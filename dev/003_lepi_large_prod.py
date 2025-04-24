@@ -24,8 +24,11 @@ from fastai.vision.all import (
     CSVLogger,
     EarlyStoppingCallback
 )
+# from fastai.distributed import *
 import json
 from collections import defaultdict
+import argparse
+from datetime import datetime 
 
 LEVELS = {
     "speciesKey":"scientificName",
@@ -41,6 +44,7 @@ def build_hierarchy(df: pd.DataFrame, hierarchy_levels: list):
     hierarchy = defaultdict(lambda: defaultdict(set))  # Use set to avoid duplicates
 
     for _, row in df.iterrows():
+        hierarchy_levels = hierarchy_levels[::-1]
         current_level = hierarchy
         for i, level in enumerate(hierarchy_levels):
             key = row[level]
@@ -83,9 +87,9 @@ def flatten_hierarchy(hierarchy: dict):
     
     def traverse(node):
         if isinstance(node, dict):  # Regular nested dictionary structure
-            for key, subnode in node.items():
+            for key in node.keys():
                 flat_list.append(key)
-            for key, subnode in node.items():
+            for subnode in node.values():
                 traverse(subnode)
         elif isinstance(node, list):  # Leaf level is a list
             for item in node:
@@ -119,7 +123,7 @@ def prepare_df(df, remove_in=[], keep_in=[], valid_set='1'):
     return df
 
 def train(
-    root_path: str|Path,
+    hierarchy_path: str|Path,
     parquet_path: str|Path,
     images_path: str|Path,
     export_path: str|Path,
@@ -144,7 +148,8 @@ def train(
         item_tfms=Resize(460),
         batch_tfms=aug_transforms(size=224)
     )
-    dls = datablock.dataloaders(df)
+    dls = datablock.dataloaders(df, bs=256)
+    # dls = datablock.dataloaders(df)
 
     f1_macro = F1ScoreMulti(thresh=0.5, average='macro')
     f1_macro.name = 'F1(macro)'
@@ -161,7 +166,8 @@ def train(
             EarlyStoppingCallback(patience=3),
             ])
     
-    learn.fine_tune(30, 2e-2)
+    # with learn.distrib_ctx():
+    learn.fine_tune(100, 2e-2)
 
     # Save the model
     # ... remove cbs first
@@ -170,22 +176,31 @@ def train(
     learn.export(model_path)
 
 if __name__=='__main__':
-    # InsectNet dataset
-    # root_path=Path("/home/george/codes/lepinet/data/insectnet")
-    # parquet_path=root_path/"0024477-250310093411724_processing_metadata_postprocessed.parquet"
+    # parser = argparse.ArgumentParser(description="Main training file.")
+    # parser.add_argument("-i", "--img_dir", type=str,
+    #     help="Image folder.")
+    # parser.add_argument("-p", "--parquet", type=str,
+    #     help="Parquet path.")
+    # parser.add_argument("-o", "--out_dir", type=str,
+    #     help="Output dir, stores models and logs.")
+    # parser.add_argument("-n", "--name", type=str,
+    #     help="Model name.")
 
     # Large Lepi dataset
-    root_path=Path("/home/george/codes/lepinet/data/lepi")
+    # Add datetime to output folder name
+    current_time = datetime.now().strftime("%Y%m%d-%H%M%S")
+    root_path=Path("data/lepi")
     parquet_path=root_path/"0061420-241126133413365_sampled_processing_metadata_postprocessed.parquet"
 
     images_path=root_path/"images"
     export_path=root_path/"models"
-    model_name="04-lepi-prod_model1"
+    model_name="20250424-lepi-prod_model1"
     train(
-        root_path,
+        None,
+        # hierarchy_path,
         parquet_path,
         images_path,
         export_path,
         model_name=model_name,
-        history_csv_name=model_name+"-h1.csv",
+        history_csv_name=model_name+"-h2.csv",
     )
