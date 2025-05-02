@@ -42,22 +42,19 @@ def build_hierarchy(df: pd.DataFrame, hierarchy_levels: list):
     Build a hierarchical tree where the penultimate level holds a unique list of the lowest-level values.
     """
     hierarchy = defaultdict(lambda: defaultdict(set))  # Use set to avoid duplicates
+    if hierarchy_levels[0] == "speciesKey":
+        hierarchy_levels = hierarchy_levels[::-1]
 
     for _, row in df.iterrows():
-        hierarchy_levels = hierarchy_levels[::-1]
         current_level = hierarchy
-        for i, level in enumerate(hierarchy_levels):
+        for level in hierarchy_levels:
             key = row[level]
 
-            if i == len(hierarchy_levels) - 2:  # Penultimate level
-                if key not in current_level:
-                    current_level[key] = set()
-                current_level = current_level[key]
-            elif i == len(hierarchy_levels) - 1:  # Lowest level (store unique values)
+            if level == "speciesKey":  # Lowest level (store unique values)
                 current_level.add(key)
             else:
                 if key not in current_level:
-                    current_level[key] = defaultdict(set)
+                    current_level[key] = set() if level == "genusKey" else defaultdict(set)  # Penultimate level
                 current_level = current_level[key] # Goes deeper in the hierarchy
 
     # Convert sets to lists for the final output
@@ -67,7 +64,7 @@ def build_hierarchy(df: pd.DataFrame, hierarchy_levels: list):
         elif isinstance(node, set):
             return list(node)
         return node
-
+    
     return convert_sets_to_lists(hierarchy)
 
 
@@ -135,6 +132,8 @@ def train(
     hierarchy=build_hierarchy(df, hierarchy_levels = HIERARCHY_LEVELS)
     save_hierarchy_to_file(hierarchy, filename=root_path/"hierarchy_all.json")
     vocab=flatten_hierarchy(hierarchy)
+    print(vocab)
+    print(len(vocab))
 
     # Remove test_ood and test_in data
     # df = prepare_df(df.copy(), remove_in=["0", "test_ood"])
@@ -149,7 +148,6 @@ def train(
         batch_tfms=aug_transforms(size=224)
     )
     dls = datablock.dataloaders(df, bs=256)
-    # dls = datablock.dataloaders(df)
 
     f1_macro = F1ScoreMulti(thresh=0.5, average='macro')
     f1_macro.name = 'F1(macro)'
@@ -163,7 +161,7 @@ def train(
         cbs=[
             ShowGraphCallback(),
             CSVLogger(export_path/history_csv_name),
-            EarlyStoppingCallback(patience=3),
+            EarlyStoppingCallback(patience=10),
             ])
     
     # with learn.distrib_ctx():
@@ -171,9 +169,14 @@ def train(
 
     # Save the model
     # ... remove cbs first
-    learn.remove_cbs((CSVLogger,EarlyStoppingCallback))
+    # learn.remove_cbs((CSVLogger,EarlyStoppingCallback))
+
+    # ...recreate a vision learner to remove large files that lives inside learner
+    slim_learn = vision_learner(learn.dls, resnet50)
+    slim_learn.model = learn.model
+
     model_path = export_path / model_name
-    learn.export(model_path)
+    slim_learn.export(model_path)
 
 if __name__=='__main__':
     # parser = argparse.ArgumentParser(description="Main training file.")
@@ -194,7 +197,7 @@ if __name__=='__main__':
 
     images_path=root_path/"images"
     export_path=root_path/"models"
-    model_name="20250424-lepi-prod_model1"
+    model_name="20250424-lepi-prod_model2"
     train(
         None,
         # hierarchy_path,
@@ -202,5 +205,5 @@ if __name__=='__main__':
         images_path,
         export_path,
         model_name=model_name,
-        history_csv_name=model_name+"-h2.csv",
+        history_csv_name=model_name+"-h1.csv",
     )
