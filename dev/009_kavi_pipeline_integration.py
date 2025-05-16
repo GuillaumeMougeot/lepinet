@@ -1,8 +1,14 @@
+import logging
+import random
+from functools import partial
+from pathlib import Path
+from types import SimpleNamespace
+
+import cv2
 import numpy as np
 import torch
-import logging
-from functools import partial
-from fastai.vision.all import load_learner, CategoryMap
+from fastai.vision.all import CategoryMap, load_learner
+
 
 def gen_level_idx(vocab, hierarchy):
     """
@@ -36,7 +42,7 @@ def gen_level_idx(vocab, hierarchy):
     indices = np.array([level_lookup.get(v, -1) for v in vocab], dtype=int)
 
     # Invert the indices, so species is 0, genus is 1 etc
-    # indices = np.where(indices < 0, indices, indices.max()-indices)
+    indices = np.where(indices < 0, indices, indices.max()-indices)
 
     # Warning for missing values
     missing_count = np.sum(indices == -1)
@@ -63,12 +69,13 @@ def get_pred_conf(preds:torch.Tensor, vocab:CategoryMap, indices:np.ndarray):
     return np.array(out_preds).swapaxes(0,1), np.array(out_confs).swapaxes(0,1)
 
 class FastaiSpeciesClassifier:
-    def __init__(self, speciesModelPath, device):
+    def __init__(self, speciesModelPath, device='cuda'):
         self.log = logging.getLogger(__name__)
         self.log.info("Moth species model path %s", speciesModelPath)
         # Load fastai Learner instead of previous speciesClassifier
         self.speciesLearner = load_learner(speciesModelPath, cpu=(device == 'cpu'))
         self.speciesLearner.model.eval()
+        self.id2name = self.speciesLearner.id2name
 
         indices = gen_level_idx(
             self.speciesLearner.dls.vocab,
@@ -122,18 +129,81 @@ class FastaiSpeciesClassifier:
 
         results = []
         for idx, (prd, cnf) in enumerate(zip(prds, cnfs)):
+            print(prd, type(prd))
             results.append({
                 "id": detection_ids[idx],
-                "label": prd,
-                "labelId": None,
+                "label": [self.id2name[p] for p in prd],
+                "labelId": prd,
                 "confidence_value": cnf
             })
 
         return results
 
 
+def test_species_classifier_with_fake_detections(
+    species_model_path: str,
+    images_folder: str,
+    num_detections: int = 3,
+    device: str = 'cpu'
+):
+    """
+    Test the FastaiSpeciesClassifier using one image and multiple fake detections.
+
+    Args:
+        species_model_path (str): Path to the Fastai .pkl learner.
+        images_folder (str): Folder containing test images.
+        num_detections (int): Number of fake detections to generate.
+        device (str): 'cpu' or 'cuda' for model inference.
+    """
+    # Load image
+    image_files = list(Path(images_folder).glob("*.*"))
+    if not image_files:
+        raise FileNotFoundError("No images found in the specified folder.")
+    img_path = str(image_files[0])
+    print(f"Using image: {img_path}")
+
+    image = cv2.imread(img_path)
+    if image is None:
+        raise ValueError(f"Could not load image: {img_path}")
+    height, width, _ = image.shape
+
+    # Generate fake detections with bounding boxes that cover at least 90% of the image
+    detections = []
+    for i in range(num_detections):
+        pad_x = random.randint(0, int(width * 0.1))
+        pad_y = random.randint(0, int(height * 0.1))
+
+        x1 = max(0, pad_x)
+        y1 = max(0, pad_y)
+        x2 = min(width, width - pad_x)
+        y2 = min(height, height - pad_y)
+
+        bbox = SimpleNamespace(x1=x1, y1=y1, x2=x2, y2=y2)
+        detection = SimpleNamespace(id=f'fake_detection_{i+1}', bbox=bbox)
+        detections.append(detection)
+
+    # Load classifier and process detections
+    classifier = FastaiSpeciesClassifier(species_model_path, device=device)
+
+    batch = classifier.batchFromDetections(image, detections)
+    results = classifier.classifySpeciesBatch(batch)
+
+    # Print results
+    for res in results:
+        print("\n--- Detection Result ---")
+        print("Detection ID:", res["id"])
+        print("Predicted Labels (Hierarchy):", res["label"])
+        print("Predicted Labels ID (Hierarchy):", res["labelId"])
+        print("Confidence Scores:", res["confidence_value"])
+   
+
 if __name__=="__main__":
-    pass
+    test_species_classifier_with_fake_detections(
+        species_model_path="/home/george/codes/lepinet/data/lepi/models/04-lepi-prod_model1-save-hierarchy-id2name",
+        images_folder="/home/george/codes/lepinet/data/lepi/images/1732680",
+        num_detections = 5,
+        device= 'cuda'
+    )
 
 
 
