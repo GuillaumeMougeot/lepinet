@@ -3,12 +3,17 @@ import random
 from functools import partial
 from pathlib import Path
 from types import SimpleNamespace
+import urllib.request
 
 import cv2
 import numpy as np
 import torch
 from fastai.vision.all import CategoryMap, load_learner
 
+
+ERDA_MODELS = "https://anon.erda.au.dk/share_redirect/C1nJdS1jtA/{}"
+DEFAULT_MODEL = "00_eulepi.pkl"
+MODEL_LOCAL_PATH="{}"
 
 def gen_level_idx(vocab, hierarchy):
     """
@@ -69,8 +74,33 @@ def get_pred_conf(preds:torch.Tensor, vocab:CategoryMap, indices:np.ndarray):
     return np.array(out_preds).swapaxes(0,1), np.array(out_confs).swapaxes(0,1)
 
 class FastaiSpeciesClassifier:
-    def __init__(self, speciesModelPath, device='cuda'):
+    valid_type = ['all', 'species', 'best']
+    f"""
+    Prediciton class for the species classifier trained with fastai.
+
+    Args:
+    - speciesModelPath (str): Path to the species model, if None download it from a ERDA link.
+    - device (str): Device to run the computations. Either cpu or cuda.
+    - output_type (str): Type of the output: one of {valid_type}. 'all' outputs a list of the best model prediction per hierarchy level, in the following order: species, genus, family. 'species' only outputs the species level. 'best' only outputs the lowest ranked predictions with a confidence above `th`.
+    - th (float): Confidence threshold.
+    """
+    def __init__(self, speciesModelPath:str=None, device='cuda', output_type: str='species', th: float=0.5):
+        assert output_type in self.valid_type, f"Error: `output_type` must be one of {self.valid_type} but found {output_type}"
+
         self.log = logging.getLogger(__name__)
+
+        # Download model from ERDA if not found locally
+        if speciesModelPath is None:
+            speciesModelPath = MODEL_LOCAL_PATH.format(DEFAULT_MODEL)
+        if not Path(speciesModelPath).is_file() or\
+            not Path(DEFAULT_MODEL).exists():
+            self.log.info(f"Model not found. Downloading from {ERDA_MODELS.format(DEFAULT_MODEL)}")
+            url = ERDA_MODELS.format(DEFAULT_MODEL)
+            with urllib.request.urlopen(url) as response, open(speciesModelPath, 'wb') as out_file:
+                out_file.write(response.read())
+        else:
+            print(f"Found model in {speciesModelPath}")
+
         self.log.info("Moth species model path %s", speciesModelPath)
         # Load fastai Learner instead of previous speciesClassifier
         self.speciesLearner = load_learner(speciesModelPath, cpu=(device == 'cpu'))
@@ -85,6 +115,9 @@ class FastaiSpeciesClassifier:
             get_pred_conf, 
             vocab=self.speciesLearner.dls.vocab,
             indices=indices,)
+    
+        self.output_type = output_type
+        self.th = th
 
     def extractCrop(self, image, bbox):
         if image is None:
@@ -129,20 +162,46 @@ class FastaiSpeciesClassifier:
 
         results = []
         for idx, (prd, cnf) in enumerate(zip(prds, cnfs)):
-            print(prd, type(prd))
-            results.append({
-                "id": detection_ids[idx],
-                "label": [self.id2name[p] for p in prd],
-                "labelId": prd,
-                "confidence_value": cnf
-            })
+            if self.output_type=='species':
+                results.append({
+                    "id": detection_ids[idx],
+                    "label": self.id2name[prd[0]],
+                    "labelId": prd[0],
+                    "confidence_value": cnf[0]
+                })
+            elif self.output_type=='best':
+                i=0 # Index of when the cnf is above 0.5
+                while i < len(cnf) and cnf[i] < self.th: i += 1
+                if i == len(cnf): # No prediction, outputs highest level
+                    results.append({
+                        "id": detection_ids[idx],
+                        "label": self.id2name[prd[-1]],
+                        "labelId": prd[-1],
+                        "confidence_value": cnf[-1]
+                    })
+                else:
+                    results.append({
+                        "id": detection_ids[idx],
+                        "label": self.id2name[prd[i]],
+                        "labelId": prd[i],
+                        "confidence_value": cnf[i]
+                    })
+            elif self.output_type=='all':
+                results.append({
+                    "id": detection_ids[idx],
+                    "label": [self.id2name[p] for p in prd],
+                    "labelId": prd,
+                    "confidence_value": cnf
+                })
+            else:
+                raise NotImplementedError("Choose a valid output type.")
 
         return results
 
 
 def test_species_classifier_with_fake_detections(
-    species_model_path: str,
     images_folder: str,
+    species_model_path: str = None,
     num_detections: int = 3,
     device: str = 'cpu'
 ):
@@ -183,7 +242,7 @@ def test_species_classifier_with_fake_detections(
         detections.append(detection)
 
     # Load classifier and process detections
-    classifier = FastaiSpeciesClassifier(species_model_path, device=device)
+    classifier = FastaiSpeciesClassifier(species_model_path, device=device, output_type='best')
 
     batch = classifier.batchFromDetections(image, detections)
     results = classifier.classifySpeciesBatch(batch)
@@ -199,7 +258,7 @@ def test_species_classifier_with_fake_detections(
 
 if __name__=="__main__":
     test_species_classifier_with_fake_detections(
-        species_model_path="/home/george/codes/lepinet/data/lepi/models/04-lepi-prod_model1-save-hierarchy-id2name",
+        # species_model_path="/home/george/codes/lepinet/data/lepi/models/04-lepi-prod_model1-save-hierarchy-id2name",
         images_folder="/home/george/codes/lepinet/data/lepi/images/1732680",
         num_detections = 5,
         device= 'cuda'
