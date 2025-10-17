@@ -123,8 +123,8 @@ def save_csv(
 def pred(
     img_dir:str,
     model_path:str,
-    hierarchy_path:str,
     output_path:str,
+    hierarchy_path:str=None,
     cpu:bool=False,
     ):
 
@@ -135,8 +135,11 @@ def pred(
     print("Model loaded.")
 
     print("Reading hierarchy...")
-    with open(hierarchy_path, "r") as f:
-        hierarchy=json.load(f)
+    if hierarchy_path is None:
+        hierarchy = learn.hierarchy
+    else:
+        with open(hierarchy_path, "r") as f:
+            hierarchy=json.load(f)
     print("Hierarchy loaded.")
 
     print("Reading image filenames...")
@@ -175,16 +178,16 @@ if __name__=="__main__":
         help="Image folder.")
     parser.add_argument("-m", "--model_path", type=str,
         help="Model path.")
-    parser.add_argument("-hp", "--hierarchy_path", type=str,
+    parser.add_argument("-hp", "--hierarchy_path", type=str, default=None,
         help="Hierarchy path.")
     parser.add_argument("-o", "--output_path", type=str,
         help="CSV output path.")
     args = parser.parse_args()
 
     pred(
-    args.img_dir,
-    args.model_path,
-    args.hierarchy_path,
-    args.output_path,
+    img_dir=args.img_dir,
+    model_path=args.model_path,
+    output_path=args.output_path,
+    hierarchy_path=args.hierarchy_path,
     cpu=False,
     )
