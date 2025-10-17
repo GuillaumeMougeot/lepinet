@@ -182,6 +182,8 @@ if __name__=="__main__":
         help="Hierarchy path.")
     parser.add_argument("-o", "--output_path", type=str,
         help="CSV output path.")
+    parser.add_argument("--cpu", default=False,  action='store_true', dest='cpu',
+        help="Whether to use the cpu or not.")  
     args = parser.parse_args()
 
     pred(
@@ -189,5 +191,5 @@ if __name__=="__main__":
     model_path=args.model_path,
     output_path=args.output_path,
     hierarchy_path=args.hierarchy_path,
-    cpu=False,
+    cpu=args.cpu,
     )
