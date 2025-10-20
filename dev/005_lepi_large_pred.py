@@ -1,16 +1,9 @@
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
 from pathlib import Path
-import os
-from os.path import join, isdir, isfile
-from PIL import Image
+from os.path import isdir
 from fastai.vision.all import *
-from pprint import pprint
-from inspect import getmembers, getmembers_static
-from sklearn.metrics import f1_score
 import json
-from matplotlib_venn import venn2
 import torch
 import argparse
 
