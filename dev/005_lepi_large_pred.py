@@ -46,7 +46,7 @@ def gen_level_idx(vocab, hierarchy):
     indices = np.array([level_lookup.get(v, -1) for v in vocab], dtype=int)
 
     # Invert the indices, so species is 0, genus is 1 etc
-    # indices = np.where(indices < 0, indices, indices.max()-indices)
+    indices = np.where(indices < 0, indices, indices.max()-indices)
 
     # Warning for missing values
     missing_count = np.sum(indices == -1)
