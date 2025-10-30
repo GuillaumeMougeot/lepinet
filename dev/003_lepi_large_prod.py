@@ -2,11 +2,8 @@
 # No cross-validation.
 
 import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
 from pathlib import Path
 import os
-from PIL import Image
 from fastai.vision.all import (
     DataBlock,
     ImageBlock,
@@ -120,9 +117,8 @@ def prepare_df(df, remove_in=[], keep_in=[], valid_set='1'):
     return df
 
 def train(
-    hierarchy_path: str|Path,
     parquet_path: str|Path,
-    images_path: str|Path,
+    img_dir: str|Path,
     export_path: str|Path,
     model_name: str,
     history_csv_name: str,
@@ -142,7 +138,7 @@ def train(
     datablock = DataBlock(
         blocks=(ImageBlock, MultiCategoryBlock(vocab=vocab)),
         splitter=ColSplitter(),
-        get_x=ColReader(0, pref=images_path),
+        get_x=ColReader(0, pref=img_dir),
         get_y=ColReader(1, label_delim=' '),
         item_tfms=Resize(460),
         batch_tfms=aug_transforms(size=224)
@@ -178,32 +174,42 @@ def train(
     model_path = export_path / model_name
     slim_learn.export(model_path)
 
-if __name__=='__main__':
-    # parser = argparse.ArgumentParser(description="Main training file.")
-    # parser.add_argument("-i", "--img_dir", type=str,
-    #     help="Image folder.")
-    # parser.add_argument("-p", "--parquet", type=str,
-    #     help="Parquet path.")
-    # parser.add_argument("-o", "--out_dir", type=str,
-    #     help="Output dir, stores models and logs.")
-    # parser.add_argument("-n", "--name", type=str,
-    #     help="Model name.")
+def cli():
+    parser = argparse.ArgumentParser(description="Main training file.")
+    parser.add_argument("-i", "--img_dir", type=str,
+        help="Image folder.")
+    parser.add_argument("-p", "--parquet", type=str,
+        help="Parquet path.")
+    parser.add_argument("-o", "--out_dir", type=str,
+        help="Output dir, stores models and logs.")
+    parser.add_argument("-n", "--name", type=str,
+        help="Model name.")
+    args=parser.parse_args()
 
+    train(
+        parquet_path=args.parquet_path,
+        img_dir=args.img_dir,
+        
+    )
+
+def test():
     # Large Lepi dataset
     # Add datetime to output folder name
     current_time = datetime.now().strftime("%Y%m%d-%H%M%S")
     root_path=Path("data/lepi")
     parquet_path=root_path/"0061420-241126133413365_sampled_processing_metadata_postprocessed.parquet"
 
-    images_path=root_path/"images"
+    img_dir=root_path/"images"
     export_path=root_path/"models"
     model_name="20250424-lepi-prod_model2"
     train(
-        None,
-        # hierarchy_path,
         parquet_path,
-        images_path,
+        img_dir,
         export_path,
         model_name=model_name,
         history_csv_name=model_name+"-h1.csv",
     )
+
+
+if __name__=='__main__':
+    test()
