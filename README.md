@@ -10,7 +10,7 @@ In bold are production-ready script.
 * 002: ipynb, result exploration and interpretation.
 * **003**: py, first version of an actual production-level training script.
 * 004: ipynb, formatting of test dataset - flemming dataset.
-* **005**: py and sh, first version of an prediction workflow with the model trained with 003.
+* **005**: py, first version of an prediction workflow with the model trained with 003.
 * 006: ipynb, results exploration and interpretation on the test dataset.
 * 007: ipynb, dev notebook for integrating fastai model inside AMI pipeline.
 * 008: py, first version of pipeline for fastai model integration in AMI pipeline.
