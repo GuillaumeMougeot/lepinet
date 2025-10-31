@@ -21,11 +21,11 @@ from fastai.vision.all import (
     vision_learner,
     partial,
     F1ScoreMulti,
-    efficientnet_v2_m,
     accuracy_multi,
     ShowGraphCallback,
     CSVLogger,
     EarlyStoppingCallback,
+    ImageDataLoaders
 )
 # from fastai.distributed import *
 import json
@@ -33,6 +33,8 @@ from collections import defaultdict
 import argparse
 from datetime import datetime 
 import yaml
+import aiohttp, asyncio
+from shutil import copyfile
 
 VALID_CONFIG_VERSIONS = [1.0]
 
@@ -76,12 +78,31 @@ def flatten_hierarchy(hierarchy: pd.DataFrame):
         flat_hierarchy.extend(hierarchy[c].unique().astype(str).tolist())
     return flat_hierarchy
 
-def prepare_df(df, remove_in=[], keep_in=[], valid_set='1'):
+def filter_df(df, remove_in=[], keep_in=[],  img_per_spc=0):
+    """
+    Parameters
+    ----------
+    img_per_spc : int, default=0
+        Number of images per species to select. If 0, then select them all.
+    """
+    df=df.copy()
     # Filter out 'test_ood' rows and 'test_in' rows
     if len(remove_in)>0:
         df = df[~df['set'].isin(remove_in)]
     if len(keep_in)>0:
         df = df[df['set'].isin(keep_in)]
+
+    # Filter rows if too few images per species
+    if img_per_spc > 0:
+        print(f"Selecting {img_per_spc} images per species.")
+        df=df[(df
+            .groupby('speciesKey')['speciesKey']
+            .transform('count') > img_per_spc)]
+    
+    print(f"Length of the filtered DataFrame: {len(df)}.")
+    return df
+
+def prepare_df_v1(df, valid_set='1'):
     def generate_image_path(row):
         return Path(str(row['speciesKey'])) / row['filename']
 
@@ -100,10 +121,49 @@ def prepare_df(df, remove_in=[], keep_in=[], valid_set='1'):
     df = df[['image_path', 'hierarchy_labels', 'is_valid']]
     return df
 
+def prepare_df(df, valid_set='1'):
+    # Vectorized image path creation (no apply)
+    df = df.copy()
+    df['image_path'] = df['speciesKey'].astype(str) + '/' + df['filename']
+
+    # Vectorized is_valid flag
+    df['is_valid'] = df['set'].eq(valid_set)
+
+    # Vectorized hierarchy label creation
+    df['hierarchy_labels'] = df[HIERARCHY_LEVELS].astype(str).agg(' '.join, axis=1)
+
+    # Convert image_path to pathlib.Path objects if fastai requires Path type
+    # df['image_path'] = df['image_path'].map(Path)
+
+    return df[['image_path', 'hierarchy_labels', 'is_valid']]
+
+async def get_key(session, scientificName=None, usageKey=None, rank='SPECIES', order='Lepidoptera'):
+    url = "https://api.gbif.org/v1/species/match?"
+    assert usageKey is not None or scientificName is not None, "One of scientificName or usageKey must be defined."
+
+    if usageKey is not None:
+        url += f"usageKey={usageKey}&"
+    if scientificName is not None:
+        url += f"scientificName={scientificName}&"
+    if rank is not None:
+        url += f"rank={rank}&"
+    if order is not None:
+        url += f"order={order}"
+
+    async with session.get(url) as response:
+        r = await response.json()
+        return r['canonicalName']
+
+async def get_all_keys(vocab):
+    async with aiohttp.ClientSession() as session:
+        tasks = [get_key(session, usageKey=k, rank=None) for k in vocab]
+        return await asyncio.gather(*tasks)
+
 def train(
     parquet_path: str|Path,
     img_dir: str|Path,
     out_dir: str|Path,
+    img_per_spc: int,
     fold: str,
     model_name: str,
     nb_epochs: int,
@@ -121,12 +181,19 @@ def train(
     # Read parquet 
     df=pd.read_parquet(parquet_path)
 
+    # Filter rows
+    print("Filtering rows...")
+    df=filter_df(df, remove_in=["0"], img_per_spc=img_per_spc)
+    print("DataFrame filtered.")
+
     # Read or create hierarchy path
     if hierarchy_path is None:
         hierarchy_path = parquet_path.parent / "hierarchy.csv"
         if not hierarchy_path.exists():
+            print(f"Hierarchy not found in {hierarchy_path}. Creating it...")
             hierarchy=build_hierarchy(df, hierarchy_levels = HIERARCHY_LEVELS)
             save_hierarchy(hierarchy, filename=hierarchy_path)
+            print(f"Hierarchy saved in {hierarchy_path}.")
     
     # Read hierarchy file
     hierarchy=load_hierarchy(filename=hierarchy_path)
@@ -134,7 +201,9 @@ def train(
     vocab=flatten_hierarchy(hierarchy)
 
     # Remove test_ood and test_in data
-    df = prepare_df(df.copy(), remove_in=["0"], valid_set=fold)
+    print("Preparing DataFrame...")
+    df = prepare_df(df, valid_set=fold)
+    print("DataFrame ready.")
 
     datablock = DataBlock(
         blocks=(ImageBlock, MultiCategoryBlock(vocab=vocab)),
@@ -145,6 +214,16 @@ def train(
         batch_tfms=aug_transforms(size=img_size)
     )
     dls = datablock.dataloaders(df, bs=batch_size)
+
+    # TODO: To use or to remove:
+    # dls = ImageDataLoaders.from_df(
+    #     df,
+    #     img_dir,
+    #     valid_col='is_valid',
+    #     label_delim=' ',
+    #     bs=batch_size,
+    #     item_tfms=Resize(aug_img_size),
+    #     batch_tfms=aug_transforms(size=img_size))
 
     f1_macro = F1ScoreMulti(thresh=0.5, average='macro')
     f1_macro.name = 'F1(macro)'
@@ -173,6 +252,14 @@ def train(
     # ...recreate a vision learner to remove large files that lives inside learner
     slim_learn = vision_learner(learn.dls, model_arch)
     slim_learn.model = learn.model
+
+    # Integrate hierarchy
+    slim_learn.hierarchy = hierarchy
+
+    # Integrate id2name
+    id2name = asyncio.run(get_all_keys(slim_learn.dls.vocab))
+    id2name = {v:n for (v,n) in zip(slim_learn.dls.vocab, id2name)}
+    slim_learn.id2name=id2name
 
     model_path = out_dir / f"{model_name}.pkl"
     slim_learn.export(model_path)
@@ -203,6 +290,9 @@ def cli():
         # Create and edit the output directory
         config['train']['out_dir'] = create_out_dir(
             config['train']['out_dir'], config['desc'])
+        
+        # Put the config file inside the output dir
+        copyfile(args.config, join(config['train']['out_dir'], 'config.yaml'))
         
         # Start the training
         train(**config['train'])

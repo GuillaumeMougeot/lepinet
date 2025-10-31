@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=61.0",
+            "setuptools-scm>=8.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools_scm]
+
+[project]
+name = "lepinet"
+dynamic = ["version"]
+# version = "0.0.40"
+authors = [
+  {name="Guillaume Mougeot", email="guillaume.mougeot@laposte.net"},
+]
+description = "LepiNet. Framework for Lepidoptera image classification."
+readme = "README.md"
+requires-python = ">=3.9"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "fastai", "aiohttp", "pyyaml", "pandas", "pyarrow>=20.0.0"
+]
+keywords=['deep learning']
+
+# [project.optional-dependencies]
+
+[project.urls]
+"Homepage" = "https://github.com/GuillaumeMougeot/lepinet"
+"Bug Tracker" = "https://github.com/GuillaumeMougeot/lepinet/issues"
+
+# [project.scripts]
+# biom3d = "biom3d.gui:main"
