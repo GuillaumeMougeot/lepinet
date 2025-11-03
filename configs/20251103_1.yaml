@@ -1,0 +1,20 @@
+# Config version
+version: 1.0
+
+# Experiment description, used in the output dir name
+desc: multilabel-global_lepi-mockup
+
+# Training hyperparameters
+train:
+    parquet_path: /home/george/codes/lepinet/data/global_lepi/0032836-250426092105405_processing_metadata_postprocessed_quality_filtered.parquet
+    img_dir: /home/george/codes/lepinet/data/global_lepi/images
+    out_dir: /home/george/codes/lepinet/data/global_lepi/models
+    fold: '1'
+    img_per_spc: 50
+    model_name: global_1.0
+    nb_epochs: 1
+    batch_size: 256
+    aug_img_size: 460
+    img_size: 256
+    model_arch_name: resnet18
+    hierarchy_path: null

@@ -35,6 +35,7 @@ from datetime import datetime
 import yaml
 import aiohttp, asyncio
 from shutil import copyfile
+import pickle
 
 VALID_CONFIG_VERSIONS = [1.0]
 
@@ -178,32 +179,58 @@ def train(
     if isinstance(img_dir, str): img_dir = Path(img_dir)
     if isinstance(out_dir, str): out_dir = Path(out_dir)
 
-    # Read parquet 
-    df=pd.read_parquet(parquet_path)
+    # First check if an existing preprocessed df exists, and if so, load it
+    parquet_name = Path(parquet_path.name)
+    df_path = out_dir.parent / parquet_name.with_suffix(".lepinet.parquet")
+    vocab_path = out_dir.parent / parquet_name.with_suffix(".vocab.pkl")
+    if df_path.exists() and vocab_path.exists():
+        print(f"Found existing preprocessed df: {df_path}")
+        print("Loading it...")
+        df = pd.read_parquet(df_path)
+        print(f"Loading vocab from {vocab_path}")
+        with open(vocab_path, 'rb') as f:
+            vocab = pickle.load(f)
+        print("Df and vocab loaded.")
+    # Else, preprocessed the DataFrame
+    elif parquet_path.exists():
+        print(f"Loading parquet file {parquet_path}")
+        # Read parquet 
+        df=pd.read_parquet(parquet_path)
 
-    # Filter rows
-    print("Filtering rows...")
-    df=filter_df(df, remove_in=["0"], img_per_spc=img_per_spc)
-    print("DataFrame filtered.")
+        # Filter rows
+        print("Filtering rows...")
+        df=filter_df(df, remove_in=["0"], img_per_spc=img_per_spc)
+        print("DataFrame filtered.")
 
-    # Read or create hierarchy path
-    if hierarchy_path is None:
-        hierarchy_path = parquet_path.parent / "hierarchy.csv"
-        if not hierarchy_path.exists():
-            print(f"Hierarchy not found in {hierarchy_path}. Creating it...")
-            hierarchy=build_hierarchy(df, hierarchy_levels = HIERARCHY_LEVELS)
-            save_hierarchy(hierarchy, filename=hierarchy_path)
-            print(f"Hierarchy saved in {hierarchy_path}.")
-    
-    # Read hierarchy file
-    hierarchy=load_hierarchy(filename=hierarchy_path)
+        # Read or create hierarchy path
+        if hierarchy_path is None:
+            hierarchy_path = parquet_path.parent / "hierarchy.csv"
+            if not hierarchy_path.exists():
+                print(f"Hierarchy not found in {hierarchy_path}. Creating it...")
+                hierarchy=build_hierarchy(df, hierarchy_levels = HIERARCHY_LEVELS)
+                save_hierarchy(hierarchy, filename=hierarchy_path)
+                print(f"Hierarchy saved in {hierarchy_path}.")
+        
+        # Read hierarchy file
+        hierarchy=load_hierarchy(filename=hierarchy_path)
 
-    vocab=flatten_hierarchy(hierarchy)
+        vocab=flatten_hierarchy(hierarchy)
 
-    # Remove test_ood and test_in data
-    print("Preparing DataFrame...")
-    df = prepare_df(df, valid_set=fold)
-    print("DataFrame ready.")
+        # Remove test_ood and test_in data
+        print("Preparing DataFrame...")
+        df = prepare_df(df, valid_set=fold)
+        print("DataFrame ready.")
+
+        # Save the preprocessed DataFrame for later use
+        print(f"Saving the DataFrame to {df_path}")
+        df.to_parquet(df_path, index=False)
+
+        # Saving the vocab
+        print(f"Saving vocab to {vocab_path}")
+        with open(vocab_path, 'wb') as f:
+            pickle.dump(vocab, f)
+    else:
+        raise FileNotFoundError(f"Parquet path not found: {parquet_path}")
 
     datablock = DataBlock(
         blocks=(ImageBlock, MultiCategoryBlock(vocab=vocab)),
@@ -273,7 +300,7 @@ def create_out_dir(out_dir, desc):
 
 def cli():
     parser = argparse.ArgumentParser(description="Main training file.")
-    parser.add_argument("--config", type=str,
+    parser.add_argument("-c", "--config", type=str,
         help="Path to config file.")
     args = parser.parse_args()
     
