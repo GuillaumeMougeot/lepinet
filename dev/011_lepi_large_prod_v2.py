@@ -25,8 +25,10 @@ from fastai.vision.all import (
     ShowGraphCallback,
     CSVLogger,
     EarlyStoppingCallback,
-    ImageDataLoaders
+    ImageDataLoaders,
+    SaveModelCallback,
 )
+from fastai.callback.tensorboard import TensorBoardCallback
 # from fastai.distributed import *
 import json
 from collections import defaultdict
@@ -178,18 +180,20 @@ def train(
     if isinstance(parquet_path, str): parquet_path = Path(parquet_path)
     if isinstance(img_dir, str): img_dir = Path(img_dir)
     if isinstance(out_dir, str): out_dir = Path(out_dir)
+    if hierarchy_path is None:
+        hierarchy_path = parquet_path.parent / "hierarchy.csv"
 
     # First check if an existing preprocessed df exists, and if so, load it
     parquet_name = Path(parquet_path.name)
     df_path = out_dir.parent / parquet_name.with_suffix(".lepinet.parquet")
-    vocab_path = out_dir.parent / parquet_name.with_suffix(".vocab.pkl")
-    if df_path.exists() and vocab_path.exists():
+    if df_path.exists() and hierarchy_path.exists():
         print(f"Found existing preprocessed df: {df_path}")
         print("Loading it...")
         df = pd.read_parquet(df_path)
-        print(f"Loading vocab from {vocab_path}")
-        with open(vocab_path, 'rb') as f:
-            vocab = pickle.load(f)
+
+        hierarchy=load_hierarchy(filename=hierarchy_path)
+        vocab=flatten_hierarchy(hierarchy)
+ 
         print("Df and vocab loaded.")
     # Else, preprocessed the DataFrame
     elif parquet_path.exists():
@@ -203,17 +207,14 @@ def train(
         print("DataFrame filtered.")
 
         # Read or create hierarchy path
-        if hierarchy_path is None:
-            hierarchy_path = parquet_path.parent / "hierarchy.csv"
-            if not hierarchy_path.exists():
-                print(f"Hierarchy not found in {hierarchy_path}. Creating it...")
-                hierarchy=build_hierarchy(df, hierarchy_levels = HIERARCHY_LEVELS)
-                save_hierarchy(hierarchy, filename=hierarchy_path)
-                print(f"Hierarchy saved in {hierarchy_path}.")
+        if not hierarchy_path.exists():
+            print(f"Hierarchy not found in {hierarchy_path}. Creating it...")
+            hierarchy=build_hierarchy(df, hierarchy_levels = HIERARCHY_LEVELS)
+            save_hierarchy(hierarchy, filename=hierarchy_path)
+            print(f"Hierarchy saved in {hierarchy_path}.")
         
         # Read hierarchy file
         hierarchy=load_hierarchy(filename=hierarchy_path)
-
         vocab=flatten_hierarchy(hierarchy)
 
         # Remove test_ood and test_in data
@@ -224,11 +225,6 @@ def train(
         # Save the preprocessed DataFrame for later use
         print(f"Saving the DataFrame to {df_path}")
         df.to_parquet(df_path, index=False)
-
-        # Saving the vocab
-        print(f"Saving vocab to {vocab_path}")
-        with open(vocab_path, 'wb') as f:
-            pickle.dump(vocab, f)
     else:
         raise FileNotFoundError(f"Parquet path not found: {parquet_path}")
 
@@ -263,9 +259,23 @@ def train(
         dls, 
         model_arch, 
         metrics=[partial(accuracy_multi, thresh=0.5), f1_macro, f1_samples],
+        model_dir=out_dir / "models",
         cbs=[
             ShowGraphCallback(),
             CSVLogger(out_dir/f"{model_name}.csv"),
+            # TensorBoard logging
+            TensorBoardCallback(
+                log_dir=out_dir/'tensorboard',  # where to store logs
+                trace_model=False,              # disable tracing to save memory
+                log_preds=False,                # optional: skip predictions logging
+            ),
+            
+            # Automatically save best model and optionally every epoch
+            SaveModelCallback(
+                fname=f"{model_name}",
+                every_epoch=True
+            ),
+
             # EarlyStoppingCallback(patience=10),
             ])
     
