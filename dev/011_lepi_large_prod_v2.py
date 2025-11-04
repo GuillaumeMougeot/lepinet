@@ -261,7 +261,6 @@ def train(
         metrics=[partial(accuracy_multi, thresh=0.5), f1_macro, f1_samples],
         model_dir=out_dir / "models",
         cbs=[
-            ShowGraphCallback(),
             CSVLogger(out_dir/f"{model_name}.csv"),
             # TensorBoard logging
             TensorBoardCallback(
@@ -330,6 +329,9 @@ def cli():
         
         # Put the config file inside the output dir
         copyfile(args.config, join(config['train']['out_dir'], 'config.yaml'))
+
+        # TODO: if a 'test' key exists in the config dict, then modify the 
+        # value of 'model_path' key to be set as the above folder.
         
         # Start the training
         train(**config['train'])
