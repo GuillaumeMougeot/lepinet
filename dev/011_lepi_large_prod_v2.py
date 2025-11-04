@@ -261,18 +261,18 @@ def train(
         metrics=[partial(accuracy_multi, thresh=0.5), f1_macro, f1_samples],
         model_dir=out_dir / "models",
         cbs=[
-            CSVLogger(out_dir/f"{model_name}.csv"),
+            CSVLogger(out_dir/f"{model_name}.csv", append=True),
             # TensorBoard logging
-            TensorBoardCallback(
-                log_dir=out_dir/'tensorboard',  # where to store logs
-                trace_model=False,              # disable tracing to save memory
-                log_preds=False,                # optional: skip predictions logging
-            ),
+            # TensorBoardCallback(
+            #     log_dir=out_dir/'tensorboard',  # where to store logs
+            #     trace_model=False,              # disable tracing to save memory
+            #     log_preds=False,                # optional: skip predictions logging
+            # ),
             
             # Automatically save best model and optionally every epoch
             SaveModelCallback(
                 fname=f"{model_name}",
-                every_epoch=True
+                # every_epoch=True
             ),
 
             # EarlyStoppingCallback(patience=10),
@@ -283,7 +283,9 @@ def train(
 
     # Save the model
     # ... remove cbs first
+    # learn.recorder = None
     # learn.remove_cbs((CSVLogger,EarlyStoppingCallback))
+    # import gc; gc.collect()
 
     # ...recreate a vision learner to remove large files that lives inside learner
     slim_learn = vision_learner(learn.dls, model_arch)
