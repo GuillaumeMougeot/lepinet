@@ -38,6 +38,9 @@ import yaml
 import aiohttp, asyncio
 from shutil import copyfile
 import pickle
+from sklearn.metrics import f1_score
+from fastai.metrics import Metric
+import torch
 
 VALID_CONFIG_VERSIONS = [1.0]
 
@@ -139,6 +142,100 @@ def prepare_df(df, valid_set='1'):
     # df['image_path'] = df['image_path'].map(Path)
 
     return df[['image_path', 'hierarchy_labels', 'is_valid']]
+
+class StreamingF1(Metric):
+    "Non-accumulating, streaming F1 metric for multi-label tasks."
+    def __init__(self, average='macro', thresh=0.5, sigmoid=True):
+        self.average, self.thresh, self.sigmoid = average, thresh, sigmoid
+        self.reset()
+
+    def reset(self):
+        self.total, self.count = 0.0, 0
+
+    def accumulate(self, learn):
+        preds, targs = learn.pred, learn.y
+        if self.sigmoid:
+            preds = torch.sigmoid(preds)
+        preds = (preds >= self.thresh).float()
+
+        # Move to CPU + numpy
+        preds = preds.detach().cpu().numpy()
+        targs = targs.detach().cpu().numpy()
+
+        batch_f1 = f1_score(targs, preds, average=self.average, zero_division=0)
+        self.total += batch_f1
+        self.count += 1
+
+    @property
+    def value(self):
+        if self.count == 0: return None
+        return self.total / self.count
+    
+    @property
+    def name(self):  return self._name
+
+    @name.setter
+    def name(self, value): self._name = value
+
+class FastStreamingF1(Metric):
+    """
+    Efficient, streaming F1 metric for multi-label problems.
+    Keeps only running TP/FP/FN counts.
+    """
+    def __init__(self, average='macro', thresh=0.5, sigmoid=True, name=None):
+        self.average, self.thresh, self.sigmoid = average, thresh, sigmoid
+        self.name = name or f"F1({average})"
+        self.reset()
+
+    def reset(self):
+        self.tp = self.fp = self.fn = None
+        self.count = 0  # for 'macro' averaging
+
+    def accumulate(self, learn):
+        preds, targs = learn.pred, learn.y
+        if self.sigmoid: preds = torch.sigmoid(preds)
+        preds = (preds >= self.thresh).float()
+
+        # Compute true positives, false positives, false negatives per class
+        tp = (preds * targs).sum(dim=0)
+        fp = (preds * (1 - targs)).sum(dim=0)
+        fn = ((1 - preds) * targs).sum(dim=0)
+
+        if self.tp is None:
+            self.tp, self.fp, self.fn = tp, fp, fn
+        else:
+            self.tp += tp
+            self.fp += fp
+            self.fn += fn
+        self.count += 1
+
+    @property
+    def value(self):
+        # Compute per-class precision, recall, f1
+        precision = self.tp / (self.tp + self.fp + 1e-8)
+        recall = self.tp / (self.tp + self.fn + 1e-8)
+        f1 = 2 * precision * recall / (precision + recall + 1e-8)
+
+        if self.average == 'macro':
+            return f1.mean().item()
+        elif self.average == 'micro':
+            # Micro average: sum over all classes
+            tp, fp, fn = self.tp.sum(), self.fp.sum(), self.fn.sum()
+            precision = tp / (tp + fp + 1e-8)
+            recall = tp / (tp + fn + 1e-8)
+            return (2 * precision * recall / (precision + recall + 1e-8)).item()
+        elif self.average == 'samples':
+            # optional extension — per-sample averaging
+            # could be added easily if you need it later
+            return f1.mean().item()
+        else:
+            raise ValueError(f"Unsupported average: {self.average}")
+        
+    @property
+    def name(self):  return self._name
+
+    @name.setter
+    def name(self, value): self._name = value
 
 async def get_key(session, scientificName=None, usageKey=None, rank='SPECIES', order='Lepidoptera'):
     url = "https://api.gbif.org/v1/species/match?"
@@ -248,31 +345,35 @@ def train(
     #     item_tfms=Resize(aug_img_size),
     #     batch_tfms=aug_transforms(size=img_size))
 
-    f1_macro = F1ScoreMulti(thresh=0.5, average='macro')
+    # f1_macro = F1ScoreMulti(thresh=0.5, average='macro')
+    # f1_macro.name = 'F1(macro)'
+    # f1_micro = F1ScoreMulti(thresh=0.5, average='micro')
+    # f1_micro.name = 'F1(micro)'
+    f1_macro = FastStreamingF1(average='macro', thresh=0.5)
     f1_macro.name = 'F1(macro)'
-    f1_samples = F1ScoreMulti(thresh=0.5, average='samples')
-    f1_samples.name = 'F1(samples)'
+    f1_micro = FastStreamingF1(average='micro', thresh=0.5)
+    f1_micro.name = 'F1(micro)'
 
     model_arch = getattr(importlib.import_module('fastai.vision.all'), model_arch_name)
 
     learn = vision_learner(
         dls, 
         model_arch, 
-        metrics=[partial(accuracy_multi, thresh=0.5), f1_macro, f1_samples],
+        metrics=[partial(accuracy_multi, thresh=0.5), f1_macro, f1_micro],
         model_dir=out_dir / "models",
         cbs=[
             CSVLogger(out_dir/f"{model_name}.csv", append=True),
             # TensorBoard logging
-            # TensorBoardCallback(
-            #     log_dir=out_dir/'tensorboard',  # where to store logs
-            #     trace_model=False,              # disable tracing to save memory
-            #     log_preds=False,                # optional: skip predictions logging
-            # ),
+            TensorBoardCallback(
+                log_dir=out_dir/'tensorboard',  # where to store logs
+                trace_model=False,              # disable tracing to save memory
+                log_preds=False,                # optional: skip predictions logging
+            ),
             
             # Automatically save best model and optionally every epoch
             SaveModelCallback(
                 fname=f"{model_name}",
-                # every_epoch=True
+                every_epoch=True
             ),
 
             # EarlyStoppingCallback(patience=10),
@@ -280,6 +381,12 @@ def train(
     
     # with learn.distrib_ctx():
     learn.fine_tune(nb_epochs, 2e-2)
+
+    # --- Debug mode: run validation only ---
+    # Run validation directly to test metrics and memory
+    # val_loss, val_metrics = learn.validate()
+    # print(f"Validation results:\nLoss: {val_loss}\nMetrics: {val_metrics}")
+    # return
 
     # Save the model
     # ... remove cbs first
