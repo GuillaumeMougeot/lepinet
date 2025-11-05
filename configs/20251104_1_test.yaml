@@ -1,0 +1,34 @@
+# Config version
+version: 1.0
+
+# Experiment description, used in the output dir name
+desc: dev_mini
+
+# Training hyperparameters
+train:
+    parquet_path: /home/george/codes/lepinet/data/mini/0013397-241007104925546_processing_metadata_postprocessed.parquet
+    img_dir: /home/george/codes/lepinet/data/mini/images
+    out_dir: /home/george/codes/lepinet/data/mini/models
+    fold: '1'
+    img_per_spc: 5
+    model_name: mini_1.0
+    nb_epochs: 20
+    batch_size: 64
+    aug_img_size: 460
+    img_size: 256
+    model_arch_name: resnet18
+    hierarchy_path: null
+
+# test: # flemming
+#     img_dir: /home/george/codes/lepinet/data/flemming
+#     model_path: /home/george/codes/lepinet/data/mini/models/20251103-161154-dev_mini/mini_1.0.pkl
+#     out_dir: /home/george/codes/lepinet/data/flemming/preds
+#     hierarchy_path: null
+#     name2id_path: /home/george/codes/lepinet/data/flemming/name2id.csv
+
+test: # EU lepi test set
+    img_dir: /home/george/codes/lepinet/data/lepi/images
+    model_path: /home/george/codes/lepinet/data/lepi/models/00_eulepi.pkl
+    out_dir: /home/george/codes/lepinet/data/lepi/preds
+    hierarchy_path: null
+    parquet_path: "/home/george/codes/lepinet/data/lepi/0061420-241126133413365_sampled_processing_metadata_postprocessed.parquet"
