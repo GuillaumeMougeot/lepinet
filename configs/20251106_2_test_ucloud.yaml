@@ -23,5 +23,3 @@ test: # flemming test
     img_dir: /work/datasets/flemming_helsing/resized/valid/referenced
     model_path: /work/GuillaumeMougeot#5298/lepinet/data/models/20251105-112242-multilabel-global_lepi/models/multilabel-global_lepi-effnetv2m_5.pth
     out_dir: /work/GuillaumeMougeot#5298/lepinet/data/preds
-    hierarchy_path: null
-    parquet_path: "/work/datasets/global_lepi/0032836-250426092105405_processing_metadata_postprocessed_quality_filtered.parquet"
