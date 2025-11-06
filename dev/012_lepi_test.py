@@ -12,6 +12,7 @@ import torch
 import importlib
 import numpy as np
 import pandas as pd
+import aiohttp, asyncio
 from fastai.vision.all import load_learner, CategoryMap, vision_learner
 
 gen_dls = getattr(importlib.import_module('011_lepi_large_prod_v2'), 'gen_dls')
@@ -133,6 +134,26 @@ def get_pred_conf(preds:torch.Tensor, vocab:CategoryMap, indices:np.ndarray):
         out_preds += [one_level_prd]
         out_confs += [one_level_cnf]
     return np.array(out_preds).swapaxes(0,1), np.array(out_confs).swapaxes(0,1)
+
+async def fetch_parents(session, usage_key):
+    url = f"https://api.gbif.org/v1/species/{usage_key}/parents"
+    try:
+        async with session.get(url) as resp:
+            if resp.status != 200:
+                return usage_key, []
+            data = await resp.json()
+            # returns parent keys in order from immediate parent to root
+            parents = [str(d['key']) for d in data] + [usage_key]
+            return usage_key, parents[::-1][:3]
+    except Exception:
+        return usage_key, []
+
+async def get_all_parents(keys, max_concurrent=20):
+    connector = aiohttp.TCPConnector(limit_per_host=max_concurrent)
+    async with aiohttp.ClientSession(connector=connector) as session:
+        tasks = [fetch_parents(session, k) for k in keys]
+        results = await asyncio.gather(*tasks)
+        return dict(results)  # usageKey → [parent1, parent2, ...]
 
 def save_csv(
     fname:str,
@@ -277,12 +298,8 @@ def test(
         lbls = np.array([[r['speciesKey'], r['genusKey'], r['familyKey']] for _,r in df.iterrows()])
     else:
         print("No parquet or name2id specified, supposing that the class names are the folder names.")
-        name2id_test_dict = {
-            r['speciesKey']:[
-                r['speciesKey'],
-                r['genusKey'],
-                r['familyKey']]
-            for _, r in hierarchy.iterrows()}
+        species = np.unique([Path(f).parent.name for f in filenames])
+        name2id_test_dict = asyncio.run(get_all_parents(species))
         lbls = np.array([name2id_test_dict[Path(f).parent.name] for f in filenames])
 
     print("Saving CSV...")
