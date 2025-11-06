@@ -144,7 +144,7 @@ async def fetch_parents(session, usage_key):
             data = await resp.json()
             # returns parent keys in order from immediate parent to root
             parents = [str(d['key']) for d in data] + [usage_key]
-            return usage_key, parents[::-1][:3]
+            return usage_key, parents[::-1][:3] # [species, genus, family]
     except Exception:
         return usage_key, []
 
@@ -275,7 +275,8 @@ def test(
     print("Test DataLoader created.")
 
     print("Get predictions...")
-    preds, _ = learn.get_preds(dl=test_dl)
+    # preds, _ = learn.get_preds(dl=test_dl)
+    preds, _ = learn.tta(dl=test_dl)
     print(f"Obtained {len(preds)} predictions.")
 
     print("Format predictions...")
