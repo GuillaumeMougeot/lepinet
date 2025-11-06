@@ -259,7 +259,7 @@ async def get_all_keys(vocab):
         tasks = [get_key(session, usageKey=k, rank=None) for k in vocab]
         return await asyncio.gather(*tasks)
 
-def train(
+def gen_learner(
     parquet_path: str|Path,
     img_dir: str|Path,
     out_dir: str|Path,
@@ -272,14 +272,14 @@ def train(
     img_size: int,
     model_arch_name: str,
     hierarchy_path: str|Path = None,
-    ):
+):
     # Assert types
     if isinstance(parquet_path, str): parquet_path = Path(parquet_path)
     if isinstance(img_dir, str): img_dir = Path(img_dir)
     if isinstance(out_dir, str): out_dir = Path(out_dir)
     if hierarchy_path is None:
         hierarchy_path = parquet_path.parent / "hierarchy.csv"
-
+    
     # First check if an existing preprocessed df exists, and if so, load it
     parquet_name = Path(parquet_path.name)
     df_path = out_dir.parent / parquet_name.with_suffix(".lepinet.parquet")
@@ -378,6 +378,36 @@ def train(
 
             # EarlyStoppingCallback(patience=10),
             ])
+    return learn, hierarchy, model_arch
+
+def train(
+    parquet_path: str|Path,
+    img_dir: str|Path,
+    out_dir: str|Path,
+    img_per_spc: int,
+    fold: str,
+    model_name: str,
+    nb_epochs: int,
+    batch_size: int,
+    aug_img_size: int,
+    img_size: int,
+    model_arch_name: str,
+    hierarchy_path: str|Path = None,
+    ):
+    learn, hierarchy, model_arch = gen_learner(
+        parquet_path=parquet_path,
+        img_dir=img_dir,
+        out_dir=out_dir,
+        img_per_spc=img_per_spc,
+        fold=fold,
+        model_name=model_name,
+        nb_epochs=nb_epochs,
+        batch_size=batch_size,
+        aug_img_size=aug_img_size,
+        img_size=img_size,
+        model_arch_name=model_arch_name,
+        hierarchy_path=hierarchy_path,
+    )
     
     # with learn.distrib_ctx():
     learn.fine_tune(nb_epochs, 2e-2)
@@ -416,15 +446,17 @@ def create_out_dir(out_dir, desc):
     os.makedirs(out_dirname, exist_ok=True)
     return out_dirname
 
-def cli():
-    parser = argparse.ArgumentParser(description="Main training file.")
-    parser.add_argument("-c", "--config", type=str,
-        help="Path to config file.")
-    args = parser.parse_args()
+def cli(config_path:str|Path=None):
+    if config_path is None:
+        parser = argparse.ArgumentParser(description="Main training file.")
+        parser.add_argument("-c", "--config", type=str,
+            help="Path to config file.")
+        args = parser.parse_args()
+        config_path = args.config
     
-    if exists(args.config):
+    if exists(config_path):
         # Load config file
-        with open(args.config) as f:
+        with open(config_path) as f:
             config=yaml.safe_load(f)
 
         # Check config version
@@ -437,7 +469,7 @@ def cli():
             config['train']['out_dir'], config['desc'])
         
         # Put the config file inside the output dir
-        copyfile(args.config, join(config['train']['out_dir'], 'config.yaml'))
+        copyfile(config_path, join(config['train']['out_dir'], 'config.yaml'))
 
         # TODO: if a 'test' key exists in the config dict, then modify the 
         # value of 'model_path' key to be set as the above folder.
@@ -445,7 +477,7 @@ def cli():
         # Start the training
         train(**config['train'])
     else:
-        raise FileNotFoundError(f"Path to config not found: {args.config}")
+        raise FileNotFoundError(f"Path to config not found: {config_path}")
 
 if __name__=='__main__':
     cli()

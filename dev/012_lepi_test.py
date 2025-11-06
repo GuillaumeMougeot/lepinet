@@ -9,9 +9,12 @@ import requests
 from os.path import exists, join, isdir
 from pathlib import Path
 import torch
+import importlib
 import numpy as np
 import pandas as pd
 from fastai.vision.all import load_learner, CategoryMap
+
+gen_learner = getattr(importlib.import_module('011_lepi_large_prod_v2'), 'gen_learner')
 
 VALID_CONFIG_VERSIONS = [1.0]
 VALID_IMAGE_EXT = ('.png', '.jpg', '.jpeg', '.tiff', '.tif', '.gif', '.webp')
@@ -182,6 +185,7 @@ def test(
     name2id_path:str|Path=None, # Needed if labels are scientific names instead of GBIF ids.
     parquet_path:str|Path=None,
     cpu:bool=False,
+    config:dict=None
     ):
 
     if isinstance(model_path, str): model_path = Path(model_path)
@@ -201,18 +205,24 @@ def test(
     
     print("Predicting...")
     print("Loading model...")
-    if model_path.exists():
+    if config is not None and model_path.exists() and model_path.suffix == '.pth':
+        learn,hierarchy,_=gen_learner(**config['train'])
+        learn.load(model_path.with_suffix(''))
+        learn.to('cpu' if cpu else 'cuda')
+    elif model_path.exists():
         learn = load_learner(model_path, cpu=cpu)
-        learn.model = learn.model.eval()
     else:
         raise FileNotFoundError(f"Model not found {model_path}")
+    learn.model = learn.model.eval()
     print("Model loaded.")
 
     print("Reading hierarchy...")
     if hierarchy_path is None and hasattr(learn,'hierarchy'):
         hierarchy = nested_dict_to_df(learn.hierarchy)
-    elif hierarchy_path is None and exists(hierarchy_path):
+    elif hierarchy_path is not None and exists(hierarchy_path):
         hierarchy=pd.read_csv(hierarchy_path)
+    elif 'hierarchy' not in locals():
+        raise ValueError("Variable 'hierarchy' could not be defined.")
     print("Hierarchy loaded.")
 
     # Optionally load name2id
@@ -301,7 +311,7 @@ def cli():
             "sub-keys.")
 
         # Start the training
-        test(**config['test'])
+        test(**config['test'], config=config)
     else:
         raise FileNotFoundError(f"Path to config not found: {args.config}")
 
