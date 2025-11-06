@@ -14,7 +14,7 @@ import numpy as np
 import pandas as pd
 from fastai.vision.all import load_learner, CategoryMap, vision_learner
 
-gen_dls = getattr(importlib.import_module('011_lepi_large_prod_v2'), 'gen_learner')
+gen_dls = getattr(importlib.import_module('011_lepi_large_prod_v2'), 'gen_dls')
 
 VALID_CONFIG_VERSIONS = [1.0]
 VALID_IMAGE_EXT = ('.png', '.jpg', '.jpeg', '.tiff', '.tif', '.gif', '.webp')
