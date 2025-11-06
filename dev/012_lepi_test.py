@@ -274,7 +274,14 @@ def test(
         print("...from parquet...")
         lbls = np.array([[r['speciesKey'], r['genusKey'], r['familyKey']] for _,r in df.iterrows()])
     else:
-        raise ValueError("You must provide either a name2id or a parquet path.")
+        print("No parquet or name2id specified, supposing that the class names are the folder names.")
+        name2id_test_dict = {
+            r['speciesKey']:[
+                r['speciesKey'],
+                r['genusKey'],
+                r['familyKey']]
+            for _, r in hierarchy.iterrows()}
+        lbls = np.array([name2id_test_dict[Path(f).parent.name] for f in filenames])
 
     print("Saving CSV...")
     out_path = out_dir / model_path.with_suffix('.csv').name
