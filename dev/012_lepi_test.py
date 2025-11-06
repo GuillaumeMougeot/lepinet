@@ -12,9 +12,9 @@ import torch
 import importlib
 import numpy as np
 import pandas as pd
-from fastai.vision.all import load_learner, CategoryMap
+from fastai.vision.all import load_learner, CategoryMap, vision_learner
 
-gen_learner = getattr(importlib.import_module('011_lepi_large_prod_v2'), 'gen_learner')
+gen_dls = getattr(importlib.import_module('011_lepi_large_prod_v2'), 'gen_learner')
 
 VALID_CONFIG_VERSIONS = [1.0]
 VALID_IMAGE_EXT = ('.png', '.jpg', '.jpeg', '.tiff', '.tif', '.gif', '.webp')
@@ -206,7 +206,9 @@ def test(
     print("Predicting...")
     print("Loading model...")
     if config is not None and model_path.exists() and model_path.suffix == '.pth':
-        learn,hierarchy,_=gen_learner(**config['train'])
+        dls,hierarchy=gen_dls(**config['train'])
+        model_arch = getattr(importlib.import_module('fastai.vision.all'), config['train']['model_arch_name'])
+        learn = vision_learner(dls, model_arch)
         learn.load(model_path.with_suffix(''))
         learn.to('cpu' if cpu else 'cuda')
     elif model_path.exists():

@@ -259,7 +259,7 @@ async def get_all_keys(vocab):
         tasks = [get_key(session, usageKey=k, rank=None) for k in vocab]
         return await asyncio.gather(*tasks)
 
-def gen_learner(
+def gen_dls(
     parquet_path: str|Path,
     img_dir: str|Path,
     out_dir: str|Path,
@@ -272,7 +272,7 @@ def gen_learner(
     img_size: int,
     model_arch_name: str,
     hierarchy_path: str|Path = None,
-):
+    ):
     # Assert types
     if isinstance(parquet_path, str): parquet_path = Path(parquet_path)
     if isinstance(img_dir, str): img_dir = Path(img_dir)
@@ -335,6 +335,37 @@ def gen_learner(
     )
     dls = datablock.dataloaders(df, bs=batch_size)
 
+    return dls, hierarchy
+
+def train(
+    parquet_path: str|Path,
+    img_dir: str|Path,
+    out_dir: str|Path,
+    img_per_spc: int,
+    fold: str,
+    model_name: str,
+    nb_epochs: int,
+    batch_size: int,
+    aug_img_size: int,
+    img_size: int,
+    model_arch_name: str,
+    hierarchy_path: str|Path = None,
+    ):
+    dls, hierarchy = gen_dls(
+        parquet_path=parquet_path,
+        img_dir=img_dir,
+        out_dir=out_dir,
+        img_per_spc=img_per_spc,
+        fold=fold,
+        model_name=model_name,
+        nb_epochs=nb_epochs,
+        batch_size=batch_size,
+        aug_img_size=aug_img_size,
+        img_size=img_size,
+        model_arch_name=model_arch_name,
+        hierarchy_path=hierarchy_path,
+    )
+
     # TODO: To use or to remove:
     # dls = ImageDataLoaders.from_df(
     #     df,
@@ -378,36 +409,7 @@ def gen_learner(
 
             # EarlyStoppingCallback(patience=10),
             ])
-    return learn, hierarchy, model_arch
 
-def train(
-    parquet_path: str|Path,
-    img_dir: str|Path,
-    out_dir: str|Path,
-    img_per_spc: int,
-    fold: str,
-    model_name: str,
-    nb_epochs: int,
-    batch_size: int,
-    aug_img_size: int,
-    img_size: int,
-    model_arch_name: str,
-    hierarchy_path: str|Path = None,
-    ):
-    learn, hierarchy, model_arch = gen_learner(
-        parquet_path=parquet_path,
-        img_dir=img_dir,
-        out_dir=out_dir,
-        img_per_spc=img_per_spc,
-        fold=fold,
-        model_name=model_name,
-        nb_epochs=nb_epochs,
-        batch_size=batch_size,
-        aug_img_size=aug_img_size,
-        img_size=img_size,
-        model_arch_name=model_arch_name,
-        hierarchy_path=hierarchy_path,
-    )
     
     # with learn.distrib_ctx():
     learn.fine_tune(nb_epochs, 2e-2)
