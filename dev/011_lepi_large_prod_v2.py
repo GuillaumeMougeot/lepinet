@@ -273,13 +273,6 @@ def gen_dls(
     model_arch_name: str,
     hierarchy_path: str|Path = None,
     ):
-    # Assert types
-    if isinstance(parquet_path, str): parquet_path = Path(parquet_path)
-    if isinstance(img_dir, str): img_dir = Path(img_dir)
-    if isinstance(out_dir, str): out_dir = Path(out_dir)
-    if hierarchy_path is None:
-        hierarchy_path = parquet_path.parent / "hierarchy.csv"
-    
     # First check if an existing preprocessed df exists, and if so, load it
     parquet_name = Path(parquet_path.name)
     df_path = out_dir.parent / parquet_name.with_suffix(".lepinet.parquet")
@@ -351,6 +344,13 @@ def train(
     model_arch_name: str,
     hierarchy_path: str|Path = None,
     ):
+    # Assert types
+    if isinstance(parquet_path, str): parquet_path = Path(parquet_path)
+    if isinstance(img_dir, str): img_dir = Path(img_dir)
+    if isinstance(out_dir, str): out_dir = Path(out_dir)
+    if hierarchy_path is None:
+        hierarchy_path = parquet_path.parent / "hierarchy.csv"
+        
     dls, hierarchy = gen_dls(
         parquet_path=parquet_path,
         img_dir=img_dir,

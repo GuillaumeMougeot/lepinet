@@ -8,4 +8,5 @@
 #SBATCH --mail-type=ALL            # Send email notifications (BEGIN, END, FAIL, ALL)
 #SBATCH --mail-user=gmo@ecos.au.dk # Your email for notifications
 
-python dev/011_lepi_large_prod_v2.py --config configs/20251103_1.yaml
+# python dev/011_lepi_large_prod_v2.py --config configs/20251103_1.yaml
+py-spy record --output /home/george/codes/lepinet/slurm/profile.pyspy --format raw --duration 120 --full-filenames -- python dev/011_lepi_large_prod_v2.py --config configs/20251111_train_ece.yaml

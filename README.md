@@ -16,8 +16,13 @@ In bold are production-ready script.
 * 008: py, first version of pipeline for fastai model integration in AMI pipeline.
 * **009**: py, production-ready script for integration of fastai model in AMI pipeline.
 * 010: py, experimentation with UCloud communication.
-* 011: py, second version of production-level training script.
+* **011**: py, second version of production-level training script.
+* **012**: py, test script of the lepi model
+* 013: ipynb, plot some curves about the classifier
 
 ## Unorganized TODOs
 
-* Run a training on the global lepi dataset.
+* Change the head of the model with the hierarchical approach?
+* Multi-GPU training? with bigger batch size? If this could half the training time that would be great.
+* How does this global model perform on the eu_lepi test set? on the global_lepi test set? on flemming test set?
+* Profile the training steps.
