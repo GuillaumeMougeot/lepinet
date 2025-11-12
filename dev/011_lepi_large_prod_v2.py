@@ -412,7 +412,7 @@ def train(
 
     
     # with learn.distrib_ctx():
-    learn.fine_tune(nb_epochs, 2e-2)
+    learn.fine_tune(nb_epochs, 2e-2, freeze_epochs=0)
 
     # --- Debug mode: run validation only ---
     # Run validation directly to test metrics and memory
