@@ -326,8 +326,9 @@ def gen_dls(
         item_tfms=Resize(aug_img_size),
         batch_tfms=aug_transforms(size=img_size)
     )
-    dls = datablock.dataloaders(df, bs=batch_size, num_workers=16)
-    print(f"Number of workers: {dls.num_workers}")
+    dls = datablock.dataloaders(df, bs=batch_size)
+    dls.num_workers = 16
+    print(f"Number of workers: {dls.num_workers}, {dls.train.num_workers}, {dls.valid.num_workers}")
 
     return dls, hierarchy
 
