@@ -13,7 +13,7 @@ train:
     img_per_spc: 50
     model_name: multilabel-global_lepi-effnetv2s
     nb_epochs: 5
-    batch_size: 256
+    batch_size: 64
     aug_img_size: 460
     img_size: 256
     model_arch_name: efficientnet_v2_s
