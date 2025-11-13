@@ -78,6 +78,7 @@ def nested_dict_to_df(data):
     Convert a nested dict {family: {genus: [species, ...]}} 
     into a pandas DataFrame with columns: speciesKey, genusKey, familyKey.
     """
+    print(f"hierarchy:{data}")
     rows = []
     for family_key, genera in data.items():
         for genus_key, species_list in genera.items():
@@ -241,7 +242,8 @@ def test(
 
     print("Reading hierarchy...")
     if hierarchy_path is None and hasattr(learn,'hierarchy'):
-        hierarchy = nested_dict_to_df(learn.hierarchy)
+        # hierarchy = nested_dict_to_df(learn.hierarchy) # LEGACY
+        hierarchy = learn.hierarchy
     elif hierarchy_path is not None and exists(hierarchy_path):
         hierarchy=pd.read_csv(hierarchy_path)
     elif 'hierarchy' not in locals():
