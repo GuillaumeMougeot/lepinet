@@ -9,5 +9,5 @@
 #SBATCH --mail-user=gmo@ecos.au.dk # Your email for notifications
 
 # python dev/012_lepi_test.py --config configs/20251104_1_test.yaml
-python dev/012_lepi_test.py --config configs/20251113_1_test_ucloud.yaml
-# python dev/012_lepi_test.py --config configs/20251113_2_test_ucloud.yaml
+# python dev/012_lepi_test.py --config configs/20251113_1_test_ucloud.yaml
+python dev/012_lepi_test.py --config configs/20251113_2_test_ucloud.yaml
