@@ -306,6 +306,7 @@ def test(
         lbls = np.array([name2id_test_dict[Path(f).parent.name] for f in filenames])
 
     print("Saving CSV...")
+    os.makedirs(out_dir, exist_ok=True)
     out_path = out_dir / model_path.with_suffix('.csv').name
     save_csv(
         out_path,
