@@ -415,7 +415,9 @@ def train(
 
     
     # with learn.distrib_ctx():
-    learn.fine_tune(nb_epochs, 2e-2, freeze_epochs=0)
+    # learn.fine_tune(nb_epochs, 2e-2, freeze_epochs=0)
+    learn.unfreeze()
+    learn.fit_one_cycle(nb_epochs, lr_max=slice(5e-3, 1.6e-2))
 
     # --- Debug mode: run validation only ---
     # Run validation directly to test metrics and memory
