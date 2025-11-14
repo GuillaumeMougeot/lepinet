@@ -45,6 +45,7 @@ from timm.utils import ModelEmaV2
 from timm.optim import AdamW
 from fastai.vision.augment import RandTransform
 from functools import partial
+import numpy as np
 
 VALID_CONFIG_VERSIONS = [1.0]
 
@@ -337,6 +338,29 @@ def gen_dls(
 
     return dls, hierarchy
 
+@torch.no_grad()
+def find_best_threshold(learn, average='macro', search_range=(0.1, 0.9), steps=50):
+    """
+    Finds the optimal threshold for F1 score on the validation set.
+    Returns the best threshold and corresponding F1 score.
+    """
+    learn.model.eval()
+    preds, targs = learn.get_preds(dl=learn.dls.valid)
+    preds = torch.sigmoid(preds).cpu().numpy()
+    targs = targs.cpu().numpy()
+
+    thresholds = np.linspace(search_range[0], search_range[1], steps)
+    best_f1, best_t = 0, 0.5
+
+    for t in thresholds:
+        bin_preds = (preds >= t).astype(np.float32)
+        f1 = f1_score(targs, bin_preds, average=average, zero_division=0)
+        if f1 > best_f1:
+            best_f1, best_t = f1, t
+
+    print(f"Best F1({average}): {best_f1:.4f} at threshold = {best_t:.3f}")
+    return best_t, best_f1
+
 def train(
     parquet_path: str|Path,
     img_dir: str|Path,
@@ -451,6 +475,19 @@ def train(
     id2name = asyncio.run(get_all_keys(slim_learn.dls.vocab))
     id2name = {v: n for (v, n) in zip(slim_learn.dls.vocab, id2name)}
     slim_learn.id2name = id2name
+
+    # -------------------------------------------------------------------------
+    # Optimize validation threshold for F1
+    # -------------------------------------------------------------------------
+    try:
+        best_thresh_macro, f1_macro_val = find_best_threshold(learn, average='macro')
+        best_thresh_micro, f1_micro_val = find_best_threshold(learn, average='micro')
+
+        # Store optimal thresholds for later inference
+        slim_learn.best_thresh_macro = best_thresh_macro
+        slim_learn.best_thresh_micro = best_thresh_micro
+    except Exception as e:
+        print(f"Following exception occured when find best threshold")
 
     model_path = out_dir / f"{model_name}.pkl"
     slim_learn.export(model_path)
