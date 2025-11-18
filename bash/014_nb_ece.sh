@@ -4,7 +4,7 @@
 #SBATCH --error=/home/george/codes/lepinet/slurm/slurmjob-%j.err
 #SBATCH --partition=GPU48
 #SBATCH --ntasks=1                 # Number of tasks (processes)
-#SBATCH --time=04:00:00            # Maximum runtime (HH:MM:SS)
+#SBATCH --time=08:00:00            # Maximum runtime (HH:MM:SS)
 #SBATCH --mail-type=FAIL           # Send email notifications (BEGIN, END, FAIL, ALL)
 #SBATCH --mail-user=gmo@ecos.au.dk # Your email for notifications
 
