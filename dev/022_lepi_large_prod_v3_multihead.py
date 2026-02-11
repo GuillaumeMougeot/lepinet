@@ -39,10 +39,17 @@ from fastai.vision.all import (
     EarlyStoppingCallback,
     ImageDataLoaders,
     SaveModelCallback,
-    Normalize
+    Normalize,
+    accuracy,
+    create_body,
+    create_head,
+    num_features_model
 )
+
 from fastai.callback.tensorboard import TensorBoardCallback
 from fastai.metrics import Metric
+from accelerate.utils import write_basic_config
+write_basic_config()
 
 VALID_CONFIG_VERSIONS = [1.0]
 
@@ -331,6 +338,32 @@ async def get_all_sn(vocab):
         tasks = [get_sn(session, usageKey=k) for k in vocab]
         return await asyncio.gather(*tasks)
 
+class MultiHead(nn.Module):
+    def __init__(self, body, heads):
+        super().__init__()
+        self.body = body
+        self.heads = heads
+
+    def forward(self, x):
+        feats = self.body(x)
+        return [h(feats) for h in self.heads]
+
+class MultiHeadLoss(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.loss = nn.CrossEntropyLoss()
+        
+    def forward(self, preds, targs_species, targs_genus, targs_family):
+        targs = [targs_species, targs_genus, targs_family]
+        return sum(self.loss(p, t) for p, t in zip(preds, targs))
+
+def accuracy_multi(preds, targs_species, targs_genus, targs_family):
+    accs = []
+    targs = [targs_species, targs_genus, targs_family]
+    for p, t in zip(preds, targs):
+        accs.append(accuracy(p, t))
+    return torch.stack(accs).mean()
+
 def train(
     parquet_path: str|Path,
     img_dir: str|Path,
@@ -351,26 +384,6 @@ def train(
     if isinstance(out_dir, str): out_dir = Path(out_dir)
     if hierarchy_path is None:
         hierarchy_path = parquet_path.parent / "hierarchy.csv"
-    
-    hierarchy = pd.read_csv(hierarchy_path)    
-    labels = {str(r['speciesKey']):r.values.astype(str).tolist() for i,r in hierarchy.iterrows()}
-    cls2idx = {str(i):{str(e):j for j,e in enumerate(s.unique())} for i,(n,s) in enumerate(hierarchy.items())}
-    sparse_masks=sparse_masks_from_labels(labels, cls2idx)
-
-    model_builder_kwargs ={
-                "model_type" : model_arch_name,
-                "weights" : None,
-                "hidden" : 512,
-                "droprate" : 0.1,
-                "normalized" : True,
-                "sparse_masks" : sparse_masks,
-                "num_classes" : len(cls2idx['0']),
-            }
-    model, _ = HierarchicalClassifier.build(**model_builder_kwargs)
-    model_preprocessor = Normalize.from_stats(
-        mean=[0.485, 0.456, 0.406],
-        std=[0.229, 0.224, 0.225],
-    )
 
     dls, hierarchy = gen_dls(
         parquet_path=parquet_path,
@@ -385,35 +398,22 @@ def train(
         img_size=img_size,
         model_arch_name=model_arch_name,
         hierarchy_path=hierarchy_path,
-        model_preprocessor=model_preprocessor
     )
 
-    # TODO: To use or to remove:
-    # dls = ImageDataLoaders.from_df(
-    #     df,
-    #     img_dir,
-    #     valid_col='is_valid',
-    #     label_delim=' ',
-    #     bs=batch_size,
-    #     item_tfms=Resize(aug_img_size),
-    #     batch_tfms=aug_transforms(size=img_size))
+    backbone = getattr(importlib.import_module('fastai.vision.all'), model_arch_name)
+    body = create_body(backbone(), pretrained=True)
+    nf = num_features_model(body)
 
-    # f1_macro = F1ScoreMulti(thresh=0.5, average='macro')
-    # f1_macro.name = 'F1(macro)'
-    # f1_micro = F1ScoreMulti(thresh=0.5, average='micro')
-    # f1_micro.name = 'F1(micro)'
-    f1_macro = FastStreamingF1MultiHead(average='macro')
-    f1_macro.name = 'F1(macro)'
-    f1_micro = FastStreamingF1MultiHead(average='micro')
-    f1_micro.name = 'F1(micro)'
-
-    # model_arch = getattr(importlib.import_module('fastai.vision.all'), model_arch_name)
+    heads = nn.ModuleList([
+        create_head(nf, len(v)) for v in dls.vocab
+    ])
+    model_arch = MultiHead(body, heads)
 
     learn = Learner(
         dls, 
-        model, 
-        loss_func=SumMultiLevelWeightedCrossEntropyLoss(weights=[1.0,1.0,1.0], device='cuda', dtype=torch.float),
-        metrics=[f1_macro, f1_micro],
+        model_arch, 
+        loss_func=MultiHeadLoss(),
+        metrics=[accuracy_multi],
         model_dir=out_dir / "models",
         cbs=[
             CSVLogger(out_dir/f"{model_name}.csv", append=True),
@@ -432,12 +432,12 @@ def train(
 
             # EarlyStoppingCallback(patience=10),
             ])
-
+    
     # res = learn.validate(cbs=[])
     # print(res)  # loss + metrics
     # with learn.distrib_ctx():
-    # learn.fine_tune(nb_epochs, 2e-2, freeze_epochs=0)
-    learn.fit_one_cycle(nb_epochs, lr_max=5e-3)
+    learn.fine_tune(nb_epochs, 1e-3)
+    # learn.fit_one_cycle(nb_epochs, lr_max=5e-3)
 
     # --- Debug mode: run validation only ---
     # Run validation directly to test metrics and memory
