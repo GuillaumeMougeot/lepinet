@@ -1,0 +1,21 @@
+# Config version
+version: 1.1
+
+# Experiment description, used in the output dir name
+desc: multilabel-global_lepi
+
+# Training hyperparameters
+train:
+    parquet_path: /home/george/codes/lepinet/data/global_lepi/0032836-250426092105405_processing_metadata_postprocessed_quality_filtered.parquet
+    img_dir: /home/george/codes/lepinet/data/global_lepi/images
+    out_dir: /home/george/codes/lepinet/data/global_lepi/models
+    fold: '1'
+    min_img_per_spc: 50
+    model_name: multilabel-global_lepi-effnetv2s
+    nb_epochs: 20
+    batch_size: 64
+    aug_img_size: 460
+    img_size: 256
+    model_arch_name: efficientnet_v2_s
+    hierarchy_path: null
+    family_filter: ['9717', '3553']
