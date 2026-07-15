@@ -1,0 +1,13 @@
+# Test config for dev/033_multihead_v4_test.py (dev/028's plain-softmax multi-head model)
+version: 1.0
+
+test:
+    model_path: data/global/models/20260711-154103-multihead-v4-global-effnetv2s/multihead-v4-global-effnetv2s.pkl
+    parquet_path: data/global/0032836-250426092105405_processing_metadata_postprocessed_quality_filtered.parquet
+    img_dir: data/global/images
+    out_dir: data/global/preds
+    test_set: '0'            # held-out fold removed from training (the global test set)
+    eval_name: global-test
+    min_img_per_spc: 0
+    family_filter: []
+    optimal_threshold: true

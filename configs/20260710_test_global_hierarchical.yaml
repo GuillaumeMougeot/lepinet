@@ -1,0 +1,19 @@
+# Test config for dev/032_hierarchical_heads_test.py
+# Fill model_path with the .pt produced by the corresponding dev/030 training run once it
+# finishes (data/global/models/<timestamp>-heads-global-hierarchical-effnetv2s/heads-global-hierarchical-effnetv2s.pt).
+version: 1.0
+
+test:
+    model_path: data/global/models/20260712-184230-heads-global-hierarchical-muon-effnetv2s/heads-global-hierarchical-muon-effnetv2s.pt
+    parquet_path: data/global/0032836-250426092105405_processing_metadata_postprocessed_quality_filtered.parquet
+    img_dir: data/global/images
+    out_dir: data/global/preds
+    test_set: '0'            # held-out fold removed from training (the global test set)
+    eval_name: global-test
+    batch_size: 64
+    aug_img_size: 460
+    img_size: 256
+    num_workers: 12
+    optimal_threshold: true
+    # decoder_num_layers: 4   # only for head=autoregressive (must match training)
+    # decoder_nhead: 1

@@ -1,0 +1,41 @@
+version: 1.0
+# Front-loaded LR schedule (NOT launched yet -- run after the one_cycle run finishes).
+# LR peaks after a 0.15-epoch ramp, then cosine-drops hard from base_lr to base_lr*0.1 by the
+# END of the first epoch (fast_decay_epochs=1.0), so the model reaches near-max accuracy on the
+# first validation, then cosine-decays gently from base_lr*0.1 to 0 over epochs 2-5 (pure
+# low-LR refinement). Tests whether committing early + a long refinement tail beats the
+# exploration-heavy flat_cos (0.877 test species macro-F1). LR-only scheduling (Muon-safe).
+desc: heads-global-independent-muon-frontloaded-effnetv2s
+train:
+  parquet_path: data/global/0032836-250426092105405_processing_metadata_postprocessed_quality_filtered.parquet
+  img_dir: data/global/images
+  out_dir: data/global/models
+  fold: '1'
+  min_img_per_spc: 50
+  model_name: heads-global-independent-muon-frontloaded-effnetv2s
+  model_arch_name: efficientnet_v2_s
+  head: independent
+  nb_epochs: 5
+  base_lr: 0.001
+  batch_size: 64
+  aug_img_size: 460
+  img_size: 256
+  optimizer: muon
+  fp16: true
+  schedule: front_loaded
+  hierarchy_path: null
+  family_filter: []
+  decoder_num_layers: 4
+  decoder_nhead: 1
+  precision: fp16
+  grad_clip: 5.0
+  warmup_epochs: 0.15
+  fast_decay_epochs: 1.0
+  lr_mid_frac: 0.1
+  aug_kwargs:
+    max_warp: 0.0
+    max_lighting: 0.0
+    p_lighting: 0.0
+    flip_vert: true
+    max_rotate: 15.0
+    max_zoom: 1.1

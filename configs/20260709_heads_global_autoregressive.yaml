@@ -1,0 +1,25 @@
+version: 1.0
+desc: heads-global-autoregressive-muon-effnetv2s
+train:
+  parquet_path: data/global/0032836-250426092105405_processing_metadata_postprocessed_quality_filtered.parquet
+  img_dir: data/global/images
+  out_dir: data/global/models
+  fold: '1'
+  min_img_per_spc: 50
+  model_name: heads-global-autoregressive-muon-effnetv2s
+  model_arch_name: efficientnet_v2_s
+  head: autoregressive
+  nb_epochs: 5
+  base_lr: 0.001
+  batch_size: 64
+  aug_img_size: 460
+  img_size: 256
+  optimizer: muon
+  fp16: true
+  schedule: flat_cos
+  hierarchy_path: null
+  family_filter: []
+  decoder_num_layers: 4
+  decoder_nhead: 1
+  precision: fp16
+  grad_clip: 1.0

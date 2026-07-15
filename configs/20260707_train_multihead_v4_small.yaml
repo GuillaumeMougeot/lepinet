@@ -1,0 +1,23 @@
+# Config version
+version: 1.0
+
+# Experiment description, used in the output dir name
+desc: multihead-v4-small
+
+# Training hyperparameters
+train:
+    parquet_path: data/small/0032836-250426092105405_processing_metadata_postprocessed_quality_filtered.raw_subset.parquet
+    img_dir: data/small/images
+    out_dir: data/small/models
+    fold: '1'
+    min_img_per_spc: 50
+    model_name: multihead-v4-small-resnet18
+    model_arch_name: resnet18
+    nb_epochs: 5
+    freeze_epochs: 1
+    base_lr: 0.001
+    batch_size: 64
+    aug_img_size: 300
+    img_size: 224
+    hierarchy_path: null
+    family_filter: []
