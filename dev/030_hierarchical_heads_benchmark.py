@@ -254,36 +254,96 @@ class HostMemoryGuard(Callback):
 
     order = -7  # before anything that might allocate
 
-    def __init__(self, every: int = 500, abort_below_gb: float = 8.0):
+    def __init__(self, every: int = 500, abort_at_frac: float = 0.92):
         self.every = every
-        self.abort_below_gb = abort_below_gb
-        self._warned = False
+        self.abort_at_frac = abort_at_frac
 
-    def before_fit(self):
+    @staticmethod
+    def _cgroup_mem():
+        """(used_bytes, limit_bytes) for *this container*, or None outside one.
+
+        `psutil.virtual_memory()` reads /proc/meminfo, which reports the physical host and
+        ignores the cgroup entirely: inside a UCloud job it cheerfully says 2434 GB total /
+        2307 GB available while the cgroup caps the job at 288 GB and the kernel kills it
+        there. Watching the host figure is watching the wrong number -- it can never trip.
+        The limit that actually binds is the cgroup's, so read that; fall back to the host
+        only when there is no cgroup (e.g. the local workstation).
+        """
+        # A container namespaces the cgroup mount, so its own limit is at the root of
+        # /sys/fs/cgroup. On a plain systemd host the process instead sits in a nested slice
+        # named by /proc/self/cgroup, and the root carries no limit -- try both, nearest first.
+        candidates = [(Path("/sys/fs/cgroup/memory.current"), Path("/sys/fs/cgroup/memory.max")),
+                      (Path("/sys/fs/cgroup/memory/memory.usage_in_bytes"),
+                       Path("/sys/fs/cgroup/memory/memory.limit_in_bytes"))]
+        try:
+            for line in Path("/proc/self/cgroup").read_text().splitlines():
+                rel = line.split(":")[-1].lstrip("/")
+                if rel:
+                    base = Path("/sys/fs/cgroup") / rel
+                    candidates.insert(0, (base / "memory.current", base / "memory.max"))
+        except OSError:
+            pass
+
+        for cur, mx in candidates:
+            try:
+                limit = mx.read_text().strip()
+                if limit == "max":
+                    return None  # cgroup exists but is uncapped: host RAM is the real limit
+                limit = int(limit)
+                # v1 signals "no limit" with a sentinel near 2^63, not the string "max".
+                if limit > (1 << 62):
+                    return None
+                return int(cur.read_text().strip()), limit
+            except (OSError, ValueError):
+                continue
+        return None
+
+    def _mem(self):
+        """(used_gb, limit_gb, source) -- the cgroup's numbers when capped, else the host's."""
+        cg = self._cgroup_mem()
+        if cg:
+            return cg[0] / 1e9, cg[1] / 1e9, "cgroup"
         import psutil
         vm = psutil.virtual_memory()
-        n = getattr(self.learn.dls.train, "num_workers", "?")
-        print(f"[mem] host RAM {vm.total/1e9:.0f} GB total, {vm.available/1e9:.0f} GB available "
-              f"| num_workers={n}. Forked workers converge on ~1.1 GB each at global scale "
-              f"(dev/037_dl_memory_probe.py), so peak ~= {n if isinstance(n, int) else 0} x 1.1 GB "
-              f"+ parent.")
+        return vm.used / 1e9, vm.total / 1e9, "host"
+
+    def _workers(self):
+        """The real worker count.
+
+        fastai's DataLoader keeps `self.num_workers = 1` and hands the configured value to the
+        torch loader it wraps (`fake_l`), so reading `dls.train.num_workers` reports 1 no
+        matter what the config said.
+        """
+        dl = self.learn.dls.train
+        return getattr(getattr(dl, "fake_l", None), "num_workers", None) or \
+            getattr(dl, "num_workers", "?")
+
+    def before_fit(self):
+        used, limit, src = self._mem()
+        n = self._workers()
+        est = f"{n * 1.1:.0f} GB" if isinstance(n, int) else "?"
+        print(f"[mem] limit {limit:.0f} GB ({src}), used {used:.0f} GB | num_workers={n} "
+              f"-> forked workers converge on ~1.1 GB each at global scale, so expect ~{est} "
+              f"+ parent (dev/037_dl_memory_probe.py).", flush=True)
+        if isinstance(n, int) and n * 1.1 > limit * 0.9:
+            print(f"[mem] WARNING: {n} workers x ~1.1 GB is close to or over the {limit:.0f} GB "
+                  f"limit. This is how the 2026-07-17 benchmark died -- silently, 36 min in.",
+                  flush=True)
 
     def after_batch(self):
         if not self.training or self.learn.train_iter % self.every:
             return
-        import psutil
-        vm = psutil.virtual_memory()
+        used, limit, src = self._mem()
         gpu = torch.cuda.memory_allocated() / 1e9 if torch.cuda.is_available() else 0
-        print(f"[mem] batch {self.learn.train_iter}: host used {vm.used/1e9:.0f} GB / "
-              f"{vm.total/1e9:.0f} GB ({vm.percent:.0f}%), available {vm.available/1e9:.0f} GB "
-              f"| GPU allocated {gpu:.1f} GB", flush=True)
-        if vm.available / 1e9 < self.abort_below_gb:
+        print(f"[mem] batch {self.learn.train_iter}: {used:.0f}/{limit:.0f} GB "
+              f"({used/limit*100:.0f}% of {src}) | GPU allocated {gpu:.1f} GB", flush=True)
+        if used / limit > self.abort_at_frac:
             raise RuntimeError(
-                f"Host RAM nearly exhausted: {vm.available/1e9:.1f} GB available of "
-                f"{vm.total/1e9:.0f} GB. The kernel OOM killer would take this process next, "
-                f"silently. Almost certainly num_workers "
-                f"({getattr(self.learn.dls.train, 'num_workers', '?')}) x ~1.1 GB/worker "
-                f"exceeds host RAM -- lower num_workers. See dev/037_dl_memory_probe.py."
+                f"Memory at {used:.0f}/{limit:.0f} GB ({used/limit*100:.0f}% of the {src} "
+                f"limit). The OOM killer takes this process next, with no traceback -- aborting "
+                f"first so the reason is on the record. num_workers={self._workers()} x ~1.1 "
+                f"GB/worker is the usual cause (forked workers each copy the dataframe); lower "
+                f"it. See dev/037_dl_memory_probe.py."
             )
 
 
