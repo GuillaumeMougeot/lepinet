@@ -254,7 +254,11 @@ class HostMemoryGuard(Callback):
 
     order = -7  # before anything that might allocate
 
-    def __init__(self, every: int = 500, abort_at_frac: float = 0.92):
+    def __init__(self, every: int = 25, abort_at_frac: float = 0.92):
+        # every=25, not 500: the 2026-07-17 bench2 attempt was SIGKILLed at batch ~315, i.e.
+        # before a 500-batch interval ever reported, leaving the failure as unexplained as the
+        # one this guard exists to explain. Reading two cgroup files costs nothing next to a
+        # batch of 64 images at 460x460; there is no reason to sample coarsely.
         self.every = every
         self.abort_at_frac = abort_at_frac
 
