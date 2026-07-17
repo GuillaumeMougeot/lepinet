@@ -36,6 +36,13 @@ max_time = "4h"
 type = "file"
 path = "/12347837/repos/mini_trainer"
 
+# mini_metrics: imported by dev/032 (the test half), declared by no pyproject. Without it
+# the job trains to completion and then dies on ModuleNotFoundError -- which is exactly
+# what the 2026-07-17 pipeline smoke caught, before it could cost 3 x 14h.
+[[resources]]
+type = "file"
+path = "/12347837/repos/mini_metrics"
+
 [[resources]]
 type = "file"
 path = "/12347837/datasets/global_lepi"

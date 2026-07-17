@@ -37,6 +37,7 @@ auto-extend and the launching of queued jobs.
 | --- | --- | --- |
 | `/work/lepinet` | `[sync]` pushes this repo to `/12347837/repos/lepinet` | rw — write results here and they persist |
 | `/work/mini_trainer` | `ucloud sync push ../mini_trainer /12347837/repos/mini_trainer` | dev/030 imports it; not a declared lepinet dep |
+| `/work/mini_metrics` | `ucloud sync push ../mini_metrics /12347837/repos/mini_metrics` | dev/032 imports it; not a declared lepinet dep |
 | `/work/global_lepi` | `/12347837/datasets/global_lepi` | read-only; 481 GB, never synced |
 
 `[sync]` is incremental and `.gitignore`-aware, so `data/` never travels and a re-submit
@@ -50,6 +51,12 @@ written. Fetch them with `ucloud files download`.
 
 - **`ssh_enabled = true` is rejected by `pytorch-te`** ("This application does not support
   SSH but it is required") — the job won't even submit. Use `q logs` to watch runs.
+- **`mini_metrics` is needed by the *test* half only**, and no pyproject declares it, so it
+  was missing from the drive and from `setup.sh` entirely. Training never imports it, so five
+  jobs passed without noticing; the first job to chain train -> test trained for four minutes
+  and then died on `ModuleNotFoundError`. On a real run that would have been ~14 h of GPU
+  burned before the import ran. `setup.sh` now imports **both halves' modules at startup** as
+  a preflight, so this class of gap fails in seconds instead of after training.
 - **`tensorboard` is missing from `pyproject.toml`.** `dev/030` imports
   `fastai.callback.tensorboard`, which imports `tensorboard`, which fastai declares
   nowhere. The local `.venv` has it, so this only breaks in a fresh environment.

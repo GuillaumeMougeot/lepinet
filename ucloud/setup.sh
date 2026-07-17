@@ -19,19 +19,43 @@ uv venv --python 3.14 /tmp/venv
 # shellcheck disable=SC1091
 source /tmp/venv/bin/activate
 
-# One resolution for both projects so torch is pinned once. lepinet sets packages=[], so
-# installing it contributes dependencies only; mini_trainer is a sibling repo locally and
-# a second mount here (/work/mini_trainer).
-uv pip install /work/lepinet /work/mini_trainer
+# One resolution for all three so torch is pinned once. lepinet sets packages=[], so
+# installing it contributes dependencies only; mini_trainer and mini_metrics are sibling
+# repos locally and extra mounts here (/work/mini_trainer, /work/mini_metrics).
+#
+# mini_metrics is needed by dev/032 (the test half) and by nothing in training, which is
+# why its absence stayed invisible until a job first ran train->test in one go: the
+# 2026-07-17 pipeline smoke trained happily for 4 minutes and then died on
+# `ModuleNotFoundError: No module named 'mini_metrics'`. Same shape as the tensorboard
+# gap -- an import that no pyproject declares, papered over locally by an editable install
+# nobody remembers doing. Verified below rather than assumed.
+uv pip install /work/lepinet /work/mini_trainer /work/mini_metrics
 
 # Fail loudly and early if the GPU isn't visible -- otherwise fastai silently trains on
 # CPU and the run looks like a timeout instead of a misconfiguration.
+#
+# Import every module the job will need up front, including the ones only the *test* half
+# touches. A missing import that surfaces after training is the worst case: it costs a full
+# run's GPU-hours to discover something a two-second check catches at startup. This is
+# exactly how mini_metrics slipped through -- five jobs never ran the test step.
 python - <<'PY'
+import importlib, sys
 import torch
 print("torch", torch.__version__, "cuda_available", torch.cuda.is_available())
 if not torch.cuda.is_available():
     raise SystemExit("no CUDA device visible to torch")
 print("device", torch.cuda.get_device_name(0))
+
+missing = []
+for mod in ("fastai.vision.all", "fastai.callback.tensorboard", "mini_trainer.hierarchical.model",
+            "mini_trainer.training.muon", "mini_metrics.metrics", "psutil", "timm"):
+    try:
+        importlib.import_module(mod)
+    except Exception as e:
+        missing.append(f"{mod}: {e}")
+if missing:
+    raise SystemExit("preflight import check failed:\n  " + "\n  ".join(missing))
+print("preflight: all required modules import (training AND test halves)")
 PY
 
 # Stage the images onto node-local NVMe. Skipped when STAGE_IMAGES is unset, so the
