@@ -11,14 +11,17 @@ version: 1.0
 # The local 5ep independent-head reference with this recipe reached test species macro-F1
 # 0.9148; 10 epochs is untested and is part of what this benchmark answers.
 #
-# num_workers 256, NOT 512. This is a memory ceiling, not a throughput choice.
+# num_workers 192, NOT 256 or 512. This is a memory ceiling, not a throughput choice.
 # The 2026-07-17 run at 512 died: it held the full ~1100 img/s decode ceiling for ~36k batches,
 # then collapsed 440x and was SIGKILLed with no traceback -- the kernel OOM killer, i.e. host
 # RAM, not GPU (a CUDA OOM raises a loud Python exception). dev/030 forks its workers, and
 # CPython refcounting breaks copy-on-write on the 634 MB dataframe, so each worker converges on
 # its own private copy: ~1.1 GB steady state per worker, measured by dev/037_dl_memory_probe.py.
-#   512 workers -> ~525-575 GB  vs 288 GB node  -> OOM, ~36 min in (once the leak saturates)
-#   256 workers -> ~270-295 GB  vs 288 GB node  -> fits, thinly (the 5ep run did 7h at 256)
+#   512 workers -> ~563 GB vs 288 GB -> OOM (measured: killed anywhere from batch 0 to 36k,
+#                 node-dependent -- once near the cap, time-to-death is a coin flip)
+#   256 workers -> ~282 GB vs 288 GB -> OOM (measured on-node: 269 GB at batch 275, still climbing;
+#                 killed ~batch 315). Right at the ceiling = still dies, just later.
+#   192 workers -> ~224 GB vs 288 GB -> 78% of the cap, ~64 GB headroom. This is the value that fits.
 # 256 also costs almost nothing in speed: the pipeline ceiling is decode/augment (~1100 img/s),
 # which 256 already reaches. At fastai's default of 16 the /work mount's ~90ms/file latency
 # caps the loader at ~170 img/s (8.7h/epoch) -- see ucloud/README.md.
@@ -29,7 +32,7 @@ train:
   out_dir: /work/lepinet/data/ucloud_models
   fold: '1'
   min_img_per_spc: 50
-  num_workers: 256
+  num_workers: 192
   model_name: bench-independent-muon-onecycle-10ep-oversample-effnetv2s-ucloud
   model_arch_name: efficientnet_v2_s
   head: independent
