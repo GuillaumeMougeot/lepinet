@@ -1,0 +1,50 @@
+# Validation of the staging approach: copy only the referenced images to node-local NVMe,
+# then train with FEW workers (32) reading from local disk. Confirms two things the /work
+# path can't give at once: low memory (32 x ~1.2 GB = ~38 GB anon, vs 128 x 1.2 = ~168 GB)
+# AND full decode throughput (fast local reads, so 32 workers saturate the ~1100 img/s ceiling).
+# 2 epochs is enough to see the per-epoch time; oversampling on so the memory path matches the
+# real benchmark.
+#   ucloud q submit ucloud/staged-test.toml --name staged-test
+
+name = "lepi-staged-test"
+replicas = 1
+
+[application]
+name = "pytorch-te"
+version = "26.05"
+
+[product]
+id = "gpu-nvidia-b200-1-gpu"
+category = "gpu-nvidia-b200"
+provider = "ucloud"
+
+[time_allocation]
+hours = 6                        # ~30 min stage (430 GB, parallel) + 2 x ~1.2h train + margin
+
+[sync]
+local = ".."
+remote = "/12347837/repos/lepinet"
+
+[setup]
+# setup-staged.sh sets STAGE_* then sources setup.sh, whose staging step (stage.py) copies only
+# the images the filtered parquet references to /tmp/global_lepi/images -- the config's img_dir.
+# ([setup] has no env field, so the vars are set in the script, not the toml.)
+script = "setup-staged.sh"
+run = "python dev/030_hierarchical_heads_benchmark.py -c configs/20260718_ucloud_staged_test_independent.yaml"
+
+[schedule]
+auto_extend = "1h"
+max_time = "10h"
+
+[[resources]]
+type = "file"
+path = "/12347837/repos/mini_trainer"
+
+[[resources]]
+type = "file"
+path = "/12347837/repos/mini_metrics"
+
+[[resources]]
+type = "file"
+path = "/12347837/datasets/global_lepi"
+read_only = true

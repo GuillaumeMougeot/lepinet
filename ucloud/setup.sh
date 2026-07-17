@@ -72,12 +72,19 @@ then
   exit 1
 fi
 
-# Stage the images onto node-local NVMe. Skipped when STAGE_IMAGES is unset, so the
-# smoke test (which reads a single family) can keep reading straight from /work.
-# `set -e` for this one step only: training against a half-copied tree would "work" and
-# quietly report metrics on missing data.
-if [ -n "${STAGE_IMAGES:-}" ]; then
+# Stage the run's images onto node-local NVMe. Set STAGE_PARQUET to switch it on (the source
+# metadata parquet); stage.py then copies only the images that parquet references, so the
+# training config's img_dir must point at STAGE_DST (default /tmp/global_lepi/images) while the
+# test config keeps reading fold '0' from /work. stage.py exits non-zero on a short copy, and
+# `set -e` here makes that abort the job -- training against a truncated tree would "succeed"
+# and silently under-train. STAGE_MIN_IMG_PER_SPC / STAGE_FAMILY_FILTER must match the config.
+if [ -n "${STAGE_PARQUET:-}" ]; then
   set -e
-  python /work/lepinet/ucloud/stage.py "$STAGE_IMAGES" /tmp/global_lepi/images
+  python /work/lepinet/ucloud/stage.py \
+    --parquet "$STAGE_PARQUET" \
+    --src "${STAGE_SRC:-/work/global_lepi/images}" \
+    --dst "${STAGE_DST:-/tmp/global_lepi/images}" \
+    --min-img-per-spc "${STAGE_MIN_IMG_PER_SPC:-50}" \
+    --family-filter "${STAGE_FAMILY_FILTER:-}"
   set +e
 fi
