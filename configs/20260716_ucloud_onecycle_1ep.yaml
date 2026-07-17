@@ -1,0 +1,47 @@
+version: 1.0
+# Timing probe: 20260714_heads_global_independent_muon_onecycle.yaml on the FULL dataset,
+# cut to a single epoch, to measure a UCloud B200 against the local 5090 (1:35-2:14 per
+# epoch on the same recipe). Only nb_epochs and the /work paths differ from that config.
+#
+# One caveat on the science: one_cycle anneals over the whole budget, so this epoch's LR
+# curve is a complete 1-epoch cycle, not epoch 0 of a 5-epoch cycle. The f1 here is NOT
+# comparable to the reference run's epoch 0 -- this config exists to measure seconds, not
+# accuracy.
+desc: heads-global-independent-muon-onecycle-effnetv2s-ucloud-1ep
+train:
+  parquet_path: /work/global_lepi/0032836-250426092105405_processing_metadata_postprocessed_quality_filtered.parquet
+  # Node-local NVMe, filled by ucloud/stage.py during setup. Reading straight from the
+  # /work mount caps at ~170 img/s (fastai's default 16 workers x ~90 ms of network
+  # latency per file) and costs ~8.7 h/epoch; from local disk the limit is JPEG decode.
+  img_dir: /tmp/global_lepi/images
+  out_dir: /work/lepinet/data/ucloud_models   # stays on the drive so results survive
+  fold: '1'
+  min_img_per_spc: 50
+  # fastai defaults to min(16, cpus) regardless of the box; this product has 48 vCPU and
+  # decode is the bottleneck once the data is local, so give it every core.
+  num_workers: 48
+  model_name: heads-global-independent-muon-onecycle-effnetv2s-ucloud-1ep
+  model_arch_name: efficientnet_v2_s
+  head: independent
+  nb_epochs: 1
+  base_lr: 0.001
+  batch_size: 64
+  aug_img_size: 460
+  img_size: 256
+  optimizer: muon
+  fp16: true
+  schedule: one_cycle
+  hierarchy_path: null
+  family_filter: []
+  decoder_num_layers: 4
+  decoder_nhead: 1
+  precision: fp16
+  grad_clip: 5.0
+  warmup_epochs: 0.5
+  aug_kwargs:
+    max_warp: 0.0
+    max_lighting: 0.0
+    p_lighting: 0.0
+    flip_vert: true
+    max_rotate: 15.0
+    max_zoom: 1.1

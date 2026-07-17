@@ -72,6 +72,7 @@ from mini_trainer.training.loss import class_weight_distribution_regularization
 from mini_trainer.training.muon import MuonAuxAdamW
 
 v4 = importlib.import_module("028_lepi_hierarchical_multihead_v4")
+longtail = importlib.import_module("034_longtail")
 
 VALID_CONFIG_VERSIONS = [1.0]
 HIERARCHY_LEVELS = v4.HIERARCHY_LEVELS  # ["speciesKey", "genusKey", "familyKey"], finest -> coarsest
@@ -184,10 +185,14 @@ class MultiLevelLossWrapper:
     already on the right device.
     """
 
-    def __init__(self, criterion):
+    def __init__(self, criterion, logit_adjustment=None):
         self.criterion = criterion
+        # Optional dev/034.LogitAdjustment: shifts logits by tau*log(prior) at train time only.
+        self.logit_adjustment = logit_adjustment
 
     def __call__(self, preds, *yb):
+        if self.logit_adjustment is not None:
+            preds = self.logit_adjustment(preds)
         targets = torch.stack(yb, dim=1)
         return sum(self.criterion(preds, targets))
 
@@ -303,6 +308,21 @@ class ClassDistributionRegularizer(Callback):
         self.learn.loss = self.learn.loss_grad.clone()
 
 
+class LogitAdjustCallback(Callback):
+    """Turns the loss's `LogitAdjustment` (dev/034) on during training and off during
+    validation, so tau*log(prior) is added only while learning (Menon et al.: predict on raw
+    logits). Metrics are unaffected either way -- they read `learn.pred` (the model's raw
+    logits), never the loss-internal adjusted copy -- so this only keeps `valid_loss`
+    comparable across configs."""
+
+    order = -6  # before the loss is computed
+
+    def before_batch(self):
+        la = getattr(self.learn.loss_func, "logit_adjustment", None)
+        if la is not None:
+            la.training = self.training
+
+
 class SupervisionContextCallback(Callback):
     """Exposes the batch's hierarchy labels via `SupervisionContext` for the
     duration of the forward+loss pass, as mini_trainer's own `train_one_epoch`
@@ -319,6 +339,27 @@ class SupervisionContextCallback(Callback):
 # ---------------------------------------------------------------------------
 # Training
 # ---------------------------------------------------------------------------
+
+def warmup_cos_schedule(n_epoch, lr, warmup_epochs, schedule, warmup_div=100.0, cos_pct=0.25):
+    """Builds the combined lr-schedule function (a fn of `pos` in [0,1] over the *whole*
+    n_epoch run) used by `fit_warmup_cos`, without calling `learn.fit`. Split out so
+    `fit_resume` can rebuild the exact same curve and continue it after an interruption,
+    instead of restarting the anneal from scratch."""
+    warmup_pct = warmup_epochs / n_epoch
+    if not 0 < warmup_pct < 1:
+        raise ValueError(f"warmup_epochs ({warmup_epochs}) must be in (0, n_epoch={n_epoch}).")
+    ramp = SchedLin(lr / warmup_div, lr)
+    if schedule == "one_cycle":
+        pcts, scheds = [warmup_pct, 1 - warmup_pct], [ramp, SchedCos(lr, 0)]
+    else:  # flat_cos: ramp -> flat -> cosine (cosine over the final cos_pct of the whole run)
+        flat_pct = 1 - warmup_pct - cos_pct
+        if flat_pct <= 0:
+            raise ValueError(f"warmup_epochs too large: no room for the flat phase before the "
+                             f"final {cos_pct:.0%} cosine anneal.")
+        pcts = [warmup_pct, flat_pct, cos_pct]
+        scheds = [ramp, SchedNo(lr, lr), SchedCos(lr, 0)]
+    return combine_scheds(pcts, scheds)
+
 
 def fit_warmup_cos(learn, n_epoch, lr, warmup_epochs, schedule, warmup_div=100.0, cos_pct=0.25):
     """`fit_flat_cos`/`fit_one_cycle` with a short LR warmup ramp prepended.
@@ -341,21 +382,24 @@ def fit_warmup_cos(learn, n_epoch, lr, warmup_epochs, schedule, warmup_div=100.0
     warmup phase). Only `lr` is scheduled (momentum left at the optimiser default) so this
     works for the tuple-hyper Muon optimiser too.
     """
-    warmup_pct = warmup_epochs / n_epoch
-    if not 0 < warmup_pct < 1:
-        raise ValueError(f"warmup_epochs ({warmup_epochs}) must be in (0, n_epoch={n_epoch}).")
-    ramp = SchedLin(lr / warmup_div, lr)
-    if schedule == "one_cycle":
-        pcts, scheds = [warmup_pct, 1 - warmup_pct], [ramp, SchedCos(lr, 0)]
-    else:  # flat_cos: ramp -> flat -> cosine (cosine over the final cos_pct of the whole run)
-        flat_pct = 1 - warmup_pct - cos_pct
-        if flat_pct <= 0:
-            raise ValueError(f"warmup_epochs too large: no room for the flat phase before the "
-                             f"final {cos_pct:.0%} cosine anneal.")
-        pcts = [warmup_pct, flat_pct, cos_pct]
-        scheds = [ramp, SchedNo(lr, lr), SchedCos(lr, 0)]
-    sched = {"lr": combine_scheds(pcts, scheds)}
+    sched = {"lr": warmup_cos_schedule(n_epoch, lr, warmup_epochs, schedule, warmup_div, cos_pct)}
     learn.fit(n_epoch, cbs=ParamScheduler(sched))
+
+
+def front_loaded_schedule(n_epoch, lr, warmup_epochs, fast_decay_epochs, lr_mid_frac, warmup_div=100.0):
+    """Builds the combined lr-schedule function used by `fit_front_loaded` (see `warmup_cos_schedule`
+    for why this is split out of the `learn.fit` call)."""
+    warmup_pct = warmup_epochs / n_epoch
+    fast_end_pct = fast_decay_epochs / n_epoch
+    fast_pct = fast_end_pct - warmup_pct
+    slow_pct = 1 - fast_end_pct
+    if not (warmup_pct > 0 and fast_pct > 0 and slow_pct > 0):
+        raise ValueError(f"Need 0 < warmup_epochs ({warmup_epochs}) < fast_decay_epochs "
+                         f"({fast_decay_epochs}) < n_epoch ({n_epoch}).")
+    lr_mid = lr * lr_mid_frac
+    pcts = [warmup_pct, fast_pct, slow_pct]
+    scheds = [SchedLin(lr / warmup_div, lr), SchedCos(lr, lr_mid), SchedCos(lr_mid, 0)]
+    return combine_scheds(pcts, scheds)
 
 
 def fit_front_loaded(learn, n_epoch, lr, warmup_epochs, fast_decay_epochs, lr_mid_frac, warmup_div=100.0):
@@ -372,18 +416,27 @@ def fit_front_loaded(learn, n_epoch, lr, warmup_epochs, fast_decay_epochs, lr_mi
     refinement. The trade-off is exploration: committing this early risks a lower final plateau
     if one high-LR epoch finds a worse basin than several would. LR-only scheduling (Muon-safe).
     """
-    warmup_pct = warmup_epochs / n_epoch
-    fast_end_pct = fast_decay_epochs / n_epoch
-    fast_pct = fast_end_pct - warmup_pct
-    slow_pct = 1 - fast_end_pct
-    if not (warmup_pct > 0 and fast_pct > 0 and slow_pct > 0):
-        raise ValueError(f"Need 0 < warmup_epochs ({warmup_epochs}) < fast_decay_epochs "
-                         f"({fast_decay_epochs}) < n_epoch ({n_epoch}).")
-    lr_mid = lr * lr_mid_frac
-    pcts = [warmup_pct, fast_pct, slow_pct]
-    scheds = [SchedLin(lr / warmup_div, lr), SchedCos(lr, lr_mid), SchedCos(lr_mid, 0)]
-    sched = {"lr": combine_scheds(pcts, scheds)}
+    sched = {"lr": front_loaded_schedule(n_epoch, lr, warmup_epochs, fast_decay_epochs, lr_mid_frac, warmup_div)}
     learn.fit(n_epoch, cbs=ParamScheduler(sched))
+
+
+def fit_resume(learn, full_sched, n_epoch, epochs_done):
+    """Continues an interrupted run whose LR followed `full_sched` (a fn of `pos` in [0,1] over
+    the *original* `n_epoch`-epoch run, as returned by `warmup_cos_schedule`/`front_loaded_schedule`).
+
+    fastai's own `ParamScheduler` position always restarts at 0 for a fresh `learn.fit` call, so
+    a naive resume would replay the schedule's *start* (e.g. the warmup ramp) instead of picking
+    up where the anneal left off. This remaps that restarted [0,1] range back onto
+    `[epochs_done/n_epoch, 1]` of the original curve, so the LR trajectory across the interruption
+    is identical to what an uninterrupted run would have produced -- only the wall-clock gap
+    differs, not the optimisation path.
+    """
+    start_pos = epochs_done / n_epoch
+    remaining = n_epoch - epochs_done
+    if remaining <= 0:
+        raise ValueError(f"epochs_done ({epochs_done}) >= n_epoch ({n_epoch}); nothing to resume.")
+    resumed = lambda pos: full_sched(start_pos + pos * (1 - start_pos))
+    learn.fit(remaining, cbs=ParamScheduler({"lr": resumed}))
 
 
 def train(
@@ -418,6 +471,10 @@ def train(
     fast_decay_epochs: float = 1.0,
     lr_mid_frac: float = 0.1,
     class_reg_strength: float = 0.0,
+    oversample_power: float = 0.0,
+    logit_adjust_tau: float = 0.0,
+    resume_checkpoint: str = None,
+    resume_epochs_done: int = 0,
 ):
     if head not in HEAD_CLASSES:
         raise ValueError(f"Unknown head {head!r}; must be one of {list(HEAD_CLASSES)}.")
@@ -441,7 +498,13 @@ def train(
 
     cls2idx, sparse_masks = build_class_spec(df, vocabs)
 
-    dls = v4.make_dls(df, vocabs, img_dir, aug_img_size, img_size, batch_size, num_workers, aug_kwargs=aug_kwargs)
+    # Long-tail resampling (dev/034): oversample rare species in the train loader. Weights are
+    # over the finest level; computed on the training split only. power=0 -> off (uniform).
+    sample_wgts = longtail.sample_weights(df, level=HIERARCHY_LEVELS[0], power=oversample_power)
+    if sample_wgts is not None:
+        print(f"Rare-class oversampling ON (power={oversample_power}, level={HIERARCHY_LEVELS[0]}).")
+    dls = v4.make_dls(df, vocabs, img_dir, aug_img_size, img_size, batch_size, num_workers,
+                      aug_kwargs=aug_kwargs, sample_wgts=sample_wgts)
 
     arch = getattr(importlib.import_module("fastai.vision.all"), model_arch_name)
     nf = v4.body_out_features(arch)
@@ -453,6 +516,13 @@ def train(
     criterion = MultiLevelWeightedCrossEntropyLoss(
         num_classes=n_classes, device=device, dtype=torch.float32, weights=level_weights, label_smoothing=label_smoothing
     )
+
+    # Long-tail logit adjustment (dev/034): add tau*log(prior) to logits at train time only.
+    logit_adjust = None
+    if logit_adjust_tau:
+        adjustments = longtail.logit_adjustments(df, vocabs, HIERARCHY_LEVELS, tau=logit_adjust_tau, device=device)
+        logit_adjust = longtail.LogitAdjustment(adjustments)
+        print(f"Logit adjustment ON (tau={logit_adjust_tau}).")
 
     custom_head = build_head(
         head, nf, n_classes, cls2idx, sparse_masks, decoder_kwargs={"num_layers": decoder_num_layers, "nhead": decoder_nhead}
@@ -480,13 +550,14 @@ def train(
         # over the custom head would crash on RMSNorm's 1D weight and would otherwise
         # silently fight mini_trainer's own initialization for the other heads.
         init=None,
-        loss_func=MultiLevelLossWrapper(criterion),
+        loss_func=MultiLevelLossWrapper(criterion, logit_adjustment=logit_adjust),
         metrics=metrics,
         model_dir=out_dir / "models",
         cbs=[
             GCCallback(),
             NaNGuard(),
             *([ClassDistributionRegularizer(class_reg_strength)] if class_reg_strength and class_reg_strength > 0 else []),
+            *([LogitAdjustCallback()] if logit_adjust is not None else []),
             SupervisionContextCallback(),
             # Gradient clipping: mini_trainer's own loop clips at 5.0 and skips NaN batches;
             # fastai's loop has neither, so without this an unfrozen Muon+AMP run on the full
@@ -511,6 +582,18 @@ def train(
         # which fastai's loop lacks. Set precision: fp16 in the config to force fp16 anyway.
         learn = learn.to_bf16() if precision == "bf16" else learn.to_fp16()
 
+    if resume_checkpoint:
+        # Recover from an interruption (crash, reboot, preemption): load the last
+        # SaveModelCallback checkpoint's weights and continue the *same* LR curve from where
+        # it left off, rather than restarting the anneal. SaveModelCallback here runs with its
+        # default with_opt=False, so only model weights are on disk -- MuonAuxAdamW's momentum
+        # buffers restart cold, which just costs a few batches of re-warming momentum, not
+        # correctness. `resume_epochs_done` is the number of epochs already completed (0-indexed
+        # epoch N-1's checkpoint -> resume_epochs_done=N).
+        state = torch.load(resume_checkpoint, map_location=device)
+        learn.model.load_state_dict(state)
+        print(f"Resumed model weights from {resume_checkpoint} ({resume_epochs_done}/{nb_epochs} epochs already done).")
+
     if schedule in ("flat_cos", "one_cycle", "front_loaded"):
         # Train everything from step 0 at a uniform base_lr (no frozen-backbone warmup, no
         # discriminative LR). fastai's fine_tune trains the backbone at base_lr/100, which is
@@ -520,9 +603,20 @@ def train(
         learn.unfreeze()
         if schedule == "front_loaded":
             wu = warmup_epochs if warmup_epochs and warmup_epochs > 0 else 0.15
-            fit_front_loaded(learn, nb_epochs, base_lr, wu, fast_decay_epochs, lr_mid_frac)
+            full_sched = front_loaded_schedule(nb_epochs, base_lr, wu, fast_decay_epochs, lr_mid_frac)
         elif warmup_epochs and warmup_epochs > 0:
-            fit_warmup_cos(learn, nb_epochs, base_lr, warmup_epochs, schedule)
+            full_sched = warmup_cos_schedule(nb_epochs, base_lr, warmup_epochs, schedule)
+        else:
+            full_sched = None  # built-in fit_one_cycle/fit_flat_cos: no resumable schedule fn
+
+        if resume_checkpoint:
+            if full_sched is None:
+                raise ValueError("resume_checkpoint needs warmup_epochs > 0 or schedule='front_loaded' -- "
+                                  "the built-in fit_one_cycle/fit_flat_cos paths don't expose a schedule "
+                                  "function to resume from.")
+            fit_resume(learn, full_sched, nb_epochs, resume_epochs_done)
+        elif full_sched is not None:
+            learn.fit(nb_epochs, cbs=ParamScheduler({"lr": full_sched}))
         elif schedule == "one_cycle":
             learn.fit_one_cycle(nb_epochs, base_lr)
         else:

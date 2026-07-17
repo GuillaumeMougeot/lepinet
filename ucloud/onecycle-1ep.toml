@@ -1,0 +1,41 @@
+# Timing probe: one full-dataset epoch on a whole B200, to compare against the 5090.
+#   ucloud q submit ucloud/onecycle-1ep.toml --name lepi-1ep
+# See ucloud/README.md for the mount layout.
+
+name = "lepi-onecycle-1ep"
+replicas = 1
+
+[application]
+name = "pytorch-te"
+version = "26.05"
+
+[product]
+# The full GPU, not the mig.1g slice the smoke test used. The 48 vCPU matter as much as
+# the GPU here: the smoke run's 6 vCPU looked dataloader-bound decoding 460px JPEGs.
+id = "gpu-nvidia-b200-1-gpu"
+category = "gpu-nvidia-b200"
+provider = "ucloud"
+
+[time_allocation]
+hours = 4                       # ~1h staging + ~1h epoch + preprocessing the 1 GB parquet
+
+[sync]
+local = ".."
+remote = "/12347837/repos/lepinet"
+
+[setup]
+script = "setup-staged.sh"      # env + copy the images to node-local NVMe first
+run = "python dev/030_hierarchical_heads_benchmark.py -c configs/20260716_ucloud_onecycle_1ep.yaml"
+
+[schedule]
+auto_extend = "1h"
+max_time = "8h"
+
+[[resources]]
+type = "file"
+path = "/12347837/repos/mini_trainer"
+
+[[resources]]
+type = "file"
+path = "/12347837/datasets/global_lepi"
+read_only = true

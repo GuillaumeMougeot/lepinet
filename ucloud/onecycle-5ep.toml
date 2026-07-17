@@ -1,0 +1,40 @@
+# The real run: reproduce the 5-epoch one_cycle reference (f1_speciesKey 0.8880).
+# Queue it behind the timing probe -- `--after` is afterok, so it only launches if
+# lepi-1ep finishes with exit 0:
+#   ucloud q submit ucloud/onecycle-5ep.toml --name lepi-5ep --after lepi-1ep
+
+name = "lepi-onecycle-5ep"
+replicas = 1
+
+[application]
+name = "pytorch-te"
+version = "26.05"
+
+[product]
+id = "gpu-nvidia-b200-1-gpu"
+category = "gpu-nvidia-b200"
+provider = "ucloud"
+
+[time_allocation]
+hours = 10                      # 5 x ~1h25m measured + preprocessing; auto_extend covers a bad guess
+
+[sync]
+local = ".."
+remote = "/12347837/repos/lepinet"
+
+[setup]
+script = "setup.sh"             # no staging: num_workers gets within 15% of local NVMe
+run = "python dev/030_hierarchical_heads_benchmark.py -c configs/20260716_ucloud_onecycle_5ep.yaml"
+
+[schedule]
+auto_extend = "2h"
+max_time = "24h"
+
+[[resources]]
+type = "file"
+path = "/12347837/repos/mini_trainer"
+
+[[resources]]
+type = "file"
+path = "/12347837/datasets/global_lepi"
+read_only = true

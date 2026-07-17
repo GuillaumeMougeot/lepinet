@@ -3,7 +3,17 @@ requires = ["setuptools>=61.0",
             "setuptools-scm>=8.0"]
 build-backend = "setuptools.build_meta"
 
+# Builds from a source tree without .git (a code sync to a compute node, an sdist) have no
+# tags to read a version from, and setuptools-scm errors out rather than guessing.
 [tool.setuptools_scm]
+fallback_version = "0.0.0"
+
+# The repo has no importable `lepinet` package -- the code lives in dev/ as numbered
+# scripts that import each other by filename (importlib), not as a library. Without this,
+# setuptools' flat-layout auto-discovery tries to package dev/bash/data/logs/configs and
+# refuses to build. Empty list = install dependencies only.
+[tool.setuptools]
+packages = []
 
 [project]
 name = "lepinet"
@@ -14,13 +24,34 @@ authors = [
 ]
 description = "LepiNet. Framework for Lepidoptera image classification."
 readme = "README.md"
-requires-python = ">=3.9"
+# torch==2.12.1 ships no wheels below 3.10, so ">=3.9" made the metadata unsatisfiable on
+# 3.9 and resolvers say so out loud.
+requires-python = ">=3.10"
 classifiers = [
     "Programming Language :: Python :: 3",
     "Operating System :: OS Independent",
 ]
 dependencies = [
-    "fastai", "aiohttp", "pyyaml", "pandas", "pyarrow>=20.0.0"
+    "fastai", "aiohttp", "pyyaml", "pandas", "pyarrow>=20.0.0",
+    # fastai pulls in spacy; 3.8.14 ships no cp314 wheel and this venv is Python 3.14,
+    # so resolution fails there. 3.8.13 has one. Drop the pin on spacy >= 3.8.15 with
+    # cp314 wheels, or if the venv moves to <= 3.13.
+    "spacy<3.8.14",
+    # dev/030 imports fastai.callback.tensorboard, whose module-level `import tensorboard`
+    # fastai declares nowhere (it treats it as an optional extra). Every run needs it, so
+    # it is a hard dependency here -- without it a fresh env dies on import.
+    "tensorboard",
+    # fastai 2.8.7 declares only `fastcore>=1.8.0`, but fastcore 2.x drops `L.starmap`,
+    # which fastai's own Optimizer.set_hypers calls -- every fit() dies on it. The pin has
+    # to be here because fastai's metadata doesn't exclude it.
+    "fastcore<2",
+    # fastprogress >= 1.1 imports fasthtml, which needs fastcore 2.x -- unsatisfiable
+    # alongside the pin above. 1.0.3 has no such dependency.
+    "fastprogress==1.0.3",
+    # torch and torchvision must be version-matched or the compiled ops fail to register
+    # (`operator torchvision::nms does not exist`). This is the pair the venv is built on.
+    "torch==2.12.1",
+    "torchvision==0.27.1",
 ]
 keywords=['deep learning']
 

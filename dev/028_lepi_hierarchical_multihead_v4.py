@@ -18,7 +18,9 @@ from fastai itself and `fine_tune()` behaves as documented.
 import argparse
 import asyncio
 import importlib
+import json
 from datetime import datetime
+from hashlib import sha1
 from os.path import exists, join
 from pathlib import Path
 from shutil import copyfile
@@ -116,9 +118,28 @@ def build_hierarchy(df):
     )
 
 
+def _cache_key(min_img_per_spc, fold, family_filter):
+    """Short digest of every gen_df argument that changes the cached rows.
+
+    The cache used to be keyed on the parquet's name alone, so a run that set
+    `family_filter` or a different `min_img_per_spc`/`fold` silently loaded a cache built
+    with other settings and trained on the wrong data while looking perfectly healthy.
+    """
+    spec = json.dumps(
+        {
+            "min_img_per_spc": min_img_per_spc,
+            "fold": str(fold),
+            "family_filter": sorted(str(f) for f in (family_filter or ())),
+        },
+        sort_keys=True,
+    )
+    return sha1(spec.encode()).hexdigest()[:8]
+
+
 def gen_df(parquet_path, out_dir, min_img_per_spc, fold, hierarchy_path, family_filter):
     """Load+preprocess the metadata parquet, caching the result next to `out_dir`."""
-    cache_path = out_dir.parent / parquet_path.with_suffix(".lepinet.parquet").name
+    key = _cache_key(min_img_per_spc, fold, family_filter)
+    cache_path = out_dir.parent / f"{parquet_path.stem}.lepinet.{key}.parquet"
 
     if cache_path.exists() and hierarchy_path.exists():
         print(f"Loading cached preprocessed df: {cache_path}")
@@ -143,7 +164,7 @@ def gen_df(parquet_path, out_dir, min_img_per_spc, fold, hierarchy_path, family_
 
 
 def make_dls(df, vocabs, img_dir, aug_img_size, img_size, batch_size, num_workers=None,
-             aug_kwargs=None):
+             aug_kwargs=None, sample_wgts=None):
     # `aug_kwargs` overrides fastai's `aug_transforms` defaults. fastai's defaults are
     # fairly heavy (perspective warp 0.2, lighting 0.2, zoom 1.1) -- fine for many-epoch
     # runs on smaller data, but on this dataset (millions of images, only a handful of
@@ -151,6 +172,10 @@ def make_dls(df, vocabs, img_dir, aug_img_size, img_size, batch_size, num_worker
     # signal the model never gets enough passes to recover, and mini_trainer's own loop
     # (the comparison target) uses lighter geometric aug + no warp/lighting. Pass e.g.
     # {"max_warp": 0.0, "max_lighting": 0.0, "flip_vert": True, "max_rotate": 15.0} to match.
+    #
+    # `sample_wgts` (per-training-row sampling weights from dev/034.sample_weights, aligned to
+    # the is_valid==False rows in df order) turns the train loader into a fastai `WeightedDL`
+    # for rare-class oversampling. None -> ordinary uniform-shuffle loader (default).
     aug_kwargs = aug_kwargs or {}
     dblock = DataBlock(
         blocks=(ImageBlock, *(CategoryBlock(vocab=vocabs[level]) for level in HIERARCHY_LEVELS)),
@@ -165,6 +190,11 @@ def make_dls(df, vocabs, img_dir, aug_img_size, img_size, batch_size, num_worker
         batch_tfms=[*aug_transforms(size=img_size, **aug_kwargs), Normalize.from_stats(*imagenet_stats)],
     )
     dl_kwargs = {} if num_workers is None else {"num_workers": num_workers}
+    if sample_wgts is not None:
+        # dl_type/dl_kwargs propagate through DataBlock.dataloaders to the per-subset DLs;
+        # WeightedDL with wgts=None (valid) behaves as a plain sequential loader.
+        from fastai.callback.data import WeightedDL
+        dl_kwargs.update(dl_type=WeightedDL, dl_kwargs=({"wgts": sample_wgts}, {}))
     return dblock.dataloaders(df, bs=batch_size, **dl_kwargs)
 
 

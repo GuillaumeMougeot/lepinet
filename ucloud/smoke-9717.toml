@@ -1,0 +1,51 @@
+# Smoke test: one lepinet training run on a UCloud GPU.
+#   ucloud q submit ucloud/smoke-9717.toml --name lepi-smoke
+#
+# Mounts inside the job:
+#   /work/lepinet      <- this repo, pushed by [sync] (rw; results land here)
+#   /work/mini_trainer <- the sibling repo, pushed by: ucloud sync push
+#                         ../mini_trainer /12347837/repos/mini_trainer
+#   /work/global_lepi  <- the dataset already on the drive (read-only)
+
+name = "lepi-smoke-9717"
+replicas = 1
+# No ssh_enabled: pytorch-te rejects it outright ("This application does not support SSH
+# but it is required"). Debug via `ucloud q logs` instead.
+
+[application]
+name = "pytorch-te"
+version = "26.05"
+
+[product]
+# Smallest GPU on offer: a 1g MIG slice of a B200 (6 vCPU / 36 GB). The local run uses
+# 8.6 GB on a 5090, so memory is not the constraint -- 6 vCPU for dataloading is.
+id = "gpu-nvidia-b200-1-mig.1g"
+category = "gpu-nvidia-b200"
+provider = "ucloud"
+
+[time_allocation]
+hours = 2                       # generous for ~2 short epochs; [schedule] covers overrun
+
+[sync]
+local = ".."                    # the lepinet repo (this file lives in ucloud/)
+remote = "/12347837/repos/lepinet"
+
+[setup]
+script = "setup.sh"             # build the venv (see the file for why not `python = "uv"`)
+run = "python dev/030_hierarchical_heads_benchmark.py -c configs/20260716_ucloud_smoke_9717_onecycle.yaml"
+
+[schedule]
+auto_extend = "1h"
+max_time = "6h"
+
+# mini_trainer: imported by dev/030 but not a declared dependency of lepinet.
+[[resources]]
+type = "file"
+path = "/12347837/repos/mini_trainer"
+
+# The dataset. Read-only: the run writes only to /work/lepinet/data/ucloud_models, and
+# hierarchy.csv already exists here so nothing needs to be created.
+[[resources]]
+type = "file"
+path = "/12347837/datasets/global_lepi"
+read_only = true
