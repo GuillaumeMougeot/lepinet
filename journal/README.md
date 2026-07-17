@@ -6,9 +6,16 @@ it reads every run's saved `config.yaml` and `metrics.json` and prints the table
 disk records *why*, or what you concluded. That is what this directory is for.
 
 ```
-dev/036_ledger.py   ->  the numbers   (generated, always current, never wrong)
+dev/036_ledger.py   ->  reads every run's config + metrics off disk
+RESULTS.md          ->  the numbers   (generated: `dev/036_ledger.py --snapshot`, then commit)
 journal/            ->  the reasoning (written by hand, the part that can be lost)
 ```
+
+`RESULTS.md` is generated but **tracked on purpose**: the ledger's source lives under `data/`,
+which is a symlink to machine-local storage and gitignored, so a clone anywhere else sees no
+runs at all. The snapshot is the only copy of those numbers that leaves the training box —
+and `git log -p RESULTS.md` is the project's result history. Regenerate and commit it whenever
+a run finishes.
 
 ## Conventions
 

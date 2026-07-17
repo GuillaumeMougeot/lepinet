@@ -4,7 +4,9 @@ One YAML per experiment, named `<YYYYMMDD>_<what it does>.yaml`. A config is con
 exactly one dev script (`train:` → `dev/030`, `test:` → `dev/032`), and dev/030 copies it into
 the run directory, so **every result on disk carries the config that produced it**.
 `python dev/036_ledger.py` reads those copies back and prints what each run tested and scored —
-that is the fastest way to find "which config produced the good number".
+that is the fastest way to find "which config produced the good number". [`RESULTS.md`](../RESULTS.md)
+is its committed snapshot (`--snapshot`), and the only place those numbers exist off the
+training box, since `data/` is gitignored.
 
 ## The winning recipe
 
