@@ -295,7 +295,13 @@ def test(
     print(f"Test images: {len(test_df)} | species present: {test_df['speciesKey'].nunique()}")
 
     # --- reconstruct model (dls only used for its transform pipeline + vocab) ---
-    dls = v4.make_dls(test_df, vocabs, img_dir, aug_img_size, img_size, batch_size, num_workers)
+    # lowmem=False here on purpose: inference feeds `learn.dls.test_dl(test_df)` a DataFrame,
+    # but the lowmem DataBlock's getters index numpy arrays by integer, so a DataFrame row
+    # reaches them as a pandas.Series and fastai's type dispatch aborts ("got pandas.Series").
+    # The test is a single pass over one fold, so the per-worker memory the lowmem path saves
+    # does not matter here; the DataFrame path is the one test_dl was built for.
+    dls = v4.make_dls(test_df, vocabs, img_dir, aug_img_size, img_size, batch_size, num_workers,
+                      lowmem=False)
     learn = load_model(checkpoint, dls, decoder_num_layers, decoder_nhead)
     print(f"Model loaded (head={checkpoint['head']}, arch={checkpoint['model_arch_name']}).")
 
