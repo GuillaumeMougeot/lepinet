@@ -31,15 +31,25 @@ source /tmp/venv/bin/activate
 # nobody remembers doing. Verified below rather than assumed.
 uv pip install /work/lepinet /work/mini_trainer /work/mini_metrics
 
-# Fail loudly and early if the GPU isn't visible -- otherwise fastai silently trains on
-# CPU and the run looks like a timeout instead of a misconfiguration.
+# Preflight: fail before burning GPU-hours, not after.
 #
-# Import every module the job will need up front, including the ones only the *test* half
-# touches. A missing import that surfaces after training is the worst case: it costs a full
-# run's GPU-hours to discover something a two-second check catches at startup. This is
-# exactly how mini_metrics slipped through -- five jobs never ran the test step.
-python - <<'PY'
-import importlib, sys
+# Checks the GPU is visible (otherwise fastai silently trains on CPU and the run looks like a
+# timeout rather than a misconfiguration), and imports every module the job needs -- including
+# the ones only the *test* half touches. An import error that surfaces after training is the
+# worst case: it costs a full run to learn something a two-second check catches at startup.
+# That is exactly how mini_metrics slipped through (five jobs never reached the test step).
+#
+# `if ! python ...; then exit 1; fi` is load-bearing. This script has no `set -e`, so a bare
+# heredoc that exits non-zero prints its error and the script cheerfully continues to training
+# -- which is what happened on 2026-07-17 and what made the *existing* CUDA check toothless
+# too: it could never have stopped a CPU-only job despite the comment claiming it would.
+#
+# Only genuinely required modules belong here. timm is NOT one: dev/014 (the archived
+# multilabel line) imports it, and mini_trainer imports it lazily inside timm-architecture
+# code paths, but nothing this pipeline runs touches it -- efficientnet_v2_s resolves through
+# fastai/torchvision. Listing it made the preflight fail on a package the job never needs.
+if ! python - <<'PY'
+import importlib
 import torch
 print("torch", torch.__version__, "cuda_available", torch.cuda.is_available())
 if not torch.cuda.is_available():
@@ -48,15 +58,19 @@ print("device", torch.cuda.get_device_name(0))
 
 missing = []
 for mod in ("fastai.vision.all", "fastai.callback.tensorboard", "mini_trainer.hierarchical.model",
-            "mini_trainer.training.muon", "mini_metrics.metrics", "psutil", "timm"):
+            "mini_trainer.training.muon", "mini_metrics.metrics", "psutil"):
     try:
         importlib.import_module(mod)
     except Exception as e:
         missing.append(f"{mod}: {e}")
 if missing:
     raise SystemExit("preflight import check failed:\n  " + "\n  ".join(missing))
-print("preflight: all required modules import (training AND test halves)")
+print("preflight: OK -- GPU visible, all required modules import (training AND test halves)")
 PY
+then
+  echo "PREFLIGHT FAILED -- aborting before the run starts (see the error above)."
+  exit 1
+fi
 
 # Stage the images onto node-local NVMe. Skipped when STAGE_IMAGES is unset, so the
 # smoke test (which reads a single family) can keep reading straight from /work.
