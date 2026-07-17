@@ -65,6 +65,14 @@ written. Fetch them with `ucloud files download`.
   sets `SETUPTOOLS_SCM_PRETEND_VERSION`.
 - **Don't use ucloud-api's `python = "uv"` shortcut here.** It runs `uv sync`, which would
   build the venv on the network drive. `setup.sh` builds it on the job's local disk.
+- **`/work/global_lepi/hierarchy.csv` is STALE: 11,939 species, but the dataset has 12,041.**
+  It is on a read-only mount, so it cannot simply be regenerated in place. This used to poison
+  every checkpoint trained here: dev/030 built its masks from the dataframe but *saved* the
+  hierarchy it read off disk, so the checkpoint disagreed with itself by 102 classes, and
+  dev/032 then failed with "Unable to construct sparse masks" -- after training finished.
+  Fixed 2026-07-17: dev/030 now saves `build_hierarchy(df)`, so the checkpoint is
+  self-consistent whatever the file says. Checkpoints trained on UCloud *before* that fix have
+  a truncated hierarchy and cannot be evaluated by dev/032.
 - **The `gen_df` cache ignores filter settings** — it is keyed on path alone. A cached
   `.lepinet.parquet` from a full-dataset run would silently override `family_filter`, so
   filtered runs need their own `out_dir`.

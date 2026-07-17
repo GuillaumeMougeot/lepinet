@@ -757,7 +757,17 @@ def train(
             "model_arch_name": model_arch_name,
             "vocabs": vocabs,
             "cls2idx": cls2idx,
-            "hierarchy": hierarchy.to_dict(orient="list"),
+            # Derived from `df`, NOT from the `hierarchy` gen_df read off disk. The masks in
+            # `cls2idx`/`sparse_masks` come from df, so saving a file-sourced hierarchy lets a
+            # checkpoint disagree with itself whenever hierarchy.csv doesn't match the data --
+            # and dev/032 rebuilds its masks from this field, so the disagreement surfaces
+            # there, after training has finished and the GPU-hours are spent.
+            # That is not hypothetical: /work/global_lepi/hierarchy.csv on UCloud has 11,939
+            # species while the dataset has 12,041, so every checkpoint trained there carried a
+            # hierarchy missing 102 of its own classes, and mini_trainer refused to build masks
+            # from it ("Unable to construct sparse masks"). Deriving from df makes the
+            # checkpoint self-consistent by construction, whatever hierarchy.csv happens to say.
+            "hierarchy": v4.build_hierarchy(df).to_dict(orient="list"),
         },
         model_path,
     )
