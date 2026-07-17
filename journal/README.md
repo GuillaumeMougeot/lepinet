@@ -45,3 +45,4 @@ dead ends, the thing you would tell someone to save them a week.
 | [2026-07-does-longtail-help.md](2026-07-does-longtail-help.md) | Do oversampling / logit adjustment push species macro-F1 past 0.8887? | RESOLVED — oversampling **new project best 0.9148**; logit adjustment 0.9031, not recommended (broke genus/family) |
 | [2026-07-gpu-hang.md](2026-07-gpu-hang.md) | What killed the training box overnight on 07-16? | RESOLVED (as far as evidence allows) — hardware |
 | [2026-07-venv-uv-sync-incident.md](2026-07-venv-uv-sync-incident.md) | What broke the venv, and what is the known-good version set? | RESOLVED — never run `uv sync` here |
+| [2026-07-ucloud-benchmark-oom.md](2026-07-ucloud-benchmark-oom.md) | Why does the UCloud MT-head benchmark keep OOM-ing? | DIAGNOSED — fork+COW dataframe leak; worker-count can't fix it; real fix open |

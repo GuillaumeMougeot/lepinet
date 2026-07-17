@@ -6,16 +6,30 @@ traceback. Silence + no Python exception = the kernel's OOM killer, i.e. HOST ra
 CUDA OOM raises a loud `torch.cuda.OutOfMemoryError`). The node has 288 GB; the run used
 `num_workers: 512`, i.e. a 576 MB budget per worker.
 
-The suspected mechanism is copy-on-write breakage: dev/030 sets `multiprocessing
-.set_start_method("fork")`, so each worker inherits the 5.7M-row DataFrame by COW -- but
-CPython's refcounting *writes* to an object's header whenever it reads it, so pages are copied
-as workers touch rows. Footprint therefore grows with batches consumed rather than jumping at
-startup -- exactly the observed ramp-then-cliff -- and saturates once a worker has touched the
-whole frame, at roughly `df_size + torch + prefetch buffers` each.
+The mechanism is copy-on-write breakage: dev/030 sets `multiprocessing.set_start_method("fork")`,
+so each worker inherits the 5.7M-row DataFrame by COW -- but CPython's refcounting *writes* to an
+object's header whenever it reads it, so pages are copied as workers touch rows. Footprint grows
+with batches consumed rather than jumping at startup -- exactly the observed ramp-then-cliff.
 
-Measured 2026-07-17 on the global df (634 MB deep): ~1.1 GB marginal per worker. So
-  256 workers -> ~270-295 GB, just inside the 288 GB node (the 5ep run survived, thinly)
-  512 workers -> ~525-575 GB, ~2x over  -> OOM-killed ~36 min in, once the leak saturated.
+Measured 2026-07-17, two phases (confirmed on-node with the guard's per-batch logging):
+  1. A fast burst as the contiguous pointer arrays and index get dirtied: to ~1.16 GB/worker
+     (237 GB at 192 workers) within ~300 batches.
+  2. A slow creep as workers touch ever-more distinct row string-objects (scattered, one page
+     dirtied at a time). Coupon-collector-shaped, decelerating (~0.007 -> 0.006 GB/batch) but
+     NOT flattening under the cap within an epoch: 192 workers crept from 237 GB (82%) at batch
+     300 to 265 GB (92%) at batch 4525, where the guard aborted. So the "plateau" is a knee,
+     not a ceiling.
+
+Consequence: worker-count tuning cannot make this safe on a long run -- any count that starts
+comfortably still creeps into the cap. 512 -> OOM in the first minutes; 256 -> ~batch 315;
+192 -> ~batch 4500. The real fix is to stop forking a pandas DataFrame at all.
+
+DISPROVEN fix (--arrow): converting the worker-read columns to pyarrow strings changed the leak
+by nothing (+4.72 vs +4.77 GB over 125 batches at 16 workers). fastai's DataBlock walks the frame
+with `df.iloc[i]`, which materialises each row as a Python-object Series regardless of column
+dtype, so the refcount churn is in the traversal, not the storage. A real fix must bypass the
+DataFrame for the hot path (pre-extract paths+labels to numpy arrays + custom getters), and needs
+label-correctness validation, not just this memory curve.
 
 This probe reproduces the dataloader half only -- no model, no GPU, no CUDA -- so it costs zero
 GPU-hours and can run on any box. It measures total PSS (not RSS -- see tree_pss_mb) across the
@@ -126,6 +140,8 @@ def main():
                    help="RAM of the machine being extrapolated for (B200 1-gpu node = 288).")
     p.add_argument("--trace-every", type=int, default=0,
                    help="Sample PSS every N batches to see whether it grows (the COW signature).")
+    p.add_argument("--arrow", action="store_true",
+                   help="Convert the worker-read columns to pyarrow strings (the COW-leak fix under test).")
     p.add_argument("--single", type=int, default=None,
                    help="Internal: probe exactly this worker count and print one JSON line. "
                         "main() re-invokes itself with this so each probe gets a clean process.")
@@ -142,6 +158,18 @@ def main():
                                "1", hierarchy_path, [])
     vocabs = {level: sorted(df[level].unique().tolist()) for level in HIERARCHY_LEVELS}
     print(f"  {len(df):,} rows, {len(vocabs['speciesKey']):,} species")
+
+    if args.arrow:
+        # The leak's root cause: the columns workers read (image_path + the 3 keys) are pandas
+        # object dtype, i.e. millions of individual Python str objects. Every ColReader access
+        # in a forked worker increfs one, dirtying its shared COW page -- so RSS climbs with
+        # rows touched. pyarrow-backed strings store the whole column in one contiguous Arrow
+        # buffer (one object), so per-row access materialises a transient str and touches no
+        # shared refcount. Same on-disk bytes, drastically fewer objects to incref.
+        cols = ["image_path", *HIERARCHY_LEVELS]
+        for c in cols:
+            df[c] = df[c].astype("string[pyarrow]")
+        print("  ARROW: converted image_path + keys to pyarrow strings (leak-fix candidate)")
     print(f"  df memory: {df.memory_usage(deep=True).sum()/1e6:.0f} MB (deep) — this is what fork shares COW\n")
 
     aug_kwargs = {"max_warp": 0.0, "max_lighting": 0.0, "p_lighting": 0.0,
@@ -168,6 +196,8 @@ def run_isolated(args):
                "--batch-size", str(args.batch_size), "--aug-img-size", str(args.aug_img_size),
                "--img-size", str(args.img_size), "--min-img-per-spc", str(args.min_img_per_spc),
                "--oversample", str(args.oversample), "--trace-every", str(args.trace_every)]
+        if args.arrow:
+            cmd.append("--arrow")
         out = subprocess.run(cmd, capture_output=True, text=True)
         line = next((l for l in out.stdout.splitlines() if l.startswith("RESULT ")), None)
         if line is None:
