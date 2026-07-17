@@ -54,7 +54,9 @@ aug stays as-is.
 ### Implementation options, lightest first
 
 1. **torchvision.io.decode_jpeg(device="cuda")** -- nvJPEG, already in our stack (torchvision
-   0.27). Plan: a Dataset that returns raw bytes (a uint8 tensor of the file); a custom collate
+   0.27). **Measured 2026-07-18 on the local 5090: batched GPU decode of 256 JPEGs = 3794 img/s
+   (decode only), vs the ~1100 img/s CPU ceiling -- 3.4× on a weaker GPU; the B200's dedicated
+   decode hardware should beat that.** Plan: a Dataset that returns raw bytes (a uint8 tensor of the file); a custom collate
    that keeps them as a list (JPEGs are variable-length); a fastai `before_batch`/batch_tfm that
    calls `decode_jpeg(list, device="cuda")`, resizes each to `aug_img_size` on the GPU, and
    stacks -- then fastai's existing aug/normalize batch_tfms run unchanged. Lightest dependency,
