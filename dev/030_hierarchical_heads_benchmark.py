@@ -265,53 +265,63 @@ class HostMemoryGuard(Callback):
         self.abort_at_frac = abort_at_frac
 
     @staticmethod
-    def _cgroup_mem():
-        """(used_bytes, limit_bytes) for *this container*, or None outside one.
+    def _cgroup_dir():
+        """The cgroup-v2 dir whose memory.max actually caps this process, or None if uncapped.
 
-        `psutil.virtual_memory()` reads /proc/meminfo, which reports the physical host and
-        ignores the cgroup entirely: inside a UCloud job it cheerfully says 2434 GB total /
-        2307 GB available while the cgroup caps the job at 288 GB and the kernel kills it
-        there. Watching the host figure is watching the wrong number -- it can never trip.
-        The limit that actually binds is the cgroup's, so read that; fall back to the host
-        only when there is no cgroup (e.g. the local workstation).
+        A container namespaces the cgroup mount, so its own limit is at the root of
+        /sys/fs/cgroup. On a plain systemd host the process sits in a nested slice named by
+        /proc/self/cgroup and the root carries no limit -- try the nested path first, root
+        second. `psutil.virtual_memory()` is the wrong signal entirely: it reads /proc/meminfo
+        (the physical host), so inside a UCloud job it reports 2434 GB while the cgroup caps at
+        288 GB and the kernel kills there.
         """
-        # A container namespaces the cgroup mount, so its own limit is at the root of
-        # /sys/fs/cgroup. On a plain systemd host the process instead sits in a nested slice
-        # named by /proc/self/cgroup, and the root carries no limit -- try both, nearest first.
-        candidates = [(Path("/sys/fs/cgroup/memory.current"), Path("/sys/fs/cgroup/memory.max")),
-                      (Path("/sys/fs/cgroup/memory/memory.usage_in_bytes"),
-                       Path("/sys/fs/cgroup/memory/memory.limit_in_bytes"))]
+        candidates = []
         try:
             for line in Path("/proc/self/cgroup").read_text().splitlines():
                 rel = line.split(":")[-1].lstrip("/")
                 if rel:
-                    base = Path("/sys/fs/cgroup") / rel
-                    candidates.insert(0, (base / "memory.current", base / "memory.max"))
+                    candidates.append(Path("/sys/fs/cgroup") / rel)
         except OSError:
             pass
-
-        for cur, mx in candidates:
+        candidates.append(Path("/sys/fs/cgroup"))
+        for base in candidates:
             try:
-                limit = mx.read_text().strip()
-                if limit == "max":
-                    return None  # cgroup exists but is uncapped: host RAM is the real limit
-                limit = int(limit)
-                # v1 signals "no limit" with a sentinel near 2^63, not the string "max".
-                if limit > (1 << 62):
-                    return None
-                return int(cur.read_text().strip()), limit
-            except (OSError, ValueError):
+                limit = (base / "memory.max").read_text().strip()
+            except OSError:
                 continue
+            if limit == "max" or int(limit) > (1 << 62):
+                return None  # cgroup exists but is uncapped: host RAM is the real limit
+            return base
         return None
 
     def _mem(self):
-        """(used_gb, limit_gb, source) -- the cgroup's numbers when capped, else the host's."""
-        cg = self._cgroup_mem()
-        if cg:
-            return cg[0] / 1e9, cg[1] / 1e9, "cgroup"
+        """(used_gb, limit_gb, cache_gb, source) where `used` is the OOM-RELEVANT memory.
+
+        The distinction is the whole point. `memory.current` includes the page cache, and
+        reading 5.67M image files fills it at ~5 MB/batch (64 JPEGs x ~80 KB) -- but page cache
+        is reclaimable: the kernel frees it under pressure instead of OOM-killing. An earlier
+        version of this guard thresholded on `memory.current` and aborted a perfectly healthy
+        128-worker run at "92%" that was ~168 GB of real memory plus ~90 GB of reclaimable
+        cache. What actually triggers the cgroup OOM killer is unreclaimable memory -- `anon`
+        (plus kernel stacks / page tables), read from `memory.stat`. That is what we threshold
+        on; `file` (cache) is logged but never counted against the limit.
+        """
+        base = self._cgroup_dir()
+        if base is not None:
+            try:
+                limit = int((base / "memory.max").read_text().strip())
+                stat = dict(line.split() for line in (base / "memory.stat").read_text().splitlines())
+                anon = int(stat.get("anon", 0))
+                unreclaimable = anon + int(stat.get("kernel_stack", 0)) + int(stat.get("pagetables", 0)) \
+                    + int(stat.get("unevictable", 0))
+                cache = int(stat.get("file", 0))
+                return unreclaimable / 1e9, limit / 1e9, cache / 1e9, "cgroup-anon"
+            except (OSError, ValueError, KeyError):
+                pass
         import psutil
         vm = psutil.virtual_memory()
-        return vm.used / 1e9, vm.total / 1e9, "host"
+        # Off-cgroup fallback: available-based, which already excludes reclaimable cache.
+        return (vm.total - vm.available) / 1e9, vm.total / 1e9, vm.cached / 1e9, "host"
 
     def _workers(self):
         """The real worker count.
@@ -325,31 +335,33 @@ class HostMemoryGuard(Callback):
             getattr(dl, "num_workers", "?")
 
     def before_fit(self):
-        used, limit, src = self._mem()
+        used, limit, cache, src = self._mem()
         n = self._workers()
         est = f"{n * 1.2:.0f} GB" if isinstance(n, int) else "?"
-        print(f"[mem] limit {limit:.0f} GB ({src}), used {used:.0f} GB | num_workers={n} "
-              f"-> each worker's image pipeline costs ~1.2 GB, so expect ~{est} "
-              f"+ parent (dev/037_dl_memory_probe.py).", flush=True)
+        print(f"[mem] limit {limit:.0f} GB ({src}), real(anon) {used:.0f} GB, cache {cache:.0f} GB "
+              f"| num_workers={n} -> each worker's image pipeline costs ~1.2 GB real, so expect "
+              f"~{est} anon + parent. Page cache grows with images read but is reclaimable "
+              f"(not counted). See dev/037_dl_memory_probe.py.", flush=True)
         if isinstance(n, int) and n * 1.2 > limit * 0.9:
-            print(f"[mem] WARNING: {n} workers x ~1.2 GB is close to or over the {limit:.0f} GB "
-                  f"limit. This is how the 2026-07-17 benchmark died -- silently, 36 min in.",
+            print(f"[mem] WARNING: {n} workers x ~1.2 GB real is close to the {limit:.0f} GB "
+                  f"limit -- this is the anon budget that actually OOMs; lower num_workers.",
                   flush=True)
 
     def after_batch(self):
         if not self.training or self.learn.train_iter % self.every:
             return
-        used, limit, src = self._mem()
+        used, limit, cache, src = self._mem()
         gpu = torch.cuda.memory_allocated() / 1e9 if torch.cuda.is_available() else 0
-        print(f"[mem] batch {self.learn.train_iter}: {used:.0f}/{limit:.0f} GB "
-              f"({used/limit*100:.0f}% of {src}) | GPU allocated {gpu:.1f} GB", flush=True)
+        print(f"[mem] batch {self.learn.train_iter}: real(anon) {used:.0f}/{limit:.0f} GB "
+              f"({used/limit*100:.0f}%), cache {cache:.0f} GB (reclaimable) | GPU {gpu:.1f} GB",
+              flush=True)
         if used / limit > self.abort_at_frac:
             raise RuntimeError(
-                f"Memory at {used:.0f}/{limit:.0f} GB ({used/limit*100:.0f}% of the {src} "
-                f"limit). The OOM killer takes this process next, with no traceback -- aborting "
-                f"first so the reason is on the record. num_workers={self._workers()} x ~1.2 "
-                f"GB/worker (each worker's fastai JPEG-decode pipeline) is the usual cause; lower "
-                f"num_workers. See dev/037_dl_memory_probe.py."
+                f"Unreclaimable memory at {used:.0f}/{limit:.0f} GB ({used/limit*100:.0f}% of "
+                f"the {src} limit) -- this excludes reclaimable page cache, so it is a real OOM "
+                f"risk, not cache pressure. The kernel OOM killer takes this process next with no "
+                f"traceback. num_workers={self._workers()} x ~1.2 GB/worker (fastai JPEG-decode "
+                f"pipeline) is the usual cause; lower num_workers. See dev/037_dl_memory_probe.py."
             )
 
 

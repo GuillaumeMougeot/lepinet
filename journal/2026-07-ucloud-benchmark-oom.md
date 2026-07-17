@@ -72,29 +72,63 @@ Near the cap, time-to-death is node-dependent: two 512-worker runs died at batch
 the kernel reclaiming page cache under memory pressure, starving the image I/O) before the kill.
 "512 survived 36k batches" was really "512 thrashed for 35 minutes then died."
 
+## Second correction: the "creep" is reclaimable page cache, and the guard was miscounting it
+
+The 128-worker run (`verify128`) plateaued in *real* memory at ~168 GB but its cgroup
+`memory.current` kept climbing ~6.6 MB/batch, and the guard aborted it at "92%" around batch
+15,000. That creep is not a leak:
+
+- 64 images/batch x ~80 KB/JPEG ≈ **5.1 MB/batch of file reads** -- matches the ~6.6 MB/batch.
+- `memory.current` includes the **page cache**; `memory.stat` splits it into `anon`
+  (unreclaimable, the real OOM driver) and `file` (page cache, reclaimable). Reading 5.67M
+  images fills `file`; the kernel reclaims it under pressure rather than OOM-killing.
+
+So the guard was thresholding on the wrong number -- total including reclaimable cache -- and
+killed a healthy run whose `anon` was ~168 GB (58%) and stable. This also finally explains why
+**the 5090 never dies**: it reads from local disk, whose page cache is not inside a tight 288 GB
+cgroup, so nothing accounts the image bytes against a hard limit.
+
+The original 256/512 deaths were still genuine: at 256 workers `anon` alone ≈ 307 GB > 288, at
+512 ≈ 614 GB -- unreclaimable, real OOM. Only the 128/192 guard-aborts were false alarms.
+
+**Guard fix:** read `anon + kernel_stack + pagetables + unevictable` from `memory.stat` and
+threshold on that; log `file` (cache) separately but never count it. Off-cgroup (local), fall
+back to `total - available`, which already excludes cache.
+
 ## The fix
 
-The per-worker image-pipeline cost is ~1.2 GB and essentially irreducible without leaving fastai
-or moving decode to the GPU. So the lever is the worker count: keep `workers x 1.2 GB` well under
-the node RAM while still enough workers to saturate the decode ceiling on the mount.
+Two parts, and only the second is the real blocker:
 
-**128 workers** on the 288 GB B200:
-- 128 x 11 files/s (at 90 ms/file) ≈ 1400 files/s raw > the ~1100 img/s decode ceiling -> full
-  throughput, no staging needed.
-- 128 x 1.2 GB ≈ 158 GB plateau (55%) + the bounded decode-size creep (~+20 GB) ≈ 178 GB (~62%)
-  -- real headroom under the guard's 92%.
-- Launched **one job first** and watched the guard's per-batch memory log plateau under ~65%
-  before committing the other two (the 192 attempt taught this: don't launch three on a
-  prediction).
+1. **Worker count for the anon budget.** Real memory is ~1.2 GB/worker (anon: decode + augment +
+   prefetch). `workers x 1.2 GB` must fit the node. **128 workers -> ~168 GB (58% of 288)**,
+   with ~1400 files/s raw > the ~1100 img/s decode ceiling, so full throughput and real margin.
+   (Even 192 -> ~237 GB anon would fit; 128 keeps comfortable headroom.)
+2. **The page cache is reclaimable and harmless** once the guard stops counting it. No staging,
+   no fewer workers needed on that account.
+
+Verified one job first (the 192/128 false-aborts taught: confirm on-node before committing
+three). Watching that `anon` plateaus under ~65% while `file` fills and reclaims.
 
 Kept regardless: the **`lowmem` make_dls rewrite** (numpy-indexed items, byte-identical to the
-DataFrame path). It didn't fix the OOM -- the OOM wasn't the dataframe -- but it is correct, it
-slightly lowers the parent footprint, and it removes a real (if secondary) refcount-churn source.
+DataFrame path). It didn't fix the OOM -- the OOM was never the dataframe -- but it is correct,
+lowers the parent footprint slightly, and removes a real (if secondary) refcount source.
 
-If 128 ever proves marginal on a busier node, the proven fallback is **staging images to
-node-local NVMe** (`ucloud/stage.py` + `setup-staged.sh`): fast storage means ~48 workers
-saturate the decode ceiling, and 48 x 1.2 GB ≈ 58 GB is bulletproof. The README long dismissed
-staging as "not worth it for throughput" -- but it is the memory-safety lever, not a speed one.
+Fallback if a node is ever genuinely anon-tight: **staging to node-local NVMe** (`ucloud/stage.py`
++ `setup-staged.sh`) lets ~48 workers saturate the decode ceiling (48 x 1.2 GB ≈ 58 GB). The
+README dismissed staging as "not worth it for throughput" -- it is a memory lever, not a speed
+one -- but with the page-cache accounting fixed it is not needed for the 288 GB node.
+
+## The trail of corrections (kept on purpose)
+
+This diagnosis was wrong twice before it was right, and each wrong turn was killed by a cheap
+test rather than a GPU run -- which is the point of dev/037 and the guard:
+1. "fork+COW on the DataFrame object columns" -> disproven by `--arrow` and the `lowmem` rewrite
+   (per-worker cost unchanged when the DataFrame left the hot path).
+2. "per-worker image-pipeline high-water that creeps unbounded" -> half right: the *plateau* is
+   the pipeline (~1.2 GB anon/worker), but the *creep* is reclaimable page cache, not anon, and
+   the guard was wrong to count it.
+The stable truth: **anon ≈ 1.2 GB/worker (real, caps the worker count); page cache fills and
+reclaims (harmless once not miscounted).**
 
 ## What got built along the way
 
