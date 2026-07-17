@@ -33,6 +33,16 @@ you genuinely can't afford many workers. But it does **not** raise the ceiling: 
 So staging = memory lever + modest throughput. Good, cheap, done. Not the way to actually use
 the B200.
 
+**Measured end-to-end on UCloud (2026-07-18, `staged-test`):**
+- targeted copy: **5,669,317 files / 450 GB in 12.6 min** (parallel, ~7500 files/s), verified complete.
+- 32 workers on staged NVMe: **48 GB anon (17%)**, epoch **1:22**.
+- vs 128 workers on /work: 168 GB anon, epoch 1:18.
+- 32 workers *under-saturates* the decode ceiling (slightly slower); ~48 workers staged is the
+  throughput optimum (~1:09, ~72 GB) -- but even that barely beats /work, because both are the
+  same ~1100 img/s CPU decode. **Confirmed: staging cuts memory ~3.5× (168 -> ~50-70 GB) and
+  does not meaningfully change speed.** So it is the fix for a RAM-tight node (the 5090), and
+  unnecessary on the 288 GB B200 where 128 workers already runs.
+
 ## GPU decode (design) -- raises the ceiling AND removes the memory bind
 
 The idea: stop decoding JPEGs on the CPU. Read **raw JPEG bytes** on the CPU (cheap, pure I/O)
