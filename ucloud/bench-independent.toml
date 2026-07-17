@@ -1,0 +1,47 @@
+# MT-head benchmark: independent head. One of three jobs run in PARALLEL (independent /
+# hierarchical / autoregressive), identical but for `head:` in the training config.
+#   ucloud q submit ucloud/bench-independent.toml --name bench-independent
+#
+# Each job does the whole pipeline itself -- train, then test at threshold 0 (which also
+# runs the mini_metrics report). Chained with `&&` so the test only runs if training
+# exits 0, and the job's exit status is the pipeline's.
+
+name = "lepi-bench-independent"
+replicas = 1
+
+[application]
+name = "pytorch-te"
+version = "26.05"
+
+[product]
+# Full GPU, 48 vCPU. NOT the MIG slice: 6 vCPU cannot host the 256 loader workers that
+# make the /work mount viable (see ucloud/README.md).
+id = "gpu-nvidia-b200-1-gpu"
+category = "gpu-nvidia-b200"
+provider = "ucloud"
+
+[time_allocation]
+# 10 epochs x ~1h25m measured = ~14h, + preprocessing + a full test pass over 630k
+# images. Generous; auto_extend covers a bad guess and the job self-terminates on exit.
+hours = 20
+
+[sync]
+local = ".."
+remote = "/12347837/repos/lepinet"
+
+[setup]
+script = "setup.sh"
+run = "python dev/030_hierarchical_heads_benchmark.py -c configs/20260717_ucloud_bench_independent_10ep_oversample.yaml && python dev/032_hierarchical_heads_test.py -c configs/20260717_ucloud_bench_test_independent_10ep_oversample.yaml"
+
+[schedule]
+auto_extend = "2h"
+max_time = "36h"
+
+[[resources]]
+type = "file"
+path = "/12347837/repos/mini_trainer"
+
+[[resources]]
+type = "file"
+path = "/12347837/datasets/global_lepi"
+read_only = true

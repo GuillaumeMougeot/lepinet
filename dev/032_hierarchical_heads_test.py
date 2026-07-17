@@ -26,6 +26,7 @@ Usage: python dev/032_hierarchical_heads_test.py --config <test_config.yaml>
 """
 
 import argparse
+import glob
 import importlib
 import json
 from collections import OrderedDict
@@ -149,12 +150,63 @@ def predict(learn, test_df, img_dir, vocabs, device):
 
 
 # ---------------------------------------------------------------------------
+# Checkpoint lookup
+# ---------------------------------------------------------------------------
+
+def resolve_model_path(model_path):
+    """Resolve `model_path`, which may be a glob, to a single checkpoint.
+
+    dev/030 writes to `<out_dir>/<timestamp>-<model_name>/<model_name>.pt`, and the timestamp
+    is minted when the run *starts* -- so a test config written in advance cannot name the
+    checkpoint a training run is about to produce. That matters for a chained train-then-test
+    job (e.g. UCloud batch), where both configs are committed before either runs. A glob lets
+    the config say "whichever run of this model_name", resolved at test time:
+
+        model_path: /work/lepinet/data/ucloud_models/*-heads-...-ucloud/heads-...-ucloud.pt
+
+    Newest match wins (by mtime), so a re-run supersedes its predecessor rather than picking
+    an arbitrary one. Plain paths pass through untouched.
+    """
+    path = Path(model_path)
+    if not glob.has_magic(str(model_path)):
+        return path
+    matches = [Path(p) for p in glob.glob(str(model_path))]
+    if not matches:
+        raise FileNotFoundError(f"No checkpoint matches the glob: {model_path}")
+    newest = max(matches, key=lambda p: p.stat().st_mtime)
+    if len(matches) > 1:
+        others = ", ".join(p.parent.name for p in sorted(matches) if p != newest)
+        print(f"Glob matched {len(matches)} checkpoints; using newest ({newest.parent.name}); "
+              f"ignoring: {others}")
+    return newest
+
+
+# ---------------------------------------------------------------------------
 # mini_metrics-format prediction CSV (long: one row per image x level)
 # ---------------------------------------------------------------------------
 
 def save_predictions_csv(path, filenames, preds, confs, labels, vocabs, threshold=0.5):
+    """`threshold` is the abstention threshold recorded per row: mini_metrics counts a
+    prediction as made only where `confidence >= threshold`. Accepts a scalar (same for every
+    level) or a per-level list, matching the config's `threshold` key.
+
+    Note this column is only what the CSV *records*: `mini_metrics.main(threshold=...)`
+    overwrites it in memory before computing anything. It is written faithfully anyway so the
+    saved predictions state the threshold they were actually evaluated at, rather than a stale
+    default that contradicts metrics.json sitting next to it.
+    """
     n, p = preds.shape
     known = {i: {str(v) for v in vocabs[level]} for i, level in enumerate(HIERARCHY_LEVELS)}
+    if isinstance(threshold, (list, tuple)):
+        if len(threshold) == 1:
+            thr_col = np.full(n * p, threshold[0], dtype=float)
+        elif len(threshold) == p:
+            thr_col = np.tile(np.asarray(threshold, dtype=float), n)
+        else:
+            raise ValueError(f"threshold has {len(threshold)} entries; expected 1 or {p} "
+                             f"(one per level: {HIERARCHY_LEVELS}).")
+    else:
+        thr_col = float(threshold)
     df = pd.DataFrame({
         "instance_id": np.repeat(np.arange(n), p),
         "filename": np.repeat(filenames, p),
@@ -162,7 +214,7 @@ def save_predictions_csv(path, filenames, preds, confs, labels, vocabs, threshol
         "label": labels.flatten(order="C").astype(str),
         "prediction": preds.flatten(order="C").astype(str),
         "confidence": confs.flatten(order="C"),
-        "threshold": threshold,
+        "threshold": thr_col,
     })
     df["known_label"] = [lbl in known[lvl] for lvl, lbl in zip(df["level"], df["label"])]
     df.to_csv(path, index=False)
@@ -191,7 +243,8 @@ def test(
     decoder_num_layers: int = 4,
     decoder_nhead: int = 1,
 ):
-    model_path, img_dir, parquet_path = Path(model_path), Path(img_dir), Path(parquet_path)
+    model_path = resolve_model_path(model_path)
+    img_dir, parquet_path = Path(img_dir), Path(parquet_path)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     print(f"Loading checkpoint: {model_path}")
@@ -233,7 +286,11 @@ def test(
     pd.DataFrame(checkpoint["hierarchy"])[HIERARCHY_LEVELS].astype(str).to_csv(combos_path, index=False)
 
     preds_path = out_base / "predictions.csv"
-    save_predictions_csv(preds_path, filenames, preds, confs, labels, vocabs)
+    # A fixed `threshold` from the config is the one actually applied downstream; with
+    # optimal_threshold the value isn't known until mini_metrics has probed for it, so the
+    # 0.5 default stands in and pass 2 overwrites it in memory anyway.
+    save_predictions_csv(preds_path, filenames, preds, confs, labels, vocabs,
+                         threshold=threshold if threshold is not None else 0.5)
     print(f"Predictions written: {preds_path}")
 
     # --- metrics via mini_metrics ---

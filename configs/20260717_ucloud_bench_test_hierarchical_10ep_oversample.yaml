@@ -1,0 +1,28 @@
+version: 1.0
+# Test half of the UCloud MT-head benchmark, hierarchical head. Runs in the same job, straight
+# after the training config of the same name -- see ucloud/bench-hierarchical.toml.
+#
+# threshold [0,0,0] = NO abstention at any level: every image counts as a prediction, so
+# coverage is 100% and macro-F1 is the raw number. This is deliberately NOT the
+# optimal_threshold path used for earlier local evals (which abstains on ~1-3% of images
+# and thereby flatters F1) -- for comparing three head architectures against each other,
+# an abstention policy tuned per-model would confound the thing being measured.
+#
+# `model_path` is a glob: dev/030 mints the run directory's timestamp at startup, so this
+# config (written in advance, committed alongside) cannot name it. resolve_model_path()
+# takes the newest match -- see dev/032.
+test:
+    model_path: /work/lepinet/data/ucloud_models/*-bench-hierarchical-muon-onecycle-10ep-oversample-effnetv2s-ucloud/bench-hierarchical-muon-onecycle-10ep-oversample-effnetv2s-ucloud.pt
+    parquet_path: /work/global_lepi/0032836-250426092105405_processing_metadata_postprocessed_quality_filtered.parquet
+    img_dir: /work/global_lepi/images
+    out_dir: /work/lepinet/data/ucloud_preds
+    test_set: '0'
+    eval_name: global-test
+    batch_size: 64
+    aug_img_size: 460
+    img_size: 256
+    num_workers: 512
+    optimal_threshold: false
+    threshold: [0.0, 0.0, 0.0]
+    decoder_num_layers: 4
+    decoder_nhead: 1
