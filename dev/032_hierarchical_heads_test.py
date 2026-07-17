@@ -59,12 +59,39 @@ VALID_CONFIG_VERSIONS = [1.0]
 # ---------------------------------------------------------------------------
 
 def class_spec_from_hierarchy(hierarchy_df, vocabs, cls2idx):
-    """Rebuild mini_trainer's `sparse_masks` from the saved hierarchy + vocabs, exactly as
-    dev/030.build_class_spec did at train time (same cls2idx, so head masks line up)."""
+    """Rebuild mini_trainer's `sparse_masks` from the saved hierarchy + vocabs, matching what
+    dev/030.build_class_spec did at train time (same cls2idx, so head masks line up).
+
+    Restricted to species the model actually knows. The two sides derive this from different
+    places: dev/030 builds its masks from the *training dataframe*, but saves `hierarchy` --
+    which `gen_df` reads from a pre-existing `hierarchy.csv` covering the whole dataset. Those
+    agree only when no filtering removed species relative to that file. Under `family_filter`
+    (or a raised `min_img_per_spc`, or simply a stale hierarchy.csv) the saved hierarchy names
+    species that were never trained and have no cls2idx entry, and this raised
+    `KeyError: '<speciesKey>'` from inside sparse_masks_from_labels -- after training had
+    finished and the checkpoint was written.
+
+    Filtering here is the correct reading rather than a workaround: a mask over classes the
+    head has no output for is meaningless, and cls2idx is authoritative about what the model
+    can predict.
+    """
+    known = set(cls2idx["0"])  # level 0 = species; keys are the vocab's string labels
     labels = OrderedDict(
         (row.speciesKey, tuple(str(getattr(row, level)) for level in HIERARCHY_LEVELS))
         for row in hierarchy_df.itertuples(index=False)
+        if str(row.speciesKey) in known
     )
+    dropped = len(hierarchy_df) - len(labels)
+    if dropped:
+        print(f"Hierarchy: kept {len(labels)} of {len(hierarchy_df)} rows "
+              f"({dropped} species in hierarchy.csv were not in the model's vocab -- "
+              f"filtered out at training time).")
+    if not labels:
+        raise ValueError(
+            "No species in the saved hierarchy are in the model's vocab. The checkpoint's "
+            "hierarchy and cls2idx disagree entirely -- check that hierarchy.csv matches the "
+            "dataset this model was trained on."
+        )
     return sparse_masks_from_labels(labels, cls2idx)
 
 

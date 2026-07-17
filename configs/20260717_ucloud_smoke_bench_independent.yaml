@@ -4,11 +4,17 @@ version: 1.0
 # that killed the 512-worker run scales with dataframe size -- so this cannot reproduce it and
 # is not trying to. num_workers is low here because the MIG slice has 6 vCPU.
 #
-# What it DOES validate, none of which has ever executed: the train -> test `&&` chain, the
+# What it DOES validate, none of which had ever executed: the train -> test `&&` chain, the
 # glob `model_path` in the test config resolving to a just-written checkpoint, the threshold-0
 # metrics path, and oversampling running to completion on UCloud. All three 10-epoch jobs died
-# inside epoch 1, so the entire back half of the pipeline is unproven. This costs minutes on
-# the cheapest GPU instead of finding out 14h into a full run.
+# inside epoch 1, so the entire back half of the pipeline was unproven. This costs minutes on
+# the cheapest GPU instead of finding out 14h into a full run -- and has already paid for
+# itself twice: it caught mini_metrics being absent from the job image, and a KeyError when
+# dev/032 rebuilt head masks from a hierarchy.csv wider than the model's vocab.
+#
+# Note family_filter makes this run *harder* than the real benchmark, not easier: the saved
+# hierarchy then covers species the filtered model never trained on, which is precisely the
+# mismatch that broke dev/032. The benchmark (family_filter: []) never hits it.
 desc: smoke-bench-independent-effnetv2s-ucloud
 train:
   parquet_path: /work/global_lepi/0032836-250426092105405_processing_metadata_postprocessed_quality_filtered.parquet
