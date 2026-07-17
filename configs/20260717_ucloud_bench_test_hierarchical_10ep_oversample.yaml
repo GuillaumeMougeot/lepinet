@@ -21,7 +21,7 @@ test:
     batch_size: 64
     aug_img_size: 460
     img_size: 256
-    num_workers: 192
+    num_workers: 128
     optimal_threshold: false
     threshold: [0.0, 0.0, 0.0]
     decoder_num_layers: 4

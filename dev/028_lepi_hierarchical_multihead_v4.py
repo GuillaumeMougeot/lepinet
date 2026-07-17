@@ -19,6 +19,7 @@ import argparse
 import asyncio
 import importlib
 import json
+import os
 from datetime import datetime
 from hashlib import sha1
 from os.path import exists, join
@@ -26,6 +27,7 @@ from pathlib import Path
 from shutil import copyfile
 
 import aiohttp
+import numpy as np
 import pandas as pd
 import yaml
 import torch.multiprocessing
@@ -164,7 +166,7 @@ def gen_df(parquet_path, out_dir, min_img_per_spc, fold, hierarchy_path, family_
 
 
 def make_dls(df, vocabs, img_dir, aug_img_size, img_size, batch_size, num_workers=None,
-             aug_kwargs=None, sample_wgts=None):
+             aug_kwargs=None, sample_wgts=None, lowmem=True):
     # `aug_kwargs` overrides fastai's `aug_transforms` defaults. fastai's defaults are
     # fairly heavy (perspective warp 0.2, lighting 0.2, zoom 1.1) -- fine for many-epoch
     # runs on smaller data, but on this dataset (millions of images, only a handful of
@@ -176,26 +178,88 @@ def make_dls(df, vocabs, img_dir, aug_img_size, img_size, batch_size, num_worker
     # `sample_wgts` (per-training-row sampling weights from dev/034.sample_weights, aligned to
     # the is_valid==False rows in df order) turns the train loader into a fastai `WeightedDL`
     # for rare-class oversampling. None -> ordinary uniform-shuffle loader (default).
+    #
+    # `lowmem` (default): build the DataBlock over integer indices into pre-extracted numpy
+    # arrays instead of over the DataFrame's rows. This exists to stop a fork+copy-on-write
+    # memory leak that is invisible locally but fatal on many-worker cloud runs. dev/030 forks
+    # its dataloader workers, and CPython refcounting *writes* to an object's header on every
+    # read, so a worker walking the DataFrame (`df.iloc[i]` -> a Python-object Series, then
+    # ColReader materialising Python str cells) dirties a shared COW page per row touched.
+    # Host RAM then climbs ~1.1 GB per worker until the OOM killer strikes -- see
+    # dev/037_dl_memory_probe.py and journal/2026-07-ucloud-benchmark-oom.md. At 24 local
+    # workers that is ~26 GB (invisible on 125 GB); at 256 cloud workers it is ~280 GB against
+    # a 288 GB cap (fatal). The fix: the columns workers read (`image_path`, the label keys,
+    # `is_valid`) become fixed-width numpy arrays -- one contiguous buffer each, so per-row
+    # access copies a value out rather than incref-ing a shared Python object, and the buffers
+    # stay shared read-only across the fork. Verified byte-identical to the DataFrame path over
+    # the full row set. `lowmem=False` restores the original DataFrame-driven DataBlock.
     aug_kwargs = aug_kwargs or {}
-    dblock = DataBlock(
-        blocks=(ImageBlock, *(CategoryBlock(vocab=vocabs[level]) for level in HIERARCHY_LEVELS)),
-        n_inp=1,
-        splitter=ColSplitter(),
-        get_x=ColReader("image_path", pref=img_dir),
-        get_y=[ColReader(level) for level in HIERARCHY_LEVELS],
-        item_tfms=Resize(aug_img_size),
-        # `vision_learner`'s automatic ImageNet normalization only fires for
-        # archs registered in fastai's `model_meta` (resnet/vgg/densenet/...);
-        # efficientnet is not, so add it ourselves to cover every arch.
-        batch_tfms=[*aug_transforms(size=img_size, **aug_kwargs), Normalize.from_stats(*imagenet_stats)],
-    )
+    batch_tfms = [*aug_transforms(size=img_size, **aug_kwargs), Normalize.from_stats(*imagenet_stats)]
+    # `vision_learner`'s automatic ImageNet normalization only fires for archs registered in
+    # fastai's `model_meta` (resnet/vgg/densenet/...); efficientnet is not, so add it above.
+
+    if lowmem:
+        dblock = _lowmem_datablock(df, vocabs, img_dir, aug_img_size, batch_tfms)
+        source = np.arange(len(df))  # items are indices; get_x/get_y close over numpy arrays
+    else:
+        dblock = DataBlock(
+            blocks=(ImageBlock, *(CategoryBlock(vocab=vocabs[level]) for level in HIERARCHY_LEVELS)),
+            n_inp=1,
+            splitter=ColSplitter(),
+            get_x=ColReader("image_path", pref=img_dir),
+            get_y=[ColReader(level) for level in HIERARCHY_LEVELS],
+            item_tfms=Resize(aug_img_size),
+            batch_tfms=batch_tfms,
+        )
+        source = df
+
     dl_kwargs = {} if num_workers is None else {"num_workers": num_workers}
     if sample_wgts is not None:
         # dl_type/dl_kwargs propagate through DataBlock.dataloaders to the per-subset DLs;
-        # WeightedDL with wgts=None (valid) behaves as a plain sequential loader.
+        # WeightedDL with wgts=None (valid) behaves as a plain sequential loader. In both the
+        # lowmem and DataFrame paths the train subset is the rows with is_valid==False in df
+        # order, so `sample_wgts` (built in that same order) stays aligned.
         from fastai.callback.data import WeightedDL
         dl_kwargs.update(dl_type=WeightedDL, dl_kwargs=({"wgts": sample_wgts}, {}))
-    return dblock.dataloaders(df, bs=batch_size, **dl_kwargs)
+    return dblock.dataloaders(source, bs=batch_size, **dl_kwargs)
+
+
+def _lowmem_datablock(df, vocabs, img_dir, aug_img_size, batch_tfms):
+    """DataBlock whose items are integer indices into fixed-width numpy arrays (see `make_dls`
+    `lowmem`). Keeps fastai's block/transform machinery -- only the item access is numpy-backed.
+
+    Correctness note: item i maps to df row i (`get_items` returns `arange(n)` in order), the
+    splitter selects positions by `is_valid` in df order (identical subset + order to
+    `ColSplitter`), and get_x reproduces `ColReader(pref=Path(img_dir))` exactly -- which joins
+    with `os.path.sep` because the prefix is a Path. All three verified against the DataFrame
+    path over the full 5.67M rows: zero mismatches.
+    """
+    paths = df["image_path"].to_numpy(dtype="U")            # one contiguous UCS buffer
+    is_valid = df["is_valid"].to_numpy(dtype=bool)
+    label_arrs = {level: df[level].to_numpy(dtype="U") for level in HIERARCHY_LEVELS}
+    pref = str(img_dir) + os.path.sep                        # matches ColReader(pref=Path(...))
+
+    def get_x(i):
+        return pref + str(paths[i])
+
+    def make_get_y(level):
+        arr = label_arrs[level]
+        return lambda i: str(arr[i])
+
+    def splitter(items):
+        # `items` is arange(n), so positions == values; return train/valid positions in df order
+        return np.where(~is_valid)[0], np.where(is_valid)[0]
+
+    return DataBlock(
+        blocks=(ImageBlock, *(CategoryBlock(vocab=vocabs[level]) for level in HIERARCHY_LEVELS)),
+        n_inp=1,
+        get_items=lambda _: np.arange(len(df)),
+        splitter=splitter,
+        get_x=get_x,
+        get_y=[make_get_y(level) for level in HIERARCHY_LEVELS],
+        item_tfms=Resize(aug_img_size),
+        batch_tfms=batch_tfms,
+    )
 
 
 # ---------------------------------------------------------------------------

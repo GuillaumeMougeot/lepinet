@@ -240,12 +240,14 @@ class HostMemoryGuard(Callback):
     zero information. (A CUDA OOM is the opposite: a loud `torch.cuda.OutOfMemoryError`. The
     absence of one is how you tell host RAM from GPU RAM.)
 
-    The cause is not a bug so much as arithmetic: dev/030 forks its dataloader workers, and
-    CPython's refcounting writes to object headers on read, so copy-on-write breaks page by
-    page and every worker converges on a private copy of the dataframe (~1.1 GB/worker at
-    global scale, measured by dev/037_dl_memory_probe.py). num_workers therefore has a hard
-    memory ceiling: 512 x 1.1 GB is ~2x a 288 GB node, 256 fits with little to spare. Because
-    the leak saturates gradually, this is invisible for the first half hour and then fatal.
+    The cause is arithmetic: each dataloader worker's fastai image-decode pipeline (JPEG decode
+    + resize/augment + prefetch) costs ~1.2 GB, roughly fixed. (Isolation test in
+    dev/037_dl_memory_probe.py / scratchpad: a dummy dataset that skips decode costs ~20 MB/
+    worker; the dataframe representation is NOT the driver -- an earlier theory that it was
+    copy-on-write on the DataFrame was disproven.) So num_workers has a hard memory ceiling:
+    512 x 1.2 GB is ~2x a 288 GB node, 256 ~ the whole node, 128 ~ 158 GB (safe). The high-water
+    mark rises gradually as workers hit larger source images, so this is invisible for a while
+    and then fatal -- which is exactly what a periodic guard is for.
 
     So: report the number while there is still a process alive to report it, and if available
     RAM crosses `abort_below_gb`, raise -- turning a silent 3-hour death into an immediate,
@@ -325,12 +327,12 @@ class HostMemoryGuard(Callback):
     def before_fit(self):
         used, limit, src = self._mem()
         n = self._workers()
-        est = f"{n * 1.1:.0f} GB" if isinstance(n, int) else "?"
+        est = f"{n * 1.2:.0f} GB" if isinstance(n, int) else "?"
         print(f"[mem] limit {limit:.0f} GB ({src}), used {used:.0f} GB | num_workers={n} "
-              f"-> forked workers converge on ~1.1 GB each at global scale, so expect ~{est} "
+              f"-> each worker's image pipeline costs ~1.2 GB, so expect ~{est} "
               f"+ parent (dev/037_dl_memory_probe.py).", flush=True)
-        if isinstance(n, int) and n * 1.1 > limit * 0.9:
-            print(f"[mem] WARNING: {n} workers x ~1.1 GB is close to or over the {limit:.0f} GB "
+        if isinstance(n, int) and n * 1.2 > limit * 0.9:
+            print(f"[mem] WARNING: {n} workers x ~1.2 GB is close to or over the {limit:.0f} GB "
                   f"limit. This is how the 2026-07-17 benchmark died -- silently, 36 min in.",
                   flush=True)
 
@@ -345,9 +347,9 @@ class HostMemoryGuard(Callback):
             raise RuntimeError(
                 f"Memory at {used:.0f}/{limit:.0f} GB ({used/limit*100:.0f}% of the {src} "
                 f"limit). The OOM killer takes this process next, with no traceback -- aborting "
-                f"first so the reason is on the record. num_workers={self._workers()} x ~1.1 "
-                f"GB/worker is the usual cause (forked workers each copy the dataframe); lower "
-                f"it. See dev/037_dl_memory_probe.py."
+                f"first so the reason is on the record. num_workers={self._workers()} x ~1.2 "
+                f"GB/worker (each worker's fastai JPEG-decode pipeline) is the usual cause; lower "
+                f"num_workers. See dev/037_dl_memory_probe.py."
             )
 
 
