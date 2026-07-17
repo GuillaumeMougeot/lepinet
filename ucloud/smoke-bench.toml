@@ -1,0 +1,42 @@
+# Pipeline smoke for the MT-head benchmark: train -> test -> mini_metrics, end to end, on
+# the cheapest GPU. Validates the plumbing the 2026-07-17 benchmark never reached (all three
+# jobs died in epoch 1, so the test half has never run).
+#   ucloud q submit ucloud/smoke-bench.toml --name smoke-bench
+
+name = "lepi-smoke-bench"
+replicas = 1
+
+[application]
+name = "pytorch-te"
+version = "26.05"
+
+[product]
+# 1g MIG slice, 6 vCPU / 36 GB -- the cheapest GPU. Fine here: family_filter makes this a
+# plumbing check, and 6 vCPU cannot host many loader workers anyway.
+id = "gpu-nvidia-b200-1-mig.1g"
+category = "gpu-nvidia-b200"
+provider = "ucloud"
+
+[time_allocation]
+hours = 2
+
+[sync]
+local = ".."
+remote = "/12347837/repos/lepinet"
+
+[setup]
+script = "setup.sh"
+run = "python dev/030_hierarchical_heads_benchmark.py -c configs/20260717_ucloud_smoke_bench_independent.yaml && python dev/032_hierarchical_heads_test.py -c configs/20260717_ucloud_smoke_bench_test_independent.yaml"
+
+[schedule]
+auto_extend = "1h"
+max_time = "4h"
+
+[[resources]]
+type = "file"
+path = "/12347837/repos/mini_trainer"
+
+[[resources]]
+type = "file"
+path = "/12347837/datasets/global_lepi"
+read_only = true

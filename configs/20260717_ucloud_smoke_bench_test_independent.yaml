@@ -1,0 +1,26 @@
+version: 1.0
+# Test half of the pipeline smoke (see 20260717_ucloud_smoke_bench_independent.yaml).
+# Same family_filter as the training half, so the test fold is ~a few thousand images rather
+# than 630k -- this checks that the plumbing runs, not that the numbers are good (2 epochs on
+# 152 species will score poorly, and that is fine).
+#
+# Exercises the two untested pieces of the benchmark: the glob model_path (dev/030 mints the
+# run timestamp at startup, so a committed config cannot name the checkpoint) and threshold
+# [0,0,0] (no abstention) through mini_metrics.
+test:
+    model_path: /work/lepinet/data/ucloud_smoke/*-smoke-bench-independent-effnetv2s-ucloud/smoke-bench-independent-effnetv2s-ucloud.pt
+    parquet_path: /work/global_lepi/0032836-250426092105405_processing_metadata_postprocessed_quality_filtered.parquet
+    img_dir: /work/global_lepi/images
+    out_dir: /work/lepinet/data/ucloud_smoke_preds
+    test_set: '0'
+    eval_name: smoke-test
+    min_img_per_spc: 50
+    family_filter: ['9717']
+    batch_size: 64
+    aug_img_size: 460
+    img_size: 256
+    num_workers: 12
+    optimal_threshold: false
+    threshold: [0.0, 0.0, 0.0]
+    decoder_num_layers: 4
+    decoder_nhead: 1

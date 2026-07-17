@@ -230,6 +230,63 @@ class GCCallback(Callback):
         gc.collect(0)
 
 
+class HostMemoryGuard(Callback):
+    """Log host RAM every `every` batches, and abort loudly before the OOM killer does.
+
+    Written after the 2026-07-17 UCloud benchmark: three 10-epoch jobs held the full decode
+    ceiling for ~36k batches, then collapsed 440x and vanished mid-batch with **no traceback,
+    no error, nothing**. That silence is the point -- the kernel's OOM killer SIGKILLs the
+    process, so Python never runs another line and the log simply stops. Nine GPU-hours bought
+    zero information. (A CUDA OOM is the opposite: a loud `torch.cuda.OutOfMemoryError`. The
+    absence of one is how you tell host RAM from GPU RAM.)
+
+    The cause is not a bug so much as arithmetic: dev/030 forks its dataloader workers, and
+    CPython's refcounting writes to object headers on read, so copy-on-write breaks page by
+    page and every worker converges on a private copy of the dataframe (~1.1 GB/worker at
+    global scale, measured by dev/037_dl_memory_probe.py). num_workers therefore has a hard
+    memory ceiling: 512 x 1.1 GB is ~2x a 288 GB node, 256 fits with little to spare. Because
+    the leak saturates gradually, this is invisible for the first half hour and then fatal.
+
+    So: report the number while there is still a process alive to report it, and if available
+    RAM crosses `abort_below_gb`, raise -- turning a silent 3-hour death into an immediate,
+    explained failure that names the knob to turn.
+    """
+
+    order = -7  # before anything that might allocate
+
+    def __init__(self, every: int = 500, abort_below_gb: float = 8.0):
+        self.every = every
+        self.abort_below_gb = abort_below_gb
+        self._warned = False
+
+    def before_fit(self):
+        import psutil
+        vm = psutil.virtual_memory()
+        n = getattr(self.learn.dls.train, "num_workers", "?")
+        print(f"[mem] host RAM {vm.total/1e9:.0f} GB total, {vm.available/1e9:.0f} GB available "
+              f"| num_workers={n}. Forked workers converge on ~1.1 GB each at global scale "
+              f"(dev/037_dl_memory_probe.py), so peak ~= {n if isinstance(n, int) else 0} x 1.1 GB "
+              f"+ parent.")
+
+    def after_batch(self):
+        if not self.training or self.learn.train_iter % self.every:
+            return
+        import psutil
+        vm = psutil.virtual_memory()
+        gpu = torch.cuda.memory_allocated() / 1e9 if torch.cuda.is_available() else 0
+        print(f"[mem] batch {self.learn.train_iter}: host used {vm.used/1e9:.0f} GB / "
+              f"{vm.total/1e9:.0f} GB ({vm.percent:.0f}%), available {vm.available/1e9:.0f} GB "
+              f"| GPU allocated {gpu:.1f} GB", flush=True)
+        if vm.available / 1e9 < self.abort_below_gb:
+            raise RuntimeError(
+                f"Host RAM nearly exhausted: {vm.available/1e9:.1f} GB available of "
+                f"{vm.total/1e9:.0f} GB. The kernel OOM killer would take this process next, "
+                f"silently. Almost certainly num_workers "
+                f"({getattr(self.learn.dls.train, 'num_workers', '?')}) x ~1.1 GB/worker "
+                f"exceeds host RAM -- lower num_workers. See dev/037_dl_memory_probe.py."
+            )
+
+
 class NaNGuard(Callback):
     """Skip any training batch whose loss is non-finite, instead of letting it poison the
     weights. This ports the safety net from mini_trainer's own loop (train_one_epoch skips
@@ -555,6 +612,7 @@ def train(
         model_dir=out_dir / "models",
         cbs=[
             GCCallback(),
+            HostMemoryGuard(),
             NaNGuard(),
             *([ClassDistributionRegularizer(class_reg_strength)] if class_reg_strength and class_reg_strength > 0 else []),
             *([LogitAdjustCallback()] if logit_adjust is not None else []),
