@@ -1,0 +1,40 @@
+version: 1.0
+# Long-tail intervention #1: rare-species oversampling (dev/034), on top of the best recipe
+# (one-cycle). power=0.5 = square-root sampling (Mahajan et al.) -- the safe middle
+# ground between natural (0) and fully class-balanced (1). Everything else identical to the
+# 5-epoch one-cycle run, so this isolates the resampling effect. Set oversample_power: 0 to
+# disable (that reproduces the plain 5ep run).
+desc: heads-global-autoregressive-bf16-10ep-oversample-local-effnetv2s
+train:
+  parquet_path: data/global/0032836-250426092105405_processing_metadata_postprocessed_quality_filtered.parquet
+  img_dir: data/global/images
+  out_dir: data/global/models
+  fold: '1'
+  min_img_per_spc: 50
+  model_name: heads-global-autoregressive-bf16-10ep-oversample-local-effnetv2s
+  model_arch_name: efficientnet_v2_s
+  head: autoregressive
+  nb_epochs: 10
+  base_lr: 0.001
+  batch_size: 64
+  aug_img_size: 460
+  img_size: 256
+  optimizer: muon
+  fp16: true
+  schedule: one_cycle
+  hierarchy_path: null
+  family_filter: []
+  decoder_num_layers: 4
+  decoder_nhead: 1
+  precision: bf16
+  grad_clip: 5.0
+  warmup_epochs: 0.5
+  oversample_power: 0.5
+  logit_adjust_tau: 0.0
+  aug_kwargs:
+    max_warp: 0.0
+    max_lighting: 0.0
+    p_lighting: 0.0
+    flip_vert: true
+    max_rotate: 15.0
+    max_zoom: 1.1
