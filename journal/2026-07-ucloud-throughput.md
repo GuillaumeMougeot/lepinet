@@ -91,6 +91,36 @@ risks (variable-size batching, aug correctness) before a full run.
 - Correctness: the decode+resize path must match the CPU one closely enough not to shift the
   numbers. Validate against a fixed batch (same images -> same normalized tensors within tol).
 
+### Measured: GPU decode done right (2026-07-18, dev/038 + dev/039)
+
+Profiling (dev/039) found the earlier ~650 img/s was NOT decode -- decode+resize+aug is ~11% of
+a batch; the model is ~77% (bwd 41% + fwd 29% + Muon 6%). The two real caps were dev/038's
+per-batch `gc.collect` (halving throughput) and no overlap. Fixes: double-buffer overlap (decode
+N+1 on a side CUDA stream while the model runs N) + `gc.collect(0)` every N batches (the
+per-batch gc guards mini_trainer's cosine-head GPU cycle; every-8 keeps GPU mem flat).
+
+With both, decode is fully hidden and training is **model-bound**:
+
+| GPU | bs | img/s | GPU mem | note |
+|---|---|---|---|---|
+| 5090 | 64 | ~820 | 7.8 GB | vs 650 before the fixes |
+| 5090 | 128 | ~880 | 14.5 GB | |
+| 5090 | 192 | ~930 | 21.3 GB | bs256 OOMs the 5090's 32 GB |
+| B200 | 256 | **~1090** | 28 GB | staged + overlap; barely above the CPU pipeline's ~1100 |
+
+**The punchline: for effnetv2s there is NO throughput win from GPU decode.** The CPU pipeline's
+"1100 img/s, decode-bound" was ~coincident with the model ceiling: effnetv2s is a small, efficient
+model, launch/bandwidth-bound at ~1100 img/s, and even the B200 at bs=256 only reaches ~1090 while
+using 28 of 180 GB. Decode was never the true bottleneck for this model; the model is.
+
+What GPU decode DID deliver: **memory**. ~28 GB GPU / ~15 GB host at bs=256, vs the CPU pipeline's
+168 GB host at 128 workers -- a ~10x cut that removes the worker/OOM bind and (unlike staging) needs
+no copy. And it makes big batches free memory-wise.
+
+Where the throughput win WOULD appear: a heavier model (effnetv2_m/l, a ViT) that is genuinely
+compute-bound. There, CPU decode caps below what the GPU could train, and GPU decode + big batch
+would stretch the B200. For effnetv2s specifically, the B200 is overkill regardless of decode.
+
 ### Verdict
 - **Now:** staging is the pragmatic win and it's done -- use it for memory-tight nodes and a
   small speed bump.
