@@ -46,4 +46,5 @@ dead ends, the thing you would tell someone to save them a week.
 | [2026-07-gpu-hang.md](2026-07-gpu-hang.md) | What killed the training box overnight on 07-16? | RESOLVED (as far as evidence allows) — hardware |
 | [2026-07-venv-uv-sync-incident.md](2026-07-venv-uv-sync-incident.md) | What broke the venv, and what is the known-good version set? | RESOLVED — never run `uv sync` here |
 | [2026-07-ucloud-benchmark-oom.md](2026-07-ucloud-benchmark-oom.md) | Why does the UCloud MT-head benchmark keep OOM-ing? | RESOLVED — image-pipeline anon ×workers; guard was miscounting reclaimable page cache; 128 workers safe |
-| [2026-07-ucloud-throughput.md](2026-07-ucloud-throughput.md) | How to make the B200 fast (it's CPU-decode-bound)? | staging built+validated; GPU decode designed, not built |
+| [2026-07-ucloud-throughput.md](2026-07-ucloud-throughput.md) | How to make the B200 fast (it's CPU-decode-bound)? | staging=memory lever; GPU decode fixed (overlap+gc+bigbatch) but model-bound for effnetv2s -> memory win not speed; co-locate copies to use the B200 |
+| [2026-07-autoregressive-fp16-instability.md](2026-07-autoregressive-fp16-instability.md) | Why did the autoregressive head train broken? | RESOLVED — fp16-unstable (decoder feedback overflows); fp32 fixes it |
