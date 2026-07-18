@@ -31,19 +31,30 @@ feeding predictions back through many transformer steps. fp16 backbone features 
 large) compounding through that generation overflow to inf/NaN, where the plain independent/
 hierarchical heads (a single linear per level) do not. That is why only this head diverged.
 
-## The fix
+## The fix: bf16 (the existing default) -- NOT fp32
 
-Run the autoregressive head in **fp32** (`precision: fp32`, `fp16: false`). Confirmed
-(`arfix-fp32`, 2-epoch UCloud run): epoch 0 train_loss **1.37** (learning normally, down from
-~21 init), species-F1 **0.70** -- right alongside independent/hierarchical at epoch 0 (~0.78),
-no NaN. It trains.
+**The fix already existed and I initially missed it.** dev/030 *defaults* to `precision: "bf16"`
+(line 602), and its own comment says bf16 "has fp32's exponent range so it doesn't overflow like
+fp16." bf16 is the intended-safe path; the benchmark configs *override* it with `precision: fp16`,
+and that override is what broke the autoregressive head. So the regression is the config, not the
+code.
 
-Cost: fp32 is ~2x the memory and slower (this run ~1:45/epoch vs the fp16 heads' ~1:20), and the
-autoregressive beam eval is slow on top. For a fair 3-head benchmark, either run all three in
-fp32, or -- cheaper -- keep independent/hierarchical in fp16 and run only autoregressive in fp32,
-noting the precision differs. A tighter fix (keep the backbone fp16 but clamp/fp32 just the
-decoder's feedback path, or add a decoder-input LayerNorm/clamp) would let it match the others'
-precision; not yet attempted.
+Two confirmations:
+- fp32 works (`arfix-fp32`, full fp32): epoch 0 train_loss 1.37, species-F1 0.70. Proves the
+  diagnosis but is the wrong (heavy) fix -- ~2x memory, ~1:45 vs 1:20/epoch.
+- **bf16 works** (local, family 9717, 2 epochs): train_loss 3.59 -> 1.30, species-F1 0.24 -> 0.69,
+  no NaN. bf16 is the same speed/memory as fp16, so this is the right fix, not fp32.
+
+Why bf16 suffices where the fp32-*head* block alone didn't: the head runs fp32 (MTHeadAdapter
+disables autocast), but its *input* is the backbone's features. In fp16 those occasionally
+overflow (~65504) to inf before they even reach the head, and the autoregressive decoder's
+compounding generation turns that into persistent NaN (the plain heads tolerate it). bf16 keeps
+the *backbone* in fp32's exponent range, so the features never overflow -- fixing it upstream of
+the head.
+
+**Action:** set `precision: bf16` on the autoregressive config (done). Independent/hierarchical
+were tuned and run in fp16 and are fine there, but they would also work in bf16 -- for a fair
+3-head benchmark, run all three in bf16.
 
 Related: [[2026-07-ucloud-benchmark-oom]] (the run it surfaced in), the dev/030 MTHeadAdapter
 docstring (the fp32-head-under-fp16 pattern this extends).

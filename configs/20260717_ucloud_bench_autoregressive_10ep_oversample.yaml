@@ -47,7 +47,7 @@ train:
   family_filter: []
   decoder_num_layers: 4
   decoder_nhead: 1
-  precision: fp16
+  precision: bf16
   grad_clip: 5.0
   warmup_epochs: 0.5
   oversample_power: 0.5
