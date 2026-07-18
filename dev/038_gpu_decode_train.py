@@ -178,9 +178,19 @@ def main():
     ap.add_argument("--epochs", type=int, default=1)
     ap.add_argument("--num-workers", type=int, default=16)
     ap.add_argument("--max-batches", type=int, default=0, help="0 = full epoch (for quick probes).")
+    ap.add_argument("--batch-size", type=int, default=0, help="0 = use the config's batch_size.")
+    ap.add_argument("--overlap", action="store_true",
+                    help="Double-buffer: decode batch N+1 on a side CUDA stream while the model "
+                         "runs batch N. Profiling showed ~1.7x (the model, not decode, is the cost).")
+    ap.add_argument("--gc-every", type=int, default=8,
+                    help="gc.collect(0) every N batches to break mini_trainer's cosine-head GPU "
+                         "reference cycle. Per-batch (=1) halved throughput; letting a few batches' "
+                         "graphs accumulate is fine on a large GPU. Watch the reported GPU mem.")
     args = ap.parse_args()
 
     cfg = yaml.safe_load(open(args.config))["train"]
+    if args.batch_size:
+        cfg["batch_size"] = args.batch_size
     device = torch.device("cuda")
     parquet = Path(cfg["parquet_path"])
     hier = parquet.parent / "hierarchy.csv"
@@ -207,39 +217,55 @@ def main():
     sampler = torch.utils.data.WeightedRandomSampler(torch.as_tensor(wgts), len(train_ds), replacement=True) if wgts is not None else None
     train_dl = DataLoader(train_ds, batch_size=cfg["batch_size"], sampler=sampler,
                           shuffle=(sampler is None), num_workers=args.num_workers,
-                          collate_fn=collate_bytes, persistent_workers=False, prefetch_factor=4)
+                          collate_fn=collate_bytes, persistent_workers=True, prefetch_factor=6)
 
-    import gc
+    import gc, threading, queue
     base_lr = cfg.get("base_lr", 1e-3)
-    warmup = int(0.5 * len(train_dl) / cfg["batch_size"] * cfg["batch_size"])  # ~0.5 epoch
-    warmup = max(warmup // 1, 1000)
+    warmup = max(len(train_dl) // 2, 1000)
     grad_clip = cfg.get("grad_clip", 5.0)
 
     def set_lr(lr):
         for g in opt.param_groups:
             g["lr"] = lr
 
-    print(f"gpu-decode prototype | {len(train_ds):,} train imgs | workers={args.num_workers} "
-          f"| bs={cfg['batch_size']} | head={cfg['head']} | warmup {warmup} batches, clip {grad_clip}",
-          flush=True)
+    def batches(dl):
+        """Yield (xb_decoded_on_gpu, yb). With --overlap, a producer thread decodes the next
+        batch on a side CUDA stream while the caller trains on the current one; the GPU decode
+        of N+1 overlaps the model compute of N (profiling: ~1.7x, since the model dominates)."""
+        if not args.overlap:
+            for bl, yb in dl:
+                yield gpu_decode_batch(bl, size, device, True, mean, std), yb.to(device)
+            return
+        stream = torch.cuda.Stream()
+        q = queue.Queue(maxsize=3)
+        def producer():
+            for bl, yb in dl:
+                with torch.cuda.stream(stream):
+                    xb = gpu_decode_batch(bl, size, device, True, mean, std)
+                q.put((xb, yb.to(device), stream.record_event()))
+            q.put(None)
+        threading.Thread(target=producer, daemon=True).start()
+        while (item := q.get()) is not None:
+            xb, yb, ev = item
+            torch.cuda.current_stream().wait_event(ev)
+            yield xb, yb
+
+    gpu_gb = lambda: torch.cuda.max_memory_allocated() / 1e9
+    print(f"gpu-decode | {len(train_ds):,} train imgs | workers={args.num_workers} "
+          f"| bs={cfg['batch_size']} | head={cfg['head']} | overlap={args.overlap} "
+          f"| gc_every={args.gc_every} | warmup {warmup}, clip {grad_clip}", flush=True)
     model.train()
     step = 0
     for ep in range(args.epochs):
         t0 = time.time(); seen = 0; peak_anon = 0.0; nan_skipped = 0
-        for bi, (byte_list, yb) in enumerate(train_dl):
-            set_lr(base_lr * min(1.0, (step + 1) / warmup))   # linear warmup, then flat
-            xb = gpu_decode_batch(byte_list, size, device, True, mean, std)
-            yb = yb.to(device)
+        for bi, (xb, yb) in enumerate(batches(train_dl)):
+            set_lr(base_lr * min(1.0, (step + 1) / warmup))
             with torch.autocast("cuda", dtype=torch.bfloat16):
                 preds = model(xb)
                 loss = criterion(preds, *[yb[:, k] for k in range(yb.shape[1])])
             opt.zero_grad()
             if torch.isfinite(loss):
                 loss.backward()
-                # The cosine head's F.normalize can emit non-finite grads when an early feature
-                # vector has ~0 norm; dev/030's fp16 GradScaler skips those steps, and this
-                # manual loop must too (checking the loss alone lets one NaN-grad step corrupt
-                # the weights and NaN every batch after). clip_grad_norm_ returns the total norm.
                 gnorm = torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
                 if torch.isfinite(gnorm):
                     opt.step()
@@ -247,18 +273,22 @@ def main():
                     nan_skipped += 1
             else:
                 nan_skipped += 1
-            gc.collect(0)
+            # gc.collect(0) breaks mini_trainer's cosine-head reference cycle that otherwise
+            # traps each batch's backward graph on the GPU. Per-batch is correct but halves
+            # throughput; every gc_every batches lets a few graphs accumulate (watch GPU mem).
+            if (bi + 1) % args.gc_every == 0:
+                gc.collect(0)
             seen += xb.shape[0]; step += 1
             if (bi + 1) % 200 == 0:
                 peak_anon = max(peak_anon, anon_gb())
                 el = time.time() - t0
-                print(f"  ep{ep} batch {bi+1}: {seen/el:.0f} img/s | mem {anon_gb():.1f} GB (pss) "
-                      f"| loss {loss.item():.3f} | nan_skipped {nan_skipped}", flush=True)
+                print(f"  ep{ep} batch {bi+1}: {seen/el:.0f} img/s | host {anon_gb():.1f} GB "
+                      f"| GPU {gpu_gb():.1f} GB | loss {loss.item():.3f} | nan {nan_skipped}", flush=True)
             if args.max_batches and bi + 1 >= args.max_batches:
                 break
         el = time.time() - t0
         print(f"epoch {ep}: {seen:,} imgs in {el/60:.1f} min = {seen/el:.0f} img/s | "
-              f"peak anon {peak_anon:.0f} GB", flush=True)
+              f"peak host {peak_anon:.0f} GB | peak GPU {gpu_gb():.1f} GB", flush=True)
 
 
 if __name__ == "__main__":
