@@ -121,6 +121,23 @@ Where the throughput win WOULD appear: a heavier model (effnetv2_m/l, a ViT) tha
 compute-bound. There, CPU decode caps below what the GPU could train, and GPU decode + big batch
 would stretch the B200. For effnetv2s specifically, the B200 is overkill regardless of decode.
 
+### Co-location: does running multiple model copies fill the B200's idle compute? (measured)
+
+Hypothesis: effnetv2s is only ~17% faster on the B200 than the 5090 despite ~3-4x compute, so
+the B200 has idle compute that concurrent copies could fill. Test (`gpudec-colo`): 3 independent
+dev/038 copies on ONE B200, staged, bs128 each.
+
+Result: **each copy 353 img/s -> aggregate 1059, ~= a single run's ~1090. No benefit.** The three
+processes time-slice the GPU and share one ~1090 ceiling; they do not exceed it. So the ~1090 wall
+is not "idle SMs waiting for work" but a hard issue-rate / memory-bandwidth limit for this small
+model -- co-location (via separate processes, no MPS) cannot beat it. NVIDIA MPS or in-process
+multi-stream might let kernels truly overlap, untested; but the simple approach gives nothing.
+
+Revises the earlier inference: the B200 does not have *exploitable* idle compute for effnetv2s.
+The model simply cannot be issued fast enough to use a GPU this large -- the fix is a heavier
+model, not more copies. Multiple copies raise *throughput per GPU-hour* only when one job leaves
+the GPU genuinely idle (not the case here).
+
 ### Verdict
 - **Now:** staging is the pragmatic win and it's done -- use it for memory-tight nodes and a
   small speed bump.
