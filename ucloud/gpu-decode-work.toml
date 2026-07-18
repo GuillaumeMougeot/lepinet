@@ -1,0 +1,45 @@
+# GPU-decode WITHOUT staging on the B200: reads bytes straight from /work with many lightweight
+# byte-reader workers (they only fetch ~80 KB each, so 128 of them is memory-cheap, unlike 128
+# CPU-decode workers at ~1.2 GB), and decodes on the GPU. Tests whether GPU decode alone -- no
+# staging -- beats the CPU pipeline, and whether /work read latency becomes the new limit.
+#   ucloud q submit ucloud/gpu-decode-work.toml --name gpudec-work
+
+name = "lepi-gpudec-work"
+replicas = 1
+
+[application]
+name = "pytorch-te"
+version = "26.05"
+
+[product]
+id = "gpu-nvidia-b200-1-gpu"
+category = "gpu-nvidia-b200"
+provider = "ucloud"
+
+[time_allocation]
+hours = 5
+
+[sync]
+local = ".."
+remote = "/12347837/repos/lepinet"
+
+[setup]
+script = "setup.sh"
+run = "python dev/038_gpu_decode_train.py -c configs/20260717_ucloud_bench_independent_10ep_oversample.yaml --num-workers 128 --epochs 1"
+
+[schedule]
+auto_extend = "1h"
+max_time = "8h"
+
+[[resources]]
+type = "file"
+path = "/12347837/repos/mini_trainer"
+
+[[resources]]
+type = "file"
+path = "/12347837/repos/mini_metrics"
+
+[[resources]]
+type = "file"
+path = "/12347837/datasets/global_lepi"
+read_only = true

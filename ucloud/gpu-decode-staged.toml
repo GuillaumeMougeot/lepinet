@@ -1,0 +1,47 @@
+# GPU-decode + staging on the B200: the decisive throughput test. Stage images to local NVMe
+# (removes read latency), then dev/038 reads bytes with few workers and decodes on the GPU
+# (removes the ~1100 img/s CPU decode ceiling) -- so training should hit the B200's COMPUTE
+# ceiling, whatever that is. Compare its img/s to the CPU benchmark's ~1100.
+#   ucloud q submit ucloud/gpu-decode-staged.toml --name gpudec-staged
+
+name = "lepi-gpudec-staged"
+replicas = 1
+
+[application]
+name = "pytorch-te"
+version = "26.05"
+
+[product]
+id = "gpu-nvidia-b200-1-gpu"
+category = "gpu-nvidia-b200"
+provider = "ucloud"
+
+[time_allocation]
+hours = 5                        # ~13 min stage + 1 epoch (fast if GPU-decode wins) + margin
+
+[sync]
+local = ".."
+remote = "/12347837/repos/lepinet"
+
+[setup]
+# setup-staged.sh stages the referenced images to /tmp (the config's img_dir), then dev/038
+# reads bytes from there and decodes on the GPU. 32 byte-readers is plenty on local NVMe.
+script = "setup-staged.sh"
+run = "python dev/038_gpu_decode_train.py -c configs/20260718_ucloud_staged_test_independent.yaml --num-workers 32 --epochs 1"
+
+[schedule]
+auto_extend = "1h"
+max_time = "8h"
+
+[[resources]]
+type = "file"
+path = "/12347837/repos/mini_trainer"
+
+[[resources]]
+type = "file"
+path = "/12347837/repos/mini_metrics"
+
+[[resources]]
+type = "file"
+path = "/12347837/datasets/global_lepi"
+read_only = true
