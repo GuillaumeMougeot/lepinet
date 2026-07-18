@@ -8,12 +8,13 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools_scm]
 fallback_version = "0.0.0"
 
-# The repo has no importable `lepinet` package -- the code lives in dev/ as numbered
-# scripts that import each other by filename (importlib), not as a library. Without this,
-# setuptools' flat-layout auto-discovery tries to package dev/bash/data/logs/configs and
-# refuses to build. Empty list = install dependencies only.
+# src-layout: the reusable library is src/lepinet/ (migrated out of the dev/ numbered scripts,
+# which stay as the experiment record and are NOT packaged -- they import each other by filename
+# via importlib and only run from the repo root). package-dir + an explicit package list keeps
+# setuptools' flat-layout auto-discovery from trying to package dev/bash/data/logs/configs.
 [tool.setuptools]
-packages = []
+package-dir = {"" = "src"}
+packages = ["lepinet"]
 
 [project]
 name = "lepinet"
