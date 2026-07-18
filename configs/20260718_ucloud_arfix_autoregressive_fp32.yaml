@@ -1,0 +1,61 @@
+version: 1.0
+# UCloud MT-head benchmark, autoregressive head. One of three configs run in parallel
+# (independent, hierarchical) that differ ONLY in `head:` -- everything else is byte-identical,
+# so the comparison isolates the head architecture and nothing else.
+#
+# Recipe = every trick learned locally, per journal/2026-07-why-was-fastai-behind-mini-trainer.md
+# and journal/2026-07-does-longtail-help.md:
+#   Muon + one_cycle + warmup 0.5 + grad_clip 5.0 + light aug  -> the optimisation ladder
+#   oversample_power 0.5 (sqrt sampling)                       -> +1.7pt, the biggest single lever
+#   nb_epochs 10                                               -> the full budget
+# The local 5ep independent-head reference with this recipe reached test species macro-F1
+# 0.9148; 10 epochs is untested and is part of what this benchmark answers.
+#
+# num_workers 128. This is a memory ceiling, not a throughput choice, and the ceiling is
+# set by the IMAGE-DECODE PIPELINE, not the dataframe (the earlier COW-leak theory was wrong).
+# The 2026-07-17 run at 512 died: it held the full ~1100 img/s decode ceiling for ~36k batches,
+# then collapsed 440x and was SIGKILLed with no traceback -- the kernel OOM killer, i.e. host
+# RAM, not GPU (a CUDA OOM raises a loud Python exception). dev/030 forks its workers, and
+# CPython refcounting breaks copy-on-write on the 634 MB dataframe, so each worker converges on
+# its own private copy: ~1.1 GB steady state per worker, measured by dev/037_dl_memory_probe.py.
+#   Measured per-worker cost is ~1.2 GB, and it is the fastai image pipeline (JPEG decode +
+#   resize/augment + prefetch), confirmed by isolation: a dummy dataset that skips decode
+#   costs ~20 MB/worker, the real one ~1.2 GB. So worker_count x 1.2 GB must fit the node.
+#     128 workers -> ~158 GB plateau (55% of the 288 GB cap) + a bounded decode-size creep.
+#     192 -> breached 92% at batch ~4500; 256 -> ~batch 315; 512 -> minutes. Any count near
+#     the cap dies at a node-dependent time. 128 keeps ~1100 img/s on /work AND real margin.
+desc: arfix-autoregressive-fp32-2ep-oversample-effnetv2s-ucloud
+train:
+  parquet_path: /work/global_lepi/0032836-250426092105405_processing_metadata_postprocessed_quality_filtered.parquet
+  img_dir: /work/global_lepi/images
+  out_dir: /work/lepinet/data/ucloud_models
+  fold: '1'
+  min_img_per_spc: 50
+  num_workers: 128
+  model_name: arfix-autoregressive-fp32-2ep-oversample-effnetv2s-ucloud
+  model_arch_name: efficientnet_v2_s
+  head: autoregressive
+  nb_epochs: 2
+  base_lr: 0.001
+  batch_size: 64
+  aug_img_size: 460
+  img_size: 256
+  optimizer: muon
+  fp16: false
+  schedule: one_cycle
+  hierarchy_path: null
+  family_filter: []
+  decoder_num_layers: 4
+  decoder_nhead: 1
+  precision: fp32
+  grad_clip: 5.0
+  warmup_epochs: 0.5
+  oversample_power: 0.5
+  logit_adjust_tau: 0.0
+  aug_kwargs:
+    max_warp: 0.0
+    max_lighting: 0.0
+    p_lighting: 0.0
+    flip_vert: true
+    max_rotate: 15.0
+    max_zoom: 1.1

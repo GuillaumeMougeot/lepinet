@@ -1,0 +1,46 @@
+# Autoregressive stability test: does fp32 fix the NaN-divergence? The head trains fine on a
+# fixed fp32 batch but NaN-diverged on real data under fp16 (train_loss went UP, NaNGuard
+# aborted). The backbone runs fp16 while the head is forced fp32, so fp16 backbone features are
+# the suspect. This runs 2 epochs in full fp32 -- if train_loss decreases, fp16 was the cause.
+# Training only (no test); just watching whether it learns.
+#   ucloud q submit ucloud/arfix-fp32.toml --name arfix-fp32
+
+name = "lepi-arfix-fp32"
+replicas = 1
+
+[application]
+name = "pytorch-te"
+version = "26.05"
+
+[product]
+id = "gpu-nvidia-b200-1-gpu"
+category = "gpu-nvidia-b200"
+provider = "ucloud"
+
+[time_allocation]
+hours = 6
+
+[sync]
+local = ".."
+remote = "/12347837/repos/lepinet"
+
+[setup]
+script = "setup.sh"
+run = "python dev/030_hierarchical_heads_benchmark.py -c configs/20260718_ucloud_arfix_autoregressive_fp32.yaml"
+
+[schedule]
+auto_extend = "1h"
+max_time = "10h"
+
+[[resources]]
+type = "file"
+path = "/12347837/repos/mini_trainer"
+
+[[resources]]
+type = "file"
+path = "/12347837/repos/mini_metrics"
+
+[[resources]]
+type = "file"
+path = "/12347837/datasets/global_lepi"
+read_only = true
