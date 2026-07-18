@@ -1,0 +1,49 @@
+# Does co-locating multiple model copies fill the B200's idle compute? effnetv2s saturates a
+# 5090 (98-100% util) but the B200 is only ~17% faster despite ~3-4x the compute -- so the B200's
+# SMs are underfed (small sequential layers, launch/dependency-bound), leaving idle compute.
+# This runs 3 independent dev/038 copies concurrently on ONE B200 (staged, so reads never limit).
+# If aggregate img/s >> a single run's ~1090, the idle compute is real and co-location (e.g. the
+# 3 benchmark heads on one GPU) is the way to use the B200 -- 3 GPUs of work on 1.
+#   ucloud q submit ucloud/gpudec-colocate.toml --name gpudec-colo
+
+name = "lepi-gpudec-colo"
+replicas = 1
+
+[application]
+name = "pytorch-te"
+version = "26.05"
+
+[product]
+id = "gpu-nvidia-b200-1-gpu"
+category = "gpu-nvidia-b200"
+provider = "ucloud"
+
+[time_allocation]
+hours = 4
+
+[sync]
+local = ".."
+remote = "/12347837/repos/lepinet"
+
+[setup]
+script = "setup-staged.sh"
+# 3 copies in parallel, each bs=128 / 12 byte-readers (36 < 48 vCPU), staged reads. Each logs
+# its own throughput; the sum is the aggregate. `wait` holds the batch job until all finish.
+run = "for i in 1 2 3; do python dev/038_gpu_decode_train.py -c configs/20260718_ucloud_staged_test_independent.yaml --num-workers 12 --overlap --gc-every 8 --batch-size 128 --max-batches 500 > /work/lepinet/colo_$i.log 2>&1 & done; wait; echo '=== per-copy results ==='; grep -h 'epoch 0:' /work/lepinet/colo_*.log"
+
+[schedule]
+auto_extend = "1h"
+max_time = "8h"
+
+[[resources]]
+type = "file"
+path = "/12347837/repos/mini_trainer"
+
+[[resources]]
+type = "file"
+path = "/12347837/repos/mini_metrics"
+
+[[resources]]
+type = "file"
+path = "/12347837/datasets/global_lepi"
+read_only = true
