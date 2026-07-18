@@ -1,0 +1,46 @@
+# The payoff test: GPU decode DONE RIGHT on the B200 -- staged (no read latency) + overlap
+# (decode N+1 while model runs N) + bigger batch (bs=256, which the B200's 180 GB affords but
+# the 5090's 32 GB can't). Locally the improved pipeline is model-bound at ~930 img/s (bs192,
+# 5090); the B200 has more compute, so bigger batch here should push throughput past the CPU
+# pipeline's ~1100 img/s ceiling and actually use the GPU. Throughput probe: 1000 batches.
+#   ucloud q submit ucloud/gpudec-fast.toml --name gpudec-fast
+
+name = "lepi-gpudec-fast"
+replicas = 1
+
+[application]
+name = "pytorch-te"
+version = "26.05"
+
+[product]
+id = "gpu-nvidia-b200-1-gpu"
+category = "gpu-nvidia-b200"
+provider = "ucloud"
+
+[time_allocation]
+hours = 4
+
+[sync]
+local = ".."
+remote = "/12347837/repos/lepinet"
+
+[setup]
+script = "setup-staged.sh"
+run = "python dev/038_gpu_decode_train.py -c configs/20260718_ucloud_staged_test_independent.yaml --num-workers 32 --overlap --gc-every 8 --batch-size 256 --max-batches 1000"
+
+[schedule]
+auto_extend = "1h"
+max_time = "8h"
+
+[[resources]]
+type = "file"
+path = "/12347837/repos/mini_trainer"
+
+[[resources]]
+type = "file"
+path = "/12347837/repos/mini_metrics"
+
+[[resources]]
+type = "file"
+path = "/12347837/datasets/global_lepi"
+read_only = true
