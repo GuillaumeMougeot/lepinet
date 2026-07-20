@@ -53,17 +53,91 @@ page.
 
 This section describes the roadmap of the development process of this app.
 
-The app should be as small as possible and run locally on the user phone or
-desktop. 
+The app should be as fast and as small as possible and run locally on the user
+phone or desktop. Fast has higher priority than small. But both are important.
 
-### Shrinking the model down to the small possible size
+### Shrinking the model down to the fastest and smallest possible size
 
-This section tackles the difficult pro
+This section tackles the difficult problem of making a trained deep learning
+model production-ready: fast and light-weight. 
+
+The current model is a fastai-trained efficientnetv2_s with ~12000 classes. The
+model heads is quite large. The model file size is currently ~170 Mb. The goal
+would be to reduce it by x10 or more.
+
+Repo used to train the model: https://github.com/GuillaumeMougeot/lepinet and
+stored locally in ~/codes/lepinet. The script used is dev/030.
+
+Here are some potential techniques to explore: To reduce the size of the last
+layer:
+- Low-rank factorization
+- PCA on the logits -> Potential risk of strong accuracy loss.
+
+To reduce the size of the entire model:
+- Knowledge distillation
+- Quantization 
+- SVD?
+
+Techniques with less potential or more substantial work/exploration yet: 
+- Trained other architecture?
+- Exploit the hierarchical structure even more by having a series of models?
+- Learned embeddings: this is probably not going to reduce the size of the final
+  app file.
+
+More?
+
+The part of the project is allowed to have time and space, meaning that the goal
+has to be reached. Training new models is allowed. New scripts can be created
+for this purpose in the dev folder, following the numbering structure. This is
+to be seen as an engineering challenge and the app can go down in size as much
+as possible. Less than a Mb is the dream. Go down to assembler if required
+(well, this could also obfusticate the code so this could also be parallel dev).
 
 ### Creating the app
+
+The app is intentionally simple and light-weight to be able to be easily
+downloaded and run locally (offline).
+
+The goal is to use most of the modern tools and techniques to reach this goal.
+
+To avoid having to set the app on a "store" and be platform-agnostic, the
+current avenue is to use PWA. This is strongly open to improvement if needed.
+
+The app would be hosted on GitHub Pages, created with CI with GitHub Actions.
+When opening the GitHub page, the user will be prompted to "download" the app,
+like "'Add to Home Screen' to install this app for offline use." 
+
+I don't know if this app code belongs to the same lepinet repo or to another
+"lepinet-app" repo?
+
+Here is an example of list of potential tools to use: 
+
+| Purpose    | Recommendation                    | Why                                              |
+| ---------- | --------------------------------- | ------------------------------------------------ |
+| ML         | PyTorch                           | Already there                                    |
+| Export     | ONNX                              | Browser standard                                 |
+| Runtime    | ONNX Runtime Web                  | Fastest mature solution                          |
+| Language   | TypeScript                        | Modern standard                                  |
+| Runtime    | Bun                               | Yes                                              |
+| Bundler    | Bun                               | Bun increasingly replaces Vite for many projects |
+| UI         | Svelte 5                          | Small runtime, simple                            |
+| PWA        | Bun                               | Offline install                                  |
+| Hosting    | GitHub Pages                      | Free                                             |
+| CI         | GitHub Actions                    | Automatic deployment                             |
+| Formatting | Biome?                            | Replaces Prettier + ESLint                       |
+
+This list is strongly amenable and must be changed if a row is wrong, too much
+or missing. I can think of tools such as WebGPU, WASM or Rust lang.
 
 ### Future avenues of development
 
 - Storing capture images locally or having some sort of identification history.
 
 ## Development rules
+
+- Journal all developments: anyone reopening the code must be able to understand
+  both the final product and the journey that led to it with all the important
+  lesson. Keep an exhaustive but efficient writing style. If done within lepinet
+  repo, follows the journaling method: create a journal entry per problem and
+  document each new script in the dev/readme. 
+- For dev, use all modern methods, uv, bun etc.
