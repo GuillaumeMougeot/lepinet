@@ -388,9 +388,15 @@ fallback. Lesson: for ORT Web, always static-QDQ, never dynamic.
 `model.qdq.onnx` (browser int8), taxonomy/calibration/thresholds/manifest. The app pins its own
 copy for now; pulling from the release is a future nicety (owner's note).
 
-**QDQ confirmed working in-browser** (owner tested, loads + installs) — so the app default is the
-**QDQ int8** model (15.5 MB) with **fp32 as fallback** (via `config.fallback` → the GitHub release
-model.onnx, tried only if the primary won't create a session).
+**QDQ did NOT work in-browser after all — reverted to fp32.** The earlier "it loads" was the fp32
+model still cached; on a clean load the static-QDQ int8 threw a raw numeric WASM error
+(`9399128`) at session creation, and the cross-origin fp32 fallback (GitHub release URL) also
+failed to fetch, so both paths died. **Lesson: Python op-verification (no ConvInteger, correct
+outputs) does NOT prove ORT-Web runtime support** — the graph must be validated in a real browser.
+v1 ships **fp32 (54 MB) same-origin as primary**, the only format confirmed to load. The 15 MB QDQ
+win is stranded until there's a way to validate a browser-runnable small format in-browser (no JS
+toolchain/browser automation on the box). Candidates to try, in order: per-tensor QDQ (current is
+per-channel), fp16-with-fp32-head, custom minimal ORT build. Tracked in the app `ROADMAP.md`.
 
 **App v1.1 (2026-07-23):** scientific names (`dev/047_build_names.py` builds `names.json` from the
 parquet's `scientificName`/`genus`/`family`, aligned to taxonomy vocab order — 0 missing), shown
