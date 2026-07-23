@@ -59,6 +59,10 @@ LEVEL_NAMES = ["species", "genus", "family"]
 # ---------------------------------------------------------------------------
 
 def quantize(src, dst, weight_type="int8"):
+    """Dynamic int8 quantization. WARNING: emits ConvInteger/MatMulInteger, which ONNX Runtime
+    *Web* implements on no backend -- a model quantized this way loads fine in Python but fails
+    in the browser with "Could not find an implementation for ConvInteger". Use for server-side
+    size measurement only; for the app bundle use `quantize_static_qdq` below."""
     import onnx
     from onnxruntime.quantization import quantize_dynamic, QuantType
 
@@ -75,6 +79,85 @@ def quantize(src, dst, weight_type="int8"):
     before, after = mod040.total_size(src), mod040.total_size(dst)
     print(f"Quantized ({weight_type}): {before/1e6:.1f} MB -> {after/1e6:.1f} MB "
           f"({before/after:.2f}x smaller)")
+    return dst, before, after
+
+
+class _ImageCalibrationReader:
+    """Feeds `quantize_static` a stream of preprocessed images to measure activation ranges.
+
+    Same preprocessing as inference (dev/041: shorter-side resize + center crop, [0,1] RGB CHW),
+    so the calibrated activation scales match what the model actually sees at run time.
+    """
+
+    def __init__(self, paths, img_size=256):
+        self.paths = list(paths)
+        self.img_size = img_size
+        self._it = iter(self.paths)
+
+    def _load(self, path):
+        from PIL import Image
+        S = self.img_size
+        im = Image.open(path).convert("RGB")
+        w, h = im.size
+        sc = S / min(w, h)
+        nw, nh = max(S, round(w * sc)), max(S, round(h * sc))
+        im = im.resize((nw, nh), Image.BILINEAR)
+        l, t = (nw - S) // 2, (nh - S) // 2
+        im = im.crop((l, t, l + S, t + S))
+        return (np.asarray(im, dtype=np.float32).transpose(2, 0, 1) / 255.0)[None]
+
+    def get_next(self):
+        path = next(self._it, None)
+        if path is None:
+            return None
+        return {"image": self._load(path)}
+
+    def rewind(self):
+        self._it = iter(self.paths)
+
+
+def quantize_static_qdq(src, dst, calib_paths, img_size=256):
+    """Static int8 quantization in **QDQ** format -- the browser-compatible path.
+
+    Static (activation scales precomputed from a calibration set) + QDQ format produces
+    QuantizeLinear/DequantizeLinear nodes around ordinary Conv/MatMul, all of which ONNX Runtime
+    Web supports -- unlike the ConvInteger that dynamic quantization emits. Numerically this is
+    the same int8 weight compression measured in [[journal 2026-07-lepi-app-compression]]
+    (-0.59 pp species macro-F1); only the op encoding differs, which is what makes it run in the
+    browser.
+    """
+    import onnx
+    from onnxruntime.quantization import quantize_static, QuantType, QuantFormat, CalibrationMethod
+
+    src, dst = Path(src), Path(dst)
+    stripped = dst.with_suffix(".stripped.onnx")
+    model = onnx.load(str(src))
+    del model.graph.value_info[:]  # see module docstring
+    onnx.save(model, str(stripped))
+
+    reader = _ImageCalibrationReader(calib_paths, img_size)
+    quantize_static(
+        str(stripped), str(dst), reader,
+        quant_format=QuantFormat.QDQ,
+        # per-channel weights: the cosine prototype rows share a dynamic range, so this is
+        # nearly free (see the int8 result in the journal).
+        per_channel=True,
+        weight_type=QuantType.QInt8,
+        # Activations as uint8: ORT Web's QDQ kernels are happiest with u8 activations / s8 weights.
+        activation_type=QuantType.QUInt8,
+        calibrate_method=CalibrationMethod.MinMax,
+    )
+    stripped.unlink()
+
+    # Guard: assert the graph has no ConvInteger/MatMulInteger (the ops ORT Web can't run).
+    qm = onnx.load(str(dst))
+    bad = sorted({n.op_type for n in qm.graph.node if n.op_type in ("ConvInteger", "MatMulInteger")})
+    if bad:
+        raise RuntimeError(f"QDQ output still contains ORT-Web-unsupported ops: {bad}")
+
+    before, after = mod040.total_size(src), mod040.total_size(dst)
+    print(f"Static QDQ int8: {before/1e6:.1f} MB -> {after/1e6:.1f} MB ({before/after:.2f}x); "
+          f"no ConvInteger/MatMulInteger (browser-safe).")
     return dst, before, after
 
 

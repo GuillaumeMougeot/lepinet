@@ -373,9 +373,23 @@ Calibration (`dev/044`) completed and shipped: active thresholds target **0.95**
 (species greys the least-confident ~6% at 94.5% precision-when-shown; genus/family never grey,
 already >0.96 unconditionally). Confidence greying is live.
 
-Outstanding: formal GitHub Release of the bundle on `lepinet` (needs owner `gh auth login`);
-optional C3 distillation; the app currently shows GBIF taxon keys, not scientific names (a
-names map would fix that).
+**Browser quantization gotcha (2026-07-23):** the int8 model failed to load in ORT Web with
+*"Could not find an implementation for ConvInteger"* — on every backend, desktop and Android.
+**Dynamic** int8 (`quantize_dynamic`, what `dev/043.quantize` did) emits `ConvInteger` /
+`MatMulInteger`, which ONNX Runtime Web implements nowhere. Fix: `dev/043.quantize_static_qdq` —
+**static QDQ** quantization with an image calibration reader, producing
+`QuantizeLinear`/`DequantizeLinear` around ordinary `Conv`/`Gemm`, all ORT-Web-supported.
+Numerically identical to the dynamic int8 (same −0.59 pp; my B2 result was never a numerical
+problem, only an op-encoding one), **54 MB → 15.5 MB**, ops verified `ConvInteger`-free and
+species top-1 unchanged (0.900). Shipped to the app; fp32 (54 MB) remains the guaranteed-safe
+fallback. Lesson: for ORT Web, always static-QDQ, never dynamic.
+
+**GitHub Release live:** `lepinet` tag `model-v1-effnetv2b2` with `model.onnx` (fp32),
+`model.qdq.onnx` (browser int8), taxonomy/calibration/thresholds/manifest. The app pins its own
+copy for now; pulling from the release is a future nicety (owner's note).
+
+Outstanding: optional C3 distillation; the app shows GBIF taxon keys, not scientific names (a
+names map would fix that); in-browser confirmation of the QDQ model (fp32 already unblocks).
 
 ## Where this leaves the size budget
 
