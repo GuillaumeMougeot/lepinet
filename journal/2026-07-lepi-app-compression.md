@@ -388,8 +388,18 @@ fallback. Lesson: for ORT Web, always static-QDQ, never dynamic.
 `model.qdq.onnx` (browser int8), taxonomy/calibration/thresholds/manifest. The app pins its own
 copy for now; pulling from the release is a future nicety (owner's note).
 
-Outstanding: optional C3 distillation; the app shows GBIF taxon keys, not scientific names (a
-names map would fix that); in-browser confirmation of the QDQ model (fp32 already unblocks).
+**QDQ confirmed working in-browser** (owner tested, loads + installs) — so the app default is the
+**QDQ int8** model (15.5 MB) with **fp32 as fallback** (via `config.fallback` → the GitHub release
+model.onnx, tried only if the primary won't create a session).
+
+**App v1.1 (2026-07-23):** scientific names (`dev/047_build_names.py` builds `names.json` from the
+parquet's `scientificName`/`genus`/`family`, aligned to taxonomy vocab order — 0 missing), shown
+instead of GBIF keys; split Camera / Gallery buttons (the combined one only opened the camera);
+**config-driven modular bundle** (`model/config.json` declares model + sidecars + IO names, so a
+new model is a folder swap, no code change) documented in the app's `DEVELOPER.md`.
+
+Outstanding: optional C3 distillation; pulling the model from the release instead of bundling it
+(owner's future nicety).
 
 ## Where this leaves the size budget
 
