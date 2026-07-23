@@ -182,7 +182,11 @@ def compare(onnx_path, parquet_path, img_dir, n, aug_img_size, img_size, test_se
     df = df.sample(n=min(n, len(df)), random_state=seed).reset_index(drop=True)
     for level in HIERARCHY_LEVELS:
         df[level] = df[level].astype(str)
-    df["is_valid"] = True
+    # Split-agnostic dummy `is_valid`, as dev/032 does: `make_dls` builds both subsets and
+    # fastai's setup indexes row 0 of the *train* split, so an all-True column makes the
+    # DataBlock fail before any image is read. The split is irrelevant here -- every image
+    # goes through `test_dl`, which applies the validation pipeline regardless.
+    df["is_valid"] = np.arange(len(df)) % 5 == 0
     test_df = df[["image_path", "is_valid", *HIERARCHY_LEVELS]]
     print(f"Comparing on {len(test_df)} images.")
 
@@ -270,13 +274,18 @@ def write_fixture(out_dir, paths, ref01, ref_logits, test_df, onnx_path, ref_acc
 def cli():
     p = argparse.ArgumentParser(description="Preprocessing parity: fastai vs browser-style resizes (Phase A2).")
     p.add_argument("--onnx", required=True, help="Path to model.onnx from dev/040 (taxonomy.json must sit beside it).")
-    p.add_argument("--parquet", default="../data/global/models/0032836-250426092105405_processing_metadata_postprocessed_quality_filtered.lepinet.parquet")
+    # The *raw* quality-filtered parquet, not the `.lepinet.parquet` cache next to it: only
+    # the raw one still carries the `set` column that `filter_df` splits the test fold on.
+    p.add_argument("--parquet", default="../data/global/0032836-250426092105405_processing_metadata_postprocessed_quality_filtered.parquet")
     p.add_argument("--img-dir", default="../data/global/images")
     p.add_argument("-n", type=int, default=200, help="Number of test images (default 200).")
     p.add_argument("--aug-img-size", type=int, default=460)
     p.add_argument("--img-size", type=int, default=256)
     p.add_argument("--test-set", default="0")
-    p.add_argument("--min-img-per-spc", type=int, default=50)
+    # 0, matching dev/032's test path -- the one that produced the project's 0.9148 headline.
+    # A non-zero value here silently restricts the test fold to well-represented species (50
+    # gives 3,696 species / 484k images instead of 12,632 / 633k) and inflates every number.
+    p.add_argument("--min-img-per-spc", type=int, default=0)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--emit-fixture", default=None, help="Directory to write the browser test fixture into.")
     a = p.parse_args()

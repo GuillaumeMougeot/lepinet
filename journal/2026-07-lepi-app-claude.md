@@ -1,6 +1,10 @@
 # lepi-app — detailed plan (Claude's companion to the proposal)
 
-**Status:** PLAN, nothing built yet. Companion to
+**Status:** decisions RESOLVED (§7), **Phases A and B are done and measured** — results in
+[`2026-07-lepi-app-compression.md`](2026-07-lepi-app-compression.md), scripts `dev/040`–`dev/044`.
+Phase C (retraining) and Phase D (the app) are open. Note that §1's size table and §8's
+predictions were written *before* those measurements and are deliberately left unedited so the
+compression journal can score them; the measured numbers supersede them. Companion to
 [`2026-07-lepi-app.md`](2026-07-lepi-app.md) (the proposal + the Review section at its end).
 Written 2026-07-20. This document holds the *how*: budgets, action items, script numbers,
 and the ideas that were not in the proposal. The proposal remains the statement of intent;
@@ -306,17 +310,30 @@ first; treat regional builds as an optimization if size becomes binding.
 
 ---
 
-## 7. Open questions needing an owner's decision
+## 7. Decisions — RESOLVED 2026-07-20 (Guillaume)
 
-1. **D1** — sample images: fetch on demand (recommended), or bundle?
-2. **D2** — is a derived, precision-targeted threshold acceptable in place of a fixed 0.5?
-3. **D3** — is open-set detection v1 or v1.1? (Recommend v1.1.)
-4. **Accuracy floor** — what test macro-F1 may the shipped app not go below? (Suggest 0.87.)
-5. **Model licence** — is the artifact bundle openly licensed? (It is publicly downloadable
-   from Pages regardless; the obfuscation idea in the proposal should be dropped either way.)
-6. **Repo split** — confirm `lepinet-app` as a separate repo with a pinned artifact bundle.
-7. **Is the geographic prior in scope at all?** It is the largest accuracy lever available
-   and it is not currently in the proposal.
+All seven are closed. Recorded here as the binding answers; the discussion above is kept for
+the reasoning but the decisions win where they differ.
+
+| # | question | decision |
+|---|---|---|
+| D1 | sample images | **No thumbnails at all.** Link out to GBIF instead — keeps the app light and copyright-free. A "fetch example photos from GBIF" button is a possible later addition, not v1. |
+| D2 | confidence threshold | **Derive it.** `dev/044` is the threshold estimator; no hardcoded 0.5. |
+| D3 | open-set / "not a lepidopteran" | **Dropped.** Not v1, not v1.1. |
+| — | accuracy floor | **0.87 test species macro-F1.** |
+| — | model licence | **GPL.** The obfuscation idea in the proposal is dropped. |
+| — | repo split | **Confirmed.** `lepinet` emits the versioned artifact bundle as a GitHub Release; `lepinet-app` (https://github.com/GuillaumeMougeot/lepinet-app, created 2026-07-20) pins a version. The app must **show the user the model version it is running**, and offer the latest. |
+| — | geographic prior (§3.1) | **Deferred to v1.1**, and noted as harder than the plan implied: it needs co-occurrence data the project does not currently have. |
+
+Two further steers on the plan above:
+
+- **§3.3 (top-5 / micro-F1 as the product metric)** — agreed in principle, measured later, not
+  a Phase B/C gate.
+- **Tiny vision transformers** are added to the C2 backbone sweep as a candidate alongside the
+  CNNs (see §5 Phase C).
+- **EXIF orientation** is *not* needed for this model — a lepidopteran can sit in any
+  orientation, and the training augmentation includes `flip_vert`. Worth revisiting only if the
+  pipeline is reused for taxa with a canonical orientation.
 
 ---
 

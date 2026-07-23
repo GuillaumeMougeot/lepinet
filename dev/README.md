@@ -30,6 +30,30 @@ through fastai's loop. Configs in [`../configs/`](../configs/), best recipe docu
 | **034**`_longtail.py` | Long-tail helpers: square-root oversampling (`sample_weights` → fastai `WeightedDL`) and logit adjustment (`LogitAdjustment`), both opt-in. Oversampling is the project's biggest single lever ([[journal 2026-07-does-longtail-help]]). |
 | **036**`_ledger.py` | Reads every run's saved `config.yaml` + `metrics.json` and prints a table of what each run tested and scored (`--chain` = the ladder; `--snapshot` writes the tracked `RESULTS.md`). The only reader of the otherwise write-only run history. |
 
+## The app / compression line (040–044)
+
+Turning the trained checkpoint into something a phone can run offline. Plan and decisions in
+[`../journal/2026-07-lepi-app-claude.md`](../journal/2026-07-lepi-app-claude.md); results in
+[`../journal/2026-07-lepi-app-compression.md`](../journal/2026-07-lepi-app-compression.md).
+These run against a **local image mirror covering 3,696 of 12,041 species**, so their absolute
+numbers are optimistic — relative comparisons are the trustworthy part.
+
+| script | what it is |
+|---|---|
+| **040**`_onnx_export.py` | Checkpoint → ONNX + `taxonomy.json` + `MANIFEST.json`. Rebuilds the model without fastai `DataLoaders`, bakes ImageNet normalization into the graph (input is RGB [0,1]), emits raw logits. Needs `dynamo=True` (the legacy tracer dies on the head's dict-valued `get_extra_state`) and an eager warm-up pass (the head's mask cache is data-dependent). Verifies PyTorch↔ORT parity. |
+| **041**`_ort_parity.py` | Does browser-style resizing cost accuracy? Compares four candidate preprocessings against the exact fastai validation pipeline. Answer: only aspect-ratio squashing matters (−1.1 pp); the kernel does not. `--emit-fixture` writes images + expected logits for the app repo's real-browser test. |
+| **042**`_marginalize.py` | Proves genus/family are better derived from the species posterior (log-space `scatter_logsumexp`) than read from their own heads. They are, at both levels on both metrics — so those two heads can be deleted. Also measures how often the independent heads contradict each other (1.8%). |
+| **043**`_quantize.py` | int8 dynamic PTQ + the accuracy it costs, at every level and through the marginal path. 3.89× for −0.59 pp species macro-F1. Strips `graph.value_info` first (ORT's quantizer trips over the dynamo exporter's shape annotations). |
+| **044**`_calibrate.py` | The threshold estimator. Fits a per-level temperature on the validation fold (exactly, via a 96-point grid of `logsumexp(z/T)` accumulated while streaming — the full logit matrix is never retained), then picks precision-targeted thresholds and reports what they achieve on the held-out fold. Emits `calibration.json` + `thresholds.json`. |
+
+**Phase C (retraining)** runs through the existing `dev/030`/`032` on `configs/`, driven by two
+detached sweep scripts (`setsid nohup … </dev/null &` so they outlive the session):
+`run_c1_bottleneck_sweep.sh` sweeps the classifier bottleneck `hidden` ∈ {512,256,128};
+`run_c2_backbone_sweep.sh` sweeps the backbone at the chosen bottleneck. C2's small nets
+(fastvit/repvit/mobilenetv4) come from **timm** — `dev/030` gained `resolve_arch` /
+`arch_body_features` / `build_backbone_model` so a config's `model_arch_name` can be either a
+torchvision callable or a timm string, and `032`/`040` reconstruct either transparently.
+
 ## Experiments & probes (frozen after measuring)
 
 | script | what it measured |

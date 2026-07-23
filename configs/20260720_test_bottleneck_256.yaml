@@ -1,0 +1,16 @@
+# Test counterpart to configs/20260720_bottleneck_256.yaml (Phase C1). Model path is a glob:
+# the run timestamp is minted when training starts, so it cannot be named in advance.
+version: 1.0
+
+test:
+    model_path: data/global/models/*-bottleneck-256-5ep-oversample-effnetv2s/bottleneck-256-5ep-oversample-effnetv2s.pt
+    parquet_path: data/global/0032836-250426092105405_processing_metadata_postprocessed_quality_filtered.parquet
+    img_dir: data/global/images
+    out_dir: data/global/preds
+    test_set: '0'
+    eval_name: global-test
+    batch_size: 64
+    aug_img_size: 460
+    img_size: 256
+    num_workers: 12
+    optimal_threshold: true

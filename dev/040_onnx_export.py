@@ -74,14 +74,14 @@ def build_model(checkpoint):
 
     sparse_masks = mod032.class_spec_from_hierarchy(hierarchy_df, vocabs, cls2idx)
 
-    arch = getattr(importlib.import_module("fastai.vision.all"), checkpoint["model_arch_name"])
-    nf = v4.body_out_features(arch)
+    arch = mod030.resolve_arch(checkpoint["model_arch_name"])
+    nf = mod030.arch_body_features(arch)
     head = mod030.build_head(
         checkpoint["head"], nf, n_classes, cls2idx, sparse_masks,
         decoder_kwargs={"num_layers": 4, "nhead": 1},
+        hidden=checkpoint.get("hidden", True),  # True = pre-bottleneck checkpoints
     )
-    body = create_body(arch(weights=None), n_in=3, pretrained=False)
-    model = nn.Sequential(body, head)
+    model = mod030.build_backbone_model(arch, head)  # torchvision or timm, matching training
     model.load_state_dict(checkpoint["model_state_dict"])
     model.eval()
     return model, vocabs, n_classes

@@ -38,6 +38,7 @@ Usage:
 """
 
 import argparse
+import glob
 import json
 import subprocess
 from datetime import datetime
@@ -190,8 +191,15 @@ def load_evals(preds_dir, runs):
 
         model_path = (cfg.get("test") or {}).get("model_path", "")
         # The run directory is the checkpoint's parent (or grandparent, for the
-        # SaveModelCallback checkpoints under `models/`).
-        owner = next((k for k in runs if k and k in str(model_path)), None)
+        # SaveModelCallback checkpoints under `models/`). Match the run-dir name as a substring
+        # of the checkpoint path -- but a test config written before its training run exists
+        # names the checkpoint with a *glob* (the timestamp isn't known yet), and a literal '*'
+        # never contains the resolved timestamp, so the raw string never matches. Resolve any
+        # glob to its actual paths first (newest wins, as dev/032's resolve_model_path does).
+        candidates = [str(model_path)]
+        if glob.has_magic(str(model_path)):
+            candidates = [str(p) for p in Path().glob(str(model_path))] or candidates
+        owner = next((k for k in runs for c in candidates if k and k in c), None)
         if owner is None:
             continue
 

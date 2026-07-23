@@ -1,0 +1,63 @@
+# C2 of the lepi-app compression plan (journal/2026-07-lepi-app-claude.md, Phase C).
+#
+# Backbone sweep at the C1 bottleneck (hidden=256), everything else byte-identical to the
+# 0.9148 recipe (20260716-154156). With the head shrunk to 4.58 M, the backbone now dominates
+# the artifact, so this is the step that decides final size. effnetv2_s (the 0.9148 baseline)
+# is 20.18 M; these candidates span 5.9-10.6 M:
+#
+#     tf_efficientnetv2_b0       5.86 M  modern CNN, direct effnetv2 lineage (safe anchor)
+#     fastvit_t12                6.53 M  Apple hybrid, reparameterizes to conv at inference
+#     repvit_m1_1                7.77 M  2024 conv-net designed to mimic ViT, SOTA mobile latency
+#     mobilenetv4_conv_medium    8.43 M  best pure-conv mobile net (2024)
+#     fastvit_sa12              10.56 M  FastViT *with* self-attention stages -- the "tiny ViT
+#                                        done right"; reparam conv at inference -> clean ONNX/WASM
+#
+# ViT choice rationale: vanilla ViTs emit token sequences that MTHeadAdapter's AdaptiveAvgPool2d
+# cannot pool, and need more data/compute than this budget allows. FastViT and RepViT are the
+# current best small hybrids -- crucially they *reparameterize to pure conv at inference*, which
+# is exactly what the browser target wants (clean ONNX graph, fast on WASM/WebGPU).
+#
+# NOTE: hidden is set to 256 on the assumption C1's knee is there. If C1 (512/128 pending) shows
+# 512 is meaningfully better, bump `hidden` to 512 in these before launching.
+# Pretrained ImageNet backbones (vision_learner default) -> timm downloads weights from HF hub.
+version: 1.0
+# Long-tail intervention #1: rare-species oversampling (dev/034), on top of the best recipe
+# (one-cycle). power=0.5 = square-root sampling (Mahajan et al.) -- the safe middle
+# ground between natural (0) and fully class-balanced (1). Everything else identical to the
+# 5-epoch one-cycle run, so this isolates the resampling effect. Set oversample_power: 0 to
+# disable (that reproduces the plain 5ep run).
+desc: backbone-effnetv2b2-h256-5ep-oversample
+train:
+  parquet_path: data/global/0032836-250426092105405_processing_metadata_postprocessed_quality_filtered.parquet
+  img_dir: data/global/images
+  out_dir: data/global/models
+  fold: '1'
+  min_img_per_spc: 50
+  model_name: backbone-effnetv2b2-h256-5ep-oversample
+  model_arch_name: tf_efficientnetv2_b2
+  head: independent
+  hidden: 256
+  nb_epochs: 5
+  base_lr: 0.001
+  batch_size: 64
+  aug_img_size: 460
+  img_size: 256
+  optimizer: muon
+  fp16: true
+  schedule: one_cycle
+  hierarchy_path: null
+  family_filter: []
+  decoder_num_layers: 4
+  decoder_nhead: 1
+  precision: fp16
+  grad_clip: 5.0
+  warmup_epochs: 0.5
+  oversample_power: 0.5
+  logit_adjust_tau: 0.0
+  aug_kwargs:
+    max_warp: 0.0
+    max_lighting: 0.0
+    p_lighting: 0.0
+    flip_vert: true
+    max_rotate: 15.0
+    max_zoom: 1.1

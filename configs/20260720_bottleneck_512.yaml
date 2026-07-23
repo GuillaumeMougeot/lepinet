@@ -1,0 +1,56 @@
+# C1 of the lepi-app compression plan (journal/2026-07-lepi-app-claude.md, Phase C).
+#
+# Sweeps mini_trainer's classifier bottleneck, `hidden`, which sets `preclassification_size`
+# -- the width of every cosine prototype row. The project has always run mini_trainer's
+# default (`hidden: true` => 1280, the backbone width), which is why the head is 53% of the
+# model's parameters (journal/2026-07-lepi-app-compression.md). Head sizes:
+#
+#     hidden: true (1280) -> 22.76 M params   (the 0.9148 baseline)
+#     hidden: 512         ->  9.13 M
+#     hidden: 256         ->  4.58 M
+#     hidden: 128         ->  2.31 M
+#
+# Everything else is byte-identical to 20260716-154156 (the current project best, test species
+# macro-F1 0.9148), so this isolates the bottleneck. The question is where the accuracy knee
+# is; the shipped app may not go below 0.87 test species macro-F1.
+version: 1.0
+# Long-tail intervention #1: rare-species oversampling (dev/034), on top of the best recipe
+# (one-cycle). power=0.5 = square-root sampling (Mahajan et al.) -- the safe middle
+# ground between natural (0) and fully class-balanced (1). Everything else identical to the
+# 5-epoch one-cycle run, so this isolates the resampling effect. Set oversample_power: 0 to
+# disable (that reproduces the plain 5ep run).
+desc: bottleneck-512-5ep-oversample-effnetv2s
+train:
+  parquet_path: data/global/0032836-250426092105405_processing_metadata_postprocessed_quality_filtered.parquet
+  img_dir: data/global/images
+  out_dir: data/global/models
+  fold: '1'
+  min_img_per_spc: 50
+  model_name: bottleneck-512-5ep-oversample-effnetv2s
+  model_arch_name: efficientnet_v2_s
+  head: independent
+  hidden: 512
+  nb_epochs: 5
+  base_lr: 0.001
+  batch_size: 64
+  aug_img_size: 460
+  img_size: 256
+  optimizer: muon
+  fp16: true
+  schedule: one_cycle
+  hierarchy_path: null
+  family_filter: []
+  decoder_num_layers: 4
+  decoder_nhead: 1
+  precision: fp16
+  grad_clip: 5.0
+  warmup_epochs: 0.5
+  oversample_power: 0.5
+  logit_adjust_tau: 0.0
+  aug_kwargs:
+    max_warp: 0.0
+    max_lighting: 0.0
+    p_lighting: 0.0
+    flip_vert: true
+    max_rotate: 15.0
+    max_zoom: 1.1

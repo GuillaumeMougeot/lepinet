@@ -109,11 +109,14 @@ def load_model(checkpoint, dls, decoder_num_layers, decoder_nhead):
 
     sparse_masks = class_spec_from_hierarchy(hierarchy_df, vocabs, cls2idx)
 
-    arch = getattr(importlib.import_module("fastai.vision.all"), checkpoint["model_arch_name"])
-    nf = v4.body_out_features(arch)
+    arch = mod030.resolve_arch(checkpoint["model_arch_name"])
+    nf = mod030.arch_body_features(arch)  # channel count is input-size-independent for these conv/hybrid nets
     custom_head = mod030.build_head(
         head, nf, n_classes, cls2idx, sparse_masks,
         decoder_kwargs={"num_layers": decoder_num_layers, "nhead": decoder_nhead},
+        # Default True for checkpoints written before the bottleneck sweep existed; those
+        # were all trained at mini_trainer's default, so True reproduces them exactly.
+        hidden=checkpoint.get("hidden", True),
     )
     learn = vision_learner(
         dls, arch, n_out=1, custom_head=custom_head, init=None,

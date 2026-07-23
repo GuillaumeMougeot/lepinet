@@ -159,13 +159,128 @@ class MTHeadAdapter(nn.Module):
             return self.head(x)
 
 
-def build_head(head_name, nf, n_classes, cls2idx, sparse_masks, decoder_kwargs=None):
+def resolve_arch(model_arch_name):
+    """Map a config's `model_arch_name` to something `vision_learner` accepts, for either backend.
+
+    fastai re-exports the torchvision architectures as callables in `fastai.vision.all`
+    (`resnet18`, `efficientnet_v2_s`, ...); pass one of those and `vision_learner` builds a
+    torchvision body. Pass a **string** it doesn't recognise and `vision_learner` routes it
+    through `create_timm_model` instead -- which is how the C2 backbone sweep reaches the modern
+    small nets (`fastvit_*`, `repvit_*`, `mobilenetv4_*`) that live only in timm.
+
+    Resolution is by lookup, not a prefix: a name that is a torchvision arch stays torchvision,
+    anything else must be a real timm model or this raises -- so a typo becomes an error here
+    rather than a silently wrong backbone eight hours into a run.
+    """
+    import fastai.vision.all as fva
+    if hasattr(fva, model_arch_name):
+        return getattr(fva, model_arch_name)
+    import timm
+    if model_arch_name in timm.list_models():
+        return model_arch_name
+    raise ValueError(
+        f"Unknown model_arch_name '{model_arch_name}': not a fastai/torchvision arch and not in "
+        f"timm.list_models(). Check the spelling or `timm.list_models('<pattern>*')`."
+    )
+
+
+def arch_body_features(arch_spec, img_size=256):
+    """Feature-channel count the head will pool, for a torchvision callable or a timm name.
+
+    For timm this forwards a dummy through the *fastai `TimmBody`* — the exact body training
+    builds — not through a bare `timm.create_model(..., global_pool="")`. The two disagree for
+    nets with a post-stage conv head: mobilenetv4_conv_medium's raw pool-less output is 1280,
+    but the TimmBody fastai wraps emits 960, and it is the latter the head actually pools.
+    Detecting the wrong one silently mismatched the head's `in_features` and only surfaced when
+    `_fix_backbone_embedding_check` raised at the first training batch (`(64, 960)` vs 1280),
+    30 s into an 8 h run. Detecting through TimmBody makes the number match by construction.
+    """
+    if isinstance(arch_spec, str):
+        from fastai.vision.learner import create_timm_model
+        model, _ = create_timm_model(arch_spec, n_out=1, pretrained=False, custom_head=nn.Identity())
+        body = model[0]
+        body.eval()
+        with torch.no_grad():
+            out = body(torch.zeros(1, 3, img_size, img_size))
+        if out.ndim != 4:
+            raise ValueError(
+                f"timm arch '{arch_spec}' emits a {out.ndim}D feature ({tuple(out.shape)}), not a "
+                f"[N,C,H,W] map -- MTHeadAdapter's AdaptiveAvgPool2d needs a spatial map. Vanilla "
+                f"ViTs (token sequences) are excluded for exactly this reason; pick a conv-stem or "
+                f"hybrid net (fastvit/repvit/mobilenetv4)."
+            )
+        return out.shape[1]
+    return v4.body_out_features(arch_spec)
+
+
+def build_backbone_model(arch_spec, custom_head):
+    """`nn.Sequential(body, head)` for either backend, matching what `vision_learner` builds.
+
+    Used by the test/export reconstruction path (dev/032, dev/040), which rebuilds the model
+    outside `vision_learner`. For timm this defers to fastai's own `create_timm_model` so the
+    `TimmBody` module tree is byte-identical to what training produced -- essential for the
+    saved state_dict to load.
+    """
+    from fastai.vision.learner import create_body, create_timm_model
+    if isinstance(arch_spec, str):
+        model, _ = create_timm_model(arch_spec, n_out=1, pretrained=False, custom_head=custom_head)
+        return model
+    body = create_body(arch_spec(weights=None), n_in=3, pretrained=False)
+    return nn.Sequential(body, custom_head)
+
+
+def build_head(head_name, nf, n_classes, cls2idx, sparse_masks, decoder_kwargs=None, hidden=True):
+    """`hidden` is the classifier's bottleneck width, and it is the single biggest size lever
+    in the model (journal/2026-07-lepi-app-compression.md).
+
+    mini_trainer's `Classifier` puts a `Linear(in_features, preclassification_size)` + LeakyReLU
+    in front of the cosine layers, and `hidden=True` (the default this project has always run)
+    means `preclassification_size = in_features` = 1280. Every one of the 16,476 prototype rows
+    is therefore 1280-wide, which is why the head is 53% of the model's parameters.
+
+    Passing an int instead sets the bottleneck directly: `hidden=256` shrinks every prototype
+    row 5x. Kept defaulting to `True` so existing configs and checkpoints reproduce exactly.
+    """
     cls = HEAD_CLASSES[head_name]
-    kwargs = dict(in_features=nf, out_features=n_classes[0], sparse_masks=sparse_masks, cls2idx=cls2idx)
+    kwargs = dict(in_features=nf, out_features=n_classes[0], sparse_masks=sparse_masks,
+                  cls2idx=cls2idx, hidden=hidden)
     if head_name == "autoregressive":
         kwargs.update(decoder_cls=XADecoder, decoder_kwargs=decoder_kwargs or {})
     head = cls(**kwargs)
+    _fix_backbone_embedding_check(head, nf)
     return MTHeadAdapter(head, autoregressive=head_name == "autoregressive")
+
+
+def _fix_backbone_embedding_check(head, in_features):
+    """Work around an upstream `Classifier._reshape_backbone_embeddings` bug.
+
+    That method validates the *backbone's* output width against
+    `self.preclassification_size` -- but `preclassification_size` is the width **after**
+    `self.hidden`, while the tensor being checked is the width **before** it. The two are
+    equal only when `hidden` is a bool (mini_trainer's default), which is why this has never
+    surfaced: every run in this project has used the default. The moment `hidden` is an int,
+    a resnet18 backbone hands the head a (64, 512) tensor, the check compares 512 against 256
+    and raises `Unexpected 2D preclassification input shape: (64, 512)`.
+
+    Patched per-instance rather than in mini_trainer's source, matching how this module already
+    handles the `AutoregressiveClassifier` MRO bug (see the module docstring). `MTHeadAdapter`
+    always pools to a 2D `[N, in_features]` tensor before the head sees it, so validating that
+    shape against `in_features` is both the correct check and the only one reachable here.
+    """
+    import types
+
+    def _reshape(self, x):
+        if x.ndim == 2 and x.shape[1] == in_features:
+            return x
+        # Anything else is a genuine shape error worth surfacing loudly, with both widths named
+        # so the next reader does not have to rediscover which one is being compared.
+        raise ValueError(
+            f"Unexpected preclassification input shape {tuple(x.shape)}; expected "
+            f"(N, {in_features}) from the backbone (preclassification_size="
+            f"{self.preclassification_size} is the width *after* the hidden layer)."
+        )
+
+    head._reshape_backbone_embeddings = types.MethodType(_reshape, head)
 
 
 # ---------------------------------------------------------------------------
@@ -596,6 +711,9 @@ def train(
     num_workers: int = None,
     decoder_num_layers: int = 4,
     decoder_nhead: int = 1,
+    # Classifier bottleneck width. True = mini_trainer's default (= backbone width, 1280);
+    # an int sets it explicitly. See `build_head`.
+    hidden: object = True,
     optimizer: str = "adam",
     fp16: bool = False,
     schedule: str = "fine_tune",
@@ -641,8 +759,8 @@ def train(
     dls = v4.make_dls(df, vocabs, img_dir, aug_img_size, img_size, batch_size, num_workers,
                       aug_kwargs=aug_kwargs, sample_wgts=sample_wgts)
 
-    arch = getattr(importlib.import_module("fastai.vision.all"), model_arch_name)
-    nf = v4.body_out_features(arch)
+    arch = resolve_arch(model_arch_name)
+    nf = arch_body_features(arch, img_size=img_size)
 
     if label_smoothing is None:
         label_smoothing = 1 / n_classes[0]  # mini_trainer's own HierarchicalBuilder.build_criterion default
@@ -660,8 +778,11 @@ def train(
         print(f"Logit adjustment ON (tau={logit_adjust_tau}).")
 
     custom_head = build_head(
-        head, nf, n_classes, cls2idx, sparse_masks, decoder_kwargs={"num_layers": decoder_num_layers, "nhead": decoder_nhead}
+        head, nf, n_classes, cls2idx, sparse_masks,
+        decoder_kwargs={"num_layers": decoder_num_layers, "nhead": decoder_nhead}, hidden=hidden
     )
+    n_head_params = sum(p.numel() for p in custom_head.parameters())
+    print(f"Head: hidden={hidden} -> {n_head_params/1e6:.2f} M params")
 
     metrics = [
         *(v4.LevelAccuracy(i, f"acc_{level}") for i, level in enumerate(HIERARCHY_LEVELS)),
@@ -773,6 +894,9 @@ def train(
             "model_state_dict": learn.model.state_dict(),
             "head": head,
             "model_arch_name": model_arch_name,
+            # Needed to rebuild the head at test/export time. Absent in checkpoints from before
+            # the bottleneck sweep, so readers must default it to True.
+            "hidden": hidden,
             "vocabs": vocabs,
             "cls2idx": cls2idx,
             # Derived from `df`, NOT from the `hierarchy` gen_df read off disk. The masks in
