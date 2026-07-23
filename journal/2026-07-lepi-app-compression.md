@@ -359,8 +359,23 @@ shorter-side-resize+center-crop preprocessing (dev/041) and species→genus→fa
 (dev/042); optional per-level temperature + thresholds from the bundle. WebGPU→WASM fallback,
 warm-up at load, service-worker precache for offline, install-to-home-screen manifest.
 **Validated in Python** (the infer.js algorithm reproduces correct species/genus/family on real
-held-out images); the in-browser runtime (ORT-web ESM/wasm, canvas) is the one piece needing a
-real-device test — handed to the owner.
+held-out images); the in-browser runtime needed a real-device test, which surfaced two bugs
+(2026-07-23, fixed):
+- **Model load failed:** `ort.webgpu.mjs` dynamically loads one of six wasm/loader variants
+  (plain / jsep / asyncify) at runtime; only the jsep pair was vendored → 404 on asyncify →
+  poisoned wasm init. Fixed by vendoring all six, `numThreads=1` (Pages isn't cross-origin
+  isolated), and a WebGPU→WASM-only fallback in `loadModel`. The big `.wasm` are cached
+  on-fetch, not precached, to avoid a 70 MB install.
+- **Stray Back button:** `.screen{display:flex}` overrode the `hidden` attribute so both screens
+  rendered; fixed with `[hidden]{display:none!important}`.
+
+Calibration (`dev/044`) completed and shipped: active thresholds target **0.95** precision
+(species greys the least-confident ~6% at 94.5% precision-when-shown; genus/family never grey,
+already >0.96 unconditionally). Confidence greying is live.
+
+Outstanding: formal GitHub Release of the bundle on `lepinet` (needs owner `gh auth login`);
+optional C3 distillation; the app currently shows GBIF taxon keys, not scientific names (a
+names map would fix that).
 
 ## Where this leaves the size budget
 
