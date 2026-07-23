@@ -398,8 +398,16 @@ instead of GBIF keys; split Camera / Gallery buttons (the combined one only open
 **config-driven modular bundle** (`model/config.json` declares model + sidecars + IO names, so a
 new model is a folder swap, no code change) documented in the app's `DEVELOPER.md`.
 
-Outstanding: optional C3 distillation; pulling the model from the release instead of bundling it
-(owner's future nicety).
+**Future development is consolidated in the app repo's `ROADMAP.md`** (single doc spanning model +
+app): C3 distillation (top model-quality lever), pull-model-from-release, real-device test matrix,
+geo prior (blocked on co-occurrence data), open-set, regional builds, size levers, and the app
+feature backlog — prioritized. This journal remains the record of what was *done* and why.
+
+Also fixed (2026-07-23): a wedged service worker after rapid cache-version churn — the SW was
+precaching the 15 MB model via `addAll`, so one flaky download failed the whole install and left
+it stuck on a stale version (surfaced as "Model failed to load: undefined"). Now precache only the
+small shell (failure-tolerant, per-item); model + wasm cache on first fetch. Error reporting shows
+the real error, not `undefined`.
 
 ## Where this leaves the size budget
 
