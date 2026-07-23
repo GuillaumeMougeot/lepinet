@@ -1,10 +1,10 @@
 # Can the 173 MB model be exported, quantized and calibrated for a browser?
 
-**Status:** Phases A + B **RESOLVED** (2026-07-20). ONNX export works, browser preprocessing is
-a non-issue, marginalization is proven, int8 costs 0.6 pp of species macro-F1, and thresholds
-now come from a measurement instead of a guess. **Phase C1 RESOLVED** (2026-07-22): bottleneck
-knee is **hidden=256** (test species macro-F1 **0.9002**, −1.46 pp, 5× smaller head; 512 −0.90,
-128 −3.05 off a cliff). **Phase C2 in progress**: backbone sweep at hidden=256 — see below.
+**Status:** Phases A + B RESOLVED (2026-07-20); C1 RESOLVED (hidden=256); **C2 RESOLVED**
+(2026-07-23): backbone = **effnetv2b2** (test species macro-F1 **0.8871**, transformers dropped
+as not-clearly-better). C3 distillation deferred (not needed for v1). **C4 bundle built**
+(effnetv2b2 int8, 14.3 MB). **Phase D app shipped v1** to github.com/GuillaumeMougeot/lepinet-app
+(Pages). Remaining: in-browser device test (owner), calibration sidecars, optional C3.
 
 > **Correction to an earlier caveat.** The Phase-B numbers were first measured with
 > `min_img_per_spc=50`, my own default — not `dev/032`'s test default of 0. That silently cut
@@ -308,9 +308,59 @@ resolve a model config, and to fetch the pretrained ImageNet weights the sweep t
 Installed additively with `uv pip install` (never `uv sync` — see
 [[2026-07-venv-uv-sync-incident]]); torch/torchvision/fastai confirmed intact afterwards.
 
-**Launched 2026-07-22** at hidden=256 (see the C1 knee analysis above for why 256, not 512),
-detached via `dev/run_c2_backbone_sweep.sh`. `effnetv2b0` trains first as the anchor; ~6 h/arch
-+ test, ~35 h for the five. Results land in the ledger and `RESULTS.md` automatically.
+**RESOLVED 2026-07-23** — ran at hidden=256, detached. Test species macro-F1:
+
+| arch | params | test F1 | Δ vs effnetv2_s@256 |
+|---|---|---|---|
+| fastvit_sa12 | 10.6M | 0.8920 | −0.82 |
+| **effnetv2b2** | **8.7M** | **0.8871** | −1.31 |
+| repvit_m1_1 | 7.8M | 0.8811 | −1.91 |
+| fastvit_t12 | 6.5M | 0.8800 | −2.02 |
+| effnetv2b0 | 5.9M | 0.8760 | −2.42 |
+| mnv4_medium | 8.4M | failed → fixed (see below) |
+
+**Chosen: effnetv2b2 (0.8871), transformers dropped.** The decisive matched-size test was b2
+(8.7M) vs fastvit_sa12 (10.6M): the transformer leads by only **0.49 pp at +22% params** — not
+the clear win needed to justify keeping the transformer line, per the owner's "focus on effnets
+unless transformers clearly prove out". effnetv2b2 clears the 0.87 floor, is an effnet (clean
+ONNX lineage from the 0.9148 teacher), and ships at ~14 MB int8. This is a smooth accuracy/size
+curve, not a transformer breakthrough — FastViT/RepViT are ~per-param competitive but nothing
+more. **fastvit_sa12 (0.892) remains the accuracy-first fallback if 14→~14 MB ever matters less
+than 0.5 pp.**
+
+**mnv4_medium failed — and it was a bug in my own nf-detection, caught cleanly.** For
+mobilenetv4 I detected 1280 channels via `timm.create_model(global_pool="")`, but fastai's
+`TimmBody` (what training builds) feeds the head 960 — its post-stage conv head differs. The
+`_fix_backbone_embedding_check` guard raised at the first batch (30 s in, not silently). Fixed:
+`arch_body_features` now detects through the real `TimmBody`, matching training by construction.
+Not re-run — a redundant ~0.88 conv point on an already-clear frontier (owner: "don't try every
+arch").
+
+## Phase C3 (distillation) — deferred, not needed for v1
+
+The gap from teacher (0.9148) to effnetv2b2 (0.8871) is 2.8 pp. Distillation could recover part
+of it, but 0.8871 already clears the floor with margin, and the owner's priority is shipping the
+app. Deferred as a v1.1 accuracy lever, not written yet. Ships effnetv2b2 as-is.
+
+## Phase C4 — the artifact bundle (2026-07-23)
+
+`data/global/bundles/effnetv2b2-v1/`, built via `dev/040` + `dev/043`:
+`model.onnx` (fp32, 54 MB) → `model.int8.onnx` (**14.3 MB**, 3.78×, parity 100%), `taxonomy.json`
+(vocabs + parent arrays), `MANIFEST.json`. Calibration (`dev/044`, marginal path, target
+precision 0.9) running to add `calibration.json` + `thresholds.json`.
+
+## Phase D — the app (2026-07-23), shipped v1
+
+Repo: **github.com/GuillaumeMougeot/lepinet-app**, deployed to GitHub Pages via Actions.
+Built as a **no-build static PWA** — the deploy box has no JS toolchain (no node/bun/npm), so
+it ships plain ES modules + a vendored copy of ONNX Runtime Web + the pinned model bundle, which
+Pages serves as-is. `src/infer.js` implements the two experiment-backed decisions directly:
+shorter-side-resize+center-crop preprocessing (dev/041) and species→genus→family marginalization
+(dev/042); optional per-level temperature + thresholds from the bundle. WebGPU→WASM fallback,
+warm-up at load, service-worker precache for offline, install-to-home-screen manifest.
+**Validated in Python** (the infer.js algorithm reproduces correct species/genus/family on real
+held-out images); the in-browser runtime (ORT-web ESM/wasm, canvas) is the one piece needing a
+real-device test — handed to the owner.
 
 ## Where this leaves the size budget
 
