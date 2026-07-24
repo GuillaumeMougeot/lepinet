@@ -8,9 +8,8 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools_scm]
 fallback_version = "0.0.0"
 
-# src-layout: the reusable library is src/lepinet/ (migrated out of the dev/ numbered scripts,
-# which stay as the experiment record and are NOT packaged -- they import each other by filename
-# via importlib and only run from the repo root). package-dir + an explicit package list keeps
+# src-layout: the reusable library is src/lepinet/ (the dev/ numbered scripts stay as the
+# experiment record and are NOT packaged). package-dir + an explicit package list keeps
 # setuptools' flat-layout auto-discovery from trying to package dev/bash/data/logs/configs.
 [tool.setuptools]
 package-dir = {"" = "src"}
@@ -19,48 +18,96 @@ packages = ["lepinet"]
 [project]
 name = "lepinet"
 dynamic = ["version"]
-# version = "0.0.40"
 authors = [
   {name="Guillaume Mougeot", email="guillaume.mougeot@laposte.net"},
 ]
-description = "LepiNet. Framework for Lepidoptera image classification."
+description = "LepiNet. Framework for hierarchical (species/genus/family) image classification."
 readme = "README.md"
-# torch==2.12.1 ships no wheels below 3.10, so ">=3.9" made the metadata unsatisfiable on
-# 3.9 and resolvers say so out loud.
+license = "GPL-3.0-or-later"
 requires-python = ">=3.10"
 classifiers = [
     "Programming Language :: Python :: 3",
     "Operating System :: OS Independent",
 ]
+keywords = ["deep learning", "image classification", "fastai", "lepidoptera"]
 dependencies = [
-    "fastai", "aiohttp", "pyyaml", "pandas", "pyarrow>=20.0.0",
-    # fastai pulls in spacy; 3.8.14 ships no cp314 wheel and this venv is Python 3.14,
-    # so resolution fails there. 3.8.13 has one. Drop the pin on spacy >= 3.8.15 with
-    # cp314 wheels, or if the venv moves to <= 3.13.
+    "fastai",
+    "aiohttp",
+    "pyyaml",
+    "pandas",
+    "pyarrow>=20.0.0",
+    "pillow",
+    "numpy",
+    "psutil",                # HostMemoryGuard's off-cgroup RAM fallback (lepinet.memory)
+    "typer",                 # the CLI (`lepinet ...`)
+    # fastai pulls in spacy; 3.8.14 ships no cp314 wheel and this venv is Python 3.14, so
+    # resolution fails there. Drop the pin if the venv moves to <= 3.13.
     "spacy<3.8.14",
-    # dev/030 imports fastai.callback.tensorboard, whose module-level `import tensorboard`
-    # fastai declares nowhere (it treats it as an optional extra). Every run needs it, so
-    # it is a hard dependency here -- without it a fresh env dies on import.
+    # dev/030 (and lepinet.data via fastai.callback.tensorboard) needs tensorboard, which fastai
+    # treats as an optional extra and declares nowhere -- a fresh env dies on import without it.
     "tensorboard",
-    # fastai 2.8.7 declares only `fastcore>=1.8.0`, but fastcore 2.x drops `L.starmap`,
-    # which fastai's own Optimizer.set_hypers calls -- every fit() dies on it. The pin has
-    # to be here because fastai's metadata doesn't exclude it.
+    # fastai 2.8.7 declares only `fastcore>=1.8.0`, but fastcore 2.x drops `L.starmap`, which
+    # fastai's own Optimizer.set_hypers calls -- every fit() dies on it.
     "fastcore<2",
-    # fastprogress >= 1.1 imports fasthtml, which needs fastcore 2.x -- unsatisfiable
-    # alongside the pin above. 1.0.3 has no such dependency.
+    # fastprogress >= 1.1 imports fasthtml, which needs fastcore 2.x -- unsatisfiable alongside
+    # the pin above. 1.0.3 has no such dependency.
     "fastprogress==1.0.3",
-    # torch and torchvision must be version-matched or the compiled ops fail to register
-    # (`operator torchvision::nms does not exist`). This is the pair the venv is built on.
+    # torch/torchvision must be version-matched or the compiled ops fail to register
+    # (`operator torchvision::nms does not exist`). Sourced from the cu130 index below (Blackwell).
     "torch==2.12.1",
     "torchvision==0.27.1",
 ]
-keywords=['deep learning']
 
-# [project.optional-dependencies]
+# Feature extras of the package itself (lazy imports; the package works without them until used).
+[project.optional-dependencies]
+export = ["onnx", "onnxruntime"]   # `lepinet export` (ONNX + ORT parity check)
+timm = ["timm"]                     # timm backbones (fastvit/repvit/mobilenetv4/...)
+
+# Dev-only dependencies (PEP 735) — installed by `uv sync` automatically, not shipped with the
+# wheel. The dev/ lab-notebook scripts additionally import the local editable packages
+# `mini_trainer` / `mini_metrics`; those are NOT locked here (they pin Python>=3.12, which would
+# needlessly constrain lepinet's own >=3.10 support). Install them separately for dev/ work:
+#     uv pip install -r dev/requirements-experiments.txt
+[dependency-groups]
+dev = ["pytest", "ruff", "mkdocs-material"]
 
 [project.urls]
 "Homepage" = "https://github.com/GuillaumeMougeot/lepinet"
+"Documentation" = "https://guillaumemougeot.github.io/lepinet/"
 "Bug Tracker" = "https://github.com/GuillaumeMougeot/lepinet/issues"
 
-# [project.scripts]
-# biom3d = "biom3d.gui:main"
+[project.scripts]
+lepinet = "lepinet.cli:main"
+
+# --- uv configuration: how to reproduce the dev environment ---
+# torch/torchvision come from PyTorch's CUDA-13.0 wheel index (the Blackwell/RTX 5090 build); the
+# `explicit = true` index is used only by packages that reference it in [tool.uv.sources]. The
+# dev/ experiment packages are local editable installs of the sibling repos.
+[[tool.uv.index]]
+name = "pytorch-cu130"
+url = "https://download.pytorch.org/whl/cu130"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu130" }
+torchvision = { index = "pytorch-cu130" }
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+src = ["src", "tests", "dev"]
+
+[tool.ruff.lint]
+# Sensible default set; the ported optimizer keeps a few private-torch imports on purpose.
+select = ["E", "F", "W", "I", "UP", "B"]
+ignore = ["E501", "B905"]
+
+[tool.ruff.lint.per-file-ignores]
+# typer expresses CLI options as `= typer.Option(...)` defaults, which B008 flags as a
+# function call in an argument default. That is the idiomatic typer pattern, not a bug.
+"src/lepinet/cli.py" = ["B008"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+markers = ["slow: end-to-end tests needing data/small and CPU time (LEPINET_RUN_SLOW=1)"]

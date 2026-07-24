@@ -1,0 +1,13 @@
+# Extra dependencies for running the dev/ lab-notebook scripts (028/030/032/034/040...), which
+# import Asger's mini_trainer and mini_metrics. lepinet itself does NOT depend on these — they are
+# kept out of pyproject.toml because they pin Python>=3.12 and would over-constrain lepinet's own
+# >=3.10 support (see the developer guide).
+#
+# Install into the project venv with:
+#     uv pip install -r dev/requirements-experiments.txt
+#
+# These are editable installs of the sibling repositories; clone them next to lepinet first:
+#     git clone https://github.com/asgersvenning/mini_trainer   ../mini_trainer
+#     git clone https://github.com/GuillaumeMougeot/mini_metrics ../mini_metrics
+-e ../mini_trainer
+-e ../mini_metrics

@@ -1,0 +1,41 @@
+site_name: lepinet
+site_description: Hierarchical image classification (species / genus / family) — fastai-only, mini_trainer-free.
+repo_url: https://github.com/GuillaumeMougeot/lepinet
+repo_name: GuillaumeMougeot/lepinet
+docs_dir: docs
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: teal
+      accent: teal
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: teal
+      accent: teal
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+  features:
+    - navigation.instant
+    - navigation.sections
+    - content.code.copy
+    - toc.integrate
+
+nav:
+  - Home: index.md
+  - User guide: user-guide.md
+  - Developer guide: developer-guide.md
+
+markdown_extensions:
+  - admonition
+  - toc:
+      permalink: true
+  - pymdownx.highlight
+  - pymdownx.superfences
+  - tables
