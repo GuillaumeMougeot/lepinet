@@ -17,6 +17,20 @@ def test_multilevel_loss_scalar_and_positive():
     assert len(crit.per_level(preds, targets)) == 3
 
 
+def test_loss_reduction_toggle_for_mixup():
+    # fastai MixUp toggles reduction to 'none' to lerp per-sample losses, then restores it.
+    crit = MultiLevelCELoss([6, 3, 2])
+    wrap = FastaiLossWrapper(crit)
+    assert wrap.y_int is True
+    preds = [torch.randn(4, 6), torch.randn(4, 3), torch.randn(4, 2)]
+    yb = (torch.randint(0, 6, (4,)), torch.randint(0, 3, (4,)), torch.randint(0, 2, (4,)))
+    assert wrap(preds, *yb).ndim == 0            # mean -> scalar
+    wrap.reduction = "none"
+    assert wrap(preds, *yb).shape == torch.Size([4])  # none -> per-sample [N]
+    wrap.reduction = "mean"
+    assert wrap(preds, *yb).ndim == 0            # restored
+
+
 def test_label_smoothing_decreases_with_depth():
     crit = MultiLevelCELoss([6, 3, 2], label_smoothing=0.1)
     ls = [fn.label_smoothing for fn in crit._loss_fns]

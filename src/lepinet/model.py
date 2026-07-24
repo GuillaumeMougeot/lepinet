@@ -27,9 +27,14 @@ def resolve_arch(model_arch_name: str):
 
     if model_arch_name in timm.list_models():
         return model_arch_name
+    # Accept timm pretrained-tag names like "convnextv2_large.fcmae_ft_in22k_in1k_384": the base
+    # architecture (before the dot) must be a real timm model; timm.create_model resolves the tag.
+    if model_arch_name.split(".")[0] in timm.list_models():
+        return model_arch_name
     raise ValueError(
         f"Unknown model_arch_name {model_arch_name!r}: not a torchvision arch and not in "
-        f"timm.list_models(). Check spelling or try timm.list_models('<pattern>*')."
+        f"timm.list_models() (base {model_arch_name.split('.')[0]!r} not found). "
+        f"Check spelling or try timm.list_models('<pattern>*')."
     )
 
 

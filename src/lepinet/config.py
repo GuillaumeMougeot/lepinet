@@ -67,6 +67,8 @@ class TrainConfig:
 
     # --- augmentation ---
     aug_kwargs: dict | None = None
+    mixup: float = 0.0               # fastai MixUp alpha (0 = off); mixes images + labels
+    cutmix: float = 0.0              # fastai CutMix alpha (0 = off); patch-mixes images + labels
 
     # --- front_loaded schedule extras ---
     fast_decay_epochs: float = 1.0

@@ -41,6 +41,7 @@ class MultiLevelCELoss:
         label_smoothing: float | None = None,
         device: torch.device | str = "cpu",
         dtype: torch.dtype = torch.float32,
+        reduction: str = "mean",
     ):
         self.n_levels = len(num_classes)
         if label_smoothing is None:
@@ -48,12 +49,24 @@ class MultiLevelCELoss:
         if weights is None:
             weights = [1.0] * self.n_levels
         self.weights = torch.as_tensor(weights, device=device, dtype=dtype)
+        self._reduction = reduction
         # Coarser levels smooth less, so (1 - ls) compounds consistently up the hierarchy.
         per_level_ls = [1 - (1 - label_smoothing) ** (1 / (i + 1)) for i in range(self.n_levels)]
-        self._loss_fns = [nn.CrossEntropyLoss(label_smoothing=ls) for ls in per_level_ls]
+        self._loss_fns = [nn.CrossEntropyLoss(label_smoothing=ls, reduction=reduction) for ls in per_level_ls]
+
+    @property
+    def reduction(self) -> str:
+        return self._reduction
+
+    @reduction.setter
+    def reduction(self, value: str) -> None:
+        # fastai's MixUp/CutMix toggle reduction to 'none' to lerp per-sample losses, then restore.
+        self._reduction = value
+        for fn in self._loss_fns:
+            fn.reduction = value
 
     def per_level(self, preds: Sequence[torch.Tensor], targets: torch.Tensor) -> list[torch.Tensor]:
-        """Per-level weighted losses (a list of scalars), for inspection/logging."""
+        """Per-level weighted losses (scalars, or per-sample ``[N]`` when reduction='none')."""
         targets = targets.transpose(0, 1)  # [N, L] -> [L, N]
         return [self._loss_fns[i](preds[i], targets[i]) * self.weights[i] for i in range(self.n_levels)]
 
@@ -62,14 +75,28 @@ class MultiLevelCELoss:
 
 
 class FastaiLossWrapper:
-    """Adapt :class:`MultiLevelCELoss` to fastai's ``loss_func(preds, *yb) -> scalar`` contract.
+    """Adapt :class:`MultiLevelCELoss` to fastai's ``loss_func(preds, *yb)`` contract.
 
     fastai passes the per-level targets as separate positional args (``*yb``); this stacks them
-    into ``[N, L]`` and calls the criterion. Not an ``nn.Module`` for the same reason as above.
+    into ``[N, L]`` and calls the criterion. Exposes ``reduction`` (delegated to the criterion) so
+    fastai's MixUp/CutMix can switch it to 'none' for per-sample loss mixing. Not an ``nn.Module``
+    for the same reason as above.
     """
+
+    # Marks targets as integer class indices, so fastai's MixUp/CutMix mix via the *loss*
+    # (lerping per-sample losses) rather than mixing the integer labels themselves.
+    y_int = True
 
     def __init__(self, criterion: MultiLevelCELoss):
         self.criterion = criterion
+
+    @property
+    def reduction(self) -> str:
+        return self.criterion.reduction
+
+    @reduction.setter
+    def reduction(self, value: str) -> None:
+        self.criterion.reduction = value
 
     def __call__(self, preds: Sequence[torch.Tensor], *yb: torch.Tensor) -> torch.Tensor:
         return self.criterion(preds, torch.stack(yb, dim=1))

@@ -12,7 +12,7 @@ from fastai.callback.core import Callback, CancelBatchException, CancelFitExcept
 
 from .memory import HostMemoryGuard  # re-export
 
-__all__ = ["NaNGuard", "GCCallback", "HostMemoryGuard"]
+__all__ = ["NaNGuard", "GCCallback", "HostMemoryGuard", "MixUpMulti"]
 
 
 class NaNGuard(Callback):
@@ -51,6 +51,66 @@ class NaNGuard(Callback):
     def after_fit(self):
         if self.n_skipped:
             print(f"NaNGuard: skipped {self.n_skipped} non-finite-loss batch(es) during training.")
+
+
+class MixUpMulti(Callback):
+    """MixUp that supports **multiple targets** (our species/genus/family levels).
+
+    fastai's stock ``MixUp`` reads the batch size from ``self.y.size(0)``, which fails when
+    ``self.y`` is a tuple of per-level targets. This is the same handler with the batch size read
+    from the input tensor ``self.x`` instead. It relies on the loss carrying ``y_int=True``
+    (:class:`~lepinet.loss.FastaiLossWrapper`), so mixing happens through the loss — each level's
+    per-sample loss is lerped between the two label sets — not by mixing integer labels.
+
+    A regulariser for longer / bigger runs (``journal/2026-07-bigger-everything.md``). CutMix for
+    the multi-target case is a further change (its ``before_batch`` also indexes ``self.y``) and is
+    not implemented yet.
+    """
+
+    run_valid = False
+
+    def __init__(self, alpha: float = 0.4):
+        from torch.distributions.beta import Beta
+
+        self.distrib = Beta(torch.tensor(alpha), torch.tensor(alpha))
+
+    def before_train(self):
+        self.stack_y = getattr(self.learn.loss_func, "y_int", False)
+        if self.stack_y:
+            self.old_lf, self.learn.loss_func = self.learn.loss_func, self.lf
+
+    def after_train(self):
+        if self.stack_y:
+            self.learn.loss_func = self.old_lf
+
+    def after_cancel_train(self):
+        self.after_train()
+
+    def after_cancel_fit(self):
+        self.after_train()
+
+    def before_batch(self):
+        from fastai.torch_core import unsqueeze
+        from fastcore.foundation import L
+
+        bs = self.x.size(0)  # batch size from the input tensor, not the target tuple
+        lam = self.distrib.sample((bs,)).squeeze().to(self.x.device)
+        lam = torch.stack([lam, 1 - lam], 1)
+        self.lam = lam.max(1)[0]
+        shuffle = torch.randperm(bs).to(self.x.device)
+        xb1, self.yb1 = tuple(L(self.xb).itemgot(shuffle)), tuple(L(self.yb).itemgot(shuffle))
+        nx_dims = len(self.x.size())
+        self.learn.xb = tuple(L(xb1, self.xb).map_zip(torch.lerp, weight=unsqueeze(self.lam, n=nx_dims - 1)))
+
+    def lf(self, pred, *yb):
+        from fastai.callback.mixup import reduce_loss
+        from fastai.losses import NoneReduce
+
+        if not self.training:
+            return self.old_lf(pred, *yb)
+        with NoneReduce(self.old_lf) as lf:
+            loss = torch.lerp(lf(pred, *self.yb1), lf(pred, *yb), self.lam)
+        return reduce_loss(loss, getattr(self.old_lf, "reduction", "mean"))
 
 
 class GCCallback(Callback):

@@ -64,6 +64,19 @@ def train(cfg: TrainConfig):
         CSVLogger(out_dir / f"{cfg.model_name}.csv", append=True),
         SaveModelCallback(fname=cfg.model_name, every_epoch=True),
     ]
+    # MixUp (opt-in): mix images + labels. Uses MixUpMulti (multi-target-aware) with the loss's
+    # y_int=True + reduction toggling, so mixing happens through the per-level loss. A regularizer
+    # for longer/bigger runs (journal/2026-07-bigger-everything.md).
+    if cfg.mixup and cfg.mixup > 0:
+        from .callbacks import MixUpMulti
+
+        cbs.append(MixUpMulti(cfg.mixup))
+        print(f"MixUp ON (alpha={cfg.mixup}).")
+    if cfg.cutmix and cfg.cutmix > 0:
+        raise NotImplementedError(
+            "cutmix is not yet supported for multi-target heads (fastai's CutMix.before_batch "
+            "indexes self.y, a tuple here). Use `mixup` for now; CutMixMulti is a follow-up."
+        )
     # GCCallback is intentionally omitted (D3): the clean head has no per-batch reference cycle.
     # Add `GCCallback()` here if a future head reintroduces one and GPU memory climbs.
 

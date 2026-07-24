@@ -67,6 +67,7 @@ def test_synthetic_train_eval_predict_export(tmp_path):
             "nb_epochs": 1, "base_lr": 1e-3, "batch_size": 16, "aug_img_size": 48, "img_size": 32,
             "optimizer": "muon", "fp16": False, "precision": "bf16", "schedule": "one_cycle",
             "warmup_epochs": 0.3, "grad_clip": 5.0, "oversample_power": 0.5, "num_workers": 0,
+            "mixup": 0.4,  # exercise multi-target MixUp through the pipeline
             "aug_kwargs": {"max_warp": 0.0, "max_lighting": 0.0, "flip_vert": True},
         },
     }

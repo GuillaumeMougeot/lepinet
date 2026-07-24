@@ -1,0 +1,47 @@
+version: 1.0
+# "Bigger everything" teacher run on UCloud B200: cutting-edge backbone + higher resolution +
+# bigger batch + more epochs + richer augmentation + MixUp, on top of the proven levers
+# (independent cosine head, Muon, one_cycle, warmup, grad_clip, sqrt-oversampling).
+#
+# Backbone: ConvNeXt V2 Large (FCMAE, ImageNet-22k->1k @384) — a modern high-accuracy ConvNet
+# (198M params, feature width 1536) that emits a spatial map (works with PooledHead). Intended as
+# a strong teacher for later knowledge distillation into small app-sized students.
+#
+# bf16 (not fp16): large model + MixUp, and the cosine head is fp32 regardless. Hyperparameters
+# (base_lr, batch_size, epochs) are first estimates; the smoke + first-epoch logs calibrate them.
+desc: lepinet-convnextv2l-bigger-320-6ep-oversample-mixup-ucloud
+train:
+  parquet_path: /work/global_lepi/0032836-250426092105405_processing_metadata_postprocessed_quality_filtered.parquet
+  img_dir: /work/global_lepi/images
+  out_dir: /work/lepinet/data/ucloud_models
+  fold: '1'
+  min_img_per_spc: 50
+  # ConvNeXtV2-L is compute-bound (slower than the /work mount), so fewer workers than effnetv2_s
+  # needed; 128 keeps host anon well under the 288 GB cgroup cap.
+  num_workers: 128
+  model_name: lepinet-convnextv2l-bigger-320-6ep-oversample-mixup-ucloud
+  model_arch_name: convnextv2_large.fcmae_ft_in22k_in1k_384
+  head: independent
+  nb_epochs: 6
+  base_lr: 0.0008
+  batch_size: 96
+  aug_img_size: 384
+  img_size: 320
+  optimizer: muon
+  fp16: true
+  precision: bf16
+  schedule: one_cycle
+  warmup_epochs: 0.5
+  grad_clip: 5.0
+  oversample_power: 0.5
+  mixup: 0.2
+  family_filter: []
+  # Richer than the baseline (which used light aug for a short 5-ep budget): a longer, bigger run
+  # can absorb warp + lighting for better generalization.
+  aug_kwargs:
+    max_warp: 0.1
+    max_lighting: 0.2
+    p_lighting: 0.5
+    flip_vert: true
+    max_rotate: 20.0
+    max_zoom: 1.2
