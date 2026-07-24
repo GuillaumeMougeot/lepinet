@@ -370,3 +370,51 @@ rest of the package.
 **Next when GPU is healthy:** `lepinet train -c configs/20260716_heads_global_independent_muon_5ep_oversample.yaml`
 (add `precision: fp16` to match the original exactly), then `lepinet test --test-set 0` → expect
 0.9148 ± ~0.2pt, and cross-check native metrics vs mini_metrics once (D2 gate).
+
+---
+
+## Execution log — 2026-07-24 (phase 2: clarity, packaging, UCloud)
+
+Second working block, after the owner's review. Everything below was done and validated this
+session.
+
+### What was learned/read (phase 2)
+- **`ucloud-api`** (`~/codes/ucloud-api`, authenticated): job = a TOML spec (`ucloud/*.toml`)
+  mirroring UCloud's JobSpecification + `[sync]` (rsync the repo to a drive, respects .gitignore)
+  + `[setup]` (script + `run` batch command) + `[schedule]` (auto_extend). Queue: `ucloud q
+  submit <spec> --name X [--after Y]` (afterok deps), advanced by `ucloud q daemon --until-idle`.
+  Data lives at `/12347837/datasets/global_lepi` → mounts `/work/global_lepi`; the synced repo is
+  `/work/lepinet`. Train product `gpu-nvidia-b200-1-gpu`, test `gpu-nvidia-b200-1-mig.1g`.
+- **The local GPU driver fault is terminal for local training**: NVML mismatch crashes the
+  backward; the owner can't reboot (encrypted disk needs a physical keyboard). → all GPU work
+  moved to UCloud. [[gpu-nvml-driver-mismatch]]
+- **The "broken venv" was a pyproject problem, not a uv problem.** `uv sync` broke the venv only
+  because pyproject declared `packages=[]` + an incomplete dep set + no lock + no torch index. Fixed
+  → `uv sync` now works. [[venv-is-hand-managed-never-uv-sync]] (now RESOLVED).
+
+### What was done (phase 2)
+- **Maximal clarity over checkpoint-loadability** (owner's call): stripped the load-compat cruft
+  from `IndependentHead` — dead BatchNorm, `linear`/`layers[0]` alias, `mask` buffers, cls2idx from
+  checkpoints. The old 0.9148 checkpoint no longer loads; parity is now by **retraining**. Head is
+  now just bottleneck + N cosine layers.
+- **typer CLI** (replaced argparse); **MkDocs + Material** docs with a **GitHub Pages** deploy
+  workflow; **CI runs a real end-to-end** (synthetic dataset → train/eval/predict/export), not just
+  units.
+- **Reproducible venv**: rebuilt from a proper `pyproject.toml` + committed `uv.lock` (cu130 torch
+  via `[[tool.uv.index]]`); dev-script deps (`mini_trainer`/`mini_metrics`, which pin py≥3.12 and
+  would over-constrain the lock) live in `dev/requirements-experiments.txt`. Verified by full
+  teardown + rebuild + tests.
+- **Launched training on UCloud B200**: smoke (family 9717) → **validated the whole path on a real
+  B200** (`uv sync --frozen` from the lock works, preflight OK, `lepinet train` runs) → 5-epoch
+  oversample run auto-launched by the daemon and is **converging healthily** (train_loss 18.9→4.2 in
+  epoch 1, ~1:17/epoch, host anon 91/288 GB — safe). Eval on fold 0 queued on a B200-MIG `--after`.
+  This is the pending **train-parity** check vs 0.9148.
+
+### Still open
+- The 5ep result (species macro-F1 vs 0.9148) + its fold-0 test — running on UCloud, daemon will
+  report.
+- The **"bigger everything" teacher run** → [[2026-07-bigger-everything]] (queued this session).
+- The app artifact path (calibration/thresholds, quantization, the versioned bundle) — the whole
+  [[2026-07-lepi-app-claude]] Phase B/C on the new package.
+- CutMix for multi-target heads (MixUp done; CutMix's `before_batch` also indexes the target tuple).
+- Distillation (teacher→small student) and the geographic prior remain future levers.
