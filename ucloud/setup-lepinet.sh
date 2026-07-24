@@ -14,9 +14,10 @@ export UV_PROJECT_ENVIRONMENT=/tmp/venv
 
 cd /work/lepinet
 # Reproducible install from uv.lock (respects [tool.uv.sources]/[[tool.uv.index]] -> cu130 torch).
-# --no-dev skips pytest/ruff/mkdocs (not needed on the node); the project (lepinet) is installed,
-# so the `lepinet` CLI is on PATH after activation.
-uv sync --no-dev --frozen
+# --no-dev skips pytest/ruff/mkdocs (not needed on the node); --extra timm installs the timm
+# backbones (needed by convnextv2/fastvit/... runs; harmless for torchvision-arch runs). The
+# project (lepinet) is installed, so the `lepinet` CLI is on PATH after activation.
+uv sync --no-dev --frozen --extra timm
 # shellcheck disable=SC1091
 source /tmp/venv/bin/activate
 
