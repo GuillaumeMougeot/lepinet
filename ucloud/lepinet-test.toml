@@ -1,0 +1,38 @@
+# Evaluate the trained 0.9148-target model on the global test fold (set '0'), on a B200-MIG slice.
+# Queued behind the training run (afterok):
+#   ucloud q submit ucloud/lepinet-test.toml --name lepi-test --after lepi-5ep
+#
+# Reads the checkpoint the training job wrote to /work (data/ is gitignored, so the sync here does
+# not disturb it); the --model glob resolves to the newest matching .pt at run time.
+
+name = "lepinet-test-fold0"
+replicas = 1
+
+[application]
+name = "pytorch-te"
+version = "26.05"
+
+[product]
+id = "gpu-nvidia-b200-1-mig.1g"
+category = "gpu-nvidia-b200"
+provider = "ucloud"
+
+[time_allocation]
+hours = 6                       # 630k images over the network mount on a small MIG slice; margin
+
+[sync]
+local = ".."
+remote = "/12347837/repos/lepinet"
+
+[setup]
+script = "setup-lepinet.sh"
+run = "lepinet test --model '/work/lepinet/data/ucloud_models/*-lepinet-heads-global-independent-muon-5ep-oversample-effnetv2s-ucloud/*.pt' --parquet /work/global_lepi/0032836-250426092105405_processing_metadata_postprocessed_quality_filtered.parquet --img-dir /work/global_lepi/images --out-dir /work/lepinet/data/ucloud_preds --test-set 0 --min-img-per-spc 50 --num-workers 6"
+
+[schedule]
+auto_extend = "1h"
+max_time = "12h"
+
+[[resources]]
+type = "file"
+path = "/12347837/datasets/global_lepi"
+read_only = true
