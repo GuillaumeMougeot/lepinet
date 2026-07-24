@@ -13,8 +13,7 @@ the model is still converging hard at the end, so it is graded mid-descent. one_
 """
 from __future__ import annotations
 
-from fastai.callback.schedule import (ParamScheduler, SchedCos, SchedLin, SchedNo,
-                                      combine_scheds)
+from fastai.callback.schedule import ParamScheduler, SchedCos, SchedLin, SchedNo, combine_scheds
 
 
 def warmup_cos_schedule(n_epoch, lr, warmup_epochs, schedule,
@@ -68,5 +67,8 @@ def fit_resume(learn, full_sched, n_epoch, epochs_done):
     if n_epoch - epochs_done <= 0:
         raise ValueError(f"epochs_done ({epochs_done}) >= n_epoch ({n_epoch}); nothing to resume.")
     learn.unfreeze()
-    resumed = lambda pos: full_sched(start + pos * (1 - start))
+
+    def resumed(pos):
+        return full_sched(start + pos * (1 - start))
+
     learn.fit(n_epoch - epochs_done, cbs=ParamScheduler({"lr": resumed}))

@@ -53,7 +53,7 @@ def memory_status():
     if base is not None:
         try:
             limit = int((base / "memory.max").read_text().strip())
-            stat = dict(l.split() for l in (base / "memory.stat").read_text().splitlines())
+            stat = dict(line.split() for line in (base / "memory.stat").read_text().splitlines())
             unreclaimable = (int(stat.get("anon", 0)) + int(stat.get("kernel_stack", 0))
                              + int(stat.get("pagetables", 0)) + int(stat.get("unevictable", 0)))
             return unreclaimable / 1e9, limit / 1e9, int(stat.get("file", 0)) / 1e9, "cgroup-anon"

@@ -28,7 +28,7 @@ from __future__ import annotations
 import os
 import queue
 import threading
-from typing import Iterator
+from collections.abc import Iterator
 
 import torch
 import torch.nn.functional as F

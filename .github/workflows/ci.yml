@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install ruff
+      - run: ruff check src/lepinet tests
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # CI runs on CPU, so it installs a CPU torch and the fastai stack directly rather than the
+      # local cu130 pin from pyproject (which targets the Blackwell GPU box). The fastai ecosystem
+      # is pinned to the versions the package needs (fastcore<2 keeps L.starmap; fastprogress 1.0.3
+      # avoids the fasthtml/fastcore-2 conflict).
+      - run: pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+      - run: pip install "fastai==2.8.7" "fastcore==1.14.5" "fastprogress==1.0.3" numpy pandas pyarrow pyyaml pillow typer onnx onnxruntime pytest
+      - run: pip install -e . --no-deps
+      # Unit tests (synthetic) + the self-contained end-to-end test (train a dummy model on a
+      # generated dataset, then eval / predict / export). data/small-based tests stay opt-in.
+      - run: CUDA_VISIBLE_DEVICES="" pytest tests/test_heads.py tests/test_loss_metrics_config.py tests/test_export.py tests/test_e2e_synthetic.py -W ignore
