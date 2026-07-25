@@ -45,15 +45,32 @@ class ExportWrapper(nn.Module):
         return tuple(out)
 
 
-def build_taxonomy(checkpoint: dict, meta: dict) -> dict:
-    """Per-level vocabs in head-index order + parent index arrays (for labels, GBIF links, marginalization)."""
+def friendly_level_names(levels) -> list[str]:
+    """App-facing level names from the internal GBIF-column names: ``speciesKey`` → ``species``.
+
+    The training/config side names levels by their parquet columns (``speciesKey``, ``genusKey``,
+    ``familyKey``); the app (and any human) wants ``species`` / ``genus`` / ``family``. Stripping a
+    trailing ``Key`` is the whole mapping for the Lepidoptera hierarchy, and it degrades to identity
+    for any other level name — so a custom hierarchy just ships whatever names it uses.
+    """
+    return [lvl[:-3] if lvl.endswith("Key") else lvl for lvl in levels]
+
+
+def build_taxonomy(checkpoint: dict, meta: dict, level_names: list[str] | None = None) -> dict:
+    """Per-level vocabs in head-index order + parent index arrays (for labels, GBIF links, marginalization).
+
+    ``level_names`` relabels the emitted keys (``levels`` / ``vocabs`` / ``parents``) to the
+    app-facing names; the internal ``meta['levels']`` still drives the lookup, so nothing about the
+    trained model changes — only the JSON keys. Defaults to the internal names (no relabel).
+    """
     levels = meta["levels"]
+    names = list(level_names) if level_names is not None else list(levels)
     vocabs = meta["vocabs"]
     hierarchy_df = meta["hierarchy"]
     idx = {level: {str(k): i for i, k in enumerate(vocabs[level])} for level in levels}
 
     parents = {}
-    for child, parent in zip(levels[:-1], levels[1:]):
+    for (child, parent), (cn, pn) in zip(zip(levels[:-1], levels[1:]), zip(names[:-1], names[1:])):
         arr = np.full(len(vocabs[child]), -1, dtype=np.int64)
         for row in hierarchy_df.itertuples(index=False):
             c, p = str(getattr(row, child)), str(getattr(row, parent))
@@ -61,12 +78,12 @@ def build_taxonomy(checkpoint: dict, meta: dict) -> dict:
                 arr[idx[child][c]] = idx[parent][p]
         missing = int((arr < 0).sum())
         if missing:
-            print(f"WARNING: {missing} entries of {child}->{parent} have no parent in the hierarchy.")
-        parents[f"{child}_to_{parent}"] = arr.tolist()
+            print(f"WARNING: {missing} entries of {cn}->{pn} have no parent in the hierarchy.")
+        parents[f"{cn}_to_{pn}"] = arr.tolist()
 
     return {
-        "levels": levels,
-        "vocabs": {level: [str(v) for v in vocabs[level]] for level in levels},
+        "levels": names,
+        "vocabs": {name: [str(v) for v in vocabs[level]] for level, name in zip(levels, names)},
         "parents": parents,
         "note": "vocab entries are GBIF taxon keys in head-index order; "
                 "GBIF page = https://www.gbif.org/species/<key>",
@@ -88,8 +105,18 @@ def export_onnx(
     check: bool = True,
     single_file: bool = True,
     dynamo: bool = False,
+    level_names: list[str] | None = None,
+    write_config: bool = True,
+    bundle_name: str | None = None,
 ) -> Path:
-    """Export a checkpoint to ``<out_dir>/model.onnx`` + ``taxonomy.json`` + ``MANIFEST.json``.
+    """Export a checkpoint to an **app-ready bundle**: ``model.onnx`` + ``taxonomy.json`` +
+    ``config.json`` + ``MANIFEST.json`` in ``out_dir``.
+
+    The graph output names and ``taxonomy.json`` keys use **app-facing level names**
+    (:func:`friendly_level_names`, e.g. ``species``), and ``config.json`` is the bundle descriptor
+    the ``lepinet-app`` loader reads — so the folder drops straight into the app (``names.json`` /
+    ``calibration.json`` / ``thresholds.json`` are referenced by convention and the app degrades
+    gracefully if they are absent; add them with ``dev/`` calibration + names scripts).
 
     ``dynamo=False`` (default) uses the legacy exporter — reliable for this graph and what the app
     pipeline is verified against. ``check`` runs a PyTorch-vs-ONNX-Runtime parity assertion.
@@ -101,6 +128,7 @@ def export_onnx(
     checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
     model, meta = load_model(checkpoint, img_size=img_size)
     levels = meta["levels"]
+    names = list(level_names) if level_names is not None else friendly_level_names(levels)
     n_classes = [len(meta["vocabs"][level]) for level in levels]
 
     n_params = sum(p.numel() for p in model.parameters())
@@ -112,7 +140,7 @@ def export_onnx(
     dummy = torch.rand(1, 3, img_size, img_size)
     onnx_path = out_dir / "model.onnx"
     print(f"Exporting to {onnx_path} (opset {opset}, {img_size}x{img_size}, dynamo={dynamo})...")
-    output_names = [f"logits_{level}" for level in levels]
+    output_names = [f"logits_{name}" for name in names]
     torch.onnx.export(
         wrapper, (dummy,), str(onnx_path),
         input_names=["image"],
@@ -124,8 +152,26 @@ def export_onnx(
     )
     actual_opset = _read_opset(onnx_path)
 
-    tax = build_taxonomy(checkpoint, meta)
+    tax = build_taxonomy(checkpoint, meta, level_names=names)
     (out_dir / "taxonomy.json").write_text(json.dumps(tax))
+
+    if write_config:
+        config = {
+            "name": bundle_name or f"{checkpoint['arch'] if 'arch' in checkpoint else checkpoint['model_arch_name']} · lepinet",
+            "model": "model.onnx",
+            "fallback": None,
+            "taxonomy": "taxonomy.json",
+            "names": "names.json",
+            "calibration": "calibration.json",
+            "thresholds": "thresholds.json",
+            "imageSize": img_size,
+            "inputName": "image",
+            "outputs": dict(zip(names, output_names)),
+            "gbifBase": "https://www.gbif.org/species/",
+        }
+        (out_dir / "config.json").write_text(json.dumps(config, indent=2))
+        print(f"Wrote config.json (app bundle descriptor; outputs {config['outputs']})")
+
     manifest = {
         "source_checkpoint": str(checkpoint_path),
         "model_name": checkpoint_path.stem,
@@ -147,7 +193,7 @@ def export_onnx(
         "note": "raw logits; calibration + thresholds ship separately",
     }
     (out_dir / "MANIFEST.json").write_text(json.dumps(manifest, indent=2))
-    print(f"Wrote taxonomy.json ({len(tax['vocabs'][levels[0]])} {levels[0]}) and MANIFEST.json")
+    print(f"Wrote taxonomy.json ({len(tax['vocabs'][names[0]])} {names[0]}) and MANIFEST.json")
 
     if check:
         verify_onnx(wrapper, onnx_path, img_size, output_names)

@@ -1,10 +1,13 @@
 # Porting the 0.9148 baseline into `src/lepinet` — a fastai-only, mini_trainer-free clean repo
 
-**Status:** IN PROGRESS — package **built and validated GPU-free** on 2026-07-24 (see the
-Execution log at the end); the one open item is the from-scratch train-parity run to 0.9148,
-blocked on a local GPU driver fault. Companion in spirit to [[2026-07-lepi-app-claude]]: this
-document is the *how* — module layout, what to keep vs cut, the sequencing, and the decisions
-that need to be right before code is written. Written 2026-07-24.
+**Status:** ✅ **RESOLVED (2026-07-25) — the port is a success.** The clean, fastai-only,
+`mini_trainer`/`mini_metrics`-free `src/lepinet` package reproduces the project-best baseline from
+scratch: **species macro-F1 0.9152 vs 0.9148** on the byte-identical eval set (all 12,041 species,
+optimal threshold; see the Train-parity section). This 5ep run is now the project's **milestone
+baseline** to compare future models against. `dev/` continues as the experiment space, but now
+imports the **`lepinet` package** rather than `dev/028/030/034`. Companion in spirit to
+[[2026-07-lepi-app-claude]]: this document is the *how* — module layout, what to keep vs cut, the
+sequencing, and the decisions that had to be right before code was written. Written 2026-07-24.
 
 **Goal in one line:** reproduce the project-best **0.9148 test species macro-F1**
 (`20260716-154156`, [[2026-07-does-longtail-help]]) from a clean, installable `src/lepinet`
