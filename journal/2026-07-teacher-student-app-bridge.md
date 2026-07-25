@@ -91,11 +91,41 @@ Built the teacher→student half of the bridge (planned `dev/045`, never written
 
 **First runs (mock teacher = the 5ep effnetv2_s milestone):** distil into a small
 `tf_efficientnetv2_b0` + 256-bottleneck (the shippable size), vs a from-scratch b0 **control** — the
-test is "does the distilled student beat its from-scratch equivalent?" (compression sweep put
-from-scratch b0 at ~0.876). Configs `20260725_ucloud_distill_effnetv2b0.yaml` /
-`..._b0_fromscratch.yaml`; both min_img_per_spc=50 to match the teacher's vocab. Launched on B200
-(behind the ConvNeXtV2-L teacher). Results pending. When the real ConvNeXtV2-L/DINOv3 teacher lands,
-swap it in as `distill_teacher` — nothing else changes.
+test is "does the distilled student beat its from-scratch equivalent?" Configs
+`20260725_ucloud_distill_effnetv2b0.yaml` / `..._b0_fromscratch.yaml`; both min_img_per_spc=50 to
+match the teacher's vocab. Both ran on the B200 alongside the ConvNeXtV2-L teacher.
+
+### Result — default KD (α=0.5, T=4) HURT. Negative result, with a mechanism. (2026-07-25)
+
+Full fold-0 test, all 12,041 species / 629,742 images (`min_img_per_spc=0`, native macro-F1):
+
+| model (b0, hidden 256, 5 ep) | species macro-F1 | species micro-acc |
+|---|---|---|
+| **from-scratch (control)** | **0.8692** | 0.9025 |
+| distilled (α=0.5, **T=4**) | 0.8546 | 0.8957 |
+
+**Distillation lost −1.46 pp** vs from-scratch — the opposite of "student beats its from-scratch
+equivalent." The wiring is correct (KD engaged, vocab aligned, no NaN); the **hyperparameters are
+wrong for this head**, and the reason is specific and worth recording:
+
+- The teacher is a **cosine z-score head** — its logits are `cosine_to_zscore(cos θ)`, i.e. already
+  ~unit-scale (roughly standard-normal), *not* the large-range logits Hinton-style KD assumes. And
+  [[2026-07-lepi-app-compression]] §5 measured the model **under-confident** (calibration T≈0.8).
+- Dividing already-flat, under-confident logits by **T=4** pushes the 12,041-class softmax target
+  toward **uniform** — the KD target carries almost no class information beyond noise. At α=0.5 that
+  diffuse signal replaces half the (working) hard-label gradient → the student ends up *worse*.
+- **Standard KD temperature (3–6) is miscalibrated for a z-score cosine head.** Hypothesis: the
+  right T here is ≈1 (use the teacher's posterior near as-is), possibly <1 (sharpen it).
+
+**Next experiment (launched):** `20260725_ucloud_distill_effnetv2b0_T1.yaml` — same run with
+**T=1.0** (α=0.5). Falsifiable: if T=1 distilled ≥ 0.8692 (beats from-scratch), temperature was the
+whole story; if still below, distillation from this teacher/at this size needs α tuning or the gap
+teacher→student (0.911→~0.87) is just too small for KD to help and it waits for the stronger
+ConvNeXtV2-L/DINOv3 teacher. Either way it's a data point, not a wall.
+
+**Lesson (also a memory):** KD temperature is not head-agnostic. For a metric-learning / cosine
+z-score head whose logits are already ~unit-scale (and under-confident), start at **T≈1**, not the
+textbook 3–4. When the real teacher lands, swap `distill_teacher` — but carry T≈1 forward.
 
 ## Plan (next, in order)
 
