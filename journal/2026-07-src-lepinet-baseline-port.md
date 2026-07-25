@@ -410,9 +410,51 @@ session.
   epoch 1, ~1:17/epoch, host anon 91/288 GB — safe). Eval on fold 0 queued on a B200-MIG `--after`.
   This is the pending **train-parity** check vs 0.9148.
 
+## Train-parity check — the 5ep run scored 0.9455, and why that is NOT a win (2026-07-25)
+
+The 5ep run finished; my `test.py` reported **species macro-F1 0.9455** on the fold-0 test. That is
+*above* the 0.9148 target, which is the wrong direction for a port meant to *reproduce* — a red
+flag, not a celebration. Two independent checks:
+
+**1. Is the metric implementation right?** Yes — **bit-exact with `mini_metrics`.** Downloaded the
+run's `predictions.csv` (the interop file, 132 MB, 1.45 M rows) off the UCloud drive and ran
+`mini_metrics.MacroF1` on it directly. At no-abstain threshold the two agree to 4 dp on every level:
+
+| level | my `test.py` (native) | `mini_metrics` @thr=0 | @thr=0.5 |
+|---|---|---|---|
+| species | 0.9455 | **0.9455** | 0.9414 |
+| genus | 0.9690 | **0.9690** | 0.9700 |
+| family | 0.9803 | **0.9803** | 0.9821 |
+
+So `LevelMacroF1`/`macro_f1` reproduces `mini_metrics` exactly (both macro-average over classes
+*present as ground-truth labels*, both set F1=0 when precision or recall is 0). The 0.9455 is a
+faithful number — of a *different eval set*.
+
+**2. Is the eval set the same as the 0.9148 baseline?** **No — this was the bug.** The 0.9148
+baseline (`20260716-154156`, journal [[2026-07-does-longtail-help]]) was measured over the *whole*
+test fold: **629,742 images, 12,041 species** (dev/032 test default `min_img_per_spc=0`). My UCloud
+test job (`lepinet-test.toml`) passed **`--min-img-per-spc 50`**, copied thoughtlessly from the
+*training* config. That filter drops every species with <50 images *in fold 0* — the entire hard
+long tail — leaving **484,299 images, 3,696 species**. Macro-F1 weights every class equally, so
+removing 8,345 rare (low-per-class-F1) species lifts the average from ~0.91 to 0.9455. The tell:
+**micro-acc went the other way** (93.79% here vs 94.76% baseline) — a genuinely better model raises
+both; an easier *macro* subset raises only macro. `min_img_per_spc` belongs on *training* (which
+species the model learns), never re-applied to the *test* fold.
+
+**Fix + apples-to-apples re-run:** `ucloud/lepinet-test-allspc.toml` (`--min-img-per-spc 0`,
+out-dir `data/ucloud_preds_allspc`), submitted as `lepi-test-all` (job 12359845, B200-MIG). Expected
+~0.9148 if the fastai-only port reproduces the pipeline. Result pending below.
+
+**Lesson (also saved to memory):** an eval number that *beats* the reference on a reproduction is a
+measurement bug until proven otherwise. Audit the eval-set construction (row count, class count,
+filters) before the metric code. Here the metric was perfect and the *filter* was wrong.
+
+### Re-test result (all species, min_img_per_spc=0)
+_(pending — `lepi-test-all` running on MIG; fill in species/genus/family macro-F1 over ~12,041
+species and compare to 0.9148.)_
+
 ### Still open
-- The 5ep result (species macro-F1 vs 0.9148) + its fold-0 test — running on UCloud, daemon will
-  report.
+- The apples-to-apples re-test (`lepi-test-all`, min_img 0) vs 0.9148 — running, result above when in.
 - The **"bigger everything" teacher run** → [[2026-07-bigger-everything]] (queued this session).
 - The app artifact path (calibration/thresholds, quantization, the versioned bundle) — the whole
   [[2026-07-lepi-app-claude]] Phase B/C on the new package.

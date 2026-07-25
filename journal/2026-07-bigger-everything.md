@@ -75,7 +75,70 @@ doesn't help here.
 estimates, not tuned. The smoke validates memory/throughput; the first epoch of the full run
 validates the LR (loss must fall in epoch 0). Expect at least one re-run to tune LR/epochs.
 
+## Design Q&A — owner's review while the run trains (2026-07-25)
+
+Six questions raised while `lepi-big2` was mid-run. Recorded because the answers set the *next*
+experiments, not just this one.
+
+**Q1 — Why ConvNeXtV2-L and not DINOv2/DINOv3?** They are excellent — DINOv3 (2025) SSL features are
+arguably the strongest general backbones going, and worth a run. Two reasons ConvNeXtV2-L went
+*first*: (a) it emits a 4-D spatial map, so it drops into the existing `PooledHead`/cosine-head path
+with **zero architecture plumbing**; DINO models are ViTs that emit patch tokens + CLS, needing a
+new head-attach adapter (mean-pool tokens or CLS → bottleneck) that `arch_body_features` currently
+*rejects* (it refuses non-4-D/ViT outputs by design). (b) With ~3 M in-domain labelled images, the
+SSL-vs-supervised gap narrows and a strong IN-22k-pretrained ConvNet fine-tunes stably at high res;
+ConvNeXt also scales to higher resolution more cheaply than a ViT (no quadratic token cost), and
+high res is exactly what fine-grained wing texture needs. **Decision:** DINOv3 ViT-L is the next
+teacher experiment — but it needs the ViT adapter first (a small, tracked task). Teacher accuracy
+matters more than teacher architecture for distillation, so both are worth benchmarking head-to-head.
+
+**Q2 — fastai default `aug_transforms` or custom?** It's fastai's `aug_transforms` *factory* with
+**custom kwargs**, not the raw defaults. Baseline lightened it (`max_warp 0`, `max_lighting 0`,
+`p_lighting 0`, flip incl. vertical, rotate 15, zoom 1.1) — heavy distortion hurts a 5-epoch run.
+This run enriches it (`max_warp 0.1`, `max_lighting 0.2`, `p_lighting 0.5`, rotate 20, zoom 1.2), on
+the bet that a longer/bigger run absorbs stronger aug for generalisation. Not yet tuned.
+
+**Q3 — Why only 6 epochs?** A conservative first guess to fit one wall-clock day (~3 h/epoch × 6),
+**not** a tuned choice — flagged as a guess up top. Given the baseline ladder found *under-annealing*
+was the #1 lever, 6 epochs is likely too few for a 198 M model. **If val is still climbing at epoch
+6, the clear next lever is more epochs (10–15), not more model.** one_cycle ties the LR schedule to
+`nb_epochs`, so this means a fresh relaunch at the longer schedule, not a resume.
+
+**Q4 — 80 GB GPU mem (low for a B200) but ~100% util.** Right read: the run is **compute-bound, not
+memory-bound**, and ~100% SM util means we're already extracting the B200's compute — so filling
+memory with a bigger batch would *not* buy throughput (it'd only change optimisation dynamics). The
+memory headroom is better spent on **higher resolution** (uses compute + memory productively and
+helps fine-grained accuracy) than on a bigger batch. Speed levers here would be `channels_last` /
+`torch.compile`, not batch size.
+
+**Q5 — ep1 promising.** Noted — LR 8e-4 with Muon is not diverging out of the gate, which was the
+main epoch-0 risk. Good sign for the guessed LR.
+
+**Q6 — Is ConvNeXt-L an intermediate rung?** Yes, exactly. The ladder is
+effnetv2_s (20 M, baseline) → **ConvNeXtV2-L (198 M, this run)** → ConvNeXtV2-Huge (660 M) / DINOv3
+ViT-L or larger. Each rung answers "does scale still pay here, at what cost?" before the next, and
+the best model becomes the distillation teacher. Scaling slowly de-risks the 40 h runs.
+
+**Q7 — Metric learning / ArcFace as a direction? Keep multi-heads? bf16?** Good direction, and worth
+noting the current head is *already* a cosine (normalised-softmax) classifier — L2-normalised
+prototypes + normalised embedding + learned scale — i.e. metric-learning-flavoured, just without a
+margin. **ArcFace = add an additive angular margin on the true class during training** (off at
+inference); it tightens intra-class / widens inter-class angles, which helps fine-grained + long-tail
++ the open-set flavour of species ID (unknown species at inference), and gives better-separated
+embeddings → better abstain-threshold behaviour, which the app wants.
+- **Keep the multi-head hierarchy** — apply ArcFace per level on the shared embedding (each level
+  keeps its own prototypes; inject the margin into that level's layer during training).
+  Recommended first test: **ArcFace on the species head only**, plain cosine on genus/family — the
+  cheapest test of "does the margin move species macro-F1."
+- **bf16 is the right call** and we already default to it: ArcFace's `cos/arccos` and large scale
+  `s` (~30–64) overflow/NaN in fp16; bf16's exponent range fixes it. Confirmed lever, not luck.
+- **Risk:** margin `m` + scale `s` are new hyperparameters; too-large a margin on rare classes (few
+  samples pushed hard) can hurt the tail — and we *already* emphasise the tail via oversampling, so
+  the two must be balanced. Mitigations if needed: sub-center ArcFace or frequency-adaptive margins.
+- **Independent of Q1:** ArcFace works with any backbone, so it is not gated on the DINOv3 decision.
+
 ## Results
 
 _(pending — the smoke + full run are queued on UCloud; the queue daemon will report. Fill in
-species/genus/family macro-F1 on the fold-0 test, throughput, and whether it beat 0.9148.)_
+species/genus/family macro-F1 on the fold-0 test, throughput, and whether it beat 0.9148. Evaluate
+with `min_img_per_spc=0` — see the eval-set gotcha in [[2026-07-src-lepinet-baseline-port]].)_
