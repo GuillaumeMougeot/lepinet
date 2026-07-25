@@ -210,6 +210,50 @@ class IndependentHead(nn.Module):
                 for layer in self.layers]
 
 
+class ArcFaceHead(IndependentHead):
+    """Metric-learning variant of :class:`IndependentHead`: cosine logits with an additive
+    angular margin applied to the true class **during training only**.
+
+    Structurally identical to :class:`IndependentHead` (same bottleneck, same unit-norm prototype
+    layers, same ``state_dict`` keys) — the only differences are:
+
+    * ``forward`` returns ``scale * cos θ`` (raw scaled cosine), not ``cosine_to_zscore(cos) + b``.
+      The frozen-zero bias is simply unused (adding 0 changes nothing), so weights are
+      interchangeable with an ``independent`` checkpoint.
+    * The **margin is not applied here** — the forward stays label-free (so it still traces to ONNX
+      with ``dynamo=False``). :class:`~lepinet.loss.MultiLevelCELoss` injects the ArcFace margin,
+      because it is the piece that sees the labels; the head only carries ``scale`` / ``margins``
+      so the training wiring can build a matching loss.
+
+    ArcFace (Deng et al. 2019) penalises the true class by ``cos(θ + m)`` before scaling by ``s``,
+    which tightens intra-class / widens inter-class angles — useful on fine-grained + long-tailed +
+    open-set species ID. ``scale`` (``s``, ~16–64) and ``margin`` (``m``, ~0.1–0.5, scalar or
+    per-level fine→coarse) are the two hyperparameters. bf16 is required (fp16 overflows the large
+    ``s·cos`` and NaNs the ``acos`` — the reason the head runs in fp32 under autocast anyway).
+    """
+
+    def __init__(
+        self,
+        in_features: int,
+        n_classes: Sequence[int],
+        hidden: bool | int = True,
+        droprate: float = 0.1,
+        scale: float = 30.0,
+        margin: float | Sequence[float] = 0.0,
+    ):
+        super().__init__(in_features, n_classes, hidden=hidden, droprate=droprate)
+        self.scale = float(scale)
+        margins = margin if isinstance(margin, (list, tuple)) else [margin] * self.n_levels
+        if len(margins) != self.n_levels:
+            raise ValueError(f"margin needs {self.n_levels} values (fine→coarse) or a scalar, got {margins!r}.")
+        self.margins = [float(m) for m in margins]
+
+    def forward(self, x: torch.Tensor) -> list[torch.Tensor]:
+        """``x``: pooled backbone features ``[N, in_features]``. Returns per-level ``s·cos θ``, fine→coarse."""
+        emb = self.preclassification(x)
+        return [self.scale * F.linear(emb, layer.weight) for layer in self.layers]
+
+
 class PooledHead(nn.Module):
     """Global-average-pool a ``[N, C, H, W]`` backbone map to ``[N, C]``, then run ``head`` in fp32.
 
@@ -232,11 +276,28 @@ class PooledHead(nn.Module):
             return self.head(x.float())
 
 
+class FlatHead(nn.Module):
+    """Run ``head`` in fp32 on an already-pooled ``[N, C]`` embedding (no spatial pooling).
+
+    The counterpart to :class:`PooledHead` for backbones that emit a single vector per image
+    rather than a ``[N, C, H, W]`` map — vanilla ViTs / DINOv2 / DINOv3, wrapped by
+    :class:`~lepinet.model.ViTBody`. Same fp32-under-autocast guard as :class:`PooledHead`.
+    """
+
+    def __init__(self, head: nn.Module):
+        super().__init__()
+        self.head = head
+
+    def forward(self, x: torch.Tensor):
+        with torch.autocast(device_type=x.device.type, enabled=False):
+            return self.head(x.float())
+
+
 # ---------------------------------------------------------------------------
 # Factory / registry (the seam for experimenting with new heads -- see §6 of the proposal)
 # ---------------------------------------------------------------------------
 
-HEAD_REGISTRY: dict[str, type[nn.Module]] = {"independent": IndependentHead}
+HEAD_REGISTRY: dict[str, type[nn.Module]] = {"independent": IndependentHead, "arcface": ArcFaceHead}
 
 
 def build_head(
@@ -244,17 +305,22 @@ def build_head(
     in_features: int,
     n_classes: Sequence[int],
     hidden: bool | int = True,
-) -> PooledHead:
-    """Construct ``PooledHead(<head>)`` for one of :data:`HEAD_REGISTRY`.
+    pool: bool = True,
+    **head_kwargs,
+) -> nn.Module:
+    """Construct ``PooledHead(<head>)`` (or ``FlatHead(<head>)``) for one of :data:`HEAD_REGISTRY`.
 
-    The baseline registers only ``"independent"``; a ``dev/`` experiment can register another
-    head class and reach it here without editing this module. A head that needs the taxonomy
-    (e.g. a hierarchical head) should take it via its own constructor and be built directly.
+    The baseline registers ``"independent"`` (cosine) and ``"arcface"`` (cosine + angular margin);
+    a ``dev/`` experiment can register another head class and reach it here without editing this
+    module. ``pool=True`` (default) wraps the head in :class:`PooledHead` for a ``[N,C,H,W]``
+    conv-map backbone; ``pool=False`` uses :class:`FlatHead` for a backbone that already emits a
+    ``[N,C]`` vector (a ViT via :class:`~lepinet.model.ViTBody`). Extra ``head_kwargs`` (e.g.
+    ``scale`` / ``margin`` for ``arcface``) go straight to the head constructor.
     """
     if head_name not in HEAD_REGISTRY:
         raise ValueError(f"Unknown head {head_name!r}; registered: {sorted(HEAD_REGISTRY)}.")
-    head = HEAD_REGISTRY[head_name](in_features, n_classes, hidden=hidden)
-    return PooledHead(head)
+    head = HEAD_REGISTRY[head_name](in_features, n_classes, hidden=hidden, **head_kwargs)
+    return PooledHead(head) if pool else FlatHead(head)
 
 
 def infer_hidden_from_state_dict(head_state: dict, prefix: str = "head.") -> bool | int:

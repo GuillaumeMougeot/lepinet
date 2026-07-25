@@ -13,10 +13,29 @@ to shrink smoothing at coarser levels: ``ls_L = 1 - (1 - ls) ** (1 / (L + 1))`` 
 """
 from __future__ import annotations
 
+import math
 from collections.abc import Sequence
 
 import torch
+import torch.nn.functional as F
 from torch import nn
+
+
+def apply_arcface_margin(logit: torch.Tensor, target: torch.Tensor, margin: float, scale: float) -> torch.Tensor:
+    """Inject an ArcFace additive angular margin into scaled-cosine logits (``logit = s·cos θ``).
+
+    Penalises the *true* class by ``cos(θ + m)`` before rescaling by ``s`` (Deng et al. 2019), so
+    cross-entropy has to push the true-class angle ``m`` radians tighter than a plain cosine head
+    would. Non-target logits are untouched. Uses the ``cos(θ+m) = cos θ·cos m − sin θ·sin m``
+    identity (no ``acos``), which is numerically clean in fp32 (the head runs fp32 under autocast).
+    Applied by the loss, not the head, because only the loss sees the labels — keeping the head
+    forward label-free and ONNX-traceable.
+    """
+    cos = (logit / scale).clamp(-1 + 1e-7, 1 - 1e-7)
+    sin = torch.sqrt((1.0 - cos * cos).clamp_min(1e-12))
+    phi = cos * math.cos(margin) - sin * math.sin(margin)   # cos(θ + m)
+    one_hot = F.one_hot(target, num_classes=logit.size(1)).to(logit.dtype)
+    return scale * (one_hot * phi + (1.0 - one_hot) * cos)
 
 
 class MultiLevelCELoss:
@@ -42,6 +61,8 @@ class MultiLevelCELoss:
         device: torch.device | str = "cpu",
         dtype: torch.dtype = torch.float32,
         reduction: str = "mean",
+        arc_scale: float | None = None,
+        arc_margins: Sequence[float] | None = None,
     ):
         self.n_levels = len(num_classes)
         if label_smoothing is None:
@@ -50,6 +71,11 @@ class MultiLevelCELoss:
             weights = [1.0] * self.n_levels
         self.weights = torch.as_tensor(weights, device=device, dtype=dtype)
         self._reduction = reduction
+        # ArcFace (optional): a per-level angular margin, applied in training only. arc_margins is
+        # None for the plain cosine baseline; a list (fine→coarse, 0 = no margin on that level)
+        # when the head is `arcface`. Needs arc_scale (the head's `s`) to recover cos θ = logit/s.
+        self.arc_scale = arc_scale
+        self.arc_margins = list(arc_margins) if arc_margins is not None else None
         # Coarser levels smooth less, so (1 - ls) compounds consistently up the hierarchy.
         per_level_ls = [1 - (1 - label_smoothing) ** (1 / (i + 1)) for i in range(self.n_levels)]
         self._loss_fns = [nn.CrossEntropyLoss(label_smoothing=ls, reduction=reduction) for ls in per_level_ls]
@@ -66,9 +92,22 @@ class MultiLevelCELoss:
             fn.reduction = value
 
     def per_level(self, preds: Sequence[torch.Tensor], targets: torch.Tensor) -> list[torch.Tensor]:
-        """Per-level weighted losses (scalars, or per-sample ``[N]`` when reduction='none')."""
+        """Per-level weighted losses (scalars, or per-sample ``[N]`` when reduction='none').
+
+        When an ArcFace margin is configured for a level, it is injected here — but only when the
+        logits carry gradient (``requires_grad``), i.e. during *training*. Validation runs under
+        ``no_grad``, so the margin is skipped and the reported val loss / metric use the plain
+        cosine logits (the model is selected on the margin-free score, as it should be).
+        """
         targets = targets.transpose(0, 1)  # [N, L] -> [L, N]
-        return [self._loss_fns[i](preds[i], targets[i]) * self.weights[i] for i in range(self.n_levels)]
+        losses = []
+        for i in range(self.n_levels):
+            logit = preds[i]
+            m = self.arc_margins[i] if self.arc_margins is not None else 0.0
+            if m > 0 and self.arc_scale is not None and logit.requires_grad:
+                logit = apply_arcface_margin(logit, targets[i], m, self.arc_scale)
+            losses.append(self._loss_fns[i](logit, targets[i]) * self.weights[i])
+        return losses
 
     def __call__(self, preds: Sequence[torch.Tensor], targets: torch.Tensor) -> torch.Tensor:
         return sum(self.per_level(preds, targets))

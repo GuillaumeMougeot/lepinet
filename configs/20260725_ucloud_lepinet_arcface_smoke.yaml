@@ -1,0 +1,39 @@
+version: 1.0
+# ArcFace smoke: same effnetv2_s baseline recipe, but head=arcface with a species-only angular
+# margin. Isolates the ArcFace change from the backbone change (see the dinov3 smoke for that).
+# Family 9717 + 1 epoch validates the whole path on a B200 in minutes: head builds, the margin is
+# injected in training (loss), NaNGuard stays quiet under bf16, train->save round-trips.
+# arcface REQUIRES bf16 (large s*cos overflows fp16); mixup is disabled (margin needs one true class).
+desc: lepinet-arcface-smoke-9717-ucloud
+train:
+  parquet_path: /work/global_lepi/0032836-250426092105405_processing_metadata_postprocessed_quality_filtered.parquet
+  img_dir: /work/global_lepi/images
+  out_dir: /work/lepinet/data/ucloud_models
+  fold: '1'
+  min_img_per_spc: 50
+  num_workers: 64
+  model_name: lepinet-arcface-smoke-9717-ucloud
+  model_arch_name: efficientnet_v2_s
+  head: arcface
+  arcface_scale: 30.0
+  arcface_margin: [0.3, 0.0, 0.0]   # species-only margin (genus/family = plain cosine)
+  nb_epochs: 1
+  base_lr: 0.001
+  batch_size: 64
+  aug_img_size: 460
+  img_size: 256
+  optimizer: muon
+  fp16: true
+  precision: bf16
+  schedule: one_cycle
+  warmup_epochs: 0.3
+  grad_clip: 5.0
+  oversample_power: 0.5
+  family_filter: ['9717']
+  aug_kwargs:
+    max_warp: 0.0
+    max_lighting: 0.0
+    p_lighting: 0.0
+    flip_vert: true
+    max_rotate: 15.0
+    max_zoom: 1.1

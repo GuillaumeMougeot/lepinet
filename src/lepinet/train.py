@@ -18,7 +18,7 @@ from .config import TrainConfig, prepare_run_dir
 from .heads import build_head
 from .loss import FastaiLossWrapper, MultiLevelCELoss
 from .metrics import default_metrics
-from .model import arch_body_features, build_learner, resolve_arch
+from .model import arch_body_features, arch_is_vit, build_learner, resolve_arch
 
 
 def train(cfg: TrainConfig):
@@ -43,15 +43,24 @@ def train(cfg: TrainConfig):
 
     # --- model ---
     arch = resolve_arch(cfg.model_arch_name)
+    vit = arch_is_vit(arch, img_size=cfg.img_size)  # ViT/DINOv3 → FlatHead + manual Learner
     nf = arch_body_features(arch, img_size=cfg.img_size)
-    custom_head = build_head(cfg.head, nf, n_classes, hidden=cfg.hidden)
+    head_kwargs = {"scale": cfg.arcface_scale, "margin": cfg.arcface_margin} if cfg.head == "arcface" else {}
+    custom_head = build_head(cfg.head, nf, n_classes, hidden=cfg.hidden, pool=not vit, **head_kwargs)
     n_head_params = sum(p.numel() for p in custom_head.parameters())
-    print(f"Head={cfg.head}, hidden={cfg.hidden} -> {n_head_params / 1e6:.2f} M params")
+    print(f"Head={cfg.head}, hidden={cfg.hidden}, backbone={'ViT' if vit else 'conv'} -> {n_head_params / 1e6:.2f} M head params")
+    if cfg.head == "arcface":
+        print(f"ArcFace ON (scale={cfg.arcface_scale}, margin={cfg.arcface_margin}).")
 
     # --- loss ---
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    arc_margins = None
+    if cfg.head == "arcface":
+        arc_margins = cfg.arcface_margin if isinstance(cfg.arcface_margin, list) else [cfg.arcface_margin] * len(n_classes)
     criterion = MultiLevelCELoss(n_classes, weights=cfg.level_weights,
-                                 label_smoothing=cfg.label_smoothing, device=device)
+                                 label_smoothing=cfg.label_smoothing, device=device,
+                                 arc_scale=cfg.arcface_scale if cfg.head == "arcface" else None,
+                                 arc_margins=arc_margins)
     loss_func = FastaiLossWrapper(criterion)
 
     # --- callbacks ---
@@ -81,7 +90,7 @@ def train(cfg: TrainConfig):
     # Add `GCCallback()` here if a future head reintroduces one and GPU memory climbs.
 
     learn = build_learner(dls, arch, custom_head, loss_func, default_metrics(levels),
-                          out_dir / "models", cbs, optimizer=cfg.optimizer)
+                          out_dir / "models", cbs, optimizer=cfg.optimizer, vit=vit)
 
     if cfg.fp16:
         # bf16 by default (fp32 exponent range -> no overflow-to-NaN); fp16 only if asked.
@@ -94,7 +103,7 @@ def train(cfg: TrainConfig):
         print(f"Resumed weights from {cfg.resume_checkpoint} ({cfg.resume_epochs_done}/{cfg.nb_epochs} epochs done).")
 
     _fit(learn, cfg)
-    _save_checkpoint(learn, cfg, levels, vocabs, df, out_dir)
+    _save_checkpoint(learn, cfg, levels, vocabs, df, out_dir, vit=vit)
 
 
 def _fit(learn, cfg: TrainConfig):
@@ -124,17 +133,21 @@ def _fit(learn, cfg: TrainConfig):
         learn.fine_tune(cfg.nb_epochs, cfg.base_lr, freeze_epochs=cfg.freeze_epochs)
 
 
-def _save_checkpoint(learn, cfg: TrainConfig, levels, vocabs, df, out_dir: Path):
+def _save_checkpoint(learn, cfg: TrainConfig, levels, vocabs, df, out_dir: Path, vit: bool = False):
     """Save a self-contained ``.pt``: weights + everything needed to rebuild the head at test/export.
 
     The hierarchy is derived from the training ``df`` (not a hierarchy.csv on disk), so the
-    checkpoint's parent table can never disagree with its own class set.
+    checkpoint's parent table can never disagree with its own class set. ``head`` / ``arcface_scale``
+    / ``vit`` tell the test/export reconstruction which forward to rebuild (all default to the cosine
+    conv-map path, so pre-existing effnet checkpoints load unchanged).
     """
     model_path = out_dir / f"{cfg.model_name}.pt"
     torch.save(
         {
             "model_state_dict": learn.model.state_dict(),
             "head": cfg.head,
+            "arcface_scale": cfg.arcface_scale,
+            "vit": vit,
             "model_arch_name": cfg.model_arch_name,
             "hidden": cfg.hidden,
             "levels": levels,

@@ -449,12 +449,28 @@ out-dir `data/ucloud_preds_allspc`), submitted as `lepi-test-all` (job 12359845,
 measurement bug until proven otherwise. Audit the eval-set construction (row count, class count,
 filters) before the metric code. Here the metric was perfect and the *filter* was wrong.
 
-### Re-test result (all species, min_img_per_spc=0)
-_(pending — `lepi-test-all` running on MIG; fill in species/genus/family macro-F1 over ~12,041
-species and compare to 0.9148.)_
+### Re-test result (all species, min_img_per_spc=0) — PORT REPRODUCES 0.9148 ✅
+
+`lepi-test-all` (min_img 0) evaluated **629,742 images / 12,041 species — byte-identical eval set to
+the 0.9148 baseline** (same n, same class count). Numbers:
+
+| level | port @thr 0 | **port @optimal thr** | baseline (`20260716-154156`) | Δ vs baseline |
+|---|---|---|---|---|
+| species | 0.9110 | **0.9152** | 0.9148 | **+0.0004** |
+| genus | 0.9587 | 0.9613 | 0.9603 | +0.0010 |
+| family | 0.9708 | 0.9723 | 0.9726 | −0.0003 |
+
+The baseline was measured with `mini_metrics --optimal` (per-level threshold that maximises
+macro-F1); the fair comparison is the **@optimal** column, where species macro-F1 is **0.9152 vs
+0.9148** — within 0.0004, i.e. **reproduced**. (Optimal per-level thresholds came out ~0.34; the
+model is under-confident, consistent with [[2026-07-lepi-app-compression]].) Micro-acc is ~1.6 pt
+lower (93.2 vs 94.8) — the fastai-only reimplement + a different seed + the clarity refactor move it
+slightly, but the headline metric lands on target. **Train-parity: DONE.** The clean, mini_trainer-
+free package reproduces the project-best baseline from scratch.
 
 ### Still open
-- The apples-to-apples re-test (`lepi-test-all`, min_img 0) vs 0.9148 — running, result above when in.
+- (nothing on parity — resolved above). Remaining threads: bigger-everything result
+  [[2026-07-bigger-everything]], the doc/comment reframe, the app artifact path, distillation.
 - The **"bigger everything" teacher run** → [[2026-07-bigger-everything]] (queued this session).
 - The app artifact path (calibration/thresholds, quantization, the versioned bundle) — the whole
   [[2026-07-lepi-app-claude]] Phase B/C on the new package.

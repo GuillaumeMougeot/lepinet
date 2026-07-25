@@ -137,8 +137,45 @@ embeddings → better abstain-threshold behaviour, which the app wants.
   the two must be balanced. Mitigations if needed: sub-center ArcFace or frequency-adaptive margins.
 - **Independent of Q1:** ArcFace works with any backbone, so it is not gated on the DINOv3 decision.
 
+## Plumbing built — ArcFace + DINOv3, modular & default-off (2026-07-25)
+
+Both levers from the Q&A are now in the package, **gated so the ep5 cosine baseline reproduces
+unchanged** (33 CPU tests green, ruff clean). Design notes worth keeping:
+
+**ArcFace (`head: arcface`).** `ArcFaceHead` *subclasses* `IndependentHead` and shares its exact
+`state_dict` (same bottleneck, same unit-norm prototype layers) — verified in a test that loads an
+`independent` checkpoint into an `arcface` head. The only differences:
+- `forward` returns `scale * cos θ` (raw scaled cosine) instead of `cosine_to_zscore(cos) + bias`.
+  The frozen-zero bias is unused (adds 0), so weights are interchangeable.
+- **The margin is applied in the *loss*, not the head** (`loss.apply_arcface_margin`), because only
+  the loss sees the labels. This keeps the head forward **label-free → still ONNX-traceable with
+  `dynamo=False`** (the whole point of the package). The loss injects `cos(θ+m)` on the true class
+  via the `cos(θ+m)=cosθ·cosm − sinθ·sinm` identity — and **only when logits carry grad**, so the
+  margin is on in training and off in validation/inference (val metric uses the margin-free score,
+  which is correct for model selection).
+- Config: `arcface_scale` (s, default 30), `arcface_margin` (m, scalar or per-level fine→coarse).
+  Guarded: `head=arcface` **rejects mixup/cutmix** (margin needs one true class per sample) and
+  warns if not bf16. First experiment = **species-only margin `[0.3, 0, 0]`** (cheapest test).
+
+**DINOv3 / ViT backbone.** `ViTBody` wraps a timm ViT headless (`num_classes=0`, timm's own CLS/
+mean pool → one `[N,C]` vector); `FlatHead` runs the cosine/ArcFace head on it with the same
+fp32-under-autocast guard as `PooledHead` but no spatial pool. `arch_is_vit` auto-detects (dummy
+forward: 4-D map → conv path, else ViT), so **the config just names a ViT and everything routes
+itself** — `build_learner` assembles `nn.Sequential(ViTBody(pretrained), FlatHead(head))` behind a
+plain `Learner` (vision_learner can't attach a pooling head to a token backbone), and the checkpoint
+carries `vit`/`arcface_scale` so test/export rebuild the right model (old effnet checkpoints default
+to the conv+cosine path, load unchanged). timm 1.0.28 exposes DINOv3 — `vit_*_patch16_dinov3.*` and,
+as a bonus, `convnext_*.dinov3_lvd1689m` (DINOv3-distilled ConvNeXts that emit 4-D maps and need
+*no* ViT adapter at all — a cheap third teacher candidate).
+
+**Smokes queued** (family 9717, 1 epoch, B200-MIG), each isolating one change:
+`configs/20260725_ucloud_lepinet_arcface_smoke.yaml` (effnetv2_s + species-margin) and
+`..._dinov3_smoke.yaml` (vit_base_patch16_dinov3 @224 + cosine head). They validate: head/backbone
+build, pretrained load, Muon over the new params, bf16 forward, margin injection, train→save→reload.
+
 ## Results
 
-_(pending — the smoke + full run are queued on UCloud; the queue daemon will report. Fill in
-species/genus/family macro-F1 on the fold-0 test, throughput, and whether it beat 0.9148. Evaluate
-with `min_img_per_spc=0` — see the eval-set gotcha in [[2026-07-src-lepinet-baseline-port]].)_
+_(pending — the ConvNeXtV2-L teacher (`lepi-big2`) + the arcface/dinov3 smokes are on UCloud; the
+queue daemon will report. Fill in species/genus/family macro-F1 on the fold-0 test, throughput, and
+whether it beat 0.9148. Evaluate with `min_img_per_spc=0` — see the eval-set gotcha in
+[[2026-07-src-lepinet-baseline-port]].)_

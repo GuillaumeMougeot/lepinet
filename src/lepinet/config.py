@@ -41,8 +41,12 @@ class TrainConfig:
     num_workers: int | None = None
 
     # --- model ---
-    head: str = "independent"
+    head: str = "independent"           # independent (cosine) | arcface (cosine + angular margin)
     hidden: bool | int = True  # bottleneck width; True = backbone width (the size lever)
+
+    # --- arcface (only used when head == 'arcface'; default off reproduces the cosine baseline) ---
+    arcface_scale: float = 30.0         # s: cosine logit scale (~16–64)
+    arcface_margin: float | list = 0.0  # m: angular margin, scalar or per-level fine→coarse (~0.1–0.5)
 
     # --- optimisation (the winning recipe defaults) ---
     nb_epochs: int = 5
@@ -90,6 +94,18 @@ class TrainConfig:
             )
         if self.precision not in ("bf16", "fp16"):
             raise ValueError(f"Unknown precision {self.precision!r}; must be 'bf16' or 'fp16'.")
+        if self.head == "arcface":
+            margins = self.arcface_margin if isinstance(self.arcface_margin, (list, tuple)) else [self.arcface_margin]
+            if (self.mixup and self.mixup > 0) or (self.cutmix and self.cutmix > 0):
+                raise ValueError(
+                    "head='arcface' is incompatible with mixup/cutmix: the angular margin is defined "
+                    "for a single true class per sample, not a mixed target. Disable mixup/cutmix, or "
+                    "use head='independent'."
+                )
+            if any(m > 0 for m in margins) and self.precision != "bf16":
+                warnings.warn(
+                    "ArcFace with a positive margin is fp16-unstable (large s·cos overflows, acos NaNs); "
+                    "bf16 is strongly recommended.", stacklevel=2)
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> TrainConfig:

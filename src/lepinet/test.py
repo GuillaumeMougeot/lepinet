@@ -40,9 +40,13 @@ def load_model(checkpoint: dict, img_size: int = 256):
     hidden = infer_hidden_from_state_dict(head_sd, prefix="")
 
     arch = resolve_arch(checkpoint["model_arch_name"])
+    vit = checkpoint.get("vit", False)              # ViT/DINOv3 backbone → FlatHead + ViTBody
     nf = arch_body_features(arch, img_size=img_size)
-    head = build_head(checkpoint["head"], nf, n_classes, hidden=hidden)
-    model = build_backbone_model(arch, head)
+    # arcface only needs `scale` at inference (the margin is training-only); default 30 for the
+    # cosine baseline and pre-existing checkpoints (which lack the key).
+    head_kwargs = {"scale": checkpoint.get("arcface_scale", 30.0)} if checkpoint["head"] == "arcface" else {}
+    head = build_head(checkpoint["head"], nf, n_classes, hidden=hidden, pool=not vit, **head_kwargs)
+    model = build_backbone_model(arch, head, vit=vit)
     model.load_state_dict(sd, strict=True)
     model.eval()
     meta = {"vocabs": vocabs, "levels": levels, "hierarchy": hierarchy_df}
