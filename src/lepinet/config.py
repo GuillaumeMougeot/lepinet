@@ -69,6 +69,11 @@ class TrainConfig:
     # --- long-tail ---
     oversample_power: float = 0.0    # 0.5 = square-root oversampling (the baseline win)
 
+    # --- distillation (train a small student from a teacher checkpoint; None = ordinary training) ---
+    distill_teacher: str | None = None   # path/glob to a trained teacher .pt (same class vocab)
+    distill_alpha: float = 0.5           # blend: 0 = hard labels only, 1 = teacher soft targets only
+    distill_temperature: float = 4.0     # softmax temperature for the KD term (~2-6)
+
     # --- augmentation ---
     aug_kwargs: dict | None = None
     mixup: float = 0.0               # fastai MixUp alpha (0 = off); mixes images + labels
@@ -106,6 +111,13 @@ class TrainConfig:
                 warnings.warn(
                     "ArcFace with a positive margin is fp16-unstable (large s·cos overflows, acos NaNs); "
                     "bf16 is strongly recommended.", stacklevel=2)
+        if self.distill_teacher and ((self.mixup and self.mixup > 0) or (self.cutmix and self.cutmix > 0)):
+            raise ValueError(
+                "distill_teacher is incompatible with mixup/cutmix for now: both rewrite the batch/loss "
+                "path. Distil without mixup, or drop the teacher."
+            )
+        if self.distill_teacher and not 0.0 <= self.distill_alpha <= 1.0:
+            raise ValueError(f"distill_alpha must be in [0, 1], got {self.distill_alpha}.")
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> TrainConfig:

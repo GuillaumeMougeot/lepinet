@@ -139,3 +139,60 @@ class FastaiLossWrapper:
 
     def __call__(self, preds: Sequence[torch.Tensor], *yb: torch.Tensor) -> torch.Tensor:
         return self.criterion(preds, torch.stack(yb, dim=1))
+
+
+class DistillLoss:
+    """Knowledge-distillation loss: hard-label CE blended with per-level soft-target KD.
+
+    ``total = (1-α)·CE(student, labels) + α·Σ_level T²·KL(softmax(student/T) ‖ softmax(teacher/T))``.
+
+    Distillation is the *training method* for a small student, not a post-hoc compressor
+    ([[2026-07-lepi-app]]): the teacher's soft posterior over 12 k species carries the hierarchy and
+    the tail structure implicitly, so the student learns more than the hard labels alone can teach.
+    KD is applied per level (fine→coarse), matching the N-level head.
+
+    The teacher's per-level logits for the current batch are injected by
+    :class:`~lepinet.callbacks.DistillCallback` (which runs the frozen teacher on the same input);
+    when they are absent — e.g. during validation, where the callback clears them — this degrades to
+    plain hard-label CE, so the reported valid loss and the metrics are margin/KD-free.
+
+    Top-level ``loss_func`` (does its own ``*yb`` stacking, like :class:`FastaiLossWrapper`).
+    ``kd_levels`` restricts KD to a subset of levels (default: all). Temperature ``T`` (~2–6) softens
+    both sides; the ``T²`` factor keeps the KD gradient scale comparable to the CE term.
+    """
+
+    y_int = True  # incompatible with MixUp for now; the config guards against enabling both
+
+    def __init__(
+        self,
+        criterion: MultiLevelCELoss,
+        alpha: float = 0.5,
+        temperature: float = 4.0,
+        kd_levels: Sequence[int] | None = None,
+    ):
+        self.criterion = criterion
+        self.alpha = float(alpha)
+        self.T = float(temperature)
+        self.kd_levels = set(kd_levels) if kd_levels is not None else None
+        self.teacher_logits: list[torch.Tensor] | None = None  # set per training batch by the callback
+
+    @property
+    def reduction(self) -> str:
+        return self.criterion.reduction
+
+    @reduction.setter
+    def reduction(self, value: str) -> None:
+        self.criterion.reduction = value
+
+    def __call__(self, preds: Sequence[torch.Tensor], *yb: torch.Tensor) -> torch.Tensor:
+        hard = self.criterion(preds, torch.stack(yb, dim=1))
+        if self.alpha == 0 or self.teacher_logits is None:
+            return hard
+        kd = hard.new_zeros(())
+        for i, (ps, pt) in enumerate(zip(preds, self.teacher_logits)):
+            if self.kd_levels is not None and i not in self.kd_levels:
+                continue
+            log_s = F.log_softmax(ps.float() / self.T, dim=1)
+            soft_t = F.softmax(pt.float() / self.T, dim=1)
+            kd = kd + F.kl_div(log_s, soft_t, reduction="batchmean") * (self.T ** 2)
+        return (1.0 - self.alpha) * hard + self.alpha * kd

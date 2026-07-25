@@ -12,7 +12,7 @@ from fastai.callback.core import Callback, CancelBatchException, CancelFitExcept
 
 from .memory import HostMemoryGuard  # re-export
 
-__all__ = ["NaNGuard", "GCCallback", "HostMemoryGuard", "MixUpMulti"]
+__all__ = ["NaNGuard", "GCCallback", "HostMemoryGuard", "MixUpMulti", "DistillCallback"]
 
 
 class NaNGuard(Callback):
@@ -111,6 +111,37 @@ class MixUpMulti(Callback):
         with NoneReduce(self.old_lf) as lf:
             loss = torch.lerp(lf(pred, *self.yb1), lf(pred, *yb), self.lam)
         return reduce_loss(loss, getattr(self.old_lf, "reduction", "mean"))
+
+
+class DistillCallback(Callback):
+    """Run a frozen teacher on each **training** batch and hand its logits to :class:`~lepinet.loss.DistillLoss`.
+
+    The teacher must share the student's exact class vocabulary and level order (checked at build
+    time in :func:`lepinet.train.train`), so its per-level logits align index-for-index with the
+    student's. Runs the teacher in fp32 with no grad (the input ``xb`` is fp32 even when the student
+    trains in bf16), which gives stable soft targets and never touches the student's graph.
+
+    On non-training batches it clears ``teacher_logits`` so the loss falls back to plain hard-label
+    CE — validation loss/metrics stay KD-free (and no teacher compute is wasted).
+    """
+
+    order = -10  # before MixUp etc.; here we simply never combine the two (config guards it)
+
+    def __init__(self, teacher: torch.nn.Module):
+        self.teacher = teacher
+
+    def before_fit(self):
+        device = next(self.learn.model.parameters()).device
+        self.teacher.to(device).float().eval()
+        for p in self.teacher.parameters():
+            p.requires_grad_(False)
+
+    def before_batch(self):
+        if not self.training:
+            self.learn.loss_func.teacher_logits = None
+            return
+        with torch.no_grad():
+            self.learn.loss_func.teacher_logits = [o.detach() for o in self.teacher(self.learn.xb[0])]
 
 
 class GCCallback(Callback):

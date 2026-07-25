@@ -65,6 +65,38 @@ Bundle from the 5ep teacher lives at `data/local_bundles/5ep_effnetv2s/` (fp32, 
 is large; this validates the *bridge*, not the shipped student). It is **not** committed (data/ is
 gitignored, machine-local).
 
+## Distillation implemented (`lepinet distill`, 2026-07-25)
+
+Built the teacher→student half of the bridge (planned `dev/045`, never written). Design:
+
+- **`DistillLoss`** (`loss.py`): `total = (1-α)·CE(student, labels) + α·Σ_level T²·KL(softmax(student/T)
+  ‖ softmax(teacher/T))`. KD per level (fine→coarse), matching the N-level head. Honors the framing
+  from [[2026-07-lepi-app]]: distillation is the student's *training method*, not a post-hoc
+  compressor — the teacher's soft posterior over 12 k species carries the hierarchy + tail structure
+  the hard labels can't. `T²` keeps the KD gradient scale comparable to CE.
+- **`DistillCallback`** (`callbacks.py`): runs the **frozen teacher in fp32, no-grad**, on each
+  *training* batch's input and feeds its per-level logits to the loss (cleared on validation → val
+  loss/metrics stay KD-free). The teacher never touches the student's graph.
+- **Label-free of the teacher's head geometry, strict on its vocab.** Teacher and student may differ
+  in backbone/bottleneck, but KD aligns logits *by index*, so `train()` asserts **identical class
+  vocab + level order** (raises with a clear message otherwise — the usual cause is a different
+  `min_img_per_spc`/fold/family_filter). This is the one correctness trap and it's guarded.
+- **Config**: `distill_teacher` (path/glob), `distill_alpha` (0=hard only, 1=teacher only, default
+  0.5), `distill_temperature` (default 4). Guarded incompatible with mixup/cutmix (both rewrite the
+  batch/loss path). **CLI**: `lepinet distill -c <student.yaml> [--teacher ... --alpha ... --temperature ...]`.
+- **Validated GPU-free**: 5 unit tests (KD=0 when teacher==student; α=0 ⇒ pure CE; KD differentiable;
+  mixup guard) + a synthetic **e2e distill** (train teacher → distil student → checkpoint). 40 tests
+  green, ruff clean. Unlabelled-data soft targets (train the student on more images than are
+  labelled) remain a future lever, per [[2026-07-lepi-app]].
+
+**First runs (mock teacher = the 5ep effnetv2_s milestone):** distil into a small
+`tf_efficientnetv2_b0` + 256-bottleneck (the shippable size), vs a from-scratch b0 **control** — the
+test is "does the distilled student beat its from-scratch equivalent?" (compression sweep put
+from-scratch b0 at ~0.876). Configs `20260725_ucloud_distill_effnetv2b0.yaml` /
+`..._b0_fromscratch.yaml`; both min_img_per_spc=50 to match the teacher's vocab. Launched on B200
+(behind the ConvNeXtV2-L teacher). Results pending. When the real ConvNeXtV2-L/DINOv3 teacher lands,
+swap it in as `distill_teacher` — nothing else changes.
+
 ## Plan (next, in order)
 
 1. **Port quantize + calibrate + names into the package** (`lepinet quantize` / a `lepinet bundle`

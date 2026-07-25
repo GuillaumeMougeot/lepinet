@@ -37,6 +37,38 @@ def train(
 
 
 @app.command()
+def distill(
+    config: Path = typer.Option(..., "--config", "-c", exists=True, dir_okay=False,
+                                help="YAML training config for the STUDENT (backbone, epochs, ...)."),
+    teacher: str | None = typer.Option(None, "--teacher", "-t",
+                                       help="Teacher checkpoint path/glob (overrides distill_teacher in the config)."),
+    alpha: float | None = typer.Option(None, help="KD blend override (0=hard labels only, 1=teacher only)."),
+    temperature: float | None = typer.Option(None, help="KD softmax temperature override."),
+):
+    """Train a small student by distilling from a teacher checkpoint.
+
+    Same as ``train`` but with a teacher: the frozen teacher's soft targets over all species are
+    blended with the hard labels. Set the teacher in the config (``distill_teacher``) or via
+    ``--teacher``. Teacher and student must share the exact class vocabulary.
+    """
+    from .config import prepare_run_dir
+    from .train import train
+
+    cfg, _run_dir = prepare_run_dir(str(config))
+    if teacher is not None:
+        cfg.distill_teacher = teacher
+    if alpha is not None:
+        cfg.distill_alpha = alpha
+    if temperature is not None:
+        cfg.distill_temperature = temperature
+    if not cfg.distill_teacher:
+        raise typer.BadParameter("No teacher given: set distill_teacher in the config or pass --teacher.")
+    cfg.__post_init__()  # re-validate after overrides (e.g. distill+mixup incompatibility)
+    train(cfg)
+    typer.echo(f"Run directory: {cfg.out_dir}")
+
+
+@app.command()
 def test(
     model: str = typer.Option(..., "--model", "-m", help="Checkpoint path (glob allowed)."),
     parquet: Path = typer.Option(..., "--parquet", "-p", exists=True, help="Evaluation parquet."),

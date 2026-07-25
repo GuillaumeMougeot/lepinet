@@ -61,7 +61,28 @@ def train(cfg: TrainConfig):
                                  label_smoothing=cfg.label_smoothing, device=device,
                                  arc_scale=cfg.arcface_scale if cfg.head == "arcface" else None,
                                  arc_margins=arc_margins)
-    loss_func = FastaiLossWrapper(criterion)
+
+    # --- distillation (optional): a frozen teacher supplies soft targets for a small student ---
+    teacher_model = None
+    if cfg.distill_teacher:
+        from .loss import DistillLoss
+        from .test import load_model, resolve_checkpoint_path
+
+        teacher_ckpt = torch.load(resolve_checkpoint_path(cfg.distill_teacher), map_location="cpu", weights_only=False)
+        # KD aligns teacher/student logits by index, so their class vocabularies must be identical.
+        t_vocabs = {lvl: [str(v) for v in teacher_ckpt["vocabs"][lvl]] for lvl in teacher_ckpt.get("levels", levels)}
+        s_vocabs = {lvl: [str(v) for v in vocabs[lvl]] for lvl in levels}
+        if teacher_ckpt.get("levels", levels) != levels or t_vocabs != s_vocabs:
+            raise ValueError(
+                "Teacher and student must share the exact class vocabulary and level order for "
+                "distillation (KD matches logits by index). They differ — most likely a different "
+                "min_img_per_spc / family_filter / fold. Re-train the teacher on the same class set."
+            )
+        teacher_model, _ = load_model(teacher_ckpt, img_size=cfg.img_size)
+        loss_func = DistillLoss(criterion, alpha=cfg.distill_alpha, temperature=cfg.distill_temperature)
+        print(f"Distillation ON (teacher={cfg.distill_teacher}, alpha={cfg.distill_alpha}, T={cfg.distill_temperature}).")
+    else:
+        loss_func = FastaiLossWrapper(criterion)
 
     # --- callbacks ---
     from fastai.vision.all import CSVLogger, GradientClip, SaveModelCallback
@@ -86,6 +107,11 @@ def train(cfg: TrainConfig):
             "cutmix is not yet supported for multi-target heads (fastai's CutMix.before_batch "
             "indexes self.y, a tuple here). Use `mixup` for now; CutMixMulti is a follow-up."
         )
+    # Distillation: run the frozen teacher per training batch, feeding soft targets to DistillLoss.
+    if teacher_model is not None:
+        from .callbacks import DistillCallback
+
+        cbs.append(DistillCallback(teacher_model))
     # GCCallback is intentionally omitted (D3): the clean head has no per-batch reference cycle.
     # Add `GCCallback()` here if a future head reintroduces one and GPU memory climbs.
 
