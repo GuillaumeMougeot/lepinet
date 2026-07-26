@@ -1,6 +1,12 @@
 # Does "bigger everything" beat the 0.9148 effnetv2_s baseline — and make a good teacher?
 
-**Status:** OPEN (written before results, per the journal convention). First scaling run of the
+**Status:** ✅ **RESOLVED (2026-07-26) — yes, bigger everything won.** ConvNeXtV2-L reached
+**species macro-F1 0.9316 vs the 0.9148 baseline (+1.68 pp)**, genus 0.9739 (+1.36), family 0.9876
+(+1.50), and species micro-acc *also* rose (0.9507 vs 0.9476) — a genuinely better model, not an
+eval artifact, landing in the predicted +1–3 pt range. It is now the project's **best teacher**
+(the mock effnetv2_s teacher was 0.911). Full result in the Results section below.
+
+First scaling run of the
 clean `src/lepinet` package: a larger, cutting-edge backbone at higher resolution, bigger batch,
 more epochs, richer augmentation and MixUp, trained on a UCloud B200. Queued 2026-07-24.
 Companion to [[2026-07-src-lepinet-baseline-port]] (the package) and [[2026-07-lepi-app-claude]]
@@ -173,9 +179,27 @@ as a bonus, `convnext_*.dinov3_lvd1689m` (DINOv3-distilled ConvNeXts that emit 4
 `..._dinov3_smoke.yaml` (vit_base_patch16_dinov3 @224 + cosine head). They validate: head/backbone
 build, pretrained load, Muon over the new params, bf16 forward, margin injection, train→save→reload.
 
-## Results
+## Results (2026-07-26)
 
-_(pending — the ConvNeXtV2-L teacher (`lepi-big2`) + the arcface/dinov3 smokes are on UCloud; the
-queue daemon will report. Fill in species/genus/family macro-F1 on the fold-0 test, throughput, and
-whether it beat 0.9148. Evaluate with `min_img_per_spc=0` — see the eval-set gotcha in
-[[2026-07-src-lepinet-baseline-port]].)_
+`convnextv2_large.fcmae_ft_in22k_in1k_384` @320, bs 96, 6 ep, oversample 0.5, MixUp 0.2, bf16, base_lr
+8e-4. Full fold-0 test, all 12,041 species / 629,742 images (`min_img_per_spc=0`, same eval set as the
+0.9148 baseline):
+
+| level | ConvNeXtV2-L | effnetv2_s baseline (`20260716-154156`) | Δ |
+|---|---|---|---|
+| **species** | **0.9316** | 0.9148 | **+1.68 pp** |
+| genus | 0.9739 | 0.9603 | +1.36 pp |
+| family | 0.9876 | 0.9726 | +1.50 pp |
+| species micro-acc | 0.9507 | 0.9476 | +0.31 pp |
+
+**Prediction scored:** +1.68 pp lands inside the pre-registered +1 to +3 pt range — scale + higher res
++ MixUp helped, as predicted, and did **not** appear under-annealed at 6 epochs (both macro and micro
+rose together, and the tail levels — genus/family — gained the most, the intended effect). The
+LR 8e-4 did not diverge. **More epochs / a bigger backbone (ConvNeXtV2-H, DINOv3-ConvNeXt) is the
+obvious next lever** if more is wanted, but the question as posed is answered: bigger everything beats
+the baseline.
+
+**As a teacher:** at 0.9316 it is meaningfully stronger than the effnetv2_s mock (0.911), so the
+next distillation round (T=1, [[2026-07-teacher-student-app-bridge]]) should lift the small student
+above the 0.8786 it reached from the mock teacher — the headroom widened by ~2 pp. Swap it in as
+`distill_teacher` and rerun; nothing else changes.
