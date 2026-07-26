@@ -72,7 +72,8 @@ class TrainConfig:
     # --- distillation (train a small student from a teacher checkpoint; None = ordinary training) ---
     distill_teacher: str | None = None   # path/glob to a trained teacher .pt (same class vocab)
     distill_alpha: float = 0.5           # blend: 0 = hard labels only, 1 = teacher soft targets only
-    distill_temperature: float = 4.0     # softmax temperature for the KD term (~2-6)
+    distill_temperature: float = 1.0     # KD temperature; T=1 for the cosine z-score head (T=4 hurt,
+                                         # over-softens already-unit-scale logits — journal 2026-07-teacher-student-app-bridge)
 
     # --- augmentation ---
     aug_kwargs: dict | None = None

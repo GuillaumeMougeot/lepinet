@@ -123,6 +123,22 @@ whole story; if still below, distillation from this teacher/at this size needs �
 teacher→student (0.911→~0.87) is just too small for KD to help and it waits for the stronger
 ConvNeXtV2-L/DINOv3 teacher. Either way it's a data point, not a wall.
 
+### T=1 result — CONFIRMED. Distillation works; temperature was the whole story. (2026-07-26)
+
+| b0 student (hidden 256, 5 ep) | species macro-F1 | Δ vs from-scratch |
+|---|---|---|
+| from-scratch (control) | 0.8692 | — |
+| distilled, T=4 | 0.8546 | **−1.46 pp** |
+| distilled, **T=1** | **0.8786** | **+0.94 pp** |
+
+**T=1 distilled beats from-scratch by +0.94 pp** (and beats T=4 by +2.40 pp) — "student beats its
+from-scratch equivalent," achieved. The diagnosis held exactly: the KD temperature, not the method,
+was the problem, and the fix is the single change T=4→T=1 for the cosine z-score head. **Locked in as
+the package default** (`distill_temperature: 1.0`, `DistillLoss` default). Genus/family marginal
+levels also improved (0.939 / 0.961). Distillation is now a working lever; the next gains are a
+**stronger teacher** (ConvNeXtV2-L/DINOv3, so the 0.911→0.879 headroom widens) and α/level tuning.
+This is the KD path the shipped small model will use.
+
 **Lesson (also a memory):** KD temperature is not head-agnostic. For a metric-learning / cosine
 z-score head whose logits are already ~unit-scale (and under-confident), start at **T≈1**, not the
 textbook 3–4. When the real teacher lands, swap `distill_teacher` — but carry T≈1 forward.

@@ -167,7 +167,7 @@ class DistillLoss:
         self,
         criterion: MultiLevelCELoss,
         alpha: float = 0.5,
-        temperature: float = 4.0,
+        temperature: float = 1.0,  # T=1 for the cosine z-score head; T=4 over-softens and hurt (journal)
         kd_levels: Sequence[int] | None = None,
     ):
         self.criterion = criterion
