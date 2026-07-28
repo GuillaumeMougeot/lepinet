@@ -1,0 +1,31 @@
+# Open-set test of the best model (ConvNeXtV2-L) on the *names* flemming dataset — folders named by
+# species name, keys via name2id.csv (GBIF-API reconciled -> far fewer OOD: 6 species / 234 imgs,
+# 0.5%). Images pushed to the repo drive (ucloud sync push, /work/lepinet/data/flemming_names/images).
+# TTA on. mini_metrics -t 0 0 0 on the predictions afterward.
+#   ucloud q submit ucloud/lepinet-flemming-names-eval.toml --name lepi-flemming-names
+name = "lepinet-flemming-names-eval"
+replicas = 1
+
+[application]
+name = "pytorch-te"
+version = "26.05"
+
+[product]
+id = "gpu-nvidia-b200-1-mig.1g"
+category = "gpu-nvidia-b200"
+provider = "ucloud"
+
+[time_allocation]
+hours = 4
+
+[sync]
+local = ".."
+remote = "/12347837/repos/lepinet"
+
+[setup]
+script = "setup-lepinet.sh"
+run = "lepinet test --model '/work/lepinet/data/ucloud_models/*-lepinet-convnextv2l-bigger-320-6ep-oversample-mixup-ucloud/*.pt' --parquet /work/lepinet/data/flemming/flemming_names_labels.parquet --img-dir /work/lepinet/data/flemming_names/images --out-dir /work/lepinet/data/ucloud_preds/flemming-names-cnxv2l --test-set 0 --min-img-per-spc 0 --img-size 320 --aug-img-size 384 --batch-size 128 --num-workers 6 --no-drop-unknown-species --tta"
+
+[schedule]
+auto_extend = "1h"
+max_time = "8h"

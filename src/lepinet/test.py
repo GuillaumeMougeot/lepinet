@@ -68,11 +68,13 @@ def resolve_checkpoint_path(model_path: str | Path) -> Path:
 # ---------------------------------------------------------------------------
 
 @torch.no_grad()
-def predict_df(model, dls, test_df, vocabs, levels, device):
+def predict_df(model, dls, test_df, vocabs, levels, device, tta: bool = False):
     """Stream the model over ``test_df`` → per-level top-1 label + softmax confidence arrays.
 
     Reduces to top-1 per batch (not accumulating full logits): at global scale the species logit
-    matrix alone is ~30 GB, so streaming keeps peak memory at one batch.
+    matrix alone is ~30 GB, so streaming keeps peak memory at one batch. ``tta=True`` averages the
+    softmax over the 4 dihedral flips (identity + h-flip + v-flip + both) — the same test-time
+    augmentation :func:`lepinet.infer.predict` uses; ~4x slower, usually +a fraction of a point.
     """
     test_dl = dls.test_dl(test_df, num_workers=getattr(dls.train, "num_workers", 0))
     model.to(device)
@@ -80,9 +82,15 @@ def predict_df(model, dls, test_df, vocabs, levels, device):
     pred_chunks = [[] for _ in levels]
     conf_chunks = [[] for _ in levels]
     for batch in test_dl:
-        out = model(batch[0].to(device))
+        x = batch[0].to(device)
+        views = [x, x.flip(-1), x.flip(-2), x.flip(-1).flip(-2)] if tta else [x]
+        probs_sum = None
+        for v in views:
+            out = model(v)
+            p = [torch.softmax(out[i].float(), dim=1) for i in range(len(levels))]
+            probs_sum = p if probs_sum is None else [probs_sum[i] + p[i] for i in range(len(levels))]
         for i in range(len(levels)):
-            probs = torch.softmax(out[i].float(), dim=1)
+            probs = probs_sum[i] / len(views)
             conf, idx = probs.max(dim=1)
             pred_chunks[i].append(vocab_arrays[i][idx.cpu().numpy()])
             conf_chunks[i].append(conf.cpu().numpy())
@@ -188,6 +196,7 @@ def evaluate(
     img_size: int = 256,
     num_workers: int | None = None,
     drop_unknown_species: bool = True,
+    tta: bool = False,
 ) -> Path:
     """Evaluate a checkpoint on a held-out fold; write predictions + native metric report.
 
@@ -225,7 +234,11 @@ def evaluate(
         print(f"Open-set eval: keeping {n_ood} OOD-species images ({n_ood_spc} species) of {n_all} total.")
     if len(df) == 0:
         raise ValueError(f"No rows in test fold '{test_set}' of {parquet_path} for known classes.")
-    df["image_path"] = df[levels[0]].astype(str) + "/" + df["filename"]
+    # Image path: use a pre-supplied ``image_path`` column if the parquet has one (datasets whose
+    # folders are named by something other than the speciesKey, e.g. species *name*); otherwise
+    # reconstruct the standard ``<speciesKey>/<filename>`` layout.
+    if "image_path" not in df.columns:
+        df["image_path"] = df[levels[0]].astype(str) + "/" + df["filename"]
     for level in levels:
         df[level] = df[level].astype(str)
     df["is_valid"] = np.arange(len(df)) % 5 == 0  # dummy split; we use test_dl regardless
@@ -237,8 +250,8 @@ def evaluate(
                    lowmem=False, levels=levels)
     model, _meta = load_model(checkpoint, img_size=img_size)
 
-    print("Running inference...")
-    preds, confs = predict_df(model, dls, test_df, vocabs, levels, device)
+    print(f"Running inference{' with TTA (4-flip)' if tta else ''}...")
+    preds, confs = predict_df(model, dls, test_df, vocabs, levels, device, tta=tta)
     labels = test_df[levels].to_numpy().astype(str)
     filenames = test_df["image_path"].to_numpy()
 

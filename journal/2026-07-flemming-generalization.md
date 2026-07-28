@@ -58,3 +58,20 @@ different questions.)
 
 Predictions + tables: `data/ucloud_preds/flemming-cnxv2l/`. Companion: [[2026-07-bigger-everything]]
 (the teacher), [[2026-07-landscape-and-plan]] (the plan this feeds).
+
+## Follow-ups launched (2026-07-28)
+
+- **The "names" flemming dataset** (`data/flemming`, 47,905 images / 486 species, folders named by
+  species *name* with `name2id.csv` GBIF-API-reconciled keys). **OOD is only 6 species / 234 images
+  (0.5%)** vs flemming_helsing's 13.7 % — **confirms the owner's hypothesis** that most of
+  flemming_helsing's "OOD" was GBIF-id mismatch, not novel taxa. Better id reconciliation ⇒ a fairer
+  test. Eval launched with the ConvNeXtV2-L teacher + **TTA**. (`dev/049` builds the parquet with an
+  explicit `image_path=<name>/<file>` column, since folders aren't speciesKey-named; `test.evaluate`
+  now uses a supplied `image_path` column when present.) Result pending.
+- **TTA on `test`**: added `--tta` (4-flip softmax average, the same TTA `predict` uses) — `test` was
+  single-pass before. Re-ran flemming_helsing with TTA on to quantify the lift. Result pending.
+- **UCloud upload 502**: `ucloud files upload` *and* `ucloud sync push` both intermittently 502 on
+  bulk upload (server gateway timeout) — it even fails the job-`[sync]` step sometimes. Workaround:
+  `sync push` is **incremental** (skips uploaded files by size+mtime), so a retry loop converges;
+  job submits succeed on retry. Not fixed at source (owner flagged an open ucloud-api issue) — using
+  the retry workaround for now; the ucloud-api fix (chunked upload + retry) is a separate task.

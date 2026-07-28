@@ -81,6 +81,29 @@ doesn't help here.
 estimates, not tuned. The smoke validates memory/throughput; the first epoch of the full run
 validates the LR (loss must fall in epoch 0). Expect at least one re-run to tune LR/epochs.
 
+## Why is DINOv3-ConvNeXt-L ~2x faster per epoch than ConvNeXtV2-L? (2026-07-28)
+
+Owner observed the `convnext_large.dinov3_lvd1689m` run trains at **~2:50/epoch** while
+`convnextv2_large.fcmae_ft_in22k_in1k_384` was a steady **~6:01/epoch** — *identical* config (320 px,
+bs 96, workers 128, MixUp, same ~198 M "large" width 1536). Confirmed from the logs (consistent per
+epoch, not an epoch-0 caching artifact). Two separable things:
+
+- **Better early accuracy** = **DINOv3 pretraining**, and this is the expected, wanted result — DINOv3
+  (self-distilled from a ViT-7B on 1.7 B images) gives stronger initial features than IN-22k FCMAE, so
+  it converges faster *and* higher. This validates the "DINOv3-cnx first" bet.
+- **~2x wall-time per epoch** is *not* the model's FLOPs (v1 and v2 large have near-identical FLOPs).
+  Leading, non-exclusive causes: **(a) ConvNeXtV2's GRN layers** — every block adds a global
+  L2-normalisation (a spatial reduction + broadcast) that is cheap in FLOPs but **memory-bandwidth-
+  bound and often un-fused**, so on a compute-monster like B200 it costs disproportionate wall-time
+  vs the convs; v1 (DINOv3) has no GRN. **(b) Data-loading throughput** — these runs skirt
+  I/O/CPU-decode-bound ([[2026-07-ucloud-throughput]]); the ConvNeXtV2-L run was the sole big reader
+  of `/work/global_lepi`, whereas the DINOv3 run is concurrent with the distill-from-cnx run reading
+  the *same* images, so they **share a warm page cache** → faster streaming for both. Definitively
+  separating (a) from (b) needs a GPU-util / `nsys` profile (SM-active % vs data-wait %) — worth one
+  quick check if we care, but the practical takeaway stands: **for the browser-teacher goal, the
+  DINOv3 ConvNeXt is both faster to train and better — a strong candidate.** Its accuracy lands with
+  the afterok eval.
+
 ## Scaling rationale — why 6 epochs, moderate aug, and not "full blast" (2026-07-28)
 
 Recorded because the sequencing was deliberate, not timid (full argument in [[2026-07-landscape-and-plan]]):
