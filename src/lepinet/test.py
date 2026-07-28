@@ -45,6 +45,15 @@ def load_model(checkpoint: dict, img_size: int = 256):
     # arcface only needs `scale` at inference (the margin is training-only); default 30 for the
     # cosine baseline and pre-existing checkpoints (which lack the key).
     head_kwargs = {"scale": checkpoint.get("arcface_scale", 30.0)} if checkpoint["head"] == "arcface" else {}
+    # Taxonomy heads (hierarchical / autoregressive) take `sparse_masks`; the real masks are saved
+    # as persistent buffers (mask_i, shape [n_children_i]), so pass correctly-shaped dummies and let
+    # the strict load overwrite them. Signature-driven, so non-taxonomy heads are unaffected. (These
+    # heads live in dev/ — import the dev module that registers them before loading.)
+    import inspect
+
+    from .heads import HEAD_REGISTRY
+    if checkpoint["head"] in HEAD_REGISTRY and "sparse_masks" in inspect.signature(HEAD_REGISTRY[checkpoint["head"]]).parameters:
+        head_kwargs["sparse_masks"] = [torch.zeros(n_classes[i], dtype=torch.long) for i in range(len(n_classes) - 1)]
     head = build_head(checkpoint["head"], nf, n_classes, hidden=hidden, pool=not vit, **head_kwargs)
     model = build_backbone_model(arch, head, vit=vit)
     model.load_state_dict(sd, strict=True)

@@ -46,6 +46,16 @@ def train(cfg: TrainConfig):
     vit = arch_is_vit(arch, img_size=cfg.img_size)  # ViT/DINOv3 → FlatHead + manual Learner
     nf = arch_body_features(arch, img_size=cfg.img_size)
     head_kwargs = {"scale": cfg.arcface_scale, "margin": cfg.arcface_margin} if cfg.head == "arcface" else {}
+    # Taxonomy-needing heads (hierarchical / autoregressive, registered from dev/) declare a
+    # `sparse_masks` argument; build it from the training labels and pass it. Signature-driven so a
+    # head that doesn't want it never sees it (the independent/arcface heads don't).
+    import inspect
+
+    from .heads import HEAD_REGISTRY, build_class_spec
+    if cfg.head in HEAD_REGISTRY and "sparse_masks" in inspect.signature(HEAD_REGISTRY[cfg.head]).parameters:
+        _cls2idx, sparse_masks = build_class_spec(df, vocabs, levels)
+        head_kwargs["sparse_masks"] = sparse_masks
+        print(f"Head {cfg.head!r} takes sparse_masks -> built {len(sparse_masks)} parent mask(s).")
     custom_head = build_head(cfg.head, nf, n_classes, hidden=cfg.hidden, pool=not vit, **head_kwargs)
     n_head_params = sum(p.numel() for p in custom_head.parameters())
     print(f"Head={cfg.head}, hidden={cfg.hidden}, backbone={'ViT' if vit else 'conv'} -> {n_head_params / 1e6:.2f} M head params")
