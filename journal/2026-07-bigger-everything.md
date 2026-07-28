@@ -81,6 +81,24 @@ doesn't help here.
 estimates, not tuned. The smoke validates memory/throughput; the first epoch of the full run
 validates the LR (loss must fall in epoch 0). Expect at least one re-run to tune LR/epochs.
 
+## Scaling rationale — why 6 epochs, moderate aug, and not "full blast" (2026-07-28)
+
+Recorded because the sequencing was deliberate, not timid (full argument in [[2026-07-landscape-and-plan]]):
+
+- **6 epochs** = a one-day wall-clock budget (~3 h/epoch), an explicit first guess. The result was
+  **not under-annealed** (macro *and* micro rose, tail levels most), so it sufficed to answer "does
+  scale help." More epochs (10–15) is the obvious cheap next gain, not a correction.
+- **Moderate, not maximal, augmentation**: heavy distortion hurts *short* runs, and fine-grained wing
+  texture is fragile (aggressive warp/color destroys the discriminative signal). Aug strength must
+  scale *with* epochs; we raised it moderately over the baseline's light aug, pending that tradeoff
+  being validated at scale.
+- **Not full-blast (biggest model + max res + max epochs + max aug at once)** on purpose:
+  one-variable discipline (a full-blast failure tells you nothing about which lever); evidence-before-
+  cost (earn the 40 h run by first proving +1.68 pp cheaply); and diminishing teacher returns for the
+  end goal (the *student's* capacity caps the shipped model, so a 0.9316 teacher may already be
+  enough). **Full-blast is now the justified next rung**, precisely because this controlled step
+  proved the direction — it was sequencing, not an argument against scale.
+
 ## Design Q&A — owner's review while the run trains (2026-07-25)
 
 Six questions raised while `lepi-big2` was mid-run. Recorded because the answers set the *next*
