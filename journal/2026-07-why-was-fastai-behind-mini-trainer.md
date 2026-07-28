@@ -4,6 +4,25 @@
 **Metric:** species (level 0) macro-F1 on the global **test** fold (`set == '0'`), via
 mini_metrics. Every number below is that metric unless stated.
 
+> **Reopened on the clean `lepinet` stack (2026-07-28, #7).** The old benchmark compared head types
+> inside mini_trainer; we're re-running it fastai-only on the package. **HierarchicalHead**
+> (parent-conditioned, clean reimpl of ConditionalClassifier — `dev/050`, registered in
+> `HEAD_REGISTRY`, threaded through train/test via signature-detected `sparse_masks`) is
+> **training on effnetv2_s** (`configs/20260728_ucloud_bench_hierarchical_effnetv2s.yaml`, 0.9148
+> recipe, via `dev/051_benchmark_run.py`) with an afterok eval — vs the independent baseline (0.9110
+> @thr0). Loss is unchanged: mini_trainer used `CrossEntropyLoss` per level for *all* heads, so the
+> conditioned output is fed to the existing `MultiLevelCELoss`.
+>
+> **AutoregressiveHead deferred (justified), not skipped.** It needs new infrastructure — a
+> cross-attention decoder + **teacher-forcing in training** (the true parent labels must enter the
+> forward, which the label-free forward contract forbids; it needs a y-supplying callback like
+> `DistillCallback`) + inference-time autoregressive generation — a substantial module that must be
+> CPU-validated before it earns a B200 run. And it is the **lowest expected value** head: in this
+> very benchmark it lost decisively (0.69–0.73 vs 0.91, and one run died). Launching it unvalidated
+> would burn GPU on a likely-broken, historically-losing config. So: implement + validate it as a
+> focused fast-follow, then launch — rather than rush it now. The core "does head *structure* beat
+> independent?" question is answered by hierarchical-vs-independent, which is running.
+
 ## The question
 
 Running mini_trainer's hierarchical heads inside fastai's training loop (dev/030) scored
