@@ -1,0 +1,38 @@
+version: 1.0
+# Real distillation: the 0.9316 ConvNeXtV2-L teacher -> small tf_efficientnetv2_b0 student, T=1.
+# The mock (effnetv2_s) teacher gave the student 0.8786; a stronger teacher should lift it further.
+version: 1.0
+desc: lepinet-distill-effnetv2b0-from-cnxv2l-T1-ucloud
+train:
+  parquet_path: /work/global_lepi/0032836-250426092105405_processing_metadata_postprocessed_quality_filtered.parquet
+  img_dir: /work/global_lepi/images
+  out_dir: /work/lepinet/data/ucloud_models
+  fold: '1'
+  min_img_per_spc: 50
+  num_workers: 128
+  model_name: lepinet-distill-effnetv2b0-from-cnxv2l-T1-ucloud
+  model_arch_name: tf_efficientnetv2_b0
+  head: independent
+  hidden: 256
+  distill_teacher: /work/lepinet/data/ucloud_models/*-lepinet-convnextv2l-bigger-320-6ep-oversample-mixup-ucloud/*.pt
+  distill_alpha: 0.5
+  distill_temperature: 1.0
+  nb_epochs: 5
+  base_lr: 0.001
+  batch_size: 64
+  aug_img_size: 460
+  img_size: 256
+  optimizer: muon
+  fp16: true
+  precision: bf16
+  schedule: one_cycle
+  warmup_epochs: 0.5
+  grad_clip: 5.0
+  oversample_power: 0.5
+  aug_kwargs:
+    max_warp: 0.0
+    max_lighting: 0.0
+    p_lighting: 0.0
+    flip_vert: true
+    max_rotate: 15.0
+    max_zoom: 1.1

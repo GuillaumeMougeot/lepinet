@@ -187,11 +187,19 @@ def evaluate(
     aug_img_size: int = 460,
     img_size: int = 256,
     num_workers: int | None = None,
+    drop_unknown_species: bool = True,
 ) -> Path:
     """Evaluate a checkpoint on a held-out fold; write predictions + native metric report.
 
     Output: ``<out_dir>/<model_name>/<eval_name>/`` with ``predictions.csv`` (mini_metrics format),
     ``metrics.json`` (native report), ``combinations.csv`` (the hierarchy used).
+
+    ``drop_unknown_species=True`` (default) keeps only species in the model's vocabulary — the right
+    behaviour for a held-out fold of the *training* distribution. Set it ``False`` for an **open-set /
+    OOD** test (e.g. an external dataset): out-of-vocabulary species are kept, the model still predicts
+    an in-vocab label for them, and each prediction row carries ``known_label=False`` so
+    ``mini_metrics`` (and the native report) can separate known from OOD. The model can never score an
+    OOD species correct, so its per-class F1 is 0 by construction — that is the honest open-set number.
     """
     ensure_fork_start_method()
     from .data import filter_df  # local: keeps import graph obvious
@@ -204,11 +212,17 @@ def evaluate(
     vocabs = checkpoint["vocabs"]
     model_name = model_path.stem
 
-    # --- build test df (held-out fold), keep only species the model knows ---
+    # --- build test df (held-out fold) ---
     df = pd.read_parquet(parquet_path)
     df = filter_df(df, keep_in=[test_set], min_img_per_spc=min_img_per_spc, family_filter=family_filter, levels=levels)
-    known = set(vocabs[levels[0]])
-    df = df[df[levels[0]].astype(str).isin(known)]
+    known = set(str(v) for v in vocabs[levels[0]])
+    n_all = len(df)
+    if drop_unknown_species:
+        df = df[df[levels[0]].astype(str).isin(known)]
+    else:
+        n_ood = int((~df[levels[0]].astype(str).isin(known)).sum())
+        n_ood_spc = int(df.loc[~df[levels[0]].astype(str).isin(known), levels[0]].nunique())
+        print(f"Open-set eval: keeping {n_ood} OOD-species images ({n_ood_spc} species) of {n_all} total.")
     if len(df) == 0:
         raise ValueError(f"No rows in test fold '{test_set}' of {parquet_path} for known classes.")
     df["image_path"] = df[levels[0]].astype(str) + "/" + df["filename"]
