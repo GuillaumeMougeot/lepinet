@@ -35,4 +35,29 @@ Baseline: `20260712-072542-heads-global-independent-muon-effnetv2s`
 | `20260710-093034` | heads-global-hierarchical-effnetv2s | 1 | freeze_epochs=1 head=hierarchical nb_epochs=4 optimizer=adam schedule=fine_tune | — | — | done |
 | `20260710-085450` | heads-global-independent-effnetv2s | 1 | freeze_epochs=1 nb_epochs=4 optimizer=adam schedule=fine_tune | — | — | done |
 
-**Best test species macro-F1: 0.9148** (`20260716-154156` heads-global-independent-muon-5ep-oversample-effnetv2s, micro-acc 0.9476)
+**Best test species macro-F1 (old dev/030 pipeline): 0.9148** (`20260716-154156` heads-global-independent-muon-5ep-oversample-effnetv2s, micro-acc 0.9476)
+
+---
+
+## lepinet package (UCloud) runs — hand-maintained
+
+The `dev/036_ledger.py` snapshot above only sees the *local* `data/global` (old dev/030 pipeline).
+The `src/lepinet` package runs on **UCloud B200** and its results/checkpoints are not in that ledger,
+so this table is maintained by hand. Test = species (level-0) macro-F1 on the **full** fold-0 test
+(all 12,041 species, `min_img_per_spc=0`), native metric (≡ mini_metrics at threshold 0). `location`
+= where the checkpoint lives now.
+
+| run | model | test species F1 | notes | location |
+|---|---|---|---|---|
+| `20260724-181230` | effnetv2_s 5ep oversample | **0.9110** (0.9152 @opt-thr) | port reproduces the 0.9148 baseline — **milestone** | local + ucloud |
+| `20260724-202442` | ConvNeXtV2-L @320 6ep mixup | **0.9316** | bigger everything (+1.68 pp) — **best teacher** | local + ucloud |
+| `20260725-164507` | tf_efficientnetv2_b0 h256 from-scratch | 0.8692 | distillation control | local + ucloud |
+| `20260725-164500` | b0 h256 distilled (mock teacher, **T=4**) | 0.8546 | KD default temp HURT — negative result | ucloud (deletable) |
+| `20260725-232410` | b0 h256 distilled (mock teacher, **T=1**) | **0.8786** | KD works; beats from-scratch (+0.94 pp) | local + ucloud |
+| `20260728-*` | b0 distilled from **ConvNeXtV2-L** teacher, T=1 | _pending_ | real distillation (#6) | ucloud |
+| `20260728-*` | convnext_large.dinov3 @320 6ep | _pending_ | DINOv3 pretraining vs FCMAE (#9) | ucloud |
+| flemming open-set | ConvNeXtV2-L on flemming referenced | _pending_ | external open-set test (mini_metrics @thr 0) | ucloud |
+
+Reasoning behind each is in [`journal/`](journal/): the port ([[2026-07-src-lepinet-baseline-port]]),
+scaling ([[2026-07-bigger-everything]]), distillation + KD-temperature
+([[2026-07-teacher-student-app-bridge]]).

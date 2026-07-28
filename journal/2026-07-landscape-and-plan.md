@@ -213,3 +213,25 @@ forward experiments (cheap→expensive), then productionisation.
 
 Phases 0–1 are the immediate next block. 2 can run on UCloud in parallel with 0/3. Nothing is
 started until the order + the cleanup deletions are confirmed.
+
+## Execution log (2026-07-28, owner-approved)
+
+**Phase 0 (done):** copied the 4 keep-models local (`data/local_models/{5ep_baseline,
+convnextv2l_teacher,distill_b0_T1,b0_control}`); the 0.9148 run stays local (`data/global/models/
+20260716-154156`, never on UCloud). Trashed (recoverable): repo leftovers `compat-check /
+demo-trainer / extend-test / ioprobe` (**kept `mini_metrics` + `mini_trainer`** per owner — useful
+for phase 1); 6 smoke checkpoints; `ucloud_smoke`, `ucloud_smoke_preds`, `ucloud_preds_distill` (T4).
+RESULTS.md gained a hand-maintained "lepinet package (UCloud) runs" table with a location column.
+*Deferred:* trimming the ~20 old dev/030 bench/heads checkpoints and consolidating the flat
+`ucloud_preds_*` siblings into `ucloud_preds/<run>/` (new runs already write there) — a careful
+follow-up, not blocking.
+
+**Phase 1 (launched):** flemming open-set test running (ConvNeXtV2-L, `--no-drop-unknown-species`,
+`mini_metrics -t 0 0 0` next). Parquet built from `example_pred.csv` (`dev/048`); note the owner's
+flag that some "OOD" species may be GBIF-id renames — to double-check later, and to optionally accept
+full species names instead of GBIF keys (deferred). **Correction:** the `unreferenced` folder is
+*not* an OOD set (owner) — dropped that idea from the ArcFace/OOD plan.
+
+**Phase 2 (launched, parallel B200):** #6 real distillation (ConvNeXtV2-L→b0, T=1) + #9
+convnext_large.dinov3 teacher, each with an afterok eval. One queue daemon advances the chains +
+auto-extend. #7 (hierarchical/autoregressive heads) and #8 (ArcFace/OOD) need code first — next.
