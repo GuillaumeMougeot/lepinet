@@ -235,3 +235,26 @@ full species names instead of GBIF keys (deferred). **Correction:** the `unrefer
 **Phase 2 (launched, parallel B200):** #6 real distillation (ConvNeXtV2-L→b0, T=1) + #9
 convnext_large.dinov3 teacher, each with an afterok eval. One queue daemon advances the chains +
 auto-extend. #7 (hierarchical/autoregressive heads) and #8 (ArcFace/OOD) need code first — next.
+
+## Progress snapshot (2026-07-29)
+
+Settled **test** (all 12,041 species, min_img 0, native macro-F1 ≡ mini_metrics @thr0):
+
+| model | species | note |
+|---|---|---|
+| effnetv2_s (port) | 0.9110 (0.9152 @opt) | milestone baseline |
+| ConvNeXtV2-L teacher | **0.9316** | best in-distribution |
+| distilled b0 (mock teacher, T=1) | 0.8786 | > from-scratch 0.8692 |
+| flemming_helsing (external) | 0.6950 / 0.6976 +TTA | ~23 pp generalisation gap |
+| flemming NAMES (external, cleaner) | **0.7122** | 0.5% OOD (id-reconciled) vs 13.7% |
+
+Just-finished trainings — **val** f1_species (test evals re-launched after a 502 window):
+
+| run | val f1_species | read |
+|---|---|---|
+| #9 DINOv3-ConvNeXt-L | **0.9304** | ~matches ConvNeXtV2-L, trains ~2× faster → likely new best teacher |
+| #7 hierarchical | 0.8853 | **< independent 0.9096 — conditioning HURTS again** (reproduces the old "independent wins") |
+| #8 arcface (margin 0.3) | 0.8781 | < independent in-dist; its value is OOD (AUROC via dev/052, pending) |
+| #6 distilled b0 ← ConvNeXtV2-L | 0.8752 | a stronger teacher barely moved the small student (student capacity is the ceiling, as predicted) |
+
+TTA lift is ~+0.3 pp (small). ucloud-api 502 fixed (5xx retry) — see that repo.
