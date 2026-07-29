@@ -124,6 +124,24 @@ def export(
     export_onnx(model, str(out_dir), img_size=img_size, opset=opset, check=check, dynamo=dynamo)
 
 
+@app.command()
+def bundle(
+    model: str = typer.Option(..., "--model", "-m", help="Checkpoint path (glob allowed)."),
+    out_dir: Path = typer.Option(..., "--out-dir", "-o", help="Bundle output directory."),
+    img_size: int = typer.Option(256),
+    quantize: bool = typer.Option(True, help="Also emit model.int8.onnx (dynamic int8)."),
+    name: str | None = typer.Option(None, help="Human-readable bundle name for config.json."),
+):
+    """Build a deployable app bundle: ONNX (fp32 + int8) + taxonomy + config + MANIFEST.
+
+    One command from a checkpoint to a ready-to-ship folder (export + quantize). Add data-dependent
+    sidecars (names.json / calibration.json / thresholds.json) beside it when available.
+    """
+    from .export import make_bundle
+
+    make_bundle(model, str(out_dir), img_size=img_size, quantize=quantize, bundle_name=name)
+
+
 def main(argv=None) -> int:
     app(args=argv)
     return 0

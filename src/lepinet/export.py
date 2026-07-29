@@ -253,3 +253,60 @@ def marginalize(species_logits: torch.Tensor, taxonomy: dict) -> list[torch.Tens
         cur = scatter_logsumexp(cur, parent_idx, len(taxonomy["vocabs"][parent]))
         out.append(cur)
     return out
+
+
+# ---------------------------------------------------------------------------
+# Quantization + one-command bundle (Phase 3: the teacher/student -> app bridge)
+# ---------------------------------------------------------------------------
+
+def quantize_dynamic_int8(onnx_path: str | Path, out_path: str | Path | None = None) -> Path:
+    """Dynamic int8 (weights-only) quantization of an ONNX graph via onnxruntime.
+
+    ~3.9x smaller for ~-0.6 pp species macro-F1 on the cosine head (measured, ``dev/043`` /
+    [[2026-07-lepi-app-compression]]) — the unit-norm prototypes share one dynamic range, so int8 is
+    nearly free. Emits ``MatMulInteger``/``ConvInteger`` ops: fine for size + native ORT/CPU, but
+    **not runnable in ORT-Web** (that needs static-QDQ, itself still unresolved in-browser — the app
+    ships fp32 for now). So this is the size-reduced release variant, not yet the browser format.
+
+    ORT's quantizer round-trips through shape-inference which trips on the exporter's ``value_info``;
+    stripping it (derived data, lossless) is the known workaround.
+    """
+    import onnx
+    from onnxruntime.quantization import QuantType, quantize_dynamic
+
+    onnx_path = Path(onnx_path)
+    out_path = Path(out_path) if out_path else onnx_path.with_suffix(".int8.onnx")
+    model = onnx.load(str(onnx_path))
+    del model.graph.value_info[:]
+    tmp = onnx_path.with_suffix(".stripped.onnx")
+    onnx.save(model, str(tmp))
+    try:
+        quantize_dynamic(str(tmp), str(out_path), weight_type=QuantType.QInt8)
+    finally:
+        tmp.unlink(missing_ok=True)
+    fp32_mb, int8_mb = onnx_path.stat().st_size / 1e6, out_path.stat().st_size / 1e6
+    print(f"int8: {fp32_mb:.1f} MB -> {int8_mb:.1f} MB ({fp32_mb / max(int8_mb, 1e-9):.2f}x) -> {out_path.name}")
+    return out_path
+
+
+def make_bundle(
+    checkpoint_path: str,
+    out_dir: str,
+    img_size: int = 256,
+    quantize: bool = True,
+    bundle_name: str | None = None,
+) -> Path:
+    """One command: checkpoint -> a deployable app bundle folder (Phase 3's "one button").
+
+    Composes :func:`export_onnx` (fp32 ``model.onnx`` + ``taxonomy.json`` + ``config.json`` +
+    ``MANIFEST.json``, the app-ready fp32 bundle) and, when ``quantize`` is set, adds a
+    ``model.int8.onnx`` size-reduced variant. ``names.json`` / ``calibration.json`` /
+    ``thresholds.json`` are data-dependent (``dev/044`` / ``dev/047``) and dropped in beside these
+    when available; the app's ``config.json`` already references them and degrades if absent.
+    """
+    out_dir = Path(out_dir)
+    onnx_path = export_onnx(checkpoint_path, str(out_dir), img_size=img_size, bundle_name=bundle_name)
+    if quantize:
+        quantize_dynamic_int8(onnx_path, out_dir / "model.int8.onnx")
+    print(f"Bundle ready: {out_dir}  (files: {sorted(p.name for p in out_dir.iterdir())})")
+    return out_dir
