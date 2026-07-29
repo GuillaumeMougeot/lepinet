@@ -297,3 +297,25 @@ a minute.
 **Lesson (worth carrying):** on a high-latency network mount, *per-file* operations are the enemy —
 batch by directory, and never trust a framework's public attribute to report what you configured.
 Both the MIG sizing and the "GPU is slow" theory were red herrings; the profile was one worker.
+
+### Measured after the fix: 898 img/s (was ~1) — 2026-07-29
+
+Throughput probe (`ucloud/lepinet-probe-throughput.toml`, 20 k random images, effnetv2_s, full B200,
+`--num-workers 32`):
+
+```
+Inference dataloader: num_workers=32, batches=313
+Inference: 20000 images in 22.3s = 898.1 img/s
+```
+
+**~900× faster than the broken single-worker path**, and it matches the ~950 img/s measured for
+*training* on the same mount — i.e. evaluation is now at the mount's practical ceiling, exactly where
+it should be. Consequences:
+
+- A full 630 k-image fold-0 eval is **~12 minutes**, not >7 days. Every eval in this project was
+  previously bottlenecked by one line.
+- **The MIG sizing was a red herring** (owner said so): the mount/CPU decode is the limit, not the
+  GPU. With workers actually working, a small slice is fine for small models; what matters is the
+  **vCPU count backing the workers**. Size eval jobs by *workers needed*, not by GPU fraction.
+- `--limit N` + the printed `img/s` line make this a 2-minute check before any long run. Standing
+  rule: **probe throughput before launching a multi-hour eval.**
