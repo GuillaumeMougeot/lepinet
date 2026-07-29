@@ -206,6 +206,7 @@ def evaluate(
     num_workers: int | None = None,
     drop_unknown_species: bool = True,
     tta: bool = False,
+    skip_missing: bool = True,
 ) -> Path:
     """Evaluate a checkpoint on a held-out fold; write predictions + native metric report.
 
@@ -250,6 +251,20 @@ def evaluate(
         df["image_path"] = df[levels[0]].astype(str) + "/" + df["filename"]
     for level in levels:
         df[level] = df[level].astype(str)
+    # Drop rows whose image file is absent. The parquet is the *catalogue*; an image mirror can be
+    # incomplete (a handful of the 630 k global_lepi files are missing). Without this a multi-hour
+    # eval dies at the first gap with a bare FileNotFoundError deep inside the DataLoader — the whole
+    # run lost for one file. Skipping is the honest behaviour (the metric is over what exists) and
+    # the count is reported so a *large* number of misses is visible rather than silent.
+    if skip_missing:
+        root = Path(img_dir)
+        exists = df["image_path"].map(lambda p: (root / p).is_file())
+        n_missing = int((~exists).sum())
+        if n_missing:
+            print(f"WARNING: {n_missing} of {len(df)} images are missing from {img_dir} — skipping them.")
+            df = df[exists]
+        if len(df) == 0:
+            raise ValueError(f"Every image listed in {parquet_path} is missing under {img_dir}.")
     df["is_valid"] = np.arange(len(df)) % 5 == 0  # dummy split; we use test_dl regardless
     test_df = df[["image_path", "is_valid", *levels]].reset_index(drop=True)
     print(f"Test images: {len(test_df)} | {levels[0]} present: {test_df[levels[0]].nunique()}")

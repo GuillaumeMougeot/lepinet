@@ -8,7 +8,7 @@ name = "pytorch-te"
 version = "26.05"
 
 [product]
-id = "gpu-nvidia-b200-1-mig.1g"
+id = "gpu-nvidia-b200-1-gpu"
 category = "gpu-nvidia-b200"
 provider = "ucloud"
 
@@ -21,7 +21,7 @@ remote = "/12347837/repos/lepinet"
 
 [setup]
 script = "setup-lepinet.sh"
-run = "lepinet test --model '/work/lepinet/data/ucloud_models/*-lepinet-distill-effnetv2b0-T1-from5ep-effnetv2s-ucloud/*.pt' --parquet /work/global_lepi/0032836-250426092105405_processing_metadata_postprocessed_quality_filtered.parquet --img-dir /work/global_lepi/images --out-dir /work/lepinet/data/ucloud_preds_distill_T1 --test-set 0 --min-img-per-spc 0 --num-workers 6"
+run = "lepinet test --model '/work/lepinet/data/ucloud_models/*-lepinet-distill-effnetv2b0-T1-from5ep-effnetv2s-ucloud/*.pt' --parquet /work/global_lepi/0032836-250426092105405_processing_metadata_postprocessed_quality_filtered.parquet --img-dir /work/global_lepi/images --out-dir /work/lepinet/data/ucloud_preds_distill_T1 --test-set 0 --min-img-per-spc 0 --num-workers 32"
 
 [schedule]
 auto_extend = "1h"
