@@ -56,6 +56,35 @@ def friendly_level_names(levels) -> list[str]:
     return [lvl[:-3] if lvl.endswith("Key") else lvl for lvl in levels]
 
 
+class Fp16ExportWrapper(nn.Module):
+    """Half-precision **backbone** + fp32 **head**, exported from source (not converted after).
+
+    Post-hoc fp16 conversion of our ONNX graph does not work: the legacy TorchScript exporter emits
+    explicit ``Cast`` nodes that ``onnxconverter_common`` rewrites inconsistently (invalid graph), and
+    blocking ``Cast`` converts nothing. Tracing a genuinely half-precision module instead produces a
+    valid graph with fp16 initializers — roughly half the file, and (unlike int8) **no
+    ``ConvInteger``/``MatMulInteger``**, which is what ORT-Web cannot execute.
+
+    The cosine head stays **fp32**: it L2-normalizes and takes ``acos`` of values near ±1, which is
+    exactly where fp16 loses the precision that matters (the same reason
+    :class:`~lepinet.heads.PooledHead` forces fp32 under autocast). Input/output stay fp32 so the app
+    feeds and reads the graph unchanged.
+    """
+
+    def __init__(self, model: nn.Module):
+        super().__init__()
+        self.body = model[0].half()
+        self.head = model[1].float()
+        self.register_buffer("mean", torch.tensor(IMAGENET_MEAN).view(1, 3, 1, 1))
+        self.register_buffer("std", torch.tensor(IMAGENET_STD).view(1, 3, 1, 1))
+
+    def forward(self, image: torch.Tensor):
+        x = (image - self.mean) / self.std      # fp32 normalization
+        x = self.body(x.half())                 # fp16 backbone (the bulk of the weights)
+        out = self.head(x.float())              # fp32 cosine head
+        return tuple(out)
+
+
 def build_taxonomy(checkpoint: dict, meta: dict, level_names: list[str] | None = None) -> dict:
     """Per-level vocabs in head-index order + parent index arrays (for labels, GBIF links, marginalization).
 
@@ -108,6 +137,7 @@ def export_onnx(
     level_names: list[str] | None = None,
     write_config: bool = True,
     bundle_name: str | None = None,
+    precision: str = "fp32",
 ) -> Path:
     """Export a checkpoint to an **app-ready bundle**: ``model.onnx`` + ``taxonomy.json`` +
     ``config.json`` + ``MANIFEST.json`` in ``out_dir``.
@@ -136,9 +166,9 @@ def export_onnx(
     print(f"Model: head={checkpoint['head']} arch={checkpoint['model_arch_name']} classes={n_classes}")
     print(f"Params: {n_params/1e6:.2f} M total, {n_head/1e6:.2f} M head ({100*n_head/n_params:.0f}%)")
 
-    wrapper = ExportWrapper(model).eval()
+    wrapper = (Fp16ExportWrapper(model) if precision == "fp16" else ExportWrapper(model)).eval()
     dummy = torch.rand(1, 3, img_size, img_size)
-    onnx_path = out_dir / "model.onnx"
+    onnx_path = out_dir / ("model.fp16.onnx" if precision == "fp16" else "model.onnx")
     print(f"Exporting to {onnx_path} (opset {opset}, {img_size}x{img_size}, dynamo={dynamo})...")
     output_names = [f"logits_{name}" for name in names]
     torch.onnx.export(
@@ -295,6 +325,7 @@ def make_bundle(
     img_size: int = 256,
     quantize: bool = True,
     bundle_name: str | None = None,
+    fp16: bool = True,
 ) -> Path:
     """One command: checkpoint -> a deployable app bundle folder (Phase 3's "one button").
 
@@ -306,6 +337,11 @@ def make_bundle(
     """
     out_dir = Path(out_dir)
     onnx_path = export_onnx(checkpoint_path, str(out_dir), img_size=img_size, bundle_name=bundle_name)
+    if fp16:
+        # Half-precision backbone: ~1.4x smaller, ONNX-valid, and free of the integer ops ORT-Web
+        # cannot run -- the leading browser-deployable format.
+        export_onnx(checkpoint_path, str(out_dir), img_size=img_size, precision="fp16",
+                    write_config=False, check=False)
     if quantize:
         quantize_dynamic_int8(onnx_path, out_dir / "model.int8.onnx")
     print(f"Bundle ready: {out_dir}  (files: {sorted(p.name for p in out_dir.iterdir())})")

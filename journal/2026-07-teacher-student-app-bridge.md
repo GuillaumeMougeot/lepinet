@@ -319,3 +319,23 @@ it should be. Consequences:
   **vCPU count backing the workers**. Size eval jobs by *workers needed*, not by GPU fraction.
 - `--limit N` + the printed `img/s` line make this a 2-minute check before any long run. Standing
   rule: **probe throughput before launching a multi-hour eval.**
+
+## Source-level fp16 works — the small-format path is open (2026-07-29)
+
+Post-hoc conversion was the dead end, not fp16 itself. `Fp16ExportWrapper` traces a genuinely
+half-precision module instead of rewriting a finished graph:
+
+- **fp16 backbone** (the bulk of the weights) + **fp32 cosine head** — the head L2-normalizes and
+  takes `acos` near ±1, exactly where fp16 loses the precision that matters (same reason `PooledHead`
+  forces fp32 under autocast). Graph I/O stays fp32 so the app feeds/reads it unchanged.
+- Measured on the distilled b0: **41.7 MB → 30.1 MB**, **100 % top-1 agreement** with fp32 at all
+  three levels, `max|Δlogit| = 0.009`, and **no `ConvInteger`/`MatMulInteger`** — the ops ORT-Web has
+  no kernels for, which is what killed int8 in the browser.
+- Wired into `lepinet bundle` (`fp16=True` by default), so one command now emits fp32 + fp16 + int8.
+
+**Browser validation deployed** (default app untouched, query-param switch):
+`?model=lepinet-test` (fp32, 41.7 MB — already confirmed working), `?model=lepinet-fp16` (30.1 MB),
+`?model=lepinet-int8` (11.0 MB). The int8 variant is included **expecting it to fail** — it is the
+in-browser confirmation of the ConvInteger hypothesis rather than a candidate. If fp16 loads, the
+shipped model drops ~28 % with zero accuracy change and the ORT-Web blocker is resolved for practical
+purposes; the ≤8 MB target then needs a smaller *student*, not a smaller *format*.
