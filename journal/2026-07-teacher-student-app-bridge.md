@@ -383,3 +383,45 @@ The 0.732-vs-0.601 OOD result came from **untuned** ArcFace (`s=30, m=0.3`, firs
    makes `s` partly redundant, since `√(d−2)` already sets a principled scale.
    **Implementation is small** (an `zscore=True` flag on `ArcFaceHead` + the margin applied before the
    transform in the loss), and it is the more interesting of the two levers scientifically.
+
+## Model distribution: models moved out of the app repo (2026-07-29)
+
+The bridge's last mile. Shipping model binaries inside `lepinet-app` does not scale — git keeps
+every version forever, so each release permanently grows the checkout *and* `.git`.
+
+**The finding that shaped the design: GitHub *release* assets cannot serve a browser.** They redirect
+to `release-assets.githubusercontent.com`, which returns **no `Access-Control-Allow-Origin`**, so
+`fetch()` from the app's origin is blocked by CORS. `curl` succeeds (it ignores CORS) — exactly the
+trap that would have looked fine until someone opened the page. Verified alternatives, with an
+explicit `Origin` header: **GitHub Pages** (`ACAO: *`) and **Hugging Face Hub** (echoes the origin).
+
+**Chosen: Hugging Face Hub** (`gmougeot/lepinet-models`) — purpose-built for models: versioned,
+CDN-backed, free, CORS-correct. Both bundles live there (`b0-fp16/`, `effnetv2b2-v1/`), and the
+GitHub release (`model-v2-b0-fp16`) is kept as the human/script-facing **archive**.
+
+**App side.** `models.json` maps id → base folder URL (relative *or* absolute). Resolution is
+`?model=<id>` → remembered choice → manifest default, so a first-time user still chooses nothing.
+The service worker previously **skipped all cross-origin requests**, which would have re-downloaded
+30 MB on every load and killed offline support — it now caches an explicit model-host allowlist
+(`*.hf.co`) and accepts `cors` responses, not just `basic`. `models.json` is network-first (the model
+*list* must be updatable without a cache-version bump); everything else stays cache-first.
+`model/` + the preview folders are deleted and `model*/`/`*.onnx` gitignored, so no model can be
+committed there again. **`ort/` (59 MB) is deliberately kept**: it is the runtime the app executes,
+it does not grow per model, and moving it to a CDN is a separate change needing its own browser test.
+
+**Three bugs found by the owner testing it, all mine, all instructive:**
+1. `(_slug(_param) && (byId(_param) || null)) ?? remembered ?? default` — **`??` only falls through
+   on null/undefined, not `false`**, so with no `?model=` param the chain pinned to `false` and the
+   app always reverted to the bundled model.
+2. `location.search = ''` is a **no-op when there is no query string** — the choice was stored and
+   then never loaded.
+3. `models.json` was served **cache-first** by the SW, so an updated model list could never reach a
+   user (they saw three stale entries).
+
+The durable fix was not a third patch but removing the ambiguity: **the selection is carried in the
+URL** (`?model=<id>`), the highest-priority source, so what loads always matches the address bar and
+is shareable/debuggable. Lesson: when state can come from three places (URL, localStorage, default),
+make one of them authoritative and *visible* rather than reconciling them.
+
+**Remaining:** purge the old model blobs from the app repo's **history** (`git filter-repo` +
+force-push — rewrites history, needs a deliberate go-ahead); optionally move `ort/` to a CDN.
