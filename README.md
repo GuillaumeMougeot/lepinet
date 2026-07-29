@@ -19,6 +19,9 @@ L2-normalised class prototypes per taxonomic level), trained with square-root cl
 On the reference Lepidoptera dataset this reaches **test species macro-F1 0.9148**. See
 [The method](#the-method) for why each piece is there.
 
+> **New to this repository?** [`START-HERE.md`](START-HERE.md) is a guided map of everything —
+> code, results, and the reasoning behind them.
+
 📖 **Docs:** [user guide](docs/user-guide.md) · [developer guide](docs/developer-guide.md) ·
 [design journal](journal/2026-07-src-lepinet-baseline-port.md)
 

@@ -216,3 +216,52 @@ ViT teacher beat the best conv teacher" experiment, since it costs more to integ
   stay after plug-and-play, not before it.
 - `export.to_fp16_onnx` is kept as a utility (works for cleanly-convertible graphs) but is **not**
   usable on our TorchScript export — noted here so it isn't mistaken for the fix.
+
+## Why checkpoints are fp32 even though training used fp16/bf16 (2026-07-29)
+
+Owner's question — and the answer is not a bug, it's how mixed precision works:
+
+**Mixed-precision training keeps fp32 *master weights*.** `to_fp16()`/`to_bf16()` (torch AMP) do not
+store the model in half precision. They cast **activations** to half for the matmuls/convs (that's
+where the speed and memory win is) while the **parameters and the optimizer state stay fp32**,
+because weight *updates* are tiny relative to weight magnitudes: adding a ~1e-7 update to a ~1e-1
+weight in fp16 (≈1e-3 relative resolution) rounds to *no change*, and training stalls. So the
+checkpoint we save is fp32 by construction — precision was a *compute* choice, never a storage one.
+
+Consequences: (1) an fp32 export is the honest default (it matches the trained master weights);
+(2) shrinking for deployment is therefore a **separate post-training step** (quantize / convert), and
+(3) that conversion is where it got hard — see the fp16 finding above: post-hoc fp16 conversion
+breaks on the TorchScript-exported graph's explicit `Cast` nodes, so a **source-level** fp16 export
+(trace with a half-precision backbone, cosine head kept fp32) is the correct route.
+
+## Evals were slow *and* failing — both root-caused and fixed (2026-07-29)
+
+- **Failing:** `FileNotFoundError` deep inside the DataLoader. The parquet is a *catalogue*; the
+  image mirror is **incomplete** (a handful of the 630 k global_lepi files are absent), so a
+  multi-hour eval died at the first gap and lost the whole run. Fix: `evaluate(skip_missing=True)`
+  pre-filters absent files and **reports the count** (so a *large* number of misses stays visible
+  rather than silently shrinking the test set).
+- **Slow:** every eval ran on `gpu-nvidia-b200-1-mig.1g` — the **smallest** MIG slice (6 vCPU) — so a
+  198 M model streamed 630 k images on a fraction of a GPU, ×4 with TTA. Fix: all eval/OOD jobs moved
+  to a **full `b200-1-gpu` with `--num-workers 32`**. (Two evals already running on the old code were
+  terminated and resubmitted; they were both slow and doomed.)
+
+## Next: models out of the app repo, into releases (owner's design, 2026-07-29)
+
+Shipping model binaries inside `lepinet-app` doesn't scale — every version bloats the repo *and*
+`.git` forever (git keeps all history; the current test bundle alone is 41.7 MB). Agreed plan:
+
+1. **Publish models as GitHub releases on the `lepinet` repo** (`lepinet bundle` output: model.onnx +
+   taxonomy + config + names/calibration/thresholds), one release per model version.
+2. **The app fetches models at runtime**: a small `models.json` manifest (hand-updated, or pulled
+   from the releases API) lists available models; the user picks one, the app downloads and caches it
+   (the service worker already caches the model on first fetch, not at install). First run uses the
+   **default latest**.
+3. **Purge the binaries from the app repo *and* its history** — `git filter-repo` (or BFG) to drop
+   `model/`, `model-*/` and `ort/` blobs, then force-push; otherwise the `.git` keeps them forever.
+   Requires care (rewrites history) and a fresh clone for anyone who had it — do it once, deliberately.
+   The vendored `ort/` runtime (59 MB) is the other big offender and should be pinned from a CDN or
+   fetched at install instead.
+
+Note this makes the *app* repo tiny and turns model releases into the distribution channel — which is
+exactly the "plug-and-play releases" goal.
