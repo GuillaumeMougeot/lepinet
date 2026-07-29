@@ -177,3 +177,23 @@ cheaply** (no quadratic tokens), and (4) as a **conv teacher align with the conv
 which the whole export/quantize pipeline is proven on. `convnext_large.dinov3` (~200 M) also compares
 apples-to-apples with the ConvNeXtV2-L run already training. Reserve the ViT path for a focused "can a
 ViT teacher beat the best conv teacher" experiment, since it costs more to integrate and deploy.
+
+## Production progress (2026-07-29)
+
+- **`lepinet bundle` shipped** (Phase 3): one command, checkpoint → deployable folder — `export`
+  (fp32 `model.onnx` + `taxonomy.json` + `config.json` + `MANIFEST.json`) + dynamic-int8
+  `model.int8.onnx`. Verified on the distilled-b0: fp32 parity 2.6e-5, int8 **41.7→11.0 MB (3.79×)**.
+  int8 is native/CPU-ready but still **not ORT-Web-runnable** (browser stays fp32 — the QDQ blocker).
+- **App plug-and-play — browser test live.** A lepinet bundle drops into the PWA (its `config.json`
+  + friendly taxonomy already match the app contract; species vocab order is *identical* to the
+  shipped model, so `names.json` reuses verbatim). Wired a **query-param model switch** in the app
+  (`?model=<slug>` → `./model-<slug>/`) so the **default app is byte-identical/untouched** and a
+  candidate bundle previews on the live deploy: **`/?model=lepinet-test`** serves the distilled-b0
+  fp32 bundle. Validate there before promoting it to the default `model/`. (Kept a strict slug regex;
+  bumped the SW cache.) Next: wire `names/calibration` into `bundle`, then the ORT-Web small-format
+  fix (per-tensor QDQ / fp16) — the only step needing an in-browser test.
+- **OOD benchmark prepared** (the new direction): `dev/052` max-logit AUROC(known vs novel) on
+  **global_lepi's <50-image species** (removed from training, still on UCloud → clean novelty, no
+  domain shift) for arcface vs independent — tomls ready (`ucloud/lepinet-ood-*.toml`, on a `mig.2g`
+  slice per the eval-slowness lesson). Submission pending a **sustained UCloud 502 window** blocking
+  all job submits; the 12-epoch DINOv3-cnx run is likewise queued behind it (background retry loop).

@@ -1,5 +1,24 @@
 # Journal
 
+## Big picture — how the project has evolved (update this as it moves)
+
+1. **Port** (Jul 24) — reimplemented the old `mini_trainer` pipeline as a clean, fastai-only
+   `src/lepinet` package; reproduced the project-best baseline (species macro-F1 **0.9152 ≈ 0.9148**).
+2. **Scale** (Jul 25–29) — bigger backbones lift it: ConvNeXtV2-L **0.9316**; DINOv3-ConvNeXt-L
+   matches it and trains ~2× faster. **In-distribution accuracy is essentially solved.**
+3. **The teacher→student→app bridge** (Jul 25–29) — distillation works (T=1, the student beats
+   from-scratch but caps ~0.88 by its own capacity); `lepinet bundle` turns any checkpoint into a
+   deployable ONNX bundle; a lepinet bundle now plugs into the companion PWA (browser test live).
+4. **The pivot** (Jul 28–29) — the head bake-off is a **null result** (independent wins;
+   hierarchical/autoregressive are washes), and a model at 0.93 in-distribution drops to **~0.70 on
+   external data**. So the real story isn't heads or accuracy — it's **reliable prediction that knows
+   what it doesn't know**: open-set in *image* space (novel species) and abstention in *hierarchy*
+   space (back off to genus/family when the photo can't resolve the species). See
+   [2026-07-story-and-directions.md](2026-07-story-and-directions.md).
+5. **Where we are going** — productionise the small model into the app (ORT-Web format still open),
+   and pursue the two OOD axes + domain robustness (the 23 pp external gap). Accuracy scaling and
+   exotic heads are de-prioritised.
+
 One file per **question**, not per run. A run is a data point; a question is why you spent a
 day of GPU on it. `dev/036_ledger.py` already answers *what was tried and what it scored* —
 it reads every run's saved `config.yaml` and `metrics.json` and prints the table. Nothing on
