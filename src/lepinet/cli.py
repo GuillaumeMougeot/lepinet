@@ -133,6 +133,9 @@ def bundle(
     img_size: int = typer.Option(256),
     quantize: bool = typer.Option(True, help="Also emit model.int8.onnx (dynamic int8)."),
     name: str | None = typer.Option(None, help="Human-readable bundle name for config.json."),
+    publish_hf: str | None = typer.Option(None, "--publish-hf",
+        help="Also upload to this Hugging Face repo (e.g. 'user/lepinet-models'). Needs `hf auth login`."),
+    hf_path: str | None = typer.Option(None, help="Folder name inside the HF repo (default: the bundle dir name)."),
 ):
     """Build a deployable app bundle: ONNX (fp32 + int8) + taxonomy + config + MANIFEST.
 
@@ -141,7 +144,8 @@ def bundle(
     """
     from .export import make_bundle
 
-    make_bundle(model, str(out_dir), img_size=img_size, quantize=quantize, bundle_name=name)
+    make_bundle(model, str(out_dir), img_size=img_size, quantize=quantize, bundle_name=name,
+                publish_hf=publish_hf, hf_path=hf_path)
 
 
 def main(argv=None) -> int:

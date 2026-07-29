@@ -326,6 +326,8 @@ def make_bundle(
     quantize: bool = True,
     bundle_name: str | None = None,
     fp16: bool = True,
+    publish_hf: str | None = None,
+    hf_path: str | None = None,
 ) -> Path:
     """One command: checkpoint -> a deployable app bundle folder (Phase 3's "one button").
 
@@ -345,6 +347,8 @@ def make_bundle(
     if quantize:
         quantize_dynamic_int8(onnx_path, out_dir / "model.int8.onnx")
     print(f"Bundle ready: {out_dir}  (files: {sorted(p.name for p in out_dir.iterdir())})")
+    if publish_hf:
+        publish_to_hf(out_dir, publish_hf, path_in_repo=hf_path, commit_message=bundle_name)
     return out_dir
 
 
@@ -370,3 +374,31 @@ def to_fp16_onnx(onnx_path: str | Path, out_path: str | Path | None = None,
     fp32_mb, fp16_mb = onnx_path.stat().st_size / 1e6, out_path.stat().st_size / 1e6
     print(f"fp16: {fp32_mb:.1f} MB -> {fp16_mb:.1f} MB ({fp32_mb / max(fp16_mb, 1e-9):.2f}x) -> {out_path.name}")
     return out_path
+
+
+def publish_to_hf(bundle_dir: str | Path, repo_id: str, path_in_repo: str | None = None,
+                  private: bool = False, commit_message: str | None = None) -> str:
+    """Upload a bundle folder to the Hugging Face Hub and return its public base URL.
+
+    **Why the Hub and not a GitHub release:** the app fetches the model *from a web page*, and
+    release assets redirect to ``release-assets.githubusercontent.com``, which sends **no
+    ``Access-Control-Allow-Origin``** — the browser blocks it (``curl`` succeeds, which is why this
+    is easy to get wrong). The Hub sends CORS, versions every file, and is CDN-backed. GitHub
+    releases remain useful as a human/script-facing *archive*, not as a runtime source.
+
+    The returned URL is exactly the ``base`` the app's ``models.json`` expects: a folder whose
+    ``config.json`` names the model file and its sidecars.
+    """
+    from huggingface_hub import HfApi
+
+    bundle_dir = Path(bundle_dir)
+    path_in_repo = path_in_repo or bundle_dir.name
+    api = HfApi()
+    api.create_repo(repo_id, repo_type="model", exist_ok=True, private=private)
+    api.upload_folder(folder_path=str(bundle_dir), path_in_repo=path_in_repo, repo_id=repo_id,
+                      repo_type="model",
+                      commit_message=commit_message or f"lepinet bundle: {path_in_repo}")
+    base = f"https://huggingface.co/{repo_id}/resolve/main/{path_in_repo}/"
+    print(f"Published -> {base}\n"
+          f'Add to the app\'s models.json:  {{"id": "{path_in_repo}", "base": "{base}", ...}}')
+    return base
