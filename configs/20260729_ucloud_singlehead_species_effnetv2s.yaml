@@ -1,0 +1,39 @@
+version: 1.0
+# Flat vs multi-head (owner hypothesis): ONE species head, identical hyperparams to the
+# 0.9148/0.9110 multi-head baseline (only levels differs). Tests whether genus/family supervision
+# helps the backbone at all -- dev/042 already showed marginals BEAT the trained coarse heads at
+# inference, so if species F1 is also unchanged, the multi-head is redundant end-to-end.
+version: 1.0
+desc: lepinet-singlehead-species-effnetv2s-ucloud
+train:
+  parquet_path: /work/global_lepi/0032836-250426092105405_processing_metadata_postprocessed_quality_filtered.parquet
+  img_dir: /work/global_lepi/images
+  out_dir: /work/lepinet/data/ucloud_models
+  fold: '1'
+  min_img_per_spc: 50
+  num_workers: 256
+  model_name: lepinet-singlehead-species-effnetv2s-ucloud
+  model_arch_name: efficientnet_v2_s
+  head: independent
+  nb_epochs: 5
+  base_lr: 0.001
+  batch_size: 64
+  aug_img_size: 460
+  img_size: 256
+  optimizer: muon
+  fp16: true
+  precision: fp16
+  schedule: one_cycle
+  warmup_epochs: 0.5
+  grad_clip: 5.0
+  oversample_power: 0.5
+  family_filter: []
+  aug_kwargs:
+    max_warp: 0.0
+    max_lighting: 0.0
+    p_lighting: 0.0
+    flip_vert: true
+    max_rotate: 15.0
+    max_zoom: 1.1
+  levels:
+  - speciesKey
