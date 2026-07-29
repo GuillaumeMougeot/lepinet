@@ -76,8 +76,52 @@ def resolve_checkpoint_path(model_path: str | Path) -> Path:
 # Inference
 # ---------------------------------------------------------------------------
 
+def dl_num_workers(dl, default: int = 0) -> int:
+    """The *real* worker count of a fastai ``DataLoader``.
+
+    **Do not read ``dl.num_workers``** — fastai hardcodes that attribute to ``1`` in
+    ``DataLoader.__init__`` (``self.rng, self.num_workers, self.offs = ..., 1, 0``) regardless of what
+    was requested; the effective count lives on the internal ``fake_l``. Reading the public attribute
+    silently pinned evaluation to a **single** worker, which on a ~90 ms/file network mount meant
+    ~1 img/s — a 630 k-image eval would have taken a week. This helper is the guard against that trap.
+    """
+    fake = getattr(dl, "fake_l", None)
+    n = getattr(fake, "num_workers", None)
+    return int(n) if n is not None else default
+
+
+
+def _paths_exist(root: Path, rel_paths) -> pd.Series:
+    """Vectorised existence check for many files under ``root`` — one listing per directory.
+
+    A naive ``(root / p).is_file()`` per row is one network round-trip **per image**: at ~90 ms/file
+    on the ``/work`` mount, 630 k images is >15 h before inference even starts. Instead we list each
+    *parent directory once* (one round-trip returns every name in it) and do the membership test in
+    memory, with a thread pool because the cost is latency, not CPU. ~12 k directories at 32 threads
+    is well under a minute.
+    """
+    import os
+    from concurrent.futures import ThreadPoolExecutor
+
+    rel = pd.Series(rel_paths).astype(str)
+    parents = rel.map(lambda p: p.rsplit("/", 1)[0] if "/" in p else "")
+    unique_dirs = sorted(parents.unique())
+
+    def listing(d: str) -> tuple[str, set[str]]:
+        try:
+            return d, set(os.listdir(root / d if d else root))
+        except OSError:
+            return d, set()
+
+    with ThreadPoolExecutor(max_workers=32) as ex:
+        contents = dict(ex.map(listing, unique_dirs))
+    names = rel.map(lambda p: p.rsplit("/", 1)[-1])
+    return pd.Series([n in contents.get(d, ()) for d, n in zip(parents, names)], index=rel.index)
+
+
 @torch.no_grad()
-def predict_df(model, dls, test_df, vocabs, levels, device, tta: bool = False):
+def predict_df(model, dls, test_df, vocabs, levels, device, tta: bool = False,
+               num_workers: int | None = None):
     """Stream the model over ``test_df`` → per-level top-1 label + softmax confidence arrays.
 
     Reduces to top-1 per batch (not accumulating full logits): at global scale the species logit
@@ -85,7 +129,9 @@ def predict_df(model, dls, test_df, vocabs, levels, device, tta: bool = False):
     softmax over the 4 dihedral flips (identity + h-flip + v-flip + both) — the same test-time
     augmentation :func:`lepinet.infer.predict` uses; ~4x slower, usually +a fraction of a point.
     """
-    test_dl = dls.test_dl(test_df, num_workers=getattr(dls.train, "num_workers", 0))
+    nw = num_workers if num_workers is not None else dl_num_workers(dls.train)
+    test_dl = dls.test_dl(test_df, num_workers=nw)
+    print(f"Inference dataloader: num_workers={nw}, batches={len(test_dl)}")
     model.to(device)
     vocab_arrays = [np.array([str(v) for v in vocabs[level]]) for level in levels]
     pred_chunks = [[] for _ in levels]
@@ -258,7 +304,7 @@ def evaluate(
     # the count is reported so a *large* number of misses is visible rather than silent.
     if skip_missing:
         root = Path(img_dir)
-        exists = df["image_path"].map(lambda p: (root / p).is_file())
+        exists = _paths_exist(root, df["image_path"])
         n_missing = int((~exists).sum())
         if n_missing:
             print(f"WARNING: {n_missing} of {len(df)} images are missing from {img_dir} — skipping them.")
@@ -275,7 +321,8 @@ def evaluate(
     model, _meta = load_model(checkpoint, img_size=img_size)
 
     print(f"Running inference{' with TTA (4-flip)' if tta else ''}...")
-    preds, confs = predict_df(model, dls, test_df, vocabs, levels, device, tta=tta)
+    preds, confs = predict_df(model, dls, test_df, vocabs, levels, device, tta=tta,
+                              num_workers=num_workers)
     labels = test_df[levels].to_numpy().astype(str)
     filenames = test_df["image_path"].to_numpy()
 

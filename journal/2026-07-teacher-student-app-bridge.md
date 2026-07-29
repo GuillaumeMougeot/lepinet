@@ -265,3 +265,35 @@ Shipping model binaries inside `lepinet-app` doesn't scale — every version blo
 
 Note this makes the *app* repo tiny and turns model releases into the distribution channel — which is
 exactly the "plug-and-play releases" goal.
+
+## The real reason evals were ~1 img/s: a fastai attribute trap (2026-07-29)
+
+Owner stopped every eval: **~1 img/s** — 630 k images would have taken **>7 days**, and the GPU was
+idle. It was not the GPU, not the MIG size, and not the model. It was one line in `predict_df`:
+
+```python
+test_dl = dls.test_dl(test_df, num_workers=getattr(dls.train, "num_workers", 0))   # BUG
+```
+
+**fastai hardcodes `self.num_workers = 1`** in `DataLoader.__init__`
+(`self.rng, self.num_workers, self.offs = random.Random(...), 1, 0`) — the public attribute is a
+*dummy*; the effective worker count lives on the internal `fake_l`. So that `getattr` **always
+returned 1**, and every evaluation ran **single-process** no matter what `--num-workers` said. On a
+~90 ms/file network mount one worker is ~11 img/s ceiling, and with large images ~1 img/s. Verified
+locally: requested 4 → `dls.train.num_workers == 1`, while the real value is 4.
+
+**Fix:** `dl_num_workers(dl)` reads through to `fake_l.num_workers`, and `evaluate` now passes its
+own `--num-workers` straight into `predict_df` rather than round-tripping it through fastai's
+attribute. The loader now prints `num_workers=N, batches=M` at startup so a regression is visible in
+the first log line. Locked in with a **regression test** (`dl_num_workers` must return 12, not the
+dummy 1).
+
+**Second, self-inflicted, slowness — fixed in the same pass.** The `skip_missing` guard I added
+earlier did `(root / p).is_file()` *per row*: one network round-trip per image, ≈15 h for 630 k
+files *before inference started*. Replaced with `_paths_exist`, which lists each **parent directory
+once** (one round-trip returns every name) across a 32-thread pool — ~12 k directories in well under
+a minute.
+
+**Lesson (worth carrying):** on a high-latency network mount, *per-file* operations are the enemy —
+batch by directory, and never trust a framework's public attribute to report what you configured.
+Both the MIG sizing and the "GPU is slow" theory were red herrings; the profile was one worker.

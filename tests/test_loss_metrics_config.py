@@ -82,3 +82,24 @@ def test_config_defaults_bf16():
     cfg = TrainConfig(parquet_path="x", img_dir="x", out_dir="x", model_name="m", model_arch_name="resnet18")
     assert cfg.precision == "bf16"
     assert cfg.levels == ["speciesKey", "genusKey", "familyKey"]
+
+
+def test_dl_num_workers_reads_real_count_not_fastai_dummy():
+    """Regression: fastai hardcodes ``DataLoader.num_workers = 1``; the real count is on ``fake_l``.
+
+    Reading the public attribute pinned every evaluation to ONE worker (~1 img/s on a network
+    mount — a 630k-image eval would take a week). ``dl_num_workers`` must read through to the
+    effective value.
+    """
+    from lepinet.test import dl_num_workers
+
+    class _FakeL:
+        num_workers = 12
+
+    class _DL:
+        num_workers = 1      # fastai's misleading dummy
+        fake_l = _FakeL()
+
+    assert _DL().num_workers == 1          # the trap
+    assert dl_num_workers(_DL()) == 12     # the fix
+    assert dl_num_workers(object(), default=3) == 3
