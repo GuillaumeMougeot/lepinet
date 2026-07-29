@@ -26,17 +26,31 @@ import numpy as np
 import pandas as pd
 import torch
 
+from lepinet.test import dl_num_workers
+
 
 @torch.no_grad()
-def max_logits(model, dls, test_df, device, level_idx: int = 0) -> np.ndarray:
-    """Per-image max logit at ``level_idx`` (species) — the (negated) OOD score input."""
-    test_dl = dls.test_dl(test_df, num_workers=getattr(dls.train, "num_workers", 0))
+def max_logits(model, dls, test_df, device, level_idx: int = 0, num_workers: int | None = None) -> np.ndarray:
+    """Per-image max logit at ``level_idx`` (species) — the (negated) OOD score input.
+
+    ``num_workers`` must be passed explicitly: fastai's ``DataLoader.num_workers`` attribute is a
+    hardcoded dummy (always 1), so reading it pinned this to a single worker (~1 img/s on the /work
+    mount). See ``lepinet.test.dl_num_workers``.
+    """
+    import time
+    nw = num_workers if num_workers is not None else dl_num_workers(dls.train)
+    test_dl = dls.test_dl(test_df, num_workers=nw)
+    print(f"OOD dataloader: num_workers={nw}, batches={len(test_dl)}")
+    t0 = time.perf_counter()
     model.to(device).eval()
     out = []
     for batch in test_dl:
         logits = model(batch[0].to(device))[level_idx].float()
         out.append(logits.max(dim=1).values.cpu().numpy())
-    return np.concatenate(out)
+    res = np.concatenate(out)
+    dt = time.perf_counter() - t0
+    print(f"OOD inference: {len(res)} images in {dt:.1f}s = {len(res)/max(dt,1e-9):.1f} img/s")
+    return res
 
 
 def ood_auroc(scores_known: np.ndarray, scores_ood: np.ndarray) -> float:
@@ -52,9 +66,9 @@ def ood_auroc(scores_known: np.ndarray, scores_ood: np.ndarray) -> float:
     return float(auc)
 
 
-def evaluate_ood(model_path, parquet_path, img_dir, out, img_size=256, levels=None):
+def evaluate_ood(model_path, parquet_path, img_dir, out, img_size=256, levels=None, num_workers=32):
     from lepinet.data import DEFAULT_LEVELS, filter_df, make_dls
-    from lepinet.test import load_model, resolve_checkpoint_path
+    from lepinet.test import dl_num_workers, load_model, resolve_checkpoint_path  # noqa: F401
 
     ckpt = torch.load(resolve_checkpoint_path(model_path), map_location="cpu", weights_only=False)
     levels = levels or ckpt.get("levels", DEFAULT_LEVELS)
@@ -72,9 +86,9 @@ def evaluate_ood(model_path, parquet_path, img_dir, out, img_size=256, levels=No
     print(f"{len(df)} images | OOD-species images: {int(is_ood.sum())} ({100*is_ood.mean():.1f}%)")
 
     dls = make_dls(df[["image_path", "is_valid", *levels]].reset_index(drop=True),
-                   vocabs, img_dir, int(img_size * 460 / 256), img_size, 128, None, lowmem=False, levels=levels)
+                   vocabs, img_dir, int(img_size * 460 / 256), img_size, 128, num_workers, lowmem=False, levels=levels)
     model, _ = load_model(ckpt, img_size=img_size)
-    ml = max_logits(model, dls, df, device)
+    ml = max_logits(model, dls, df, device, num_workers=num_workers)
     score = -ml  # higher ⇒ more OOD
     auroc = ood_auroc(score[~is_ood.values], score[is_ood.values]) if is_ood.any() else float("nan")
     res = {
@@ -97,5 +111,6 @@ if __name__ == "__main__":
     ap.add_argument("--img-dir", required=True)
     ap.add_argument("--out", default="ood.json")
     ap.add_argument("--img-size", type=int, default=256)
+    ap.add_argument("--num-workers", type=int, default=32)
     a = ap.parse_args()
-    evaluate_ood(a.model, a.parquet, a.img_dir, a.out, a.img_size)
+    evaluate_ood(a.model, a.parquet, a.img_dir, a.out, a.img_size, num_workers=a.num_workers)
