@@ -310,3 +310,27 @@ def make_bundle(
         quantize_dynamic_int8(onnx_path, out_dir / "model.int8.onnx")
     print(f"Bundle ready: {out_dir}  (files: {sorted(p.name for p in out_dir.iterdir())})")
     return out_dir
+
+
+def to_fp16_onnx(onnx_path: str | Path, out_path: str | Path | None = None,
+                 keep_fp32_ops: tuple[str, ...] = ("Acos",)) -> Path:
+    """Convert an fp32 ONNX graph to fp16 — the leading ORT-Web small-format candidate.
+
+    Halves the file (~2x) with no ``ConvInteger``/``MatMulInteger`` (which ORT-Web can't run — the
+    reason int8 QDQ failed in-browser, [[2026-07-lepi-app-compression]]). ``keep_io_types=True`` keeps
+    the graph's inputs/outputs fp32 (the app feeds fp32, unchanged); internals run fp16. The cosine
+    head's ``Acos`` is kept fp32 (``keep_fp32_ops``) — its domain-clamped ``acos`` is fp16-fragile
+    (the same reason ``PooledHead`` runs the head in fp32). Verify top-1 parity, then browser-test.
+    """
+    import onnx
+    from onnxconverter_common import float16
+
+    onnx_path = Path(onnx_path)
+    out_path = Path(out_path) if out_path else onnx_path.with_suffix(".fp16.onnx")
+    model = onnx.load(str(onnx_path))
+    block = sorted(set(keep_fp32_ops) | set(getattr(float16, "DEFAULT_OP_BLOCK_LIST", [])))
+    model16 = float16.convert_float_to_float16(model, keep_io_types=True, op_block_list=block)
+    onnx.save(model16, str(out_path))
+    fp32_mb, fp16_mb = onnx_path.stat().st_size / 1e6, out_path.stat().st_size / 1e6
+    print(f"fp16: {fp32_mb:.1f} MB -> {fp16_mb:.1f} MB ({fp32_mb / max(fp16_mb, 1e-9):.2f}x) -> {out_path.name}")
+    return out_path

@@ -197,3 +197,22 @@ ViT teacher beat the best conv teacher" experiment, since it costs more to integ
   domain shift) for arcface vs independent — tomls ready (`ucloud/lepinet-ood-*.toml`, on a `mig.2g`
   slice per the eval-slowness lesson). Submission pending a **sustained UCloud 502 window** blocking
   all job submits; the 12-epoch DINOv3-cnx run is likewise queued behind it (background retry loop).
+
+## Plug-and-play validated + the ORT-Web small-format reality (2026-07-29)
+
+- **Plug-and-play CONFIRMED (owner tested the browser link).** A `lepinet bundle` (distilled-b0,
+  fp32) loads and predicts in the PWA via `?model=lepinet-test`, default app untouched. **This is the
+  milestone: a lepinet-produced release drops into the app with no app-code change.** fp32 b0 is
+  **41.7 MB** — already shippable (app v1 shipped 54 MB); the ≤8 MB dream is optimisation, not a
+  blocker to shipping a real lepinet model.
+- **ORT-Web small-format is the remaining, genuinely-iterative blocker.** Tried post-hoc fp16
+  (`onnxconverter_common.float16`): converting the graph yields an **invalid Cast-type graph** (ORT
+  refuses to load — `Cast_1 output float16 vs expected float`), because the legacy-TorchScript
+  exporter emits explicit `Cast` nodes the fp16 pass can't rewrite consistently; blocking `Cast`
+  makes it valid but converts *nothing* (all initializers stay fp32). So **post-hoc fp16 is a dead
+  end for this graph.** The clean fix is a **source-level fp16 export** — trace an fp16 backbone with
+  the cosine head kept fp32 (the `PooledHead` fp32 guard already exists) — then browser-test. Plus
+  the still-open per-tensor-QDQ path. Both need in-browser validation (owner), which is why they
+  stay after plug-and-play, not before it.
+- `export.to_fp16_onnx` is kept as a utility (works for cleanly-convertible graphs) but is **not**
+  usable on our TorchScript export — noted here so it isn't mistaken for the fix.
