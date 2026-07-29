@@ -93,3 +93,35 @@ a good system distinguishes and handles both.
   *smallest* MIG — so a 198 M model streams 630 k images on a fraction of one GPU; TTA makes it 4×.
   Fix going forward: **eval big models on a bigger MIG (2g/3g) or a full GPU**, and drop TTA for the
   big-model sweeps (its +0.3 pp isn't worth 4×).
+
+## First OOD result: ArcFace clearly beats the plain cosine head (2026-07-29)
+
+Benchmark (a) from the plan — **global_lepi's <50-image species**: removed from training but still on
+UCloud, so they are genuinely *unseen species* in the **same image domain** (no domain-shift
+confound). Score = `-max species logit`; metric = AUROC(known vs novel).
+
+| head | in-distribution species F1 | **OOD AUROC** | known max-logit (μ±σ) | novel max-logit (μ±σ) |
+|---|---|---|---|---|
+| independent (plain cosine) | **0.9110** | 0.601 | −9.27 ± 7.44 | −11.46 ± 6.82 |
+| **arcface** (species margin 0.3) | 0.8784 | **0.732** | 26.00 ± 13.03 | 23.47 ± 10.84 |
+
+632,913 images, 3,171 of them novel-species.
+
+**Reading it.** The plain cosine head is *barely better than chance* at knowing what it doesn't know
+(0.601): its max-logit distributions for known and novel species overlap almost completely. ArcFace
+moves that to **0.732 — a +13.1 pt improvement in open-set detection** — for a −3.3 pt cost in
+in-distribution species F1. **That is the trade the new story is about**, and it is the first
+evidence that the margin does what the face-recognition literature claims: it shapes an embedding
+where "distance to the nearest known class" is *meaningful for classes never trained on*.
+
+Caveats worth keeping: (i) 0.732 is useful but far from solved — a deployable "unknown species"
+gate probably wants ≥0.85, so this is a direction, not a finished result; (ii) the two heads have
+different logit scales (arcface is `s·cosθ` ≈ +26, the cosine head's z-score ≈ −9), so only the
+*ranking* (AUROC) is comparable, not the raw thresholds — calibration per head is required before
+any UI threshold; (iii) this isolates **novelty**; benchmark (b) (flemming OOD species = novelty **+**
+domain shift) is the harder, more realistic case and still to run.
+
+**What it changes.** ArcFace graduates from "a head that costs accuracy" to **the enabling component
+of the open-set half of the story**. Next levers: energy / max-cosine variants of the score, the
+margin as a hyperparameter (0.3 was a first guess), per-rank abstention (fall back to genus/family
+when the species score is low), and the same measurement under domain shift.
