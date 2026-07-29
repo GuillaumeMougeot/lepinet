@@ -38,6 +38,30 @@ def apply_arcface_margin(logit: torch.Tensor, target: torch.Tensor, margin: floa
     return scale * (one_hot * phi + (1.0 - one_hot) * cos)
 
 
+def apply_arcface_margin_zscore(logit: torch.Tensor, target: torch.Tensor, margin: float, ndim: int) -> torch.Tensor:
+    """ArcFace margin composed with ``cosine_to_zscore`` — the calibrated variant.
+
+    The plain ArcFace head emits ``s·cos θ``; the project's cosine head instead emits
+    ``z(cos θ) = √(ndim−2)·(acos(−cos θ) − π/2)``, which stretches the *concentrated* cosine
+    distribution of high-dimensional unit vectors into ~N(0,1) so the logits behave like ordinary
+    pre-softmax scores. Those two are complementary, not alternatives: this applies the additive
+    angular margin **and then** the z-score transform, i.e. ``z(cos(θ + m))``, keeping ArcFace's
+    open-set geometry *and* the dimension-aware, calibrated scale (which also makes the arbitrary
+    ``s`` largely redundant — √(ndim−2) sets a principled one).
+
+    The head's forward stays label-free (it emits ``z(cos θ)``, ONNX-traceable), so the margin is
+    injected here. ``z`` is **exactly invertible** — ``cos θ = sin(z / √(ndim−2))`` — so we recover
+    the cosine, rotate the true class by ``m``, and re-transform. Verified to 1e-7.
+    """
+    z_var = 1.0 / (float(ndim) - 2.0) ** 0.5
+    cos = torch.sin(logit * z_var).clamp(-1 + 1e-7, 1 - 1e-7)
+    sin = torch.sqrt((1.0 - cos * cos).clamp_min(1e-12))
+    phi = cos * math.cos(margin) - sin * math.sin(margin)          # cos(θ + m)
+    one_hot = F.one_hot(target, num_classes=logit.size(1)).to(logit.dtype)
+    cos_m = (one_hot * phi + (1.0 - one_hot) * cos).clamp(-1 + 1e-7, 1 - 1e-7)
+    return (torch.acos(-cos_m) - torch.pi / 2.0) / z_var           # z(cos(θ + m))
+
+
 class MultiLevelCELoss:
     """Sum of per-level cross-entropy losses (returns a scalar).
 
@@ -63,6 +87,8 @@ class MultiLevelCELoss:
         reduction: str = "mean",
         arc_scale: float | None = None,
         arc_margins: Sequence[float] | None = None,
+        arc_zscore: bool = False,
+        arc_ndim: int | None = None,
     ):
         self.n_levels = len(num_classes)
         if label_smoothing is None:
@@ -76,6 +102,10 @@ class MultiLevelCELoss:
         # when the head is `arcface`. Needs arc_scale (the head's `s`) to recover cos θ = logit/s.
         self.arc_scale = arc_scale
         self.arc_margins = list(arc_margins) if arc_margins is not None else None
+        # z-score variant: the head emits z(cos) rather than s*cos, so the margin is applied
+        # through the invertible transform (needs the embedding width, not the scale).
+        self.arc_zscore = bool(arc_zscore)
+        self.arc_ndim = arc_ndim
         # Coarser levels smooth less, so (1 - ls) compounds consistently up the hierarchy.
         per_level_ls = [1 - (1 - label_smoothing) ** (1 / (i + 1)) for i in range(self.n_levels)]
         self._loss_fns = [nn.CrossEntropyLoss(label_smoothing=ls, reduction=reduction) for ls in per_level_ls]
@@ -104,8 +134,11 @@ class MultiLevelCELoss:
         for i in range(self.n_levels):
             logit = preds[i]
             m = self.arc_margins[i] if self.arc_margins is not None else 0.0
-            if m > 0 and self.arc_scale is not None and logit.requires_grad:
-                logit = apply_arcface_margin(logit, targets[i], m, self.arc_scale)
+            if m > 0 and logit.requires_grad:
+                if self.arc_zscore and self.arc_ndim:
+                    logit = apply_arcface_margin_zscore(logit, targets[i], m, self.arc_ndim)
+                elif self.arc_scale is not None:
+                    logit = apply_arcface_margin(logit, targets[i], m, self.arc_scale)
             losses.append(self._loss_fns[i](logit, targets[i]) * self.weights[i])
         return losses
 

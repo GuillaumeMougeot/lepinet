@@ -47,6 +47,7 @@ class TrainConfig:
     # --- arcface (only used when head == 'arcface'; default off reproduces the cosine baseline) ---
     arcface_scale: float = 30.0         # s: cosine logit scale (~16–64)
     arcface_margin: float | list = 0.0  # m: angular margin, scalar or per-level fine→coarse (~0.1–0.5)
+    arcface_zscore: bool = False        # compose the margin with cosine_to_zscore instead of s·cos
 
     # --- optimisation (the winning recipe defaults) ---
     nb_epochs: int = 5

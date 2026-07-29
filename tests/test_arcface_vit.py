@@ -98,3 +98,50 @@ def test_vit_backbone_builds_and_roundtrips():
 
     rebuilt = build_backbone_model(arch, build_head("independent", nf, [10, 5, 2], hidden=True, pool=False), vit=True)
     rebuilt.load_state_dict(model.state_dict(), strict=True)   # keys match "1.head." reconstruction
+
+
+def test_zscore_arcface_head_matches_independent_forward():
+    """With zscore=True the head emits z(cos θ) — identical to the plain cosine head's forward."""
+    from lepinet.heads import ArcFaceHead, IndependentHead
+
+    ind = IndependentHead(16, [10, 5], hidden=True).eval()
+    arc = ArcFaceHead(16, [10, 5], hidden=True, zscore=True).eval()
+    arc.load_state_dict(ind.state_dict(), strict=True)
+    x = torch.randn(4, 16)
+    for a, b in zip(ind(x), arc(x)):
+        assert torch.allclose(a, b, atol=1e-5)
+
+
+def test_zscore_inverse_is_exact():
+    """The margin composition relies on z being invertible: cos θ = sin(z / sqrt(ndim-2))."""
+    import math
+
+    from lepinet.heads import cosine_to_zscore
+
+    d = 256
+    cos = torch.linspace(-0.99, 0.99, 21)
+    rec = torch.sin(cosine_to_zscore(cos, d) / math.sqrt(d - 2.0))
+    assert torch.allclose(cos, rec, atol=1e-5)
+
+
+def test_zscore_margin_lowers_only_true_class_and_stays_finite():
+    from lepinet.loss import apply_arcface_margin_zscore
+
+    d = 256
+    logit = torch.randn(4, 10) * 2.0                      # z-scale logits
+    tgt = torch.tensor([0, 1, 2, 3])
+    out = apply_arcface_margin_zscore(logit, tgt, margin=0.3, ndim=d)
+    assert torch.isfinite(out).all()
+    assert (out[range(4), tgt] < logit[range(4), tgt]).all()      # true class penalised
+    off = torch.ones_like(logit, dtype=torch.bool)
+    off[range(4), tgt] = False
+    assert torch.allclose(out[off], logit[off], atol=1e-4)        # others untouched
+
+
+def test_zscore_margin_zero_is_identity():
+    from lepinet.loss import apply_arcface_margin_zscore
+
+    logit = torch.randn(4, 10) * 2.0
+    tgt = torch.randint(0, 10, (4,))
+    out = apply_arcface_margin_zscore(logit, tgt, margin=0.0, ndim=256)
+    assert torch.allclose(out, logit, atol=1e-4)

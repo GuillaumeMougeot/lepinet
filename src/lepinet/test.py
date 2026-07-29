@@ -44,7 +44,8 @@ def load_model(checkpoint: dict, img_size: int = 256):
     nf = arch_body_features(arch, img_size=img_size)
     # arcface only needs `scale` at inference (the margin is training-only); default 30 for the
     # cosine baseline and pre-existing checkpoints (which lack the key).
-    head_kwargs = {"scale": checkpoint.get("arcface_scale", 30.0)} if checkpoint["head"] == "arcface" else {}
+    head_kwargs = ({"scale": checkpoint.get("arcface_scale", 30.0), "zscore": checkpoint.get("arcface_zscore", False)}
+                   if checkpoint["head"] == "arcface" else {})
     # Taxonomy heads (hierarchical / autoregressive) take `sparse_masks`; the real masks are saved
     # as persistent buffers (mask_i, shape [n_children_i]), so pass correctly-shaped dummies and let
     # the strict load overwrite them. Signature-driven, so non-taxonomy heads are unaffected. (These

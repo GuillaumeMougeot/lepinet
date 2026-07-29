@@ -45,7 +45,8 @@ def train(cfg: TrainConfig):
     arch = resolve_arch(cfg.model_arch_name)
     vit = arch_is_vit(arch, img_size=cfg.img_size)  # ViT/DINOv3 → FlatHead + manual Learner
     nf = arch_body_features(arch, img_size=cfg.img_size)
-    head_kwargs = {"scale": cfg.arcface_scale, "margin": cfg.arcface_margin} if cfg.head == "arcface" else {}
+    head_kwargs = ({"scale": cfg.arcface_scale, "margin": cfg.arcface_margin, "zscore": cfg.arcface_zscore}
+                   if cfg.head == "arcface" else {})
     # Taxonomy-needing heads (hierarchical / autoregressive, registered from dev/) declare a
     # `sparse_masks` argument; build it from the training labels and pass it. Signature-driven so a
     # head that doesn't want it never sees it (the independent/arcface heads don't).
@@ -60,7 +61,7 @@ def train(cfg: TrainConfig):
     n_head_params = sum(p.numel() for p in custom_head.parameters())
     print(f"Head={cfg.head}, hidden={cfg.hidden}, backbone={'ViT' if vit else 'conv'} -> {n_head_params / 1e6:.2f} M head params")
     if cfg.head == "arcface":
-        print(f"ArcFace ON (scale={cfg.arcface_scale}, margin={cfg.arcface_margin}).")
+        print(f"ArcFace ON (scale={cfg.arcface_scale}, margin={cfg.arcface_margin}, zscore={cfg.arcface_zscore}).")
 
     # --- loss ---
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -70,7 +71,9 @@ def train(cfg: TrainConfig):
     criterion = MultiLevelCELoss(n_classes, weights=cfg.level_weights,
                                  label_smoothing=cfg.label_smoothing, device=device,
                                  arc_scale=cfg.arcface_scale if cfg.head == "arcface" else None,
-                                 arc_margins=arc_margins)
+                                 arc_margins=arc_margins,
+                                 arc_zscore=cfg.head == "arcface" and cfg.arcface_zscore,
+                                 arc_ndim=(custom_head.head.preclass_size if cfg.head == "arcface" else None))
 
     # --- distillation (optional): a frozen teacher supplies soft targets for a small student ---
     teacher_model = None
@@ -183,6 +186,7 @@ def _save_checkpoint(learn, cfg: TrainConfig, levels, vocabs, df, out_dir: Path,
             "model_state_dict": learn.model.state_dict(),
             "head": cfg.head,
             "arcface_scale": cfg.arcface_scale,
+            "arcface_zscore": cfg.arcface_zscore,
             "vit": vit,
             "model_arch_name": cfg.model_arch_name,
             "hidden": cfg.hidden,

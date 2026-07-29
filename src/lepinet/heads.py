@@ -240,17 +240,29 @@ class ArcFaceHead(IndependentHead):
         droprate: float = 0.1,
         scale: float = 30.0,
         margin: float | Sequence[float] = 0.0,
+        zscore: bool = False,
     ):
         super().__init__(in_features, n_classes, hidden=hidden, droprate=droprate)
         self.scale = float(scale)
+        # zscore=True: emit z(cos θ) like the plain cosine head instead of s·cos θ, so the ArcFace
+        # margin composes with the project's calibrated transform (see
+        # lepinet.loss.apply_arcface_margin_zscore). Makes `scale` largely redundant.
+        self.zscore = bool(zscore)
         margins = margin if isinstance(margin, (list, tuple)) else [margin] * self.n_levels
         if len(margins) != self.n_levels:
             raise ValueError(f"margin needs {self.n_levels} values (fine→coarse) or a scalar, got {margins!r}.")
         self.margins = [float(m) for m in margins]
 
     def forward(self, x: torch.Tensor) -> list[torch.Tensor]:
-        """``x``: pooled backbone features ``[N, in_features]``. Returns per-level ``s·cos θ``, fine→coarse."""
+        """Per-level logits, fine→coarse: ``z(cos θ)`` when ``zscore`` else ``s·cos θ``.
+
+        Label-free either way (the margin is training-only, injected by the loss), so this still
+        traces to ONNX with ``dynamo=False``.
+        """
         emb = self.preclassification(x)
+        if self.zscore:
+            return [cosine_to_zscore(F.linear(emb, layer.weight), self.preclass_size) + layer.bias
+                    for layer in self.layers]
         return [self.scale * F.linear(emb, layer.weight) for layer in self.layers]
 
 
