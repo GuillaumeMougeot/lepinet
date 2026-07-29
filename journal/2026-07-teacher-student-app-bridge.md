@@ -339,3 +339,47 @@ half-precision module instead of rewriting a finished graph:
 in-browser confirmation of the ConvInteger hypothesis rather than a candidate. If fp16 loads, the
 shipped model drops ~28 % with zero accuracy change and the ORT-Web blocker is resolved for practical
 purposes; the ≤8 MB target then needs a smaller *student*, not a smaller *format*.
+
+## int8 in the browser: CLOSED as not-worth-it; fp16 is the shipping format (2026-07-29)
+
+Owner's in-browser test of the deployed candidates:
+
+- **fp16 (30.1 MB): WORKS.** Loads and predicts. → **this is the shipping format.**
+- **int8 (11.0 MB): FAILS**, with exactly the predicted error:
+  `Could not find an implementation for ConvInteger(10) node '/model/model.0/conv_stem/Conv_quant'`.
+
+**Is there a fix?** In principle yes — *static QDQ* quantization emits
+`QuantizeLinear`/`DequantizeLinear` around ordinary `Conv`/`Gemm` instead of `ConvInteger`, which
+ORT-Web does implement. But we **already tried that** ([[2026-07-lepi-app-compression]]): the static
+QDQ graph verified in Python and then died in-browser at session creation with a raw numeric WASM
+error. So both int8 encodings have now failed in a real browser for *different* reasons, and the
+remaining ideas (per-tensor instead of per-channel QDQ, a custom minimal ORT build) are speculative
+and slow to iterate — each costs a build + a device test.
+
+**Decision (owner concurs): stop chasing int8.** fp16 gives 28 % off with *zero* accuracy change and
+is confirmed working. The path to a genuinely small artifact is therefore a **smaller/better student**
+(the model), not a smaller *format*: b0 caps ~0.88, while `fastvit_sa12` (10.6 M) reached 0.892 and
+`effnetv2b2` (8.7 M) 0.887 in the compression sweep. A fp16 student at that size lands near ~15–20 MB
+with *better* accuracy than today's b0 — strictly better than a broken 11 MB int8.
+
+## ArcFace next steps: tune it, and the z-score adaptation (owner's idea, 2026-07-29)
+
+The 0.732-vs-0.601 OOD result came from **untuned** ArcFace (`s=30, m=0.3`, first guess). Two levers:
+
+1. **Hyperparameter tuning.** `m` controls how hard the margin pushes (too large hurts the tail, which
+   we already emphasise via oversampling); `s` sets the logit scale and interacts with label
+   smoothing. A small sweep (`m ∈ {0.1, 0.2, 0.3, 0.5}`, `s ∈ {16, 30, 64}`) on the *fixed* backbone,
+   scored on **both** in-distribution F1 and OOD AUROC, should find a better point on that trade-off —
+   0.732 is very unlikely to be the ceiling.
+2. **ArcFace × `cosine_to_zscore` (owner's proposal — mathematically grounded, and I agree).** The two
+   are complementary and currently *mutually exclusive* in our code: the independent head maps
+   `cos θ → z-score` (`√(d−2)·(acos(−cos) − π/2)`, which stretches the concentrated cosine
+   distribution of high-dimensional unit vectors into ~N(0,1) so the logits behave like ordinary
+   pre-softmax scores), while `ArcFaceHead` drops that and returns raw `s·cos θ`. Combining them —
+   apply the additive angular margin **then** the z-score transform, i.e. `z(cos(θ+m))` — keeps the
+   margin's open-set geometry *and* restores the calibrated, dimension-aware logit scale. That should
+   help exactly where the current arcface is weakest: comparable thresholds across heads (§ the OOD
+   note that only AUROC, not raw scores, is comparable today) and better-behaved softmax/CE. It also
+   makes `s` partly redundant, since `√(d−2)` already sets a principled scale.
+   **Implementation is small** (an `zscore=True` flag on `ArcFaceHead` + the margin applied before the
+   transform in the loss), and it is the more interesting of the two levers scientifically.
