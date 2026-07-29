@@ -253,6 +253,7 @@ def evaluate(
     drop_unknown_species: bool = True,
     tta: bool = False,
     skip_missing: bool = True,
+    limit: int | None = None,
 ) -> Path:
     """Evaluate a checkpoint on a held-out fold; write predictions + native metric report.
 
@@ -311,6 +312,11 @@ def evaluate(
             df = df[exists]
         if len(df) == 0:
             raise ValueError(f"Every image listed in {parquet_path} is missing under {img_dir}.")
+    if limit:
+        # Throughput probe / smoke: evaluate a random subset. Metrics on a subset are NOT comparable
+        # to a full-fold number -- this exists to measure img/s and validate a config cheaply.
+        df = df.sample(n=min(int(limit), len(df)), random_state=0)
+        print(f"LIMIT: evaluating a random subset of {len(df)} images (metrics not comparable to a full run).")
     df["is_valid"] = np.arange(len(df)) % 5 == 0  # dummy split; we use test_dl regardless
     test_df = df[["image_path", "is_valid", *levels]].reset_index(drop=True)
     print(f"Test images: {len(test_df)} | {levels[0]} present: {test_df[levels[0]].nunique()}")
@@ -320,9 +326,13 @@ def evaluate(
                    lowmem=False, levels=levels)
     model, _meta = load_model(checkpoint, img_size=img_size)
 
+    import time as _time
     print(f"Running inference{' with TTA (4-flip)' if tta else ''}...")
+    _t0 = _time.perf_counter()
     preds, confs = predict_df(model, dls, test_df, vocabs, levels, device, tta=tta,
                               num_workers=num_workers)
+    _dt = _time.perf_counter() - _t0
+    print(f"Inference: {len(test_df)} images in {_dt:.1f}s = {len(test_df)/max(_dt,1e-9):.1f} img/s")
     labels = test_df[levels].to_numpy().astype(str)
     filenames = test_df["image_path"].to_numpy()
 
