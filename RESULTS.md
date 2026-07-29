@@ -41,23 +41,62 @@ Baseline: `20260712-072542-heads-global-independent-muon-effnetv2s`
 
 ## lepinet package (UCloud) runs — hand-maintained
 
-The `dev/036_ledger.py` snapshot above only sees the *local* `data/global` (old dev/030 pipeline).
-The `src/lepinet` package runs on **UCloud B200** and its results/checkpoints are not in that ledger,
-so this table is maintained by hand. Test = species (level-0) macro-F1 on the **full** fold-0 test
-(all 12,041 species, `min_img_per_spc=0`), native metric (≡ mini_metrics at threshold 0). `location`
-= where the checkpoint lives now.
+`dev/036_ledger.py` only sees the *local* `data/global` (old dev/030 pipeline). The `src/lepinet`
+package runs on **UCloud B200** and its checkpoints/results are not in that ledger, so this table is
+maintained by hand and kept exhaustive.
 
-| run | model | test species F1 | notes | location |
-|---|---|---|---|---|
-| `20260724-181230` | effnetv2_s 5ep oversample | **0.9110** (0.9152 @opt-thr) | port reproduces the 0.9148 baseline — **milestone** | local + ucloud |
-| `20260724-202442` | ConvNeXtV2-L @320 6ep mixup | **0.9316** | bigger everything (+1.68 pp) — **best teacher** | local + ucloud |
-| `20260725-164507` | tf_efficientnetv2_b0 h256 from-scratch | 0.8692 | distillation control | local + ucloud |
-| `20260725-164500` | b0 h256 distilled (mock teacher, **T=4**) | 0.8546 | KD default temp HURT — negative result | ucloud (deletable) |
-| `20260725-232410` | b0 h256 distilled (mock teacher, **T=1**) | **0.8786** | KD works; beats from-scratch (+0.94 pp) | local + ucloud |
-| `20260728-*` | b0 distilled from **ConvNeXtV2-L** teacher, T=1 | _pending_ | real distillation (#6) | ucloud |
-| `20260728-*` | convnext_large.dinov3 @320 6ep | _pending_ | DINOv3 pretraining vs FCMAE (#9) | ucloud |
-| flemming open-set | ConvNeXtV2-L on flemming referenced | _pending_ | external open-set test (mini_metrics @thr 0) | ucloud |
+**Metric:** species (level-0) **macro-F1** on the held-out fold `set=='0'`, over **all** species
+(`min_img_per_spc=0`, 629,742 images / 12,041 species) unless the row says otherwise; micro-accuracy
+in parentheses. Native metric ≡ `mini_metrics` at threshold 0 (verified bit-exact).
+`location`: where the checkpoint lives now (`local` = `data/local_models/`).
 
-Reasoning behind each is in [`journal/`](journal/): the port ([[2026-07-src-lepinet-baseline-port]]),
-scaling ([[2026-07-bigger-everything]]), distillation + KD-temperature
-([[2026-07-teacher-student-app-bridge]]).
+### Trained models
+
+| run id | model | species F1 (micro) | genus | family | notes | location |
+|---|---|---|---|---|---|---|
+| `20260724-181230` | effnetv2_s, independent head, 5 ep, oversample 0.5 | **0.9110** (0.9317) | 0.9587 | 0.9708 | **milestone baseline** — reproduces the 0.9148 project best (0.9152 @optimal threshold) | local + ucloud |
+| `20260724-202442` | ConvNeXtV2-L @320, 6 ep, MixUp 0.2 | **0.9316** (0.9507) | 0.9739 | 0.9876 | "bigger everything" — **+1.68 pp**, best in-distribution | local + ucloud |
+| `20260728-113338` | convnext_large.dinov3 @320, 6 ep, MixUp 0.2 | **0.9311** (0.9498) | 0.9731 | 0.9867 | matches ConvNeXtV2-L at **~2× the training speed** → preferred teacher | ucloud |
+| `20260725-164507` | tf_efficientnetv2_b0, hidden 256, from scratch | 0.8692 (0.9025) | 0.9344 | 0.9560 | distillation **control** | local + ucloud |
+| `20260725-232410` | b0 h256, distilled from the 5ep teacher, **T=1** | **0.8786** (0.9070) | 0.9390 | 0.9610 | KD works: **+0.94 pp over from-scratch** | local + ucloud |
+| `20260725-164500` | b0 h256, distilled, **T=4** | 0.8546 (0.8957) | — | — | **negative result** — textbook KD temperature *hurt* (−1.46 pp) | ucloud (deletable) |
+| `20260728-113248` | b0 h256, distilled from **ConvNeXtV2-L**, T=1 | 0.8756 (0.9062) | 0.9375 | 0.9598 | a stronger teacher did **not** help — the student's capacity is the ceiling | ucloud |
+| `20260728-184225` | effnetv2_s, **hierarchical** (parent-conditioned) head | 0.8845 (0.9138) | 0.9471 | 0.9683 | **< independent 0.9110** — conditioning hurts (fair comparison, identical config) | ucloud |
+| `20260728-184310` | effnetv2_s, **arcface** head (s=30, m=0.3 species-only) | 0.8784 (0.9092) | 0.9465 | 0.9639 | −3.3 pp in-distribution, but **OOD AUROC 0.732 vs 0.601** (see below) | ucloud |
+| `20260729-182718` | effnetv2_s, **single species head** (flat) | _running_ | — | — | tests whether genus/family supervision helps the backbone at all | ucloud |
+| `20260729-183815` | effnetv2_s, **arcface × z-score** (m=0.3) | _running_ | — | — | margin composed with `cosine_to_zscore`: `z(cos(θ+m))` | ucloud |
+| `20260729-115003/115103` | convnext_large.dinov3 @320, **12 ep** | _running_ | — | — | owner's "6 ep was budget, not principle" | ucloud |
+
+Smoke runs (family 9717, 1 epoch — path validation only, not comparable): `lepinet-smoke-9717`,
+`convnextv2l-smoke` ×2, `arcface-smoke` ×2, `dinov3-vitb-smoke`. Deleted from UCloud.
+
+### External-dataset evaluations (generalisation)
+
+The same ConvNeXtV2-L model (in-distribution **0.9316**) on data from a different source:
+
+| dataset | images | species F1 (micro) | genus | family | notes |
+|---|---|---|---|---|---|
+| flemming_helsing `referenced` | 58,640 | **0.6950** (0.6549) | 0.7641 | 0.8086 | ~23 pp generalisation gap; 13.7 % of images are OOD species |
+| ↳ same, **with TTA** (4-flip) | 58,640 | 0.6976 (0.6622) | 0.7733 | 0.8157 | TTA worth only **+0.3 pp** for 4× the cost |
+| flemming **names** set | 47,905 | **0.7122** (0.7218) | 0.7859 | 0.7949 | GBIF-id-reconciled ⇒ only **0.5 %** OOD (vs 13.7 %) — cleaner test |
+
+### Open-set / OOD detection
+
+Unseen species from **global_lepi's <50-image classes** (excluded from training, same image domain,
+so this isolates *novelty* from domain shift). 632,913 images, 3,171 novel. Score = `−max species
+logit`; metric = AUROC(known vs novel).
+
+| head | in-distribution species F1 | **OOD AUROC** |
+|---|---|---|
+| independent (plain cosine) | 0.9110 | 0.601 (≈ chance) |
+| **arcface** (s=30, m=0.3) | 0.8784 | **0.732** (+13.1 pt) |
+
+### Throughput
+
+| what | measurement |
+|---|---|
+| inference (effnetv2_s, full B200, 32 workers) | **898 img/s** → a full 630 k eval is ~12 min |
+| the same before the `num_workers` fix | ~1 img/s (fastai's `DataLoader.num_workers` is a dummy) |
+
+Reasoning behind every number is in [`journal/`](journal/) — start at
+[`journal/README.md`](journal/README.md).
