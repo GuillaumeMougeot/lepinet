@@ -266,3 +266,33 @@ m≈0.5, which is the model adapting, not the margin becoming benign).
 That is a cheap grid (~4 × 200 steps), not a range test, and it measures the right thing. Recorded
 as a negative result because "invent an lr_find for hyperparameter X" is a tempting instinct and it
 is only valid when X's effect on the loss is *indirect*.
+
+## OOD benchmark (b): under domain shift the advantage shrinks but holds (2026-07-30)
+
+The realistic case — flemming: novel species **and** a different camera. Both the known and the novel
+images come from the shifted domain, which is what a deployed trap actually sees.
+
+| head | benchmark (a): novelty only | **benchmark (b): novelty + domain shift** |
+|---|---|---|
+| independent (plain cosine) | 0.601 | **0.574** |
+| arcface × z-score | **0.9115** | **0.7272** |
+| *advantage* | +31.1 pt | **+15.3 pt** |
+
+**Reading it honestly.** ArcFace × z-score still wins clearly (0.727 vs 0.574 — the plain head is
+essentially chance under shift too), but the gap **halves** and the absolute score drops 18 pt from
+the clean benchmark. So the 0.9115 headline is a *best case*, obtained where only the taxon is
+unfamiliar. When the imaging conditions also change, the embedding drifts toward the "unknown"
+region for *known* species too — visible in the logits: the known mean falls 32.6 → 20.6 while novel
+sits at 14.1, so the two distributions move toward each other rather than the novel one moving away.
+
+**Caveat on precision:** only **234** of 47,905 images are novel here (6 species), because this
+dataset is GBIF-id-reconciled. That is a small positive class — treat 0.727 as ±0.03-ish, and as
+evidence of *direction*, not a precise operating point. A larger novel set under shift would need
+either the un-reconciled flemming_helsing OOD species (13.7 % of images, but with id noise) or a
+deliberately held-out species split from the trap data.
+
+**Consequence for the story.** The two axes interact: novelty detection is *not* domain-robust. This
+strengthens the paper's framing (both kinds of "unknown" matter and they compound) and it sharpens
+the priority list — **domain robustness is upstream of open-set**, because a shifted embedding
+degrades the novelty score itself. Domain-mimicking augmentation / self-training is therefore not a
+parallel track to OOD work; it is a prerequisite for it.
