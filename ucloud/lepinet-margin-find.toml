@@ -1,0 +1,26 @@
+# ArcFace margin range test (the lr_find analogue): ramp m 0->0.8 over 400 steps from the CONVERGED
+# margin-free 5ep baseline, so the loss is flat and any rise is attributable to m. Reads the knee.
+name = "lepinet-margin-find"
+replicas = 1
+[application]
+name = "pytorch-te"
+version = "26.05"
+[product]
+id = "gpu-nvidia-b200-1-gpu"
+category = "gpu-nvidia-b200"
+provider = "ucloud"
+[time_allocation]
+hours = 3
+[sync]
+local = ".."
+remote = "/12347837/repos/lepinet"
+[setup]
+script = "setup-lepinet.sh"
+run = "python dev/055_margin_scale_find.py --config configs/20260729_ucloud_arcface_zscore_effnetv2s.yaml --init-from '/work/lepinet/data/ucloud_models/*-lepinet-heads-global-independent-muon-5ep-oversample-effnetv2s-ucloud/*.pt' --steps 400 --m-max 0.8 --out /work/lepinet/data/ucloud_preds/margin_find.json"
+[schedule]
+auto_extend = "1h"
+max_time = "6h"
+[[resources]]
+type = "file"
+path = "/12347837/datasets/global_lepi"
+read_only = true
