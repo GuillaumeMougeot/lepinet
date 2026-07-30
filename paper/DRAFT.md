@@ -166,7 +166,31 @@ distributions that carry the result are Fig. 4, `figures/fig4_openset_scores.png
 everything (intra −0.15), so novel and known look alike. This is why a 2-D projection (UMAP/t-SNE) is
 the wrong visualisation: it is invariant to exactly the property that carries the effect.
 
-### 4.4 Open-set under domain shift
+### 4.4 Novelty is graded by taxonomic distance
+
+Treating open-set detection as binary hides the structure that matters. Splitting novel taxa by how
+much of their lineage the model has seen (unfiltered catalogue; species below the training floor are
+genuinely unseen, in-domain):
+
+| stratum | n | cosine | **ArcFace × z-score** |
+|---|---|---|---|
+| **near** — unseen species, known genus | 8,000 | 0.5606 | **0.8493** |
+| **mid** — unseen genus, known family | 8,000 | 0.6177 | **0.9094** |
+| **far** — unseen family | 399 | 0.6656 | **0.9411** |
+
+Both heads are **monotone in taxonomic distance**: the further a novel taxon lies from the training
+set, the easier it is to flag. The embedding therefore places unfamiliar taxa at a distance that
+tracks the taxonomy rather than merely displacing them, which is what makes a single scalar novelty
+score meaningful across ranks.
+
+It also disciplines the headline. `far` is rare (399 images) while `near` — a new species in a
+familiar genus — is both the most common and the operationally decisive case, so a pooled AUROC is
+flattered by the easy strata. Stated honestly: **0.94 for a novel family, 0.85 for a novel species in
+a known genus** — against a plain cosine head that is near-chance (0.56) on precisely that case.
+ArcFace's advantage is uniform across strata (+27.6 to +29.2 points), i.e. it improves the entire
+difficulty range rather than only the easy end.
+
+### 4.5 Open-set under domain shift
 
 Repeating the benchmark where the novel species *also* come from a different camera (flemming):
 
@@ -181,7 +205,7 @@ unfamiliar rather than making novel ones look more distinct. Novelty detection i
 domain-robust**, and domain adaptation is upstream of open-set rather than parallel to it. (Only 234
 of 47,905 images are novel here, so treat this as directional, ±0.03.)
 
-### 4.5 Rank abstention — and why backing off is subtler than it looks
+### 4.6 Rank abstention — and why backing off is subtler than it looks
 
 Marginalisation makes rank abstention a *threshold*, not a second model: back off to genus when the
 species posterior is unconfident. Evaluated on 629,742 held-out images with the single-head model:

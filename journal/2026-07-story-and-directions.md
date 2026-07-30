@@ -332,3 +332,37 @@ the warm-started model is destroyed within 200 steps (accuracy 0.91 → 0.00) �
 loss enormous (12+, per the range test) and the gradients wreck the weights. Training *from scratch*
 with a fixed margin is stable and gives 0.9069. If margin fine-tuning is ever wanted, it needs a
 margin warm-up schedule and/or a much lower LR.
+
+
+## C3: novelty detection is graded by taxonomic distance (2026-07-30)
+
+The binary framing — "known vs novel" — hides structure. Using the **unfiltered** global_lepi parquet
+(species below the `min_img_per_spc=50` training floor are genuinely unseen, in-domain: 64,504 novel
+images across 38,907 species, vs 3,171 before), novelty splits into three degrees:
+
+| stratum | meaning | n | plain cosine | **ArcFace × z-score** |
+|---|---|---|---|---|
+| **near** | unseen species, **known genus** | 8,000 | 0.5606 | **0.8493** |
+| **mid** | unseen genus, known family | 8,000 | 0.6177 | **0.9094** |
+| **far** | unseen **family** | 399 | 0.6656 | **0.9411** |
+| all novel | — | 16,399 | 0.5910 | 0.8808 |
+
+**Both heads are monotone in taxonomic distance** — the further a novel taxon sits from the training
+set, the easier it is to flag. That is the behaviour one would *want* and it is not guaranteed: it
+says the embedding places unfamiliar taxa at a distance that tracks the taxonomy, not merely
+"somewhere else". The mean max-cosine shows the same ordering directly (ArcFace: known 0.671 → near
+0.433 → mid 0.363 → far 0.261).
+
+**Why this matters more than the headline AUROC.** The *easy* stratum (`far`) is rare — 399 images —
+while the **hard** one (`near`: a new species in a genus the model knows) is both the most common and
+the most operationally important, because that is what a field deployment actually meets. Quoting a
+single pooled AUROC lets the easier strata flatter the number. Reported per stratum, the honest
+statement is: **ArcFace × z-score detects a genuinely novel family at 0.94, but a novel species in a
+familiar genus only at 0.85** — still transformative versus the plain head's 0.56, which is
+indistinguishable from guessing on exactly the case that matters.
+
+**ArcFace's advantage is uniform** (+28.9, +29.2, +27.6 points across near/mid/far), so the margin is
+not merely sharpening far-away detection — it improves the whole difficulty range.
+
+*(Cosmetic: the script prints `n=0` for the pooled row because it only counts the four strata keys;
+the AUROC itself is computed over the union of all novel images.)*

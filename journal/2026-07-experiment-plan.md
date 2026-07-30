@@ -20,7 +20,7 @@ Updated 2026-07-30. `→` = chained eval. Every finished run must land in `RESUL
 | B3 | self-training on unlabelled OOD images | not started | — |
 | C1 | rank-abstention curves (no GPU) | **DONE** | 99.18% answered at 95.04% precision; **coarse ranks must be calibrated conditionally** — genus is 0.487 on the hard subset vs 0.970 overall |
 | C2 | OOD AUROC for A1/A2 | blocked on A | — |
-| C3 | hierarchical OOD (near/mid/far), unfiltered parquet | **running** (both heads) | — |
+| C3 | hierarchical OOD (near/mid/far), unfiltered parquet | **DONE** | Monotone in taxonomic distance for both heads. ArcFace×z-score: near 0.849 / mid 0.909 / far 0.941; plain 0.561 / 0.618 / 0.666. The hard, common case (`near`) is where the plain head is ~chance. |
 | D1 | calibration + thresholds + names in `lepinet bundle` | not started | — |
 | D2 | distil into fastvit_sa12 instead of b0 | not started | — |
 | — | marginal supervision (owner's true hierarchical idea) | **running** → eval queued | — |
