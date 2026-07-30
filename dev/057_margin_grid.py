@@ -113,12 +113,18 @@ def build(cfg, margin, init_from, steps):
     learn = build_learner(dls, arch, head, FastaiLossWrapper(crit), default_metrics(levels),
                           Path(cfg.out_dir) / "models", [NaNGuard(), StopAfter(steps)],
                           optimizer=cfg.optimizer, vit=vit)
+    # A SEPARATE loader for scoring: the training dls use the lowmem (numpy-indexed) getters, whose
+    # `test_dl` takes indices, not a DataFrame — feeding it one raises a fastai type assertion.
+    # `lepinet.test.evaluate` builds its loaders with lowmem=False for the same reason.
+    val_df = df[df["is_valid"]].head(4096).reset_index(drop=True) if "is_valid" in df.columns else df.head(4096)
+    eval_dls = data_mod.make_dls(val_df, vocabs, cfg.img_dir, cfg.aug_img_size, cfg.img_size,
+                                 cfg.batch_size, cfg.num_workers, lowmem=False, levels=levels)
     state = torch.load(resolve_checkpoint_path(init_from), map_location="cpu", weights_only=False)
     learn.model.load_state_dict(state["model_state_dict"], strict=False)
     if cfg.fp16:
         learn = learn.to_bf16() if cfg.precision == "bf16" else learn.to_fp16()
     learn.unfreeze()
-    return learn, dls, df, levels, vocabs, device
+    return learn, eval_dls, val_df, levels, vocabs, device
 
 
 def main(a):
@@ -132,11 +138,11 @@ def main(a):
     for m in a.margins:
         print(f"\n=== margin {m} ===")
         c = copy.deepcopy(cfg)
-        learn, dls, df, levels, vocabs, device = build(c, m, a.init_from, a.steps)
-        val = df[df["is_valid"]] if "is_valid" in df.columns else df.sample(min(2000, len(df)), random_state=0)
-        base = geometry_margin(learn.model, dls, val.head(a.n_eval), levels, vocabs, device)
+        learn, eval_dls, val_df, levels, vocabs, device = build(c, m, a.init_from, a.steps)
+        val = val_df.head(a.n_eval)
+        base = geometry_margin(learn.model, eval_dls, val, levels, vocabs, device)
         learn.fit(1, cfg.base_lr)
-        after = geometry_margin(learn.model, dls, val.head(a.n_eval), levels, vocabs, device)
+        after = geometry_margin(learn.model, eval_dls, val, levels, vocabs, device)
         results[str(m)] = {"before": base, "after": after}
         print(f"  geometry margin {base['geometry_margin']:.3f} -> {after['geometry_margin']:.3f} "
               f"| acc {base['acc']:.3f} -> {after['acc']:.3f}")
