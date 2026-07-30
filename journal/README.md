@@ -115,7 +115,8 @@ Six phases, in order. The engineering lessons each one produced are consolidated
 | [07-24](2026-07-24-bigger-everything.md) | Does a bigger backbone beat 0.9148 and make a good distillation teacher? | RESOLVED — ConvNeXtV2-L **0.9316 (+1.68 pp)**, now the best teacher |
 | [07-28](2026-07-28-flemming-generalization.md) | Does the 0.9316 model survive an external dataset? | RESOLVED — drops to **0.6950** (~23 pp gap); family robust; motivates the OOD work |
 | [07-30](2026-07-30-domain-shift.md) | Is domain augmentation a fix for the 23 pp gap, or a treadmill? | OPEN — B1 running |
-| [07-30](2026-07-30-marginal-supervision.md) | Does supervising the marginals *during training* help? | OPEN — running |
+| [07-30](2026-07-30-marginal-supervision.md) | Does supervising the marginals *during training* help? | RESOLVED — species **unchanged** (0.9135 → 0.9135), but genus +0.27 / family +0.39 pp. Free coarse accuracy via calibration of the sum |
+| [07-30](2026-07-30-does-arcface-compose-with-marginalisation.md) | Do single-head marginalisation and ArcFace × z-score compose? | OPEN — **they do not**: prediction falsified, and the interference is 2× larger at genus/family than at species, so the *marginalisation* is what the margin breaks. AUROC pending |
 
 ### Subprojects
 

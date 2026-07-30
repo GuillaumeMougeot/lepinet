@@ -1,6 +1,10 @@
 # Closing the 23-point domain gap — is augmentation a fix or a treadmill?
 
-**Kind:** research · **Status:** OPEN (2026-07-30). Hypotheses before experiments. Feeds the same paper as
+**Kind:** research · **Status:** OPEN (2026-07-30). B1 (`domain_aug: trap`) has trained: in-distribution species macro-F1
+**0.8999** vs A1's 0.9035, i.e. the expected small cost (−0.36 pp) for training on deliberately
+degraded images. **That number decides nothing** — the whole hypothesis is about the *shifted*
+benchmark, queued as `lepi-B1-shift`. Recorded here only so the cost is on the books before the
+benefit is known. Hypotheses before experiments. Feeds the same paper as
 [[DIRECTIONS]] — a new *section*, not a new project: the flemming result showed
 novelty detection degrades under shift, so robustness sits **upstream** of the open-set contribution
 rather than beside it.

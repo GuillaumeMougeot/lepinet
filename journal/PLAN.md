@@ -18,11 +18,13 @@ Updated 2026-07-30. `→` = chained eval. Every finished run must land in `RESUL
 
 | id | run | state | result |
 |---|---|---|---|
-| A1 | effnetv2_s, single head + ArcFace × z-score | **running** → eval queued | — |
+| A1 | effnetv2_s, single head + ArcFace × z-score | **in-dist DONE**; shift + OOD queued (`lepi-A1-shift`, `lepi-A1-ood`) | **0.9035** / 0.9491 / 0.9628 — **prediction falsified** (floor was 0.906). The two effects do *not* compose: interference is −0.59 pt at species but **−1.0 pt at genus/family**, so what breaks is the *marginalisation*, via calibration. See [[2026-07-30-does-arcface-compose-with-marginalisation]]. Verdict pending the AUROC, which is the axis ArcFace exists for. |
 | A2 | DINOv3-cnx-L, single head + ArcFace × z-score (final-model candidate) | **queued** → eval queued | — |
 | A3 | distil A2 → small single-head student | blocked on A2 | — |
+| A4 | **A1 + marginal supervision** | not started — *newly indicated* | Two same-day results identified one mechanism from opposite sides: marginal supervision improves the summed posterior's calibration (+0.27/+0.39 coarse), the ArcFace margin degrades it (−1.15/−1.11 coarse). Composing them is the direct test. |
+| A5 | **seed-repeat of the current baseline** | not started — *overdue* | The project has never measured its seed-to-seed spread, yet routinely interprets 0.2–0.4 pt deltas. 1.5 h, and it retroactively sets the believability threshold for every sub-half-point row in `RESULTS.md`. |
 | B0 | more capacity / longer schedule | **deferred, deliberately.** The owner's 12-epoch DINOv3-cnx-L (job 12361261) expired mid-run — no queue daemon was ticking, see [[2026-07-30-ucloud-queue-daemon]]. Not restarted as-is: it trained the *old multi-head* architecture, so its number would land on a superseded baseline. Re-ask as **12 epochs of A2's config** once A2 lands, which isolates schedule length as the single factor. | — |
-| B1 | domain-mimicking augmentation (`domain_aug: trap`) | **running** → eval queued | — |
+| B1 | domain-mimicking augmentation (`domain_aug: trap`) | **in-dist DONE**; shift queued (`lepi-B1-shift`) | 0.8999 in-distribution (−0.36 pt vs A1) — the expected cost. **Decides nothing until the shifted number lands.** |
 | B2 | background suppression (flatbug-style) | not started | — |
 | B3 | self-training on unlabelled OOD images | not started | — |
 | C1 | rank-abstention curves (no GPU) | **DONE** | 99.18% answered at 95.04% precision; **coarse ranks must be calibrated conditionally** — genus is 0.487 on the hard subset vs 0.970 overall |
