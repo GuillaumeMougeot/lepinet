@@ -200,3 +200,35 @@ single-head architecture. That is a much cleaner claim than a head bake-off.
 **Caveats.** 0.9115 is on the *no-domain-shift* benchmark; the flemming OOD set (novelty **+**
 different camera) is the harder case and is still to run. `m=0.3`/`s=30` remain untuned, so this is
 a floor, not a ceiling.
+
+
+## The embedding geometry, measured (dev/053, 2026-07-30)
+
+*Why* arcface × z-score detects novelty so much better, measured directly on the embeddings —
+12 species × 40 held-out images, cosine against each model's **own trained prototypes**:
+
+| head | intra ↑ | inter ↓ | **margin** ↑ | silhouette |
+|---|---|---|---|---|
+| independent (plain cosine) | −0.154 | −0.336 | 0.182 | 0.617 |
+| **arcface × z-score** | **0.667** | 0.056 | **0.610** | **0.641** |
+
+- **intra** = mean cosine to its own prototype, **inter** = mean max cosine to a *wrong* prototype,
+  **margin** = intra − inter (the separation ArcFace is designed to create).
+- The margin is **3.3× larger** (0.610 vs 0.182), and the absolute geometry is transformed: the plain
+  head's embeddings sit at cosine **−0.15** to their own prototype — barely aligned, essentially
+  relying on *relative* ordering — while ArcFace pulls them to **+0.67**, genuinely clustered around
+  the prototype, with wrong classes pushed to ≈0 (orthogonal).
+- **Silhouette barely moves (0.617 → 0.641).** That is the honest caveat and the reason this script
+  reports numbers before pictures: *cluster separability* was already fine — closed-set accuracy is
+  0.911 either way, so of course it was. What changes is the **absolute angular position** relative
+  to the prototypes, which is exactly what an open-set score reads. A t-SNE panel would have shown
+  "two similar-looking blobs" and hidden the effect entirely.
+
+**This explains the OOD result mechanistically.** A novelty score of `max cos θ` only works if
+"close to a known class" has an absolute meaning. In the plain head everything is roughly orthogonal
+to everything (intra −0.15, inter −0.34): a novel species looks no different from a known one, hence
+AUROC 0.601. ArcFace × z-score gives known images high absolute similarity (0.667) while leaving
+novel ones near the inter level, so a threshold separates them — AUROC 0.9115.
+
+Plot: `data/emb_compare/embeddings.png` (t-SNE; umap not installed, and it would not change the
+conclusion since the effect is angular, not topological).
