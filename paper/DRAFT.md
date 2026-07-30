@@ -160,12 +160,28 @@ discarding the calibrated transform.
 | ArcFace × z-score | **+0.667** | 0.056 | **0.610** | 0.641 |
 
 Silhouette barely moves: *separability was never the problem* — closed-set accuracy is equal. What
-changes is **absolute** angular position. A novelty score $\max_j \cos\theta_j$ is only meaningful if
+changes is **absolute** angular position (Fig. 3, `figures/fig3_embedding_tsne.png`; the score
+distributions that carry the result are Fig. 4, `figures/fig4_openset_scores.png`). A novelty score $\max_j \cos\theta_j$ is only meaningful if
 "close to a known class" has an absolute scale; the plain head places everything near-orthogonal to
 everything (intra −0.15), so novel and known look alike. This is why a 2-D projection (UMAP/t-SNE) is
 the wrong visualisation: it is invariant to exactly the property that carries the effect.
 
-### 4.4 Rank abstention _(pending)_
+### 4.4 Open-set under domain shift
+
+Repeating the benchmark where the novel species *also* come from a different camera (flemming):
+
+| head | novelty only | novelty + domain shift |
+|---|---|---|
+| cosine | 0.601 | 0.574 |
+| ArcFace × z-score | **0.9115** | **0.7272** |
+
+The advantage survives but halves (+31.1 → +15.3 points). The logits show why: under shift the
+*known* mean falls (32.6 → 20.6) toward the novel one (14.1), i.e. shift makes familiar species look
+unfamiliar rather than making novel ones look more distinct. Novelty detection is therefore **not
+domain-robust**, and domain adaptation is upstream of open-set rather than parallel to it. (Only 234
+of 47,905 images are novel here, so treat this as directional, ±0.03.)
+
+### 4.5 Rank abstention _(pending)_
 
 Coverage/precision per rank from marginalised posteriors with per-level thresholds.
 

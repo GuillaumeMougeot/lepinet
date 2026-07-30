@@ -116,7 +116,11 @@ def build(cfg, margin, init_from, steps):
     # A SEPARATE loader for scoring: the training dls use the lowmem (numpy-indexed) getters, whose
     # `test_dl` takes indices, not a DataFrame — feeding it one raises a fastai type assertion.
     # `lepinet.test.evaluate` builds its loaders with lowmem=False for the same reason.
-    val_df = df[df["is_valid"]].head(4096).reset_index(drop=True) if "is_valid" in df.columns else df.head(4096)
+    val_df = (df[df["is_valid"]] if "is_valid" in df.columns else df).head(4096).reset_index(drop=True)
+    # A DataBlock with ColSplitter needs BOTH splits non-empty; an all-validation frame makes the
+    # train split empty and fastai indexes into nothing ("single positional indexer is
+    # out-of-bounds"). Same dummy split lepinet.test.evaluate uses — test_dl ignores it anyway.
+    val_df["is_valid"] = np.arange(len(val_df)) % 5 == 0
     eval_dls = data_mod.make_dls(val_df, vocabs, cfg.img_dir, cfg.aug_img_size, cfg.img_size,
                                  cfg.batch_size, cfg.num_workers, lowmem=False, levels=levels)
     state = torch.load(resolve_checkpoint_path(init_from), map_location="cpu", weights_only=False)
