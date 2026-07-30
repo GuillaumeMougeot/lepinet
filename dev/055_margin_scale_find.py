@@ -43,6 +43,20 @@ def zscore_scale(ndim: int) -> float:
     return math.sqrt(ndim - 2.0)
 
 
+def preclass_size(cfg) -> int:
+    """Embedding width the prototypes live in — i.e. what ``√(ndim−2)`` is computed from.
+
+    ``cfg.hidden`` is ``True``/``False`` (use the backbone width) or an explicit int (the bottleneck).
+    **Check ``bool`` before ``int``**: in Python ``isinstance(True, int)`` is True, so a naive
+    ``isinstance(cfg.hidden, int)`` accepts ``True`` and yields ``√(1−2) = √−1`` — which is exactly
+    how the first run of this script died.
+    """
+    if isinstance(cfg.hidden, bool):
+        from lepinet.model import arch_body_features, resolve_arch
+        return int(arch_body_features(resolve_arch(cfg.model_arch_name), img_size=cfg.img_size))
+    return int(cfg.hidden)
+
+
 def scale_report(n_classes_per_level, hidden_dims=(1280, 256)) -> dict:
     rep = {"floors": {}, "zscore_scale": {}}
     for c in n_classes_per_level:
@@ -194,7 +208,7 @@ def main(a):
     cfg, _ = load_config(a.config)
     import pandas as pd
     n_species = pd.read_parquet(cfg.parquet_path)[cfg.levels[0]].nunique()
-    hidden = cfg.hidden if isinstance(cfg.hidden, int) else 1280
+    hidden = preclass_size(cfg)
     floor, zs = analytic_scale_floor(n_species), zscore_scale(hidden)
     print(f"scale: floor(p=0.9)={floor:.1f} | z-score gives {zs:.1f} -> "
           f"{'ADEQUATE, s is inert under zscore' if zs >= floor else 'set s explicitly'}")
