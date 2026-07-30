@@ -45,15 +45,61 @@ class ExportWrapper(nn.Module):
         return tuple(out)
 
 
-def build_taxonomy(checkpoint: dict, meta: dict) -> dict:
-    """Per-level vocabs in head-index order + parent index arrays (for labels, GBIF links, marginalization)."""
+def friendly_level_names(levels) -> list[str]:
+    """App-facing level names from the internal GBIF-column names: ``speciesKey`` → ``species``.
+
+    The training/config side names levels by their parquet columns (``speciesKey``, ``genusKey``,
+    ``familyKey``); the app (and any human) wants ``species`` / ``genus`` / ``family``. Stripping a
+    trailing ``Key`` is the whole mapping for the Lepidoptera hierarchy, and it degrades to identity
+    for any other level name — so a custom hierarchy just ships whatever names it uses.
+    """
+    return [lvl[:-3] if lvl.endswith("Key") else lvl for lvl in levels]
+
+
+class Fp16ExportWrapper(nn.Module):
+    """Half-precision **backbone** + fp32 **head**, exported from source (not converted after).
+
+    Post-hoc fp16 conversion of our ONNX graph does not work: the legacy TorchScript exporter emits
+    explicit ``Cast`` nodes that ``onnxconverter_common`` rewrites inconsistently (invalid graph), and
+    blocking ``Cast`` converts nothing. Tracing a genuinely half-precision module instead produces a
+    valid graph with fp16 initializers — roughly half the file, and (unlike int8) **no
+    ``ConvInteger``/``MatMulInteger``**, which is what ORT-Web cannot execute.
+
+    The cosine head stays **fp32**: it L2-normalizes and takes ``acos`` of values near ±1, which is
+    exactly where fp16 loses the precision that matters (the same reason
+    :class:`~lepinet.heads.PooledHead` forces fp32 under autocast). Input/output stay fp32 so the app
+    feeds and reads the graph unchanged.
+    """
+
+    def __init__(self, model: nn.Module):
+        super().__init__()
+        self.body = model[0].half()
+        self.head = model[1].float()
+        self.register_buffer("mean", torch.tensor(IMAGENET_MEAN).view(1, 3, 1, 1))
+        self.register_buffer("std", torch.tensor(IMAGENET_STD).view(1, 3, 1, 1))
+
+    def forward(self, image: torch.Tensor):
+        x = (image - self.mean) / self.std      # fp32 normalization
+        x = self.body(x.half())                 # fp16 backbone (the bulk of the weights)
+        out = self.head(x.float())              # fp32 cosine head
+        return tuple(out)
+
+
+def build_taxonomy(checkpoint: dict, meta: dict, level_names: list[str] | None = None) -> dict:
+    """Per-level vocabs in head-index order + parent index arrays (for labels, GBIF links, marginalization).
+
+    ``level_names`` relabels the emitted keys (``levels`` / ``vocabs`` / ``parents``) to the
+    app-facing names; the internal ``meta['levels']`` still drives the lookup, so nothing about the
+    trained model changes — only the JSON keys. Defaults to the internal names (no relabel).
+    """
     levels = meta["levels"]
+    names = list(level_names) if level_names is not None else list(levels)
     vocabs = meta["vocabs"]
     hierarchy_df = meta["hierarchy"]
     idx = {level: {str(k): i for i, k in enumerate(vocabs[level])} for level in levels}
 
     parents = {}
-    for child, parent in zip(levels[:-1], levels[1:]):
+    for (child, parent), (cn, pn) in zip(zip(levels[:-1], levels[1:]), zip(names[:-1], names[1:])):
         arr = np.full(len(vocabs[child]), -1, dtype=np.int64)
         for row in hierarchy_df.itertuples(index=False):
             c, p = str(getattr(row, child)), str(getattr(row, parent))
@@ -61,12 +107,12 @@ def build_taxonomy(checkpoint: dict, meta: dict) -> dict:
                 arr[idx[child][c]] = idx[parent][p]
         missing = int((arr < 0).sum())
         if missing:
-            print(f"WARNING: {missing} entries of {child}->{parent} have no parent in the hierarchy.")
-        parents[f"{child}_to_{parent}"] = arr.tolist()
+            print(f"WARNING: {missing} entries of {cn}->{pn} have no parent in the hierarchy.")
+        parents[f"{cn}_to_{pn}"] = arr.tolist()
 
     return {
-        "levels": levels,
-        "vocabs": {level: [str(v) for v in vocabs[level]] for level in levels},
+        "levels": names,
+        "vocabs": {name: [str(v) for v in vocabs[level]] for level, name in zip(levels, names)},
         "parents": parents,
         "note": "vocab entries are GBIF taxon keys in head-index order; "
                 "GBIF page = https://www.gbif.org/species/<key>",
@@ -88,8 +134,19 @@ def export_onnx(
     check: bool = True,
     single_file: bool = True,
     dynamo: bool = False,
+    level_names: list[str] | None = None,
+    write_config: bool = True,
+    bundle_name: str | None = None,
+    precision: str = "fp32",
 ) -> Path:
-    """Export a checkpoint to ``<out_dir>/model.onnx`` + ``taxonomy.json`` + ``MANIFEST.json``.
+    """Export a checkpoint to an **app-ready bundle**: ``model.onnx`` + ``taxonomy.json`` +
+    ``config.json`` + ``MANIFEST.json`` in ``out_dir``.
+
+    The graph output names and ``taxonomy.json`` keys use **app-facing level names**
+    (:func:`friendly_level_names`, e.g. ``species``), and ``config.json`` is the bundle descriptor
+    the ``lepinet-app`` loader reads — so the folder drops straight into the app (``names.json`` /
+    ``calibration.json`` / ``thresholds.json`` are referenced by convention and the app degrades
+    gracefully if they are absent; add them with ``dev/`` calibration + names scripts).
 
     ``dynamo=False`` (default) uses the legacy exporter — reliable for this graph and what the app
     pipeline is verified against. ``check`` runs a PyTorch-vs-ONNX-Runtime parity assertion.
@@ -101,6 +158,7 @@ def export_onnx(
     checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
     model, meta = load_model(checkpoint, img_size=img_size)
     levels = meta["levels"]
+    names = list(level_names) if level_names is not None else friendly_level_names(levels)
     n_classes = [len(meta["vocabs"][level]) for level in levels]
 
     n_params = sum(p.numel() for p in model.parameters())
@@ -108,11 +166,11 @@ def export_onnx(
     print(f"Model: head={checkpoint['head']} arch={checkpoint['model_arch_name']} classes={n_classes}")
     print(f"Params: {n_params/1e6:.2f} M total, {n_head/1e6:.2f} M head ({100*n_head/n_params:.0f}%)")
 
-    wrapper = ExportWrapper(model).eval()
+    wrapper = (Fp16ExportWrapper(model) if precision == "fp16" else ExportWrapper(model)).eval()
     dummy = torch.rand(1, 3, img_size, img_size)
-    onnx_path = out_dir / "model.onnx"
+    onnx_path = out_dir / ("model.fp16.onnx" if precision == "fp16" else "model.onnx")
     print(f"Exporting to {onnx_path} (opset {opset}, {img_size}x{img_size}, dynamo={dynamo})...")
-    output_names = [f"logits_{level}" for level in levels]
+    output_names = [f"logits_{name}" for name in names]
     torch.onnx.export(
         wrapper, (dummy,), str(onnx_path),
         input_names=["image"],
@@ -124,8 +182,26 @@ def export_onnx(
     )
     actual_opset = _read_opset(onnx_path)
 
-    tax = build_taxonomy(checkpoint, meta)
+    tax = build_taxonomy(checkpoint, meta, level_names=names)
     (out_dir / "taxonomy.json").write_text(json.dumps(tax))
+
+    if write_config:
+        config = {
+            "name": bundle_name or f"{checkpoint['arch'] if 'arch' in checkpoint else checkpoint['model_arch_name']} · lepinet",
+            "model": "model.onnx",
+            "fallback": None,
+            "taxonomy": "taxonomy.json",
+            "names": "names.json",
+            "calibration": "calibration.json",
+            "thresholds": "thresholds.json",
+            "imageSize": img_size,
+            "inputName": "image",
+            "outputs": dict(zip(names, output_names)),
+            "gbifBase": "https://www.gbif.org/species/",
+        }
+        (out_dir / "config.json").write_text(json.dumps(config, indent=2))
+        print(f"Wrote config.json (app bundle descriptor; outputs {config['outputs']})")
+
     manifest = {
         "source_checkpoint": str(checkpoint_path),
         "model_name": checkpoint_path.stem,
@@ -147,7 +223,7 @@ def export_onnx(
         "note": "raw logits; calibration + thresholds ship separately",
     }
     (out_dir / "MANIFEST.json").write_text(json.dumps(manifest, indent=2))
-    print(f"Wrote taxonomy.json ({len(tax['vocabs'][levels[0]])} {levels[0]}) and MANIFEST.json")
+    print(f"Wrote taxonomy.json ({len(tax['vocabs'][names[0]])} {names[0]}) and MANIFEST.json")
 
     if check:
         verify_onnx(wrapper, onnx_path, img_size, output_names)
@@ -207,3 +283,122 @@ def marginalize(species_logits: torch.Tensor, taxonomy: dict) -> list[torch.Tens
         cur = scatter_logsumexp(cur, parent_idx, len(taxonomy["vocabs"][parent]))
         out.append(cur)
     return out
+
+
+# ---------------------------------------------------------------------------
+# Quantization + one-command bundle (Phase 3: the teacher/student -> app bridge)
+# ---------------------------------------------------------------------------
+
+def quantize_dynamic_int8(onnx_path: str | Path, out_path: str | Path | None = None) -> Path:
+    """Dynamic int8 (weights-only) quantization of an ONNX graph via onnxruntime.
+
+    ~3.9x smaller for ~-0.6 pp species macro-F1 on the cosine head (measured, ``dev/043`` /
+    [[2026-07-lepi-app-compression]]) — the unit-norm prototypes share one dynamic range, so int8 is
+    nearly free. Emits ``MatMulInteger``/``ConvInteger`` ops: fine for size + native ORT/CPU, but
+    **not runnable in ORT-Web** (that needs static-QDQ, itself still unresolved in-browser — the app
+    ships fp32 for now). So this is the size-reduced release variant, not yet the browser format.
+
+    ORT's quantizer round-trips through shape-inference which trips on the exporter's ``value_info``;
+    stripping it (derived data, lossless) is the known workaround.
+    """
+    import onnx
+    from onnxruntime.quantization import QuantType, quantize_dynamic
+
+    onnx_path = Path(onnx_path)
+    out_path = Path(out_path) if out_path else onnx_path.with_suffix(".int8.onnx")
+    model = onnx.load(str(onnx_path))
+    del model.graph.value_info[:]
+    tmp = onnx_path.with_suffix(".stripped.onnx")
+    onnx.save(model, str(tmp))
+    try:
+        quantize_dynamic(str(tmp), str(out_path), weight_type=QuantType.QInt8)
+    finally:
+        tmp.unlink(missing_ok=True)
+    fp32_mb, int8_mb = onnx_path.stat().st_size / 1e6, out_path.stat().st_size / 1e6
+    print(f"int8: {fp32_mb:.1f} MB -> {int8_mb:.1f} MB ({fp32_mb / max(int8_mb, 1e-9):.2f}x) -> {out_path.name}")
+    return out_path
+
+
+def make_bundle(
+    checkpoint_path: str,
+    out_dir: str,
+    img_size: int = 256,
+    quantize: bool = True,
+    bundle_name: str | None = None,
+    fp16: bool = True,
+    publish_hf: str | None = None,
+    hf_path: str | None = None,
+) -> Path:
+    """One command: checkpoint -> a deployable app bundle folder (Phase 3's "one button").
+
+    Composes :func:`export_onnx` (fp32 ``model.onnx`` + ``taxonomy.json`` + ``config.json`` +
+    ``MANIFEST.json``, the app-ready fp32 bundle) and, when ``quantize`` is set, adds a
+    ``model.int8.onnx`` size-reduced variant. ``names.json`` / ``calibration.json`` /
+    ``thresholds.json`` are data-dependent (``dev/044`` / ``dev/047``) and dropped in beside these
+    when available; the app's ``config.json`` already references them and degrades if absent.
+    """
+    out_dir = Path(out_dir)
+    onnx_path = export_onnx(checkpoint_path, str(out_dir), img_size=img_size, bundle_name=bundle_name)
+    if fp16:
+        # Half-precision backbone: ~1.4x smaller, ONNX-valid, and free of the integer ops ORT-Web
+        # cannot run -- the leading browser-deployable format.
+        export_onnx(checkpoint_path, str(out_dir), img_size=img_size, precision="fp16",
+                    write_config=False, check=False)
+    if quantize:
+        quantize_dynamic_int8(onnx_path, out_dir / "model.int8.onnx")
+    print(f"Bundle ready: {out_dir}  (files: {sorted(p.name for p in out_dir.iterdir())})")
+    if publish_hf:
+        publish_to_hf(out_dir, publish_hf, path_in_repo=hf_path, commit_message=bundle_name)
+    return out_dir
+
+
+def to_fp16_onnx(onnx_path: str | Path, out_path: str | Path | None = None,
+                 keep_fp32_ops: tuple[str, ...] = ("Acos",)) -> Path:
+    """Convert an fp32 ONNX graph to fp16 — the leading ORT-Web small-format candidate.
+
+    Halves the file (~2x) with no ``ConvInteger``/``MatMulInteger`` (which ORT-Web can't run — the
+    reason int8 QDQ failed in-browser, [[2026-07-lepi-app-compression]]). ``keep_io_types=True`` keeps
+    the graph's inputs/outputs fp32 (the app feeds fp32, unchanged); internals run fp16. The cosine
+    head's ``Acos`` is kept fp32 (``keep_fp32_ops``) — its domain-clamped ``acos`` is fp16-fragile
+    (the same reason ``PooledHead`` runs the head in fp32). Verify top-1 parity, then browser-test.
+    """
+    import onnx
+    from onnxconverter_common import float16
+
+    onnx_path = Path(onnx_path)
+    out_path = Path(out_path) if out_path else onnx_path.with_suffix(".fp16.onnx")
+    model = onnx.load(str(onnx_path))
+    block = sorted(set(keep_fp32_ops) | set(getattr(float16, "DEFAULT_OP_BLOCK_LIST", [])))
+    model16 = float16.convert_float_to_float16(model, keep_io_types=True, op_block_list=block)
+    onnx.save(model16, str(out_path))
+    fp32_mb, fp16_mb = onnx_path.stat().st_size / 1e6, out_path.stat().st_size / 1e6
+    print(f"fp16: {fp32_mb:.1f} MB -> {fp16_mb:.1f} MB ({fp32_mb / max(fp16_mb, 1e-9):.2f}x) -> {out_path.name}")
+    return out_path
+
+
+def publish_to_hf(bundle_dir: str | Path, repo_id: str, path_in_repo: str | None = None,
+                  private: bool = False, commit_message: str | None = None) -> str:
+    """Upload a bundle folder to the Hugging Face Hub and return its public base URL.
+
+    **Why the Hub and not a GitHub release:** the app fetches the model *from a web page*, and
+    release assets redirect to ``release-assets.githubusercontent.com``, which sends **no
+    ``Access-Control-Allow-Origin``** — the browser blocks it (``curl`` succeeds, which is why this
+    is easy to get wrong). The Hub sends CORS, versions every file, and is CDN-backed. GitHub
+    releases remain useful as a human/script-facing *archive*, not as a runtime source.
+
+    The returned URL is exactly the ``base`` the app's ``models.json`` expects: a folder whose
+    ``config.json`` names the model file and its sidecars.
+    """
+    from huggingface_hub import HfApi
+
+    bundle_dir = Path(bundle_dir)
+    path_in_repo = path_in_repo or bundle_dir.name
+    api = HfApi()
+    api.create_repo(repo_id, repo_type="model", exist_ok=True, private=private)
+    api.upload_folder(folder_path=str(bundle_dir), path_in_repo=path_in_repo, repo_id=repo_id,
+                      repo_type="model",
+                      commit_message=commit_message or f"lepinet bundle: {path_in_repo}")
+    base = f"https://huggingface.co/{repo_id}/resolve/main/{path_in_repo}/"
+    print(f"Published -> {base}\n"
+          f'Add to the app\'s models.json:  {{"id": "{path_in_repo}", "base": "{base}", ...}}')
+    return base

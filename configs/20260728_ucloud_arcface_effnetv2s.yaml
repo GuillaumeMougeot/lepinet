@@ -1,0 +1,40 @@
+version: 1.0
+# #8 ArcFace: effnetv2_s, species-only angular margin 0.3, scale 30, BF16 (fp16 NaNs arcface).
+# Then OOD eval: max-cosine as an unknown-species score on flemming. head=arcface is in src.
+version: 1.0
+desc: lepinet-arcface-effnetv2s-ucloud
+train:
+  parquet_path: /work/global_lepi/0032836-250426092105405_processing_metadata_postprocessed_quality_filtered.parquet
+  img_dir: /work/global_lepi/images
+  out_dir: /work/lepinet/data/ucloud_models
+  fold: '1'
+  min_img_per_spc: 50
+  num_workers: 256
+  model_name: lepinet-arcface-effnetv2s-ucloud
+  model_arch_name: efficientnet_v2_s
+  head: arcface
+  nb_epochs: 5
+  base_lr: 0.001
+  batch_size: 64
+  aug_img_size: 460
+  img_size: 256
+  optimizer: muon
+  fp16: true
+  precision: bf16
+  schedule: one_cycle
+  warmup_epochs: 0.5
+  grad_clip: 5.0
+  oversample_power: 0.5
+  family_filter: []
+  aug_kwargs:
+    max_warp: 0.0
+    max_lighting: 0.0
+    p_lighting: 0.0
+    flip_vert: true
+    max_rotate: 15.0
+    max_zoom: 1.1
+  arcface_scale: 30.0
+  arcface_margin:
+  - 0.3
+  - 0.0
+  - 0.0

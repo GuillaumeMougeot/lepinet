@@ -1,0 +1,209 @@
+# Knowing what you don't know: calibrated open-set hierarchical classification for long-tailed species identification
+
+**Status:** working draft (2026-07-30). Numbers are from `RESULTS.md`; the reasoning behind each is
+in [`../journal/`](../journal/). Sections marked _(pending)_ await runs that are in flight.
+
+---
+
+## Abstract (draft)
+
+Automated species identification is usually framed as fine-grained classification over a fixed label
+set. We argue this framing is the wrong one for deployment, and support the argument with three
+results on a 12,041-species Lepidoptera benchmark. First, **hierarchical prediction heads do not
+help**: an independent multi-head cosine classifier, a parent-conditioned hierarchical head and an
+autoregressive head are all matched or beaten by a *single* species head whose genus and family
+predictions are obtained by marginalising its own posterior (0.9135 vs 0.9110 species macro-F1, and
+better at every coarser level) — while being smaller and consistent by construction. Second,
+in-distribution accuracy is close to saturated (0.9316 with a modern large backbone) yet collapses to
+**0.70 on data from a different source**, so the remaining error is dominated by distribution shift
+rather than by classifier design. Third, and most usefully, we show that composing an **additive
+angular margin with a dimension-aware z-score transform** turns a classifier that is near-chance at
+detecting unseen species (AUROC 0.601) into a reliable one (**0.9115**) at a cost of 0.4 points of
+closed-set accuracy — where the margin *alone* costs 3.3 points and yields only 0.732. Taken
+together, these give a single-head architecture that (i) predicts species, (ii) degrades gracefully
+to genus/family by marginalisation when the image cannot support a species call, and (iii) flags
+taxa it has never seen. We release the package, the models and the reproduction recipes.
+
+---
+
+## 1. Introduction _(outline)_
+
+- Species ID from images: fine-grained, long-tailed (53 % of species have < 200 images), and
+  **open-set in deployment** — a field tool meets taxa outside its label set constantly.
+- The literature's instinct is to encode the taxonomy in the *architecture* (hierarchical softmax,
+  conditional heads, autoregressive decoders). We test that instinct and find it does not pay.
+- Reframe: the taxonomy's value is in **abstention and novelty handling**, not in the classifier.
+  Two orthogonal kinds of "unknown":
+  1. **Image-space / open-set** — the taxon was never trained on. Detect it.
+  2. **Hierarchy-space / rank abstention** — the photo cannot resolve the species. Back off to the
+     rank the evidence supports ("unknown species, but *Noctuidae*").
+- Contributions: (C1) a negative result on hierarchical heads with a like-for-like protocol;
+  (C2) the marginalisation-beats-coarse-heads result; (C3) **ArcFace × z-score**, with the analysis
+  of *why* the two compose; (C4) a measured generalisation gap; (C5) an open, reproducible package.
+
+## 2. Method
+
+### 2.1 Cosine classification head
+
+A backbone $f_\theta$ maps an image to $z \in \mathbb{R}^{d}$ through a bottleneck, then
+$e = z/\lVert z\rVert$. Each class $j$ owns a prototype $w_j$ constrained to $\lVert w_j\rVert = 1$
+(weight-norm with the row norm frozen), so the pre-activation is a cosine similarity
+
+$$\cos\theta_j \;=\; e^{\top} w_j \;\in\; [-1, 1].$$
+
+### 2.2 The z-score transform (and why a raw cosine is a poor logit)
+
+In high dimension the cosine between (near-)random unit vectors concentrates sharply: for $e$
+uniform on $S^{d-1}$, $\cos\theta$ has mean 0 and standard deviation $1/\sqrt{d}$, so with
+$d = 1280$ virtually all class scores fall inside a band of width $\approx 0.1$. Feeding that into a
+softmax gives a nearly uniform posterior regardless of the embedding's quality — the classic reason
+cosine classifiers need a scale factor.
+
+Instead of an arbitrary multiplier we apply the transform that maps this concentrated distribution
+onto an approximately standard normal one:
+
+$$Z(\cos\theta) \;=\; \sqrt{d-2}\;\Bigl(\arccos(-\cos\theta) - \tfrac{\pi}{2}\Bigr).$$
+
+Its derivative at $\cos\theta = 0$ is $\sqrt{d-2}$, i.e. the transform *is* a scale — but a
+principled, dimension-aware one rather than a tuned constant. Logits are $Z(\cos\theta_j) + b_j$
+with $b_j$ frozen at 0.
+
+### 2.3 ArcFace × z-score
+
+ArcFace [Deng et al. 2019] sharpens class boundaries by rotating the *true* class by a margin $m$
+before the softmax, $\cos\theta_y \mapsto \cos(\theta_y + m)$, and rescaling by a constant $s$:
+$\ell_j = s\cos\theta_j$ for $j \ne y$, $\ell_y = s\cos(\theta_y + m)$.
+
+We instead **compose the margin with the z-score transform**:
+
+$$\ell_j \;=\; \begin{cases} Z\bigl(\cos(\theta_y + m)\bigr) & j = y \\[2pt] Z(\cos\theta_j) & j \ne y \end{cases}$$
+
+with, as usual, the margin applied **only during training** (at inference $m = 0$, so the forward
+pass is label-free and exports to ONNX unchanged).
+
+Two implementation notes make this practical:
+
+1. **The head stays label-free.** Because $Z$ is *invertible*,
+   $\cos\theta = \sin\bigl(Z/\sqrt{d-2}\bigr)$ (verified to $10^{-7}$), the head can emit
+   $Z(\cos\theta)$ and the **loss** recovers the cosine, rotates the true class, and re-applies $Z$.
+   No labels enter the model's forward pass.
+2. **No $s$ to tune.** For the softmax to express confidence $p$ over $C$ classes it needs
+   $s \gtrsim \log\bigl((C-1)p/(1-p)\bigr)$ [Wang et al. 2017]; at $C = 12{,}041$, $p = 0.9$ that is
+   $s \ge 11.6$. The z-score's implicit scale is $\sqrt{d-2} = 35.7$ at $d = 1280$ — **already above
+   the floor**. The transform supplies for free the scale that raw-cosine ArcFace must guess.
+
+### 2.4 Marginalisation instead of coarse heads
+
+Let $\pi(\cdot)$ map a class to its parent. Coarse posteriors are obtained from the species
+posterior rather than from dedicated heads:
+
+$$\log P(g) \;=\; \operatorname*{log\,sum\,exp}_{\{\,s\,:\,\pi(s)=g\,\}} \log P(s),$$
+
+applied recursively up the taxonomy. This is exact, adds no parameters, and is **consistent by
+construction**: the genus argmax can never contradict the parent of the species argmax (measured at
+1.81 % of images for independently trained heads).
+
+## 3. Experimental setup
+
+12,041 species / 4,333 genera / 102 families; ~3 M training images; a held-out fold of
+**629,742 images**. Backbone efficientnet\_v2\_s unless stated; Muon + AdamW, one-cycle, 5 epochs,
+460→256 px, square-root class oversampling ($p=0.5$). Metric: **species macro-F1** (each species
+weighted equally, so the tail counts). All comparisons change exactly one factor; configs are
+released. Open-set benchmark: species with < 50 images, excluded from training but drawn from the
+**same image distribution**, isolating novelty from domain shift.
+
+## 4. Results
+
+### 4.1 Hierarchical heads do not help (C1, C2)
+
+| head | species | genus | family |
+|---|---|---|---|
+| multi-head independent | 0.9110 | 0.9587 | 0.9708 |
+| parent-conditioned hierarchical | 0.8845 | 0.9471 | 0.9683 |
+| autoregressive | 0.69–0.73 | — | — |
+| **single head + marginalisation** | **0.9135** | **0.9606** | **0.9739** |
+
+The single head wins at *every* level. Marginalisation also beats separately trained coarse heads in
+a matched comparison (+0.7 pp genus, +3.1 pp family). Marginal supervision *during* training
+_(pending)_.
+
+### 4.2 Accuracy saturates; generalisation does not (C4)
+
+| model | in-distribution | external dataset |
+|---|---|---|
+| efficientnet\_v2\_s | 0.9110 | — |
+| ConvNeXtV2-L @320 | **0.9316** | 0.6950 |
+| DINOv3-ConvNeXt-L @320 | 0.9311 (≈2× faster to train) | — |
+
+A ~23-point drop on data from a different source. Distillation into a small student saturates at
+~0.88 **regardless of teacher quality** (0.8786 from a 0.911 teacher; 0.8756 from a 0.9316 teacher),
+i.e. student capacity, not teacher accuracy, is the binding constraint.
+
+### 4.3 ArcFace × z-score: the trade-off dissolves (C3)
+
+| head | species macro-F1 | **open-set AUROC** | known $\max\cos$ | novel $\max\cos$ |
+|---|---|---|---|---|
+| cosine (z-score, no margin) | **0.9110** | 0.601 | −9.27 ± 7.44 | −11.46 ± 6.82 |
+| ArcFace ($s\cos$, $m{=}0.3$) | 0.8784 | 0.732 | 26.00 ± 13.03 | 23.47 ± 10.84 |
+| **ArcFace × z-score** ($m{=}0.3$) | 0.9069 | **0.9115** | 32.58 ± 7.83 | 18.17 ± 6.38 |
+
+The composition beats **both** components on the axis each was meant to own: +31 points of AUROC over
+the plain cosine head for −0.4 points of accuracy, and +18 AUROC *and* +2.9 accuracy over plain
+ArcFace. The trade-off reported for margins is therefore not intrinsic — it is an artefact of
+discarding the calibrated transform.
+
+**Mechanism.** Measured on held-out images against each model's own prototypes:
+
+| head | intra ($\cos$ to own) | inter (max $\cos$ to wrong) | margin | silhouette |
+|---|---|---|---|---|
+| cosine | −0.154 | −0.336 | 0.182 | 0.617 |
+| ArcFace × z-score | **+0.667** | 0.056 | **0.610** | 0.641 |
+
+Silhouette barely moves: *separability was never the problem* — closed-set accuracy is equal. What
+changes is **absolute** angular position (Fig. 3, `figures/fig3_embedding_tsne.png`; the score
+distributions that carry the result are Fig. 4, `figures/fig4_openset_scores.png`). A novelty score $\max_j \cos\theta_j$ is only meaningful if
+"close to a known class" has an absolute scale; the plain head places everything near-orthogonal to
+everything (intra −0.15), so novel and known look alike. This is why a 2-D projection (UMAP/t-SNE) is
+the wrong visualisation: it is invariant to exactly the property that carries the effect.
+
+### 4.4 Open-set under domain shift
+
+Repeating the benchmark where the novel species *also* come from a different camera (flemming):
+
+| head | novelty only | novelty + domain shift |
+|---|---|---|
+| cosine | 0.601 | 0.574 |
+| ArcFace × z-score | **0.9115** | **0.7272** |
+
+The advantage survives but halves (+31.1 → +15.3 points). The logits show why: under shift the
+*known* mean falls (32.6 → 20.6) toward the novel one (14.1), i.e. shift makes familiar species look
+unfamiliar rather than making novel ones look more distinct. Novelty detection is therefore **not
+domain-robust**, and domain adaptation is upstream of open-set rather than parallel to it. (Only 234
+of 47,905 images are novel here, so treat this as directional, ±0.03.)
+
+### 4.5 Rank abstention _(pending)_
+
+Coverage/precision per rank from marginalised posteriors with per-level thresholds.
+
+## 5. Discussion
+
+- Encoding a taxonomy in the *architecture* buys nothing here; using it for *inference-time
+  reasoning* (marginalisation, abstention) buys consistency for free and better coarse accuracy.
+- Metric-learning margins are usually sold for retrieval and face verification. Their real value in
+  a classification pipeline may be **calibration of the open-set score**, provided the logit scale is
+  dimension-aware.
+- The field's benchmark culture rewards closed-set accuracy on the training distribution; our numbers
+  suggest that is close to exhausted while the deployment-relevant quantities (domain shift, novelty)
+  are not.
+
+## 6. Limitations
+
+Single taxonomic domain and one 3-level hierarchy. Open-set results are on a *no-domain-shift*
+benchmark; the harder novelty-plus-shift case is _(pending)_. $m = 0.3$, $s = 30$ were first guesses,
+so 0.9115 is a floor, not a tuned optimum. Distillation experiments use one student family.
+
+## References _(to complete)_
+
+Deng et al., *ArcFace*, CVPR 2019 · Wang et al., *NormFace*, ACM MM 2017 · Liu et al., *ConvNeXt V2*,
+CVPR 2023 · Oquab et al., *DINOv2* / *DINOv3* · Jordan & Jacobs, hierarchical mixtures · Hinton et
+al., *Distilling the knowledge in a neural network*, 2015.

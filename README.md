@@ -1,9 +1,26 @@
 # lepinet
 
-**Hierarchical image classification** — species / genus / family, or any fine→coarse label
-hierarchy. A clean, **fastai-only, `mini_trainer`-free** Python package that reproduces the
-project-best Lepidoptera baseline (**test species macro-F1 0.9148**) and is generic in the number
-of hierarchy levels.
+**Hierarchical fine-grained image classification.** Given a photo, predict a label at every level
+of a taxonomy at once — for the reference dataset, the *species*, its *genus*, and its *family* of
+moth or butterfly — over ~12,000 species with a heavy long tail (half the species have fewer than
+200 images). The package is generic in the number and names of the levels: any fine→coarse label
+hierarchy works.
+
+Two things make this hard, and shape the whole design:
+
+- **Fine-grained.** Neighbouring species differ by subtle wing-pattern detail, so the model needs
+  high-resolution local texture, not just global shape.
+- **Long-tailed.** Most images belong to a few common species; thousands of rare species have a
+  handful each. The headline metric is therefore **macro-F1** (every species weighted equally, so
+  the tail counts), and the training rebalances toward rare classes.
+
+The method: a shared image backbone feeds a **per-level cosine classification head** (one set of
+L2-normalised class prototypes per taxonomic level), trained with square-root class oversampling.
+On the reference Lepidoptera dataset this reaches **test species macro-F1 0.9148**. See
+[The method](#the-method) for why each piece is there.
+
+> **New to this repository?** [`START-HERE.md`](START-HERE.md) is a guided map of everything —
+> code, results, and the reasoning behind them.
 
 📖 **Docs:** [user guide](docs/user-guide.md) · [developer guide](docs/developer-guide.md) ·
 [design journal](journal/2026-07-src-lepinet-baseline-port.md)
@@ -50,12 +67,35 @@ train(TrainConfig(parquet_path="...", img_dir="...", out_dir="...",
 | **predict** | single-image / folder inference with test-time augmentation |
 | **export** | browser-ready ONNX (normalization baked in, raw logits) + `taxonomy.json` for the companion PWA |
 
-## The baseline recipe
+## The method
 
-efficientnet_v2_s · independent cosine head · Muon (backbone) + AdamW (head) · one-cycle,
-`warmup_epochs 0.5` · `grad_clip 5.0` · `oversample_power 0.5` · bf16 · 460→256, batch 64, 5 epochs
-· light aug. Details and the full ladder of experiments that led here are in
-[`journal/`](journal/) and [`RESULTS.md`](RESULTS.md).
+Each design choice answers one of the two difficulties above.
+
+- **Per-level cosine head.** The backbone produces one embedding; a small bottleneck projects it,
+  then each taxonomic level has its own layer of L2-normalised class prototypes and classifies by
+  *cosine similarity* (angle to the nearest prototype), not an unbounded dot product. Normalising
+  both sides tightens intra-class / widens inter-class angles — the property that helps most on
+  fine-grained classes and on the tail, where a plain linear layer over-fits the few examples it
+  sees. The levels are independent heads on the shared embedding, so adding or renaming levels is
+  just a longer list.
+- **Square-root oversampling** (`oversample_power 0.5`). Sampling rare classes more often — but at
+  the square root of the inverse frequency, not the full inverse — lifts tail recall without
+  drowning the common classes. This is the single biggest lever on macro-F1 in the experiment
+  ladder (+1.7 pt over no oversampling).
+- **Muon (backbone) + AdamW (head), one-cycle** with a short warmup and gradient clipping — the
+  optimiser/schedule combination that trains this head stably in a few epochs.
+- **bf16** throughout: enough exponent range for the cosine head (and for margin losses like
+  ArcFace, a planned extension) without the fp16 overflow that NaNs them.
+
+Reference recipe: efficientnet_v2_s · 460→256 px · batch 64 · 5 epochs · light aug. The full ladder
+of experiments that led to each choice — and the negative results — is in [`journal/`](journal/)
+and [`RESULTS.md`](RESULTS.md).
+
+> **Provenance.** This is a from-scratch **fastai-only** reimplementation of an earlier
+> `mini_trainer`/`mini_metrics`-based pipeline; it reproduces that pipeline's best result with no
+> dependency on it (a `mini_metrics`-format `predictions.csv` is still emitted for interop). That
+> lineage explains some naming in the design journal but is not something a user needs to care
+> about — the package stands alone.
 
 ## Repository layout
 

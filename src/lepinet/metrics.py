@@ -12,6 +12,21 @@ from fastai.metrics import Metric
 from torch import nn
 
 
+def level_pred_targ(learn, level_idx: int):
+    """``(pred, target)`` for one level, robust to fastai's single-vs-multi-target shapes.
+
+    With several levels fastai hands the metric a *tuple* of per-level targets, so ``learn.y[i]``
+    picks a level. With a **single** level it hands over a bare tensor, and ``learn.y[0]`` would
+    silently index the first *row* instead — yielding a 0-dim tensor and an ``IndexError`` deep in
+    the Recorder. Normalising here keeps the metrics genuinely N-level generic (N=1 included), which
+    matters for the flat-vs-multi-head comparison.
+    """
+    y = learn.y
+    targ = y[level_idx] if isinstance(y, (tuple, list)) else y
+    pred = learn.pred[level_idx] if isinstance(learn.pred, (tuple, list)) else learn.pred
+    return pred, targ
+
+
 class LevelAccuracy(Metric):
     """Top-1 accuracy for a single head, so per-level difficulty stays visible."""
 
@@ -23,7 +38,7 @@ class LevelAccuracy(Metric):
         self.correct = self.total = 0
 
     def accumulate(self, learn):
-        preds, targs = learn.pred[self.level_idx], learn.y[self.level_idx]
+        preds, targs = level_pred_targ(learn, self.level_idx)
         self.correct += (preds.argmax(dim=1) == targs).sum().item()
         self.total += targs.shape[0]
 
@@ -53,7 +68,7 @@ class LevelMacroF1(Metric):
         self.tp = self.fp = self.fn = None
 
     def accumulate(self, learn):
-        p, y = learn.pred[self.level_idx], learn.y[self.level_idx]
+        p, y = level_pred_targ(learn, self.level_idx)
         n = p.shape[1]
         if self.tp is None:
             self.tp, self.fp, self.fn = (p.new_zeros(n) for _ in range(3))
@@ -92,7 +107,12 @@ class StreamingF1MultiHead(Metric):
         self.tp, self.fp, self.fn = {}, {}, {}
 
     def accumulate(self, learn):
-        for h, (p, y) in enumerate(zip(learn.pred, learn.y)):
+        # Normalise to per-level lists first: with a SINGLE level fastai hands over bare tensors,
+        # and zip() would then iterate the batch *rows* instead of the levels — silently producing
+        # a nonsense aggregate (measured 0.0075 instead of 0.91). Same trap as level_pred_targ.
+        preds = learn.pred if isinstance(learn.pred, (tuple, list)) else [learn.pred]
+        ys = learn.y if isinstance(learn.y, (tuple, list)) else [learn.y]
+        for h, (p, y) in enumerate(zip(preds, ys)):
             n_classes = p.shape[1]
             if h not in self.tp:
                 self.tp[h] = p.new_zeros(n_classes)

@@ -1,0 +1,25 @@
+# OOD benchmark (b): flemming = novelty AND domain shift — the harder, more realistic case.
+name = "lepinet-ood-flemming-plain"
+replicas = 1
+[application]
+name = "pytorch-te"
+version = "26.05"
+[product]
+id = "gpu-nvidia-b200-1-gpu"
+category = "gpu-nvidia-b200"
+provider = "ucloud"
+[time_allocation]
+hours = 3
+[sync]
+local = ".."
+remote = "/12347837/repos/lepinet"
+[setup]
+script = "setup-lepinet.sh"
+run = "python dev/052_ood_score.py --model '/work/lepinet/data/ucloud_models/*-lepinet-heads-global-independent-muon-5ep-oversample-effnetv2s-ucloud/*.pt' --parquet /work/lepinet/data/flemming/flemming_names_labels.parquet --img-dir /work/flemming/images --out /work/lepinet/data/ucloud_preds/ood-flemming-plain.json --img-size 256 --num-workers 32"
+[schedule]
+auto_extend = "1h"
+max_time = "6h"
+[[resources]]
+type = "file"
+path = "/12347837/datasets/flemming"
+read_only = true

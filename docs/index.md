@@ -1,10 +1,26 @@
 # lepinet
 
-**Hierarchical image classification** (species / genus / family, or any fine→coarse label
-hierarchy) — a clean, **fastai-only, `mini_trainer`-free** Python package.
+**Hierarchical fine-grained image classification.** Predict a label at every level of a taxonomy
+from one photo — species, genus and family for the reference moth/butterfly dataset (~12,000
+species, heavy long tail), or any fine→coarse label hierarchy of your own.
 
-It reproduces the project-best Lepidoptera baseline — **test species macro-F1 0.9148** — and is
-generic in the number of hierarchy levels.
+The task is hard for two reasons that shape the design:
+
+- **Fine-grained** — species differ by subtle local detail, so features must capture texture, not
+  just shape.
+- **Long-tailed** — a few species dominate the images, thousands are rare. The headline metric is
+  **macro-F1** (all species weighted equally), and training oversamples the tail.
+
+The method is a shared backbone with a **per-level cosine classification head** (L2-normalised
+class prototypes per level) trained with square-root class oversampling; on the reference
+Lepidoptera dataset it reaches **test species macro-F1 0.9148**. The
+[developer guide](developer-guide.md) explains *why* each piece is there.
+
+!!! note "Provenance"
+    `lepinet` is a from-scratch **fastai-only** reimplementation of an earlier
+    `mini_trainer`/`mini_metrics` pipeline, reproducing its best result without depending on it
+    (it still emits a `mini_metrics`-format `predictions.csv` for interop). That lineage is a
+    project-history detail, not something you need to use the package.
 
 ## What you get
 

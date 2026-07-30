@@ -1,0 +1,35 @@
+version: 1.0
+# Owner: 6ep was budget not principle; dinov3-cnx trains ~3h/ep -> double to 12ep, does the teacher climb?
+version: 1.0
+desc: lepinet-convnext-large-dinov3-320-12ep-oversample-mixup-ucloud
+train:
+  parquet_path: /work/global_lepi/0032836-250426092105405_processing_metadata_postprocessed_quality_filtered.parquet
+  img_dir: /work/global_lepi/images
+  out_dir: /work/lepinet/data/ucloud_models
+  fold: '1'
+  min_img_per_spc: 50
+  num_workers: 128
+  model_name: lepinet-convnext-large-dinov3-320-12ep-oversample-mixup-ucloud
+  model_arch_name: convnext_large.dinov3_lvd1689m
+  head: independent
+  nb_epochs: 12
+  base_lr: 0.0008
+  batch_size: 96
+  aug_img_size: 384
+  img_size: 320
+  optimizer: muon
+  fp16: true
+  precision: bf16
+  schedule: one_cycle
+  warmup_epochs: 0.5
+  grad_clip: 5.0
+  oversample_power: 0.5
+  mixup: 0.2
+  family_filter: []
+  aug_kwargs:
+    max_warp: 0.1
+    max_lighting: 0.2
+    p_lighting: 0.5
+    flip_vert: true
+    max_rotate: 20.0
+    max_zoom: 1.2

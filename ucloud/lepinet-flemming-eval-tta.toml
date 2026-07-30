@@ -1,0 +1,36 @@
+# Open-set test of the best model (ConvNeXtV2-L teacher) on the flemming_helsing referenced set.
+# 58,640 images / 522 species (17 OOD vs the 12,041 vocab). Labels parquet built from the dataset's
+# example_pred.csv. --no-drop-unknown-species keeps OOD rows (known_label=False) so mini_metrics can
+# separate known vs OOD. Then run mini_metrics -t 0 0 0 on the predictions.csv locally.
+#   ucloud q submit ucloud/lepinet-flemming-eval.toml --name lepi-flemming-eval
+name = "lepinet-flemming-eval-tta"
+replicas = 1
+
+[application]
+name = "pytorch-te"
+version = "26.05"
+
+[product]
+id = "gpu-nvidia-b200-1-gpu"
+category = "gpu-nvidia-b200"
+provider = "ucloud"
+
+[time_allocation]
+hours = 3
+
+[sync]
+local = ".."
+remote = "/12347837/repos/lepinet"
+
+[setup]
+script = "setup-lepinet.sh"
+run = "lepinet test --model '/work/lepinet/data/ucloud_models/*-lepinet-convnextv2l-bigger-320-6ep-oversample-mixup-ucloud/*.pt' --parquet /work/lepinet/data/flemming/flemming_labels.parquet --img-dir /work/flemming_helsing/resized/valid/referenced --out-dir /work/lepinet/data/ucloud_preds/flemming-cnxv2l-tta --test-set 0 --min-img-per-spc 0 --img-size 320 --aug-img-size 384 --batch-size 128 --num-workers 32 --no-drop-unknown-species --tta"
+
+[schedule]
+auto_extend = "1h"
+max_time = "6h"
+
+[[resources]]
+type = "file"
+path = "/12347837/datasets/flemming_helsing"
+read_only = true

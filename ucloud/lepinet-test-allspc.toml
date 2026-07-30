@@ -1,0 +1,37 @@
+# Re-run of the fold-0 test WITHOUT the min-img-per-spc filter, so the eval set matches the
+# original 0.9148 baseline (dev/032 test default: min_img_per_spc=0 -> all 12,041 species,
+# ~629,742 images). The first UCloud test (lepi-test) wrongly passed --min-img-per-spc 50,
+# which restricted the macro-F1 average to 3,696 well-populated species and inflated it to
+# 0.9455. This job produces the apples-to-apples number for the port-reproduces-0.9148 check.
+#   ucloud q submit ucloud/lepinet-test-allspc.toml --name lepi-test-all
+name = "lepinet-test-fold0-allspc"
+replicas = 1
+
+[application]
+name = "pytorch-te"
+version = "26.05"
+
+[product]
+id = "gpu-nvidia-b200-1-mig.1g"
+category = "gpu-nvidia-b200"
+provider = "ucloud"
+
+[time_allocation]
+hours = 6
+
+[sync]
+local = ".."
+remote = "/12347837/repos/lepinet"
+
+[setup]
+script = "setup-lepinet.sh"
+run = "lepinet test --model '/work/lepinet/data/ucloud_models/*-lepinet-heads-global-independent-muon-5ep-oversample-effnetv2s-ucloud/*.pt' --parquet /work/global_lepi/0032836-250426092105405_processing_metadata_postprocessed_quality_filtered.parquet --img-dir /work/global_lepi/images --out-dir /work/lepinet/data/ucloud_preds_allspc --test-set 0 --min-img-per-spc 0 --num-workers 6"
+
+[schedule]
+auto_extend = "1h"
+max_time = "12h"
+
+[[resources]]
+type = "file"
+path = "/12347837/datasets/global_lepi"
+read_only = true

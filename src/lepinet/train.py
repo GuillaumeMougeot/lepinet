@@ -18,7 +18,7 @@ from .config import TrainConfig, prepare_run_dir
 from .heads import build_head
 from .loss import FastaiLossWrapper, MultiLevelCELoss
 from .metrics import default_metrics
-from .model import arch_body_features, build_learner, resolve_arch
+from .model import arch_body_features, arch_is_vit, build_learner, resolve_arch
 
 
 def train(cfg: TrainConfig):
@@ -43,16 +43,59 @@ def train(cfg: TrainConfig):
 
     # --- model ---
     arch = resolve_arch(cfg.model_arch_name)
+    vit = arch_is_vit(arch, img_size=cfg.img_size)  # ViT/DINOv3 → FlatHead + manual Learner
     nf = arch_body_features(arch, img_size=cfg.img_size)
-    custom_head = build_head(cfg.head, nf, n_classes, hidden=cfg.hidden)
+    head_kwargs = ({"scale": cfg.arcface_scale, "margin": cfg.arcface_margin, "zscore": cfg.arcface_zscore}
+                   if cfg.head == "arcface" else {})
+    # Taxonomy-needing heads (hierarchical / autoregressive, registered from dev/) declare a
+    # `sparse_masks` argument; build it from the training labels and pass it. Signature-driven so a
+    # head that doesn't want it never sees it (the independent/arcface heads don't).
+    import inspect
+
+    from .heads import HEAD_REGISTRY, build_class_spec
+    if cfg.head in HEAD_REGISTRY and "sparse_masks" in inspect.signature(HEAD_REGISTRY[cfg.head]).parameters:
+        _cls2idx, sparse_masks = build_class_spec(df, vocabs, levels)
+        head_kwargs["sparse_masks"] = sparse_masks
+        print(f"Head {cfg.head!r} takes sparse_masks -> built {len(sparse_masks)} parent mask(s).")
+    custom_head = build_head(cfg.head, nf, n_classes, hidden=cfg.hidden, pool=not vit, **head_kwargs)
     n_head_params = sum(p.numel() for p in custom_head.parameters())
-    print(f"Head={cfg.head}, hidden={cfg.hidden} -> {n_head_params / 1e6:.2f} M params")
+    print(f"Head={cfg.head}, hidden={cfg.hidden}, backbone={'ViT' if vit else 'conv'} -> {n_head_params / 1e6:.2f} M head params")
+    if cfg.head == "arcface":
+        print(f"ArcFace ON (scale={cfg.arcface_scale}, margin={cfg.arcface_margin}, zscore={cfg.arcface_zscore}).")
 
     # --- loss ---
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    arc_margins = None
+    if cfg.head == "arcface":
+        arc_margins = cfg.arcface_margin if isinstance(cfg.arcface_margin, list) else [cfg.arcface_margin] * len(n_classes)
     criterion = MultiLevelCELoss(n_classes, weights=cfg.level_weights,
-                                 label_smoothing=cfg.label_smoothing, device=device)
-    loss_func = FastaiLossWrapper(criterion)
+                                 label_smoothing=cfg.label_smoothing, device=device,
+                                 arc_scale=cfg.arcface_scale if cfg.head == "arcface" else None,
+                                 arc_margins=arc_margins,
+                                 arc_zscore=cfg.head == "arcface" and cfg.arcface_zscore,
+                                 arc_ndim=(custom_head.head.preclass_size if cfg.head == "arcface" else None))
+
+    # --- distillation (optional): a frozen teacher supplies soft targets for a small student ---
+    teacher_model = None
+    if cfg.distill_teacher:
+        from .loss import DistillLoss
+        from .test import load_model, resolve_checkpoint_path
+
+        teacher_ckpt = torch.load(resolve_checkpoint_path(cfg.distill_teacher), map_location="cpu", weights_only=False)
+        # KD aligns teacher/student logits by index, so their class vocabularies must be identical.
+        t_vocabs = {lvl: [str(v) for v in teacher_ckpt["vocabs"][lvl]] for lvl in teacher_ckpt.get("levels", levels)}
+        s_vocabs = {lvl: [str(v) for v in vocabs[lvl]] for lvl in levels}
+        if teacher_ckpt.get("levels", levels) != levels or t_vocabs != s_vocabs:
+            raise ValueError(
+                "Teacher and student must share the exact class vocabulary and level order for "
+                "distillation (KD matches logits by index). They differ — most likely a different "
+                "min_img_per_spc / family_filter / fold. Re-train the teacher on the same class set."
+            )
+        teacher_model, _ = load_model(teacher_ckpt, img_size=cfg.img_size)
+        loss_func = DistillLoss(criterion, alpha=cfg.distill_alpha, temperature=cfg.distill_temperature)
+        print(f"Distillation ON (teacher={cfg.distill_teacher}, alpha={cfg.distill_alpha}, T={cfg.distill_temperature}).")
+    else:
+        loss_func = FastaiLossWrapper(criterion)
 
     # --- callbacks ---
     from fastai.vision.all import CSVLogger, GradientClip, SaveModelCallback
@@ -64,11 +107,29 @@ def train(cfg: TrainConfig):
         CSVLogger(out_dir / f"{cfg.model_name}.csv", append=True),
         SaveModelCallback(fname=cfg.model_name, every_epoch=True),
     ]
+    # MixUp (opt-in): mix images + labels. Uses MixUpMulti (multi-target-aware) with the loss's
+    # y_int=True + reduction toggling, so mixing happens through the per-level loss. A regularizer
+    # for longer/bigger runs (journal/2026-07-bigger-everything.md).
+    if cfg.mixup and cfg.mixup > 0:
+        from .callbacks import MixUpMulti
+
+        cbs.append(MixUpMulti(cfg.mixup))
+        print(f"MixUp ON (alpha={cfg.mixup}).")
+    if cfg.cutmix and cfg.cutmix > 0:
+        raise NotImplementedError(
+            "cutmix is not yet supported for multi-target heads (fastai's CutMix.before_batch "
+            "indexes self.y, a tuple here). Use `mixup` for now; CutMixMulti is a follow-up."
+        )
+    # Distillation: run the frozen teacher per training batch, feeding soft targets to DistillLoss.
+    if teacher_model is not None:
+        from .callbacks import DistillCallback
+
+        cbs.append(DistillCallback(teacher_model))
     # GCCallback is intentionally omitted (D3): the clean head has no per-batch reference cycle.
     # Add `GCCallback()` here if a future head reintroduces one and GPU memory climbs.
 
     learn = build_learner(dls, arch, custom_head, loss_func, default_metrics(levels),
-                          out_dir / "models", cbs, optimizer=cfg.optimizer)
+                          out_dir / "models", cbs, optimizer=cfg.optimizer, vit=vit)
 
     if cfg.fp16:
         # bf16 by default (fp32 exponent range -> no overflow-to-NaN); fp16 only if asked.
@@ -81,7 +142,7 @@ def train(cfg: TrainConfig):
         print(f"Resumed weights from {cfg.resume_checkpoint} ({cfg.resume_epochs_done}/{cfg.nb_epochs} epochs done).")
 
     _fit(learn, cfg)
-    _save_checkpoint(learn, cfg, levels, vocabs, df, out_dir)
+    _save_checkpoint(learn, cfg, levels, vocabs, df, out_dir, vit=vit)
 
 
 def _fit(learn, cfg: TrainConfig):
@@ -111,17 +172,22 @@ def _fit(learn, cfg: TrainConfig):
         learn.fine_tune(cfg.nb_epochs, cfg.base_lr, freeze_epochs=cfg.freeze_epochs)
 
 
-def _save_checkpoint(learn, cfg: TrainConfig, levels, vocabs, df, out_dir: Path):
+def _save_checkpoint(learn, cfg: TrainConfig, levels, vocabs, df, out_dir: Path, vit: bool = False):
     """Save a self-contained ``.pt``: weights + everything needed to rebuild the head at test/export.
 
     The hierarchy is derived from the training ``df`` (not a hierarchy.csv on disk), so the
-    checkpoint's parent table can never disagree with its own class set.
+    checkpoint's parent table can never disagree with its own class set. ``head`` / ``arcface_scale``
+    / ``vit`` tell the test/export reconstruction which forward to rebuild (all default to the cosine
+    conv-map path, so pre-existing effnet checkpoints load unchanged).
     """
     model_path = out_dir / f"{cfg.model_name}.pt"
     torch.save(
         {
             "model_state_dict": learn.model.state_dict(),
             "head": cfg.head,
+            "arcface_scale": cfg.arcface_scale,
+            "arcface_zscore": cfg.arcface_zscore,
+            "vit": vit,
             "model_arch_name": cfg.model_arch_name,
             "hidden": cfg.hidden,
             "levels": levels,

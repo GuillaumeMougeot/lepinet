@@ -41,8 +41,13 @@ class TrainConfig:
     num_workers: int | None = None
 
     # --- model ---
-    head: str = "independent"
+    head: str = "independent"           # independent (cosine) | arcface (cosine + angular margin)
     hidden: bool | int = True  # bottleneck width; True = backbone width (the size lever)
+
+    # --- arcface (only used when head == 'arcface'; default off reproduces the cosine baseline) ---
+    arcface_scale: float = 30.0         # s: cosine logit scale (~16–64)
+    arcface_margin: float | list = 0.0  # m: angular margin, scalar or per-level fine→coarse (~0.1–0.5)
+    arcface_zscore: bool = False        # compose the margin with cosine_to_zscore instead of s·cos
 
     # --- optimisation (the winning recipe defaults) ---
     nb_epochs: int = 5
@@ -65,8 +70,16 @@ class TrainConfig:
     # --- long-tail ---
     oversample_power: float = 0.0    # 0.5 = square-root oversampling (the baseline win)
 
+    # --- distillation (train a small student from a teacher checkpoint; None = ordinary training) ---
+    distill_teacher: str | None = None   # path/glob to a trained teacher .pt (same class vocab)
+    distill_alpha: float = 0.5           # blend: 0 = hard labels only, 1 = teacher soft targets only
+    distill_temperature: float = 1.0     # KD temperature; T=1 for the cosine z-score head (T=4 hurt,
+                                         # over-softens already-unit-scale logits — journal 2026-07-teacher-student-app-bridge)
+
     # --- augmentation ---
     aug_kwargs: dict | None = None
+    mixup: float = 0.0               # fastai MixUp alpha (0 = off); mixes images + labels
+    cutmix: float = 0.0              # fastai CutMix alpha (0 = off); patch-mixes images + labels
 
     # --- front_loaded schedule extras ---
     fast_decay_epochs: float = 1.0
@@ -88,6 +101,25 @@ class TrainConfig:
             )
         if self.precision not in ("bf16", "fp16"):
             raise ValueError(f"Unknown precision {self.precision!r}; must be 'bf16' or 'fp16'.")
+        if self.head == "arcface":
+            margins = self.arcface_margin if isinstance(self.arcface_margin, (list, tuple)) else [self.arcface_margin]
+            if (self.mixup and self.mixup > 0) or (self.cutmix and self.cutmix > 0):
+                raise ValueError(
+                    "head='arcface' is incompatible with mixup/cutmix: the angular margin is defined "
+                    "for a single true class per sample, not a mixed target. Disable mixup/cutmix, or "
+                    "use head='independent'."
+                )
+            if any(m > 0 for m in margins) and self.precision != "bf16":
+                warnings.warn(
+                    "ArcFace with a positive margin is fp16-unstable (large s·cos overflows, acos NaNs); "
+                    "bf16 is strongly recommended.", stacklevel=2)
+        if self.distill_teacher and ((self.mixup and self.mixup > 0) or (self.cutmix and self.cutmix > 0)):
+            raise ValueError(
+                "distill_teacher is incompatible with mixup/cutmix for now: both rewrite the batch/loss "
+                "path. Distil without mixup, or drop the teacher."
+            )
+        if self.distill_teacher and not 0.0 <= self.distill_alpha <= 1.0:
+            raise ValueError(f"distill_alpha must be in [0, 1], got {self.distill_alpha}.")
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> TrainConfig:

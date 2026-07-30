@@ -1,10 +1,13 @@
 # Porting the 0.9148 baseline into `src/lepinet` — a fastai-only, mini_trainer-free clean repo
 
-**Status:** IN PROGRESS — package **built and validated GPU-free** on 2026-07-24 (see the
-Execution log at the end); the one open item is the from-scratch train-parity run to 0.9148,
-blocked on a local GPU driver fault. Companion in spirit to [[2026-07-lepi-app-claude]]: this
-document is the *how* — module layout, what to keep vs cut, the sequencing, and the decisions
-that need to be right before code is written. Written 2026-07-24.
+**Status:** ✅ **RESOLVED (2026-07-25) — the port is a success.** The clean, fastai-only,
+`mini_trainer`/`mini_metrics`-free `src/lepinet` package reproduces the project-best baseline from
+scratch: **species macro-F1 0.9152 vs 0.9148** on the byte-identical eval set (all 12,041 species,
+optimal threshold; see the Train-parity section). This 5ep run is now the project's **milestone
+baseline** to compare future models against. `dev/` continues as the experiment space, but now
+imports the **`lepinet` package** rather than `dev/028/030/034`. Companion in spirit to
+[[2026-07-lepi-app-claude]]: this document is the *how* — module layout, what to keep vs cut, the
+sequencing, and the decisions that had to be right before code was written. Written 2026-07-24.
 
 **Goal in one line:** reproduce the project-best **0.9148 test species macro-F1**
 (`20260716-154156`, [[2026-07-does-longtail-help]]) from a clean, installable `src/lepinet`
@@ -370,3 +373,109 @@ rest of the package.
 **Next when GPU is healthy:** `lepinet train -c configs/20260716_heads_global_independent_muon_5ep_oversample.yaml`
 (add `precision: fp16` to match the original exactly), then `lepinet test --test-set 0` → expect
 0.9148 ± ~0.2pt, and cross-check native metrics vs mini_metrics once (D2 gate).
+
+---
+
+## Execution log — 2026-07-24 (phase 2: clarity, packaging, UCloud)
+
+Second working block, after the owner's review. Everything below was done and validated this
+session.
+
+### What was learned/read (phase 2)
+- **`ucloud-api`** (`~/codes/ucloud-api`, authenticated): job = a TOML spec (`ucloud/*.toml`)
+  mirroring UCloud's JobSpecification + `[sync]` (rsync the repo to a drive, respects .gitignore)
+  + `[setup]` (script + `run` batch command) + `[schedule]` (auto_extend). Queue: `ucloud q
+  submit <spec> --name X [--after Y]` (afterok deps), advanced by `ucloud q daemon --until-idle`.
+  Data lives at `/12347837/datasets/global_lepi` → mounts `/work/global_lepi`; the synced repo is
+  `/work/lepinet`. Train product `gpu-nvidia-b200-1-gpu`, test `gpu-nvidia-b200-1-mig.1g`.
+- **The local GPU driver fault is terminal for local training**: NVML mismatch crashes the
+  backward; the owner can't reboot (encrypted disk needs a physical keyboard). → all GPU work
+  moved to UCloud. [[gpu-nvml-driver-mismatch]]
+- **The "broken venv" was a pyproject problem, not a uv problem.** `uv sync` broke the venv only
+  because pyproject declared `packages=[]` + an incomplete dep set + no lock + no torch index. Fixed
+  → `uv sync` now works. [[venv-is-hand-managed-never-uv-sync]] (now RESOLVED).
+
+### What was done (phase 2)
+- **Maximal clarity over checkpoint-loadability** (owner's call): stripped the load-compat cruft
+  from `IndependentHead` — dead BatchNorm, `linear`/`layers[0]` alias, `mask` buffers, cls2idx from
+  checkpoints. The old 0.9148 checkpoint no longer loads; parity is now by **retraining**. Head is
+  now just bottleneck + N cosine layers.
+- **typer CLI** (replaced argparse); **MkDocs + Material** docs with a **GitHub Pages** deploy
+  workflow; **CI runs a real end-to-end** (synthetic dataset → train/eval/predict/export), not just
+  units.
+- **Reproducible venv**: rebuilt from a proper `pyproject.toml` + committed `uv.lock` (cu130 torch
+  via `[[tool.uv.index]]`); dev-script deps (`mini_trainer`/`mini_metrics`, which pin py≥3.12 and
+  would over-constrain the lock) live in `dev/requirements-experiments.txt`. Verified by full
+  teardown + rebuild + tests.
+- **Launched training on UCloud B200**: smoke (family 9717) → **validated the whole path on a real
+  B200** (`uv sync --frozen` from the lock works, preflight OK, `lepinet train` runs) → 5-epoch
+  oversample run auto-launched by the daemon and is **converging healthily** (train_loss 18.9→4.2 in
+  epoch 1, ~1:17/epoch, host anon 91/288 GB — safe). Eval on fold 0 queued on a B200-MIG `--after`.
+  This is the pending **train-parity** check vs 0.9148.
+
+## Train-parity check — the 5ep run scored 0.9455, and why that is NOT a win (2026-07-25)
+
+The 5ep run finished; my `test.py` reported **species macro-F1 0.9455** on the fold-0 test. That is
+*above* the 0.9148 target, which is the wrong direction for a port meant to *reproduce* — a red
+flag, not a celebration. Two independent checks:
+
+**1. Is the metric implementation right?** Yes — **bit-exact with `mini_metrics`.** Downloaded the
+run's `predictions.csv` (the interop file, 132 MB, 1.45 M rows) off the UCloud drive and ran
+`mini_metrics.MacroF1` on it directly. At no-abstain threshold the two agree to 4 dp on every level:
+
+| level | my `test.py` (native) | `mini_metrics` @thr=0 | @thr=0.5 |
+|---|---|---|---|
+| species | 0.9455 | **0.9455** | 0.9414 |
+| genus | 0.9690 | **0.9690** | 0.9700 |
+| family | 0.9803 | **0.9803** | 0.9821 |
+
+So `LevelMacroF1`/`macro_f1` reproduces `mini_metrics` exactly (both macro-average over classes
+*present as ground-truth labels*, both set F1=0 when precision or recall is 0). The 0.9455 is a
+faithful number — of a *different eval set*.
+
+**2. Is the eval set the same as the 0.9148 baseline?** **No — this was the bug.** The 0.9148
+baseline (`20260716-154156`, journal [[2026-07-does-longtail-help]]) was measured over the *whole*
+test fold: **629,742 images, 12,041 species** (dev/032 test default `min_img_per_spc=0`). My UCloud
+test job (`lepinet-test.toml`) passed **`--min-img-per-spc 50`**, copied thoughtlessly from the
+*training* config. That filter drops every species with <50 images *in fold 0* — the entire hard
+long tail — leaving **484,299 images, 3,696 species**. Macro-F1 weights every class equally, so
+removing 8,345 rare (low-per-class-F1) species lifts the average from ~0.91 to 0.9455. The tell:
+**micro-acc went the other way** (93.79% here vs 94.76% baseline) — a genuinely better model raises
+both; an easier *macro* subset raises only macro. `min_img_per_spc` belongs on *training* (which
+species the model learns), never re-applied to the *test* fold.
+
+**Fix + apples-to-apples re-run:** `ucloud/lepinet-test-allspc.toml` (`--min-img-per-spc 0`,
+out-dir `data/ucloud_preds_allspc`), submitted as `lepi-test-all` (job 12359845, B200-MIG). Expected
+~0.9148 if the fastai-only port reproduces the pipeline. Result pending below.
+
+**Lesson (also saved to memory):** an eval number that *beats* the reference on a reproduction is a
+measurement bug until proven otherwise. Audit the eval-set construction (row count, class count,
+filters) before the metric code. Here the metric was perfect and the *filter* was wrong.
+
+### Re-test result (all species, min_img_per_spc=0) — PORT REPRODUCES 0.9148 ✅
+
+`lepi-test-all` (min_img 0) evaluated **629,742 images / 12,041 species — byte-identical eval set to
+the 0.9148 baseline** (same n, same class count). Numbers:
+
+| level | port @thr 0 | **port @optimal thr** | baseline (`20260716-154156`) | Δ vs baseline |
+|---|---|---|---|---|
+| species | 0.9110 | **0.9152** | 0.9148 | **+0.0004** |
+| genus | 0.9587 | 0.9613 | 0.9603 | +0.0010 |
+| family | 0.9708 | 0.9723 | 0.9726 | −0.0003 |
+
+The baseline was measured with `mini_metrics --optimal` (per-level threshold that maximises
+macro-F1); the fair comparison is the **@optimal** column, where species macro-F1 is **0.9152 vs
+0.9148** — within 0.0004, i.e. **reproduced**. (Optimal per-level thresholds came out ~0.34; the
+model is under-confident, consistent with [[2026-07-lepi-app-compression]].) Micro-acc is ~1.6 pt
+lower (93.2 vs 94.8) — the fastai-only reimplement + a different seed + the clarity refactor move it
+slightly, but the headline metric lands on target. **Train-parity: DONE.** The clean, mini_trainer-
+free package reproduces the project-best baseline from scratch.
+
+### Still open
+- (nothing on parity — resolved above). Remaining threads: bigger-everything result
+  [[2026-07-bigger-everything]], the doc/comment reframe, the app artifact path, distillation.
+- The **"bigger everything" teacher run** → [[2026-07-bigger-everything]] (queued this session).
+- The app artifact path (calibration/thresholds, quantization, the versioned bundle) — the whole
+  [[2026-07-lepi-app-claude]] Phase B/C on the new package.
+- CutMix for multi-target heads (MixUp done; CutMix's `before_batch` also indexes the target tuple).
+- Distillation (teacher→small student) and the geographic prior remain future levers.

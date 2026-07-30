@@ -17,6 +17,20 @@ def test_multilevel_loss_scalar_and_positive():
     assert len(crit.per_level(preds, targets)) == 3
 
 
+def test_loss_reduction_toggle_for_mixup():
+    # fastai MixUp toggles reduction to 'none' to lerp per-sample losses, then restores it.
+    crit = MultiLevelCELoss([6, 3, 2])
+    wrap = FastaiLossWrapper(crit)
+    assert wrap.y_int is True
+    preds = [torch.randn(4, 6), torch.randn(4, 3), torch.randn(4, 2)]
+    yb = (torch.randint(0, 6, (4,)), torch.randint(0, 3, (4,)), torch.randint(0, 2, (4,)))
+    assert wrap(preds, *yb).ndim == 0            # mean -> scalar
+    wrap.reduction = "none"
+    assert wrap(preds, *yb).shape == torch.Size([4])  # none -> per-sample [N]
+    wrap.reduction = "mean"
+    assert wrap(preds, *yb).ndim == 0            # restored
+
+
 def test_label_smoothing_decreases_with_depth():
     crit = MultiLevelCELoss([6, 3, 2], label_smoothing=0.1)
     ls = [fn.label_smoothing for fn in crit._loss_fns]
@@ -68,3 +82,40 @@ def test_config_defaults_bf16():
     cfg = TrainConfig(parquet_path="x", img_dir="x", out_dir="x", model_name="m", model_arch_name="resnet18")
     assert cfg.precision == "bf16"
     assert cfg.levels == ["speciesKey", "genusKey", "familyKey"]
+
+
+def test_dl_num_workers_reads_real_count_not_fastai_dummy():
+    """Regression: fastai hardcodes ``DataLoader.num_workers = 1``; the real count is on ``fake_l``.
+
+    Reading the public attribute pinned every evaluation to ONE worker (~1 img/s on a network
+    mount — a 630k-image eval would take a week). ``dl_num_workers`` must read through to the
+    effective value.
+    """
+    from lepinet.test import dl_num_workers
+
+    class _FakeL:
+        num_workers = 12
+
+    class _DL:
+        num_workers = 1      # fastai's misleading dummy
+        fake_l = _FakeL()
+
+    assert _DL().num_workers == 1          # the trap
+    assert dl_num_workers(_DL()) == 12     # the fix
+    assert dl_num_workers(object(), default=3) == 3
+
+
+def test_streaming_f1_multihead_handles_single_level():
+    """Regression: with one level fastai passes bare tensors; zip() would iterate batch rows."""
+    import torch
+
+    from lepinet.metrics import StreamingF1MultiHead
+
+    class _Learn:
+        pred = torch.randn(8, 5)          # bare tensor, not a list
+        y = torch.randint(0, 5, (8,))
+
+    m = StreamingF1MultiHead(average="macro", name="F1(macro)")
+    m.reset()
+    m.accumulate(_Learn())
+    assert len(m.tp) == 1 and int(m.tp[0].sum() + m.fn[0].sum()) == 8   # 8 samples, ONE level

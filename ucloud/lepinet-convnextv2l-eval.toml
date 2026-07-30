@@ -1,0 +1,34 @@
+# Eval the ConvNeXtV2-L teacher on the full fold-0 test (min_img 0, all 12,041 species), img 320.
+# On a full B200 (198 M params @320 over 630k images is heavy for a MIG slice).
+#   ucloud q submit ucloud/lepinet-convnextv2l-eval.toml --name lepi-cnx-eval
+name = "lepinet-convnextv2l-eval"
+replicas = 1
+
+[application]
+name = "pytorch-te"
+version = "26.05"
+
+[product]
+id = "gpu-nvidia-b200-1-gpu"
+category = "gpu-nvidia-b200"
+provider = "ucloud"
+
+[time_allocation]
+hours = 6
+
+[sync]
+local = ".."
+remote = "/12347837/repos/lepinet"
+
+[setup]
+script = "setup-lepinet.sh"
+run = "lepinet test --model '/work/lepinet/data/ucloud_models/*-lepinet-convnextv2l-bigger-320-6ep-oversample-mixup-ucloud/*.pt' --parquet /work/global_lepi/0032836-250426092105405_processing_metadata_postprocessed_quality_filtered.parquet --img-dir /work/global_lepi/images --out-dir /work/lepinet/data/ucloud_preds_cnxv2l --test-set 0 --min-img-per-spc 0 --img-size 320 --aug-img-size 384 --batch-size 128 --num-workers 16"
+
+[schedule]
+auto_extend = "2h"
+max_time = "12h"
+
+[[resources]]
+type = "file"
+path = "/12347837/datasets/global_lepi"
+read_only = true

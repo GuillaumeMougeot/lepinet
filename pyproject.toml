@@ -60,6 +60,7 @@ dependencies = [
 
 # Feature extras of the package itself (lazy imports; the package works without them until used).
 [project.optional-dependencies]
+hf = ["huggingface_hub>=0.23"]   # `lepinet bundle --publish-hf`
 export = ["onnx", "onnxruntime"]   # `lepinet export` (ONNX + ORT parity check)
 timm = ["timm"]                     # timm backbones (fastvit/repvit/mobilenetv4/...)
 

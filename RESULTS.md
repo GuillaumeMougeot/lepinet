@@ -35,4 +35,83 @@ Baseline: `20260712-072542-heads-global-independent-muon-effnetv2s`
 | `20260710-093034` | heads-global-hierarchical-effnetv2s | 1 | freeze_epochs=1 head=hierarchical nb_epochs=4 optimizer=adam schedule=fine_tune | — | — | done |
 | `20260710-085450` | heads-global-independent-effnetv2s | 1 | freeze_epochs=1 nb_epochs=4 optimizer=adam schedule=fine_tune | — | — | done |
 
-**Best test species macro-F1: 0.9148** (`20260716-154156` heads-global-independent-muon-5ep-oversample-effnetv2s, micro-acc 0.9476)
+**Best test species macro-F1 (old dev/030 pipeline): 0.9148** (`20260716-154156` heads-global-independent-muon-5ep-oversample-effnetv2s, micro-acc 0.9476)
+
+---
+
+## lepinet package (UCloud) runs — hand-maintained
+
+`dev/036_ledger.py` only sees the *local* `data/global` (old dev/030 pipeline). The `src/lepinet`
+package runs on **UCloud B200** and its checkpoints/results are not in that ledger, so this table is
+maintained by hand and kept exhaustive.
+
+**Metric:** species (level-0) **macro-F1** on the held-out fold `set=='0'`, over **all** species
+(`min_img_per_spc=0`, 629,742 images / 12,041 species) unless the row says otherwise; micro-accuracy
+in parentheses. Native metric ≡ `mini_metrics` at threshold 0 (verified bit-exact).
+`location`: where the checkpoint lives now (`local` = `data/local_models/`).
+
+### Trained models
+
+| run id | model | species F1 (micro) | genus | family | notes | location |
+|---|---|---|---|---|---|---|
+| `20260724-181230` | effnetv2_s, independent head, 5 ep, oversample 0.5 | **0.9110** (0.9317) | 0.9587 | 0.9708 | **milestone baseline** — reproduces the 0.9148 project best (0.9152 @optimal threshold) | local + ucloud |
+| `20260724-202442` | ConvNeXtV2-L @320, 6 ep, MixUp 0.2 | **0.9316** (0.9507) | 0.9739 | 0.9876 | "bigger everything" — **+1.68 pp**, best in-distribution | local + ucloud |
+| `20260728-113338` | convnext_large.dinov3 @320, 6 ep, MixUp 0.2 | **0.9311** (0.9498) | 0.9731 | 0.9867 | matches ConvNeXtV2-L at **~2× the training speed** → preferred teacher | ucloud |
+| `20260725-164507` | tf_efficientnetv2_b0, hidden 256, from scratch | 0.8692 (0.9025) | 0.9344 | 0.9560 | distillation **control** | local + ucloud |
+| `20260725-232410` | b0 h256, distilled from the 5ep teacher, **T=1** | **0.8786** (0.9070) | 0.9390 | 0.9610 | KD works: **+0.94 pp over from-scratch** | local + ucloud |
+| `20260725-164500` | b0 h256, distilled, **T=4** | 0.8546 (0.8957) | — | — | **negative result** — textbook KD temperature *hurt* (−1.46 pp) | ucloud (deletable) |
+| `20260728-113248` | b0 h256, distilled from **ConvNeXtV2-L**, T=1 | 0.8756 (0.9062) | 0.9375 | 0.9598 | a stronger teacher did **not** help — the student's capacity is the ceiling | ucloud |
+| `20260728-184225` | effnetv2_s, **hierarchical** (parent-conditioned) head | 0.8845 (0.9138) | 0.9471 | 0.9683 | **< independent 0.9110** — conditioning hurts (fair comparison, identical config) | ucloud |
+| `20260728-184310` | effnetv2_s, **arcface** head (s=30, m=0.3 species-only) | 0.8784 (0.9092) | 0.9465 | 0.9639 | −3.3 pp in-distribution, but **OOD AUROC 0.732 vs 0.601** (see below) | ucloud |
+| `20260729-182718` | effnetv2_s, **single species head** + marginalisation | **0.9135** (0.9344) | **0.9606** | **0.9739** | **beats the multi-head at every level** — coarse heads are not just redundant, they are worse | ucloud |
+| `20260729-183815` | effnetv2_s, **arcface × z-score** (m=0.3) | **0.9069** (0.9316) | 0.9572 | 0.9699 | recovers +2.9 pp over plain arcface **and** lifts OOD AUROC to 0.9115 (see below) | ucloud |
+| `20260729-115003/115103` | convnext_large.dinov3 @320, **12 ep** | _running_ | — | — | owner's "6 ep was budget, not principle" | ucloud |
+
+Smoke runs (family 9717, 1 epoch — path validation only, not comparable): `lepinet-smoke-9717`,
+`convnextv2l-smoke` ×2, `arcface-smoke` ×2, `dinov3-vitb-smoke`. Deleted from UCloud.
+
+### External-dataset evaluations (generalisation)
+
+The same ConvNeXtV2-L model (in-distribution **0.9316**) on data from a different source:
+
+| dataset | images | species F1 (micro) | genus | family | notes |
+|---|---|---|---|---|---|
+| flemming_helsing `referenced` | 58,640 | **0.6950** (0.6549) | 0.7641 | 0.8086 | ~23 pp generalisation gap; 13.7 % of images are OOD species |
+| ↳ same, **with TTA** (4-flip) | 58,640 | 0.6976 (0.6622) | 0.7733 | 0.8157 | TTA worth only **+0.3 pp** for 4× the cost |
+| flemming **names** set | 47,905 | **0.7122** (0.7218) | 0.7859 | 0.7949 | GBIF-id-reconciled ⇒ only **0.5 %** OOD (vs 13.7 %) — cleaner test |
+
+### Open-set / OOD detection
+
+Unseen species from **global_lepi's <50-image classes** (excluded from training, same image domain,
+so this isolates *novelty* from domain shift). 632,913 images, 3,171 novel. Score = `−max species
+logit`; metric = AUROC(known vs novel).
+
+| head | in-distribution species F1 | **OOD AUROC** | known max-logit μ±σ | novel max-logit μ±σ |
+|---|---|---|---|---|
+| independent (plain cosine) | **0.9110** | 0.601 (≈ chance) | −9.27 ± 7.44 | −11.46 ± 6.82 |
+| arcface (`s·cos`, s=30, m=0.3) | 0.8784 | 0.732 | 26.00 ± 13.03 | 23.47 ± 10.84 |
+| **arcface × z-score** (m=0.3) | 0.9069 | **0.9115** | 32.58 ± 7.83 | 18.17 ± 6.38 |
+
+The composition beats **both** components on the axis each was meant to own (+31 pt AUROC over plain
+cosine for −0.4 pt accuracy; +18 pt AUROC **and** +2.9 pt accuracy over plain arcface), so the
+accuracy-vs-open-set trade-off is an artefact of dropping the calibrated transform, not intrinsic.
+
+### Embedding geometry (12 species × 40 held-out images, vs each model's own prototypes)
+
+| head | intra ↑ | inter ↓ | margin ↑ | silhouette |
+|---|---|---|---|---|
+| independent (plain cosine) | −0.154 | −0.336 | 0.182 | 0.617 |
+| **arcface × z-score** | **+0.667** | 0.056 | **0.610** | 0.641 |
+
+Silhouette barely moves — *separability was never the problem*; what changes is the **absolute**
+angular position, which is exactly what an open-set score reads (and what a 2-D projection discards).
+
+### Throughput
+
+| what | measurement |
+|---|---|
+| inference (effnetv2_s, full B200, 32 workers) | **898 img/s** → a full 630 k eval is ~12 min |
+| the same before the `num_workers` fix | ~1 img/s (fastai's `DataLoader.num_workers` is a dummy) |
+
+Reasoning behind every number is in [`journal/`](journal/) — start at
+[`journal/README.md`](journal/README.md).

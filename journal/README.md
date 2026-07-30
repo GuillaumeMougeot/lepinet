@@ -1,5 +1,24 @@
 # Journal
 
+## Big picture — how the project has evolved (update this as it moves)
+
+1. **Port** (Jul 24) — reimplemented the old `mini_trainer` pipeline as a clean, fastai-only
+   `src/lepinet` package; reproduced the project-best baseline (species macro-F1 **0.9152 ≈ 0.9148**).
+2. **Scale** (Jul 25–29) — bigger backbones lift it: ConvNeXtV2-L **0.9316**; DINOv3-ConvNeXt-L
+   matches it and trains ~2× faster. **In-distribution accuracy is essentially solved.**
+3. **The teacher→student→app bridge** (Jul 25–29) — distillation works (T=1, the student beats
+   from-scratch but caps ~0.88 by its own capacity); `lepinet bundle` turns any checkpoint into a
+   deployable ONNX bundle; a lepinet bundle now plugs into the companion PWA (browser test live).
+4. **The pivot** (Jul 28–29) — the head bake-off is a **null result** (independent wins;
+   hierarchical/autoregressive are washes), and a model at 0.93 in-distribution drops to **~0.70 on
+   external data**. So the real story isn't heads or accuracy — it's **reliable prediction that knows
+   what it doesn't know**: open-set in *image* space (novel species) and abstention in *hierarchy*
+   space (back off to genus/family when the photo can't resolve the species). See
+   [2026-07-story-and-directions.md](2026-07-story-and-directions.md).
+5. **Where we are going** — productionise the small model into the app (ORT-Web format still open),
+   and pursue the two OOD axes + domain robustness (the 23 pp external gap). Accuracy scaling and
+   exotic heads are de-prioritised.
+
 One file per **question**, not per run. A run is a data point; a question is why you spent a
 day of GPU on it. `dev/036_ledger.py` already answers *what was tried and what it scored* —
 it reads every run's saved `config.yaml` and `metrics.json` and prints the table. Nothing on
@@ -52,4 +71,9 @@ dead ends, the thing you would tell someone to save them a week.
 | [2026-07-lepi-app-HANDOFF.md](2026-07-lepi-app-HANDOFF.md) | **START HERE to resume** — self-contained handoff: state, env, how-to, open problems | living |
 | [2026-07-lepi-app-claude.md](2026-07-lepi-app-claude.md) | ↳ the detailed plan: size budget, phases A–E, decisions | Decisions RESOLVED (§7); phases A+B done, C+D open |
 | [2026-07-lepi-app-compression.md](2026-07-lepi-app-compression.md) | Does the model export, quantize and calibrate for a browser? | RESOLVED — ONNX ok; int8 **3.9× for −0.59 pp**; marginalization proven; resize is a non-issue; model is *under*confident |
-| [2026-07-src-lepinet-baseline-port.md](2026-07-src-lepinet-baseline-port.md) | How to port the 0.9148 baseline into a clean, fastai-only, mini_trainer-free `src/lepinet`? | IN PROGRESS — package built + validated GPU-free (head load-parity bit-exact, train/eval/predict/export all pass); train-parity run blocked on GPU driver fault |
+| [2026-07-src-lepinet-baseline-port.md](2026-07-src-lepinet-baseline-port.md) | How to port the 0.9148 baseline into a clean, fastai-only, mini_trainer-free `src/lepinet`? | **RESOLVED** — port reproduces the baseline (**species 0.9152 vs 0.9148**, same eval set); this 5ep run is the milestone baseline; dev/ now imports `lepinet` |
+| [2026-07-bigger-everything.md](2026-07-bigger-everything.md) | Does a bigger, cutting-edge model (ConvNeXtV2-L / DINOv3, ArcFace) beat 0.9148 and make a good distillation teacher? | **RESOLVED** — ConvNeXtV2-L **0.9316 vs 0.9148 (+1.68pp)**, now the best teacher; ArcFace + DINOv3/ViT plumbing built & smoke-validated |
+| [2026-07-teacher-student-app-bridge.md](2026-07-teacher-student-app-bridge.md) | How to make shipping a model (teacher→small student→app bundle→release) one command? | OPEN — distillation works (T=1, 0.8786 > from-scratch); interop bundle done; quantize/release + ORT-Web QDQ fix next |
+| [2026-07-landscape-and-plan.md](2026-07-landscape-and-plan.md) | Global landscape: what's settled, the open questions answered, and the ordered backlog | living — the map; read before picking up new work |
+| [2026-07-flemming-generalization.md](2026-07-flemming-generalization.md) | Does the 0.9316 model survive an external dataset (flemming_helsing)? | RESOLVED — drops to species macro-F1 0.67 (all) / 0.70 (known); ~23 pp gap; family robust; motivates OOD work |
+| [2026-07-story-and-directions.md](2026-07-story-and-directions.md) | What's the real story/bottleneck (heads are a null result)? | strategic — reframe to reliable open-set + hierarchy-abstention under domain shift; research directions |

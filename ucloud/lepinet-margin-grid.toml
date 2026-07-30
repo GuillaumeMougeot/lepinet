@@ -1,0 +1,27 @@
+# Corrected margin search: short INDEPENDENT fine-tunes per m from the converged margin-free
+# baseline, scored by embedding geometry (intra-inter), which is calibrated against OOD AUROC.
+# Replaces the invalid range test (a margin mechanically raises CE, so a knee is meaningless).
+name = "lepinet-margin-grid"
+replicas = 1
+[application]
+name = "pytorch-te"
+version = "26.05"
+[product]
+id = "gpu-nvidia-b200-1-gpu"
+category = "gpu-nvidia-b200"
+provider = "ucloud"
+[time_allocation]
+hours = 4
+[sync]
+local = ".."
+remote = "/12347837/repos/lepinet"
+[setup]
+script = "setup-lepinet.sh"
+run = "python dev/057_margin_grid.py --config configs/20260729_ucloud_arcface_zscore_effnetv2s.yaml --init-from '/work/lepinet/data/ucloud_models/*-lepinet-heads-global-independent-muon-5ep-oversample-effnetv2s-ucloud/*.pt' --margins 0.1 0.2 0.3 0.5 0.7 --steps 200 --out /work/lepinet/data/ucloud_preds/margin_grid.json"
+[schedule]
+auto_extend = "1h"
+max_time = "8h"
+[[resources]]
+type = "file"
+path = "/12347837/datasets/global_lepi"
+read_only = true

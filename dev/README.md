@@ -1,5 +1,7 @@
 # dev/ — the lab notebook
 
+> New here? Start at [`../START-HERE.md`](../START-HERE.md) for the map of the whole repository.
+
 Numbered scripts and notebooks, append-only and chronological: the number records *when an idea
 happened*, so the sequence tells the project's story. They import each other by filename via
 `importlib` (module names can't start with a digit), which is why this is a notebook, not a
@@ -105,3 +107,17 @@ machines and it is not expected to run here. Its configs/launchers are in
 - Run a trainer/test with `python dev/030_...py -c configs/<name>.yaml`.
 - Numbered scripts import each other via `importlib` and rely on being launched from the repo
   root (so `dev/` is on `sys.path`).
+
+
+## Package-era scripts (import `lepinet`, 2026-07)
+
+Since the pipeline moved into [`../src/lepinet/`](../src/lepinet/), new experiments import the
+package instead of the old 028/030/034 chain.
+
+| script | what it is |
+|---|---|
+| `048_flemming_parquet.py` | build an eval labels parquet for flemming_helsing from its `example_pred.csv` |
+| `049_flemming_names_parquet.py` | same for the *names* flemming set (folders by species name + `name2id.csv`) |
+| `050_hierarchical_heads.py` | **HierarchicalHead** (parent-conditioned cosine), clean reimpl; registers into `HEAD_REGISTRY` |
+| `051_benchmark_run.py` | runner that registers the dev heads then dispatches to `lepinet train/test` |
+| `052_ood_score.py` | open-set scoring: max-logit → AUROC(known vs novel species) |

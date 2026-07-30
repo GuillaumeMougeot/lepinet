@@ -37,6 +37,38 @@ def train(
 
 
 @app.command()
+def distill(
+    config: Path = typer.Option(..., "--config", "-c", exists=True, dir_okay=False,
+                                help="YAML training config for the STUDENT (backbone, epochs, ...)."),
+    teacher: str | None = typer.Option(None, "--teacher", "-t",
+                                       help="Teacher checkpoint path/glob (overrides distill_teacher in the config)."),
+    alpha: float | None = typer.Option(None, help="KD blend override (0=hard labels only, 1=teacher only)."),
+    temperature: float | None = typer.Option(None, help="KD softmax temperature override."),
+):
+    """Train a small student by distilling from a teacher checkpoint.
+
+    Same as ``train`` but with a teacher: the frozen teacher's soft targets over all species are
+    blended with the hard labels. Set the teacher in the config (``distill_teacher``) or via
+    ``--teacher``. Teacher and student must share the exact class vocabulary.
+    """
+    from .config import prepare_run_dir
+    from .train import train
+
+    cfg, _run_dir = prepare_run_dir(str(config))
+    if teacher is not None:
+        cfg.distill_teacher = teacher
+    if alpha is not None:
+        cfg.distill_alpha = alpha
+    if temperature is not None:
+        cfg.distill_temperature = temperature
+    if not cfg.distill_teacher:
+        raise typer.BadParameter("No teacher given: set distill_teacher in the config or pass --teacher.")
+    cfg.__post_init__()  # re-validate after overrides (e.g. distill+mixup incompatibility)
+    train(cfg)
+    typer.echo(f"Run directory: {cfg.out_dir}")
+
+
+@app.command()
 def test(
     model: str = typer.Option(..., "--model", "-m", help="Checkpoint path (glob allowed)."),
     parquet: Path = typer.Option(..., "--parquet", "-p", exists=True, help="Evaluation parquet."),
@@ -49,13 +81,21 @@ def test(
     aug_img_size: int = typer.Option(460),
     img_size: int = typer.Option(256),
     num_workers: int | None = typer.Option(None),
+    drop_unknown_species: bool = typer.Option(True, help="Drop OOD species (default); False = open-set eval keeping them."),
+    tta: bool = typer.Option(False, help="Test-time augmentation (4-flip average); ~4x slower."),
+    skip_missing: bool = typer.Option(True, help="Skip catalogued images absent from disk (incomplete mirrors)."),
+    limit: int | None = typer.Option(None, help="Evaluate only N random images (throughput probe / smoke)."),
+    marginal: bool = typer.Option(False, help="Derive coarser levels from the species posterior (log-sum-exp up the taxonomy)."),
+    eval_levels: str | None = typer.Option(None, help="Comma-separated levels to score, e.g. 'speciesKey,genusKey,familyKey'."),
 ):
     """Evaluate a checkpoint on a held-out fold (native metrics + mini_metrics-format predictions)."""
     from .test import evaluate
 
     evaluate(model_path=model, parquet_path=str(parquet), img_dir=str(img_dir), out_dir=str(out_dir),
              eval_name=eval_name, test_set=test_set, min_img_per_spc=min_img_per_spc,
-             batch_size=batch_size, aug_img_size=aug_img_size, img_size=img_size, num_workers=num_workers)
+             batch_size=batch_size, aug_img_size=aug_img_size, img_size=img_size, num_workers=num_workers,
+             drop_unknown_species=drop_unknown_species, tta=tta, skip_missing=skip_missing, limit=limit, marginal=marginal,
+             eval_levels=eval_levels.split(',') if eval_levels else None)
 
 
 @app.command()
@@ -87,6 +127,28 @@ def export(
     from .export import export_onnx
 
     export_onnx(model, str(out_dir), img_size=img_size, opset=opset, check=check, dynamo=dynamo)
+
+
+@app.command()
+def bundle(
+    model: str = typer.Option(..., "--model", "-m", help="Checkpoint path (glob allowed)."),
+    out_dir: Path = typer.Option(..., "--out-dir", "-o", help="Bundle output directory."),
+    img_size: int = typer.Option(256),
+    quantize: bool = typer.Option(True, help="Also emit model.int8.onnx (dynamic int8)."),
+    name: str | None = typer.Option(None, help="Human-readable bundle name for config.json."),
+    publish_hf: str | None = typer.Option(None, "--publish-hf",
+        help="Also upload to this Hugging Face repo (e.g. 'user/lepinet-models'). Needs `hf auth login`."),
+    hf_path: str | None = typer.Option(None, help="Folder name inside the HF repo (default: the bundle dir name)."),
+):
+    """Build a deployable app bundle: ONNX (fp32 + int8) + taxonomy + config + MANIFEST.
+
+    One command from a checkpoint to a ready-to-ship folder (export + quantize). Add data-dependent
+    sidecars (names.json / calibration.json / thresholds.json) beside it when available.
+    """
+    from .export import make_bundle
+
+    make_bundle(model, str(out_dir), img_size=img_size, quantize=quantize, bundle_name=name,
+                publish_hf=publish_hf, hf_path=hf_path)
 
 
 def main(argv=None) -> int:

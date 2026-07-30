@@ -1,0 +1,33 @@
+# Smoke for the "bigger everything" ConvNeXtV2-L run (validates arch/memory/throughput on a B200).
+#   ucloud q submit ucloud/lepinet-convnextv2l-smoke.toml --name lepi-big-smoke
+name = "lepinet-convnextv2l-smoke"
+replicas = 1
+
+[application]
+name = "pytorch-te"
+version = "26.05"
+
+[product]
+id = "gpu-nvidia-b200-1-gpu"
+category = "gpu-nvidia-b200"
+provider = "ucloud"
+
+[time_allocation]
+hours = 2
+
+[sync]
+local = ".."
+remote = "/12347837/repos/lepinet"
+
+[setup]
+script = "setup-lepinet.sh"
+run = "lepinet train -c configs/20260724_ucloud_lepinet_convnextv2l_smoke.yaml"
+
+[schedule]
+auto_extend = "1h"
+max_time = "4h"
+
+[[resources]]
+type = "file"
+path = "/12347837/datasets/global_lepi"
+read_only = true
