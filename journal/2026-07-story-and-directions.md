@@ -296,3 +296,39 @@ strengthens the paper's framing (both kinds of "unknown" matter and they compoun
 the priority list — **domain robustness is upstream of open-set**, because a shifted embedding
 degrades the novelty score itself. Domain-mimicking augmentation / self-training is therefore not a
 parallel track to OOD work; it is a prerequisite for it.
+
+## Short-horizon margin probes don't work either (second negative, 2026-07-30)
+
+After the range test failed, the corrected design was: warm-start from the converged margin-free
+baseline, fine-tune **200 steps independently per `m`**, and score the embedding geometry
+(`intra − inter`), which is calibrated against AUROC. It ran cleanly. The result:
+
+| m | geometry (before → after) | accuracy (before → after) |
+|---|---|---|
+| 0.10 | 0.060 → 0.045 | 0.910 → 0.836 |
+| 0.20 | 0.060 → 0.052 | 0.910 → 0.867 |
+| 0.30 | 0.060 → **−0.083** | 0.910 → **0.199** |
+| 0.50 | 0.060 → −0.138 | 0.910 → **0.000** |
+| 0.70 | 0.060 → −0.106 | 0.910 → 0.002 |
+
+**No margin improves the geometry in 200 steps — every one makes it worse.** Yet we know from a full
+run that `m = 0.3` trained from scratch reaches 0.9069 F1 and **0.9115 AUROC**, the best open-set
+result in the project. So the probe is **anti-correlated with the outcome it is meant to predict**,
+and its "winner" (0.2) is meaningless — it is merely the least-damaged.
+
+**Why.** ArcFace's benefit is a *converged* property: the margin slowly rotates prototypes apart over
+a whole training run. Two hundred steps only capture the **shock of switching objective mid-flight**,
+which is largest for exactly the margins that help most in the end. Any short-horizon proxy measures
+disruption, not destination.
+
+**Conclusion on tuning `m`:** there is no cheap proxy. It needs full runs — which is affordable
+(≈1.5 h each) but is a *grid*, not a trick, and `m = 0.3` already delivers 0.9115, so tuning is a
+refinement rather than a blocker. Two failed attempts at a shortcut is enough; the honest statement
+in the paper is that `m` was not tuned and 0.9115 is therefore a floor.
+
+**A practical finding falls out of the wreckage**, worth keeping: **you cannot fine-tune an existing
+cosine model into an ArcFace one by simply switching on a margin.** At `m ≥ 0.3` with the normal LR
+the warm-started model is destroyed within 200 steps (accuracy 0.91 → 0.00) — the margin makes the
+loss enormous (12+, per the range test) and the gradients wreck the weights. Training *from scratch*
+with a fixed margin is stable and gives 0.9069. If margin fine-tuning is ever wanted, it needs a
+margin warm-up schedule and/or a much lower LR.
