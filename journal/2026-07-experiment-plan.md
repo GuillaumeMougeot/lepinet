@@ -4,6 +4,30 @@
 architecture has never been trained. Compute is not the constraint; **experimental hygiene is** — the
 danger is accumulating results on inconsistent baselines, which is exactly what happened already.
 
+
+## Status board (keep this current)
+
+Updated 2026-07-30. `→` = chained eval. Every finished run must land in `RESULTS.md`.
+
+| id | run | state | result |
+|---|---|---|---|
+| A1 | effnetv2_s, single head + ArcFace × z-score | **running** → eval queued | — |
+| A2 | DINOv3-cnx-L, single head + ArcFace × z-score (final-model candidate) | **queued** → eval queued | — |
+| A3 | distil A2 → small single-head student | blocked on A2 | — |
+| B0 | more capacity / longer schedule | **running**: owner's 12-epoch DINOv3-cnx-L (job 12361261). Must be evaluated on **both** benchmarks — the question is whether a longer schedule moves the *shifted* score, which H4 says is where the headroom is. | — |
+| B1 | domain-mimicking augmentation | not started | — |
+| B2 | background suppression (flatbug-style) | not started | — |
+| B3 | self-training on unlabelled OOD images | not started | — |
+| C1 | rank-abstention curves (no GPU) | **DONE** | 99.18% answered at 95.04% precision; **coarse ranks must be calibrated conditionally** — genus is 0.487 on the hard subset vs 0.970 overall |
+| C2 | OOD AUROC for A1/A2 | blocked on A | — |
+| C3 | larger novel set under shift | not started | — |
+| D1 | calibration + thresholds + names in `lepinet bundle` | not started | — |
+| D2 | distil into fastvit_sa12 instead of b0 | not started | — |
+| — | marginal supervision (owner's true hierarchical idea) | **running** → eval queued | — |
+
+Done and folded in: H4 (backbone × shift, 3.0× spread), margin tuning (abandoned, two principled
+failures), flemming OOD under shift (0.727 vs 0.574).
+
 ## H4, answered first: backbone choice matters 3× more under shift
 
 | backbone | in-distribution | flemming (shifted) | gap |

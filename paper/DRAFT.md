@@ -181,7 +181,41 @@ unfamiliar rather than making novel ones look more distinct. Novelty detection i
 domain-robust**, and domain adaptation is upstream of open-set rather than parallel to it. (Only 234
 of 47,905 images are novel here, so treat this as directional, ±0.03.)
 
-### 4.5 Rank abstention _(pending)_
+### 4.5 Rank abstention — and why backing off is subtler than it looks
+
+Marginalisation makes rank abstention a *threshold*, not a second model: back off to genus when the
+species posterior is unconfident. Evaluated on 629,742 held-out images with the single-head model:
+
+| rank | precision at threshold 0 |
+|---|---|
+| species | 0.9344 |
+| genus | 0.9701 |
+| family | 0.9922 |
+
+The obvious policy is to pick each rank's threshold from these global curves. **That is wrong**, and
+the error is instructive. Conditioned on the images where the species head was *unconfident*
+(15,453 images, species conf < 0.40), genus precision is **0.4874**, not 0.9701 — and family is
+0.7935, not 0.9922. The coarse posterior is a deterministic function of the species posterior, so it
+**inherits exactly the uncertainty that triggered the back-off**. "Genus is 97 % accurate" is true on
+average and badly misleading for the cases where you actually need it.
+
+Calibrating the coarse thresholds *on the subset they will serve* fixes this. At a 95 % precision
+target throughout:
+
+| returned rank | coverage | precision |
+|---|---|---|
+| species | 97.55 % | 0.9506 |
+| genus | 0.41 % | 0.9502 |
+| family | 1.22 % | 0.9366 |
+| abstain | 0.82 % | — |
+
+**99.18 % of images get an answer, 95.04 % of those are correct**, and the fallback ranks carry their
+promised precision instead of a 49 % one. The practical lesson generalises beyond this dataset: in
+any hierarchical back-off, thresholds must be calibrated **conditionally on reaching that rank**, or
+the coarse levels' apparent reliability is borrowed from the easy cases they never see.
+
+(Figure 5, `figures/fig5_rank_abstention.png`: per-rank precision/coverage curves, and the rank the
+user receives as the species bar rises.)
 
 Coverage/precision per rank from marginalised posteriors with per-level thresholds.
 
