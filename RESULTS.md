@@ -63,8 +63,8 @@ in parentheses. Native metric ≡ `mini_metrics` at threshold 0 (verified bit-ex
 | `20260728-113248` | b0 h256, distilled from **ConvNeXtV2-L**, T=1 | 0.8756 (0.9062) | 0.9375 | 0.9598 | a stronger teacher did **not** help — the student's capacity is the ceiling | ucloud |
 | `20260728-184225` | effnetv2_s, **hierarchical** (parent-conditioned) head | 0.8845 (0.9138) | 0.9471 | 0.9683 | **< independent 0.9110** — conditioning hurts (fair comparison, identical config) | ucloud |
 | `20260728-184310` | effnetv2_s, **arcface** head (s=30, m=0.3 species-only) | 0.8784 (0.9092) | 0.9465 | 0.9639 | −3.3 pp in-distribution, but **OOD AUROC 0.732 vs 0.601** (see below) | ucloud |
-| `20260729-182718` | effnetv2_s, **single species head** (flat) | _running_ | — | — | tests whether genus/family supervision helps the backbone at all | ucloud |
-| `20260729-183815` | effnetv2_s, **arcface × z-score** (m=0.3) | _running_ | — | — | margin composed with `cosine_to_zscore`: `z(cos(θ+m))` | ucloud |
+| `20260729-182718` | effnetv2_s, **single species head** + marginalisation | **0.9135** (0.9344) | **0.9606** | **0.9739** | **beats the multi-head at every level** — coarse heads are not just redundant, they are worse | ucloud |
+| `20260729-183815` | effnetv2_s, **arcface × z-score** (m=0.3) | **0.9069** (0.9316) | 0.9572 | 0.9699 | recovers +2.9 pp over plain arcface **and** lifts OOD AUROC to 0.9115 (see below) | ucloud |
 | `20260729-115003/115103` | convnext_large.dinov3 @320, **12 ep** | _running_ | — | — | owner's "6 ep was budget, not principle" | ucloud |
 
 Smoke runs (family 9717, 1 epoch — path validation only, not comparable): `lepinet-smoke-9717`,
@@ -86,10 +86,25 @@ Unseen species from **global_lepi's <50-image classes** (excluded from training,
 so this isolates *novelty* from domain shift). 632,913 images, 3,171 novel. Score = `−max species
 logit`; metric = AUROC(known vs novel).
 
-| head | in-distribution species F1 | **OOD AUROC** |
-|---|---|---|
-| independent (plain cosine) | 0.9110 | 0.601 (≈ chance) |
-| **arcface** (s=30, m=0.3) | 0.8784 | **0.732** (+13.1 pt) |
+| head | in-distribution species F1 | **OOD AUROC** | known max-logit μ±σ | novel max-logit μ±σ |
+|---|---|---|---|---|
+| independent (plain cosine) | **0.9110** | 0.601 (≈ chance) | −9.27 ± 7.44 | −11.46 ± 6.82 |
+| arcface (`s·cos`, s=30, m=0.3) | 0.8784 | 0.732 | 26.00 ± 13.03 | 23.47 ± 10.84 |
+| **arcface × z-score** (m=0.3) | 0.9069 | **0.9115** | 32.58 ± 7.83 | 18.17 ± 6.38 |
+
+The composition beats **both** components on the axis each was meant to own (+31 pt AUROC over plain
+cosine for −0.4 pt accuracy; +18 pt AUROC **and** +2.9 pt accuracy over plain arcface), so the
+accuracy-vs-open-set trade-off is an artefact of dropping the calibrated transform, not intrinsic.
+
+### Embedding geometry (12 species × 40 held-out images, vs each model's own prototypes)
+
+| head | intra ↑ | inter ↓ | margin ↑ | silhouette |
+|---|---|---|---|---|
+| independent (plain cosine) | −0.154 | −0.336 | 0.182 | 0.617 |
+| **arcface × z-score** | **+0.667** | 0.056 | **0.610** | 0.641 |
+
+Silhouette barely moves — *separability was never the problem*; what changes is the **absolute**
+angular position, which is exactly what an open-set score reads (and what a 2-D projection discards).
 
 ### Throughput
 
