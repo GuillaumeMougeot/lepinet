@@ -232,3 +232,37 @@ novel ones near the inter level, so a threshold separates them — AUROC 0.9115.
 
 Plot: `data/emb_compare/embeddings.png` (t-SNE; umap not installed, and it would not change the
 conclusion since the effect is angular, not topological).
+
+## The margin range test does not work — and why (negative result, 2026-07-30)
+
+I proposed an `lr_find` analogue for ArcFace's margin: ramp `m` from 0 upward over a few hundred
+steps from a converged margin-free checkpoint, and read the knee where the loss turns up. It ran
+cleanly and returned **knee = 0.0**. That is not a tuning failure, it is the method being wrong.
+
+Measured curve (warm start from the 5ep baseline, smoothed train loss):
+
+| m | 0.00 | 0.10 | 0.20 | 0.30 | 0.40 | 0.50 | 0.60 | 0.70 | 0.80 |
+|---|---|---|---|---|---|---|---|---|---|
+| loss | 0.45 | 1.63 | 3.59 | 8.32 | 12.57 | 13.62 | 13.22 | 12.52 | 12.19 |
+
+**Why the analogy breaks.** `lr_find` works because a bad learning rate *damages optimisation* — the
+loss rise is evidence of a real failure. A margin does no such thing: it **mechanically** lowers the
+true-class logit (`cos(θ_y + m) < cos θ_y`), so cross-entropy is *guaranteed* to rise with `m`
+whatever the model's quality. The curve above is essentially that deterministic penalty, not a
+signal about what the model can absorb. Any knee-finder must therefore return ~0.
+
+A second confound makes a ramp doubly unsuitable: later `m` values are also *later training steps*,
+so adaptation and margin are entangled along the x-axis (visible above as the loss *falling* after
+m≈0.5, which is the model adapting, not the margin becoming benign).
+
+**What would actually work.** The quantity we care about — open-set separation — only emerges from
+*how training reshapes the embedding*, so the proxy must include adaptation:
+
+1. Warm-start from the converged margin-free checkpoint.
+2. For each `m` in a small grid, fine-tune a few hundred steps **independently** (not a ramp).
+3. Score each by the **geometry margin** (`intra − inter`, `dev/053`) on a small held-out set, which
+   we already have two calibration points for: 0.182 → AUROC 0.601, 0.610 → AUROC 0.9115.
+
+That is a cheap grid (~4 × 200 steps), not a range test, and it measures the right thing. Recorded
+as a negative result because "invent an lr_find for hyperparameter X" is a tempting instinct and it
+is only valid when X's effect on the loss is *indirect*.
