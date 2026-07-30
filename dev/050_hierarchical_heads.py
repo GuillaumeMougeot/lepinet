@@ -77,6 +77,49 @@ class HierarchicalHead(IndependentHead):
 HEAD_REGISTRY["hierarchical"] = HierarchicalHead
 
 
+class MarginalHead(IndependentHead):
+    """**One** species prototype layer; coarser levels are the marginals of the species posterior.
+
+    This is the owner's original "hierarchical head" idea, applied *during training* rather than only
+    at inference: there are **no genus/family parameters at all**. The coarse logits are
+    ``log Σ_children exp(log p(species))`` computed in the forward pass, so the coarse
+    cross-entropies backpropagate **into the species head**.
+
+    Contrast with :class:`HierarchicalHead` (mini_trainer's conditional classifier), which keeps
+    separate prototype layers per level and pushes information *down* the tree. Here information
+    flows *up*, and the levels are consistent by construction — a genus can never contradict the
+    species argmax's parent.
+
+    Emits log-probabilities (not z-scores) at every level: they must live on one comparable scale for
+    the log-sum-exp to mean anything, and ``CrossEntropyLoss`` treats them as logits correctly since
+    softmax(log p) ∝ p. Forward is label-free, so it still traces to ONNX.
+    """
+
+    def __init__(self, in_features: int, n_classes: Sequence[int], hidden: bool | int = True,
+                 droprate: float = 0.1, sparse_masks: list[torch.Tensor] | None = None):
+        # Only the finest level gets a prototype layer; drop the rest before building.
+        super().__init__(in_features, [n_classes[0]], hidden=hidden, droprate=droprate)
+        if sparse_masks is None or len(sparse_masks) != len(n_classes) - 1:
+            raise ValueError(f"MarginalHead needs {len(n_classes) - 1} sparse_masks (fine→coarse).")
+        self.level_sizes = list(n_classes)
+        for i, m in enumerate(sparse_masks):
+            self.register_buffer(f"mask_{i}", m.long(), persistent=True)
+
+    def forward(self, x: torch.Tensor) -> list[torch.Tensor]:
+        emb = self.preclassification(x)
+        species = cosine_to_zscore(F.linear(emb, self.layers[0].weight), self.preclass_size) + self.layers[0].bias
+        out = [F.log_softmax(species, dim=1)]
+        cur = out[0]
+        for i in range(len(self.level_sizes) - 1):
+            cur = scatter_logsumexp(cur, getattr(self, f"mask_{i}"), self.level_sizes[i + 1])
+            out.append(cur)
+        return out
+
+
+HEAD_REGISTRY["marginal"] = MarginalHead
+
+
+
 # ---------------------------------------------------------------------------
 # Self-test (CPU) + next-step plan
 # ---------------------------------------------------------------------------
@@ -98,6 +141,19 @@ def _selftest():
     assert [tuple(o.shape) for o in out] == [(4, 6), (4, 3), (4, 2)]
     assert all(torch.isfinite(o).all() for o in out)
     print("HierarchicalHead selftest OK:", [tuple(o.shape) for o in out])
+
+    mh = build_head("marginal", 16, n_classes, hidden=True, sparse_masks=masks).eval()
+    mo = mh(torch.randn(4, 16, 2, 2))
+    assert [tuple(o.shape) for o in mo] == [(4, 6), (4, 3), (4, 2)]
+    # every level is a proper log-distribution, and coarse = sum of its children
+    for o in mo:
+        assert torch.allclose(o.exp().sum(1), torch.ones(4), atol=1e-4)
+    got = mo[1].exp()
+    want = torch.zeros_like(got).index_add_(1, masks[0], mo[0].exp())
+    assert torch.allclose(got, want, atol=1e-5), "genus must equal the sum of its species"
+    n_params = sum(p.numel() for p in mh.parameters())
+    n_multi = sum(p.numel() for p in build_head("independent", 16, n_classes, hidden=True).parameters())
+    print(f"MarginalHead selftest OK: {[tuple(o.shape) for o in mo]} | params {n_params} vs multi-head {n_multi}")
 
 
 PLAN = """
