@@ -14,10 +14,13 @@ Two things make this hard, and shape the whole design:
   handful each. The headline metric is therefore **macro-F1** (every species weighted equally, so
   the tail counts), and the training rebalances toward rare classes.
 
-The method: a shared image backbone feeds a **per-level cosine classification head** (one set of
-L2-normalised class prototypes per taxonomic level), trained with square-root class oversampling.
-On the reference Lepidoptera dataset this reaches **test species macro-F1 0.9148**. See
-[The method](#the-method) for why each piece is there.
+The method: a shared image backbone feeds a **cosine classification head** — L2-normalised class
+prototypes scored by angle — trained with square-root class oversampling. Coarser ranks are obtained
+by **marginalising the species posterior** rather than from separate heads, which measures better and
+cannot contradict the species prediction. On the reference Lepidoptera dataset this reaches **species
+macro-F1 0.9135** (0.9316 with a larger backbone). An optional **ArcFace × z-score** variant makes the
+model able to flag species it was never trained on (open-set AUROC 0.601 → 0.9115). See
+[The method](#the-method).
 
 > **New to this repository?** [`START-HERE.md`](START-HERE.md) is a guided map of everything —
 > code, results, and the reasoning behind them.
@@ -71,13 +74,18 @@ train(TrainConfig(parquet_path="...", img_dir="...", out_dir="...",
 
 Each design choice answers one of the two difficulties above.
 
-- **Per-level cosine head.** The backbone produces one embedding; a small bottleneck projects it,
-  then each taxonomic level has its own layer of L2-normalised class prototypes and classifies by
-  *cosine similarity* (angle to the nearest prototype), not an unbounded dot product. Normalising
-  both sides tightens intra-class / widens inter-class angles — the property that helps most on
-  fine-grained classes and on the tail, where a plain linear layer over-fits the few examples it
-  sees. The levels are independent heads on the shared embedding, so adding or renaming levels is
-  just a longer list.
+- **Cosine head.** The backbone produces one embedding; a small bottleneck projects it, then classes
+  are L2-normalised prototypes scored by *cosine similarity* (angle to the nearest prototype), not an
+  unbounded dot product. Normalising both sides tightens intra-class / widens inter-class angles —
+  what helps most on fine-grained classes and on the tail, where a plain linear layer over-fits the
+  few examples it sees.
+- **Marginalisation instead of coarse heads.** `P(genus) = Σ P(species ∈ genus)`, applied up the
+  taxonomy. Measured *better* than separately trained genus/family heads (+0.7 pp genus, +3.1 pp
+  family) and consistent by construction — a genus can never contradict the species argmax's parent.
+  The head is still N-level generic; you simply do not need the extra levels.
+- **ArcFace × z-score (optional, `head: arcface`).** An angular margin composed with the z-score
+  transform. Costs ~0.4 pt of accuracy and takes open-set detection of unseen species from
+  near-chance (AUROC 0.601) to 0.9115 — see the [paper draft](paper/DRAFT.md) for the derivation.
 - **Square-root oversampling** (`oversample_power 0.5`). Sampling rare classes more often — but at
   the square root of the inverse frequency, not the full inverse — lifts tail recall without
   drowning the common classes. This is the single biggest lever on macro-F1 in the experiment
@@ -87,9 +95,10 @@ Each design choice answers one of the two difficulties above.
 - **bf16** throughout: enough exponent range for the cosine head (and for margin losses like
   ArcFace, a planned extension) without the fp16 overflow that NaNs them.
 
-Reference recipe: efficientnet_v2_s · 460→256 px · batch 64 · 5 epochs · light aug. The full ladder
-of experiments that led to each choice — and the negative results — is in [`journal/`](journal/)
-and [`RESULTS.md`](RESULTS.md).
+Reference recipe: efficientnet_v2_s · single species head · 460→256 px · batch 64 · 5 epochs · light
+aug → **0.9135**. This is the baseline new experiments are compared against
+([`RESULTS.md`](RESULTS.md)). The full ladder that led to each choice — including the things that
+*did not* work — is in [`journal/`](journal/); [`START-HERE.md`](START-HERE.md) lists the findings.
 
 > **Provenance.** This is a from-scratch **fastai-only** reimplementation of an earlier
 > `mini_trainer`/`mini_metrics`-based pipeline; it reproduces that pipeline's best result with no

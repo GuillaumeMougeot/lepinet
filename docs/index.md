@@ -11,10 +11,13 @@ The task is hard for two reasons that shape the design:
 - **Long-tailed** — a few species dominate the images, thousands are rare. The headline metric is
   **macro-F1** (all species weighted equally), and training oversamples the tail.
 
-The method is a shared backbone with a **per-level cosine classification head** (L2-normalised
-class prototypes per level) trained with square-root class oversampling; on the reference
-Lepidoptera dataset it reaches **test species macro-F1 0.9148**. The
-[developer guide](developer-guide.md) explains *why* each piece is there.
+The method is a shared backbone with a **cosine classification head** (L2-normalised class
+prototypes, scored by angle) trained with square-root class oversampling; coarser ranks come from
+**marginalising the species posterior** rather than from separate heads. On the reference Lepidoptera
+dataset this reaches **species macro-F1 0.9135** (0.9316 with a larger backbone), and an optional
+**ArcFace × z-score** head lets the model flag species it has never seen (open-set AUROC 0.9115).
+The [developer guide](developer-guide.md) explains *why* each piece is there; the repository's
+`START-HERE.md` lists what the project has established, with links to the evidence.
 
 !!! note "Provenance"
     `lepinet` is a from-scratch **fastai-only** reimplementation of an earlier

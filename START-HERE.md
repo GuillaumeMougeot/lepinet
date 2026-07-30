@@ -23,7 +23,48 @@ a moth or butterfly, over ~12,000 species with a heavy long tail.
 | **Run on the GPU cluster** | [`ucloud/`](ucloud/) | One TOML per job (train / eval / benchmark), plus the shared `setup-lepinet.sh` |
 | **See the phone app** | the companion repo `lepinet-app` + [`journal/2026-07-lepi-app-compression.md`](journal/2026-07-lepi-app-compression.md) | The browser PWA that consumes an exported bundle |
 
-## 2. The 90-second version of the project's state
+## 2. What this project has established
+
+Each line is a result with a number, and links to the journal entry that argues it. Negative results
+are kept deliberately — they cost GPU time to learn and are the first thing a newcomer would
+otherwise repeat.
+
+| # | finding | evidence |
+|---|---|---|
+| 1 | **Hierarchical prediction heads do not help.** Parent-conditioned 0.8845 and autoregressive 0.69–0.73 both lose to a plain multi-head 0.9110, on identical configs. | [heads](journal/2026-07-why-was-fastai-behind-mini-trainer.md) |
+| 2 | **One species head + marginalisation beats the multi-head at *every* level** (0.9135/0.9606/0.9739 vs 0.9110/0.9587/0.9708) — fewer parameters, and coarse levels cannot contradict the species call. | [story](journal/2026-07-story-and-directions.md) |
+| 3 | **ArcFace × z-score turns novelty detection from chance into usable**: open-set AUROC 0.601 → **0.9115** for −0.4 pt accuracy. The margin *alone* costs 3.3 pt and reaches only 0.732 — the trade-off was an artefact of discarding the calibrated transform, not intrinsic. | [story](journal/2026-07-story-and-directions.md) |
+| 4 | **In-distribution accuracy is near-saturated but generalisation is not**: 0.9316 in-domain → **0.6950** on an external source (~23 pt gap), and open-set AUROC falls 0.9115 → 0.7272 with it. Shift makes *known* species look unfamiliar. | [flemming](journal/2026-07-flemming-generalization.md), [domain shift](journal/2026-07-domain-shift.md) |
+| 5 | **Knowledge distillation works, but the student is the ceiling.** T=1 beats from-scratch (0.8786 vs 0.8692); a 2 pt better teacher moved the student by ~0. **KD temperature is not head-agnostic** — the textbook T=4 *hurt* (0.8546). | [bridge](journal/2026-07-teacher-student-app-bridge.md) |
+| 6 | **Scale pays, then plateaus.** ConvNeXtV2-L 0.9316 (+1.7 pt); a DINOv3-distilled ConvNeXt matches it at ~2× the training speed. | [bigger everything](journal/2026-07-bigger-everything.md) |
+| 7 | **Deployment findings**: int8 cannot run in ORT-Web (no `ConvInteger` kernel) but **source-level fp16 can** (−28 % size, identical top-1); GitHub *release* assets send no CORS so they cannot serve a browser. | [bridge](journal/2026-07-teacher-student-app-bridge.md) |
+| 8 | **Methodological**: an `lr_find`-style range test is invalid for a margin (it mechanically raises the loss); and a 2-D projection is the wrong picture for an angular effect (silhouette barely moves while AUROC moves 30 pt). | [story](journal/2026-07-story-and-directions.md) |
+
+> Where this list lives, and why: **here** for newcomers (one line + a link, no argument),
+> formally in [`paper/DRAFT.md`](paper/DRAFT.md) (the scientific claims), and *chronologically* in
+> [`journal/README.md`](journal/README.md) (how it evolved). Three views of one truth, no fourth copy.
+
+## 3. The current baseline — what to compare against
+
+**For any new experiment: `efficientnet_v2_s`, single species head, marginalisation, 5 epochs,
+sqrt-oversampling → species macro-F1 0.9135.** Config:
+[`configs/20260729_ucloud_singlehead_species_effnetv2s.yaml`](configs/20260729_ucloud_singlehead_species_effnetv2s.yaml).
+It replaced the old multi-head 0.9110 reference because it dominates it at every level while being
+smaller.
+
+| purpose | model | score |
+|---|---|---|
+| **cheap reference** (change one thing, compare here) | effnetv2_s single head | **0.9135** |
+| best in-distribution / distillation teacher | ConvNeXtV2-L @320 | 0.9316 |
+| best open-set | ArcFace × z-score (multi-head) | 0.9069 F1 / **0.9115** AUROC |
+| shippable student | distilled b0, fp16 | 0.8786 |
+
+> **Caveat worth knowing before trusting a comparison:** results 3, 5 and 6 above were obtained on
+> the *old multi-head* baseline. The recommended architecture — **single head + ArcFace × z-score +
+> marginalisation** — has therefore **never actually been trained**. That combination, and
+> re-running distillation from a single-head teacher, are the highest-value pending experiments.
+
+## 4. The 90-second version of the project's state
 
 - A clean, fastai-only package (`src/lepinet`) reproduces the project-best baseline:
   **species macro-F1 0.9152**.
@@ -38,7 +79,7 @@ a moth or butterfly, over ~12,000 species with a heavy long tail.
   *reliable prediction that knows what it doesn't know* — see
   [`journal/2026-07-story-and-directions.md`](journal/2026-07-story-and-directions.md).
 
-## 3. How the layers fit together
+## 5. How the layers fit together
 
 ```
 START-HERE.md          <- you are here: the map
@@ -59,7 +100,7 @@ START-HERE.md          <- you are here: the map
 **The rule of thumb:** `RESULTS.md` tells you *what* happened, `journal/` tells you *why*, `src/`
 is *how*, and `dev/` is *what we're trying next*.
 
-## 4. Conventions worth knowing before you dig in
+## 6. Conventions worth knowing before you dig in
 
 - **The journal is one file per _question_, not per run** — and a hypothesis is written *before* the
   result lands, so predictions are tested rather than rationalised. Negative results are kept on

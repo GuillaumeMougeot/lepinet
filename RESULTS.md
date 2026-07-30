@@ -39,6 +39,25 @@ Baseline: `20260712-072542-heads-global-independent-muon-effnetv2s`
 
 ---
 
+## The current baseline — what a new experiment should be compared against
+
+**`efficientnet_v2_s` + a single species head + marginalisation, 5 epochs, sqrt-oversampling →
+species macro-F1 0.9135** (`20260729-182718`). This replaced the multi-head 0.9110 reference: it wins
+at every level (0.9135 / 0.9606 / 0.9739 vs 0.9110 / 0.9587 / 0.9708) with fewer parameters and no
+possibility of a genus contradicting the species call.
+
+| purpose | model | number |
+|---|---|---|
+| **reference for new experiments** | effnetv2_s, single head + marginals | **0.9135** |
+| best in-distribution / teacher | ConvNeXtV2-L @320 | 0.9316 |
+| best open-set | ArcFace × z-score | 0.9069 F1 · **0.9115** AUROC |
+| shippable student | distilled b0 (fp16) | 0.8786 |
+
+**Comparisons to treat with care.** ArcFace, distillation and the backbone sweep were all run on the
+*old multi-head* baseline. So the recommended architecture — single head + ArcFace × z-score +
+marginalisation — **has never been trained**, and the distillation numbers come from a multi-head
+teacher. Re-running those two on the new baseline is the highest-value pending work.
+
 ## lepinet package (UCloud) runs — hand-maintained
 
 `dev/036_ledger.py` only sees the *local* `data/global` (old dev/030 pipeline). The `src/lepinet`

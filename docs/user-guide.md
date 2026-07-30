@@ -62,7 +62,7 @@ print(preds[0].levels[0].top)           # (top species key, confidence)
 export_onnx("run1.pt", "artifact/", img_size=256)
 ```
 
-## The baseline recipe
+## The baseline recipe (what to compare against)
 
 The winning configuration (held fixed unless you are experimenting):
 
@@ -78,6 +78,31 @@ The winning configuration (held fixed unless you are experimenting):
 | images | `aug_img_size: 460` → `img_size: 256`, `batch_size: 64` |
 | epochs | 5 |
 | aug | light: no warp, no lighting, `flip_vert: true`, rotate 15°, zoom 1.1 |
+
+## Beyond training: the rest of the CLI
+
+```bash
+lepinet distill -c student.yaml --teacher teacher.pt   # KD from a teacher (use T=1, see below)
+lepinet test  -m model.pt ... --marginal               # derive genus/family from the species head
+lepinet test  -m model.pt ... --tta --limit 20000      # 4-flip TTA; --limit for a quick probe
+lepinet bundle -m model.pt -o bundles/x --publish-hf user/repo   # deployable ONNX bundle + upload
+```
+
+Flags worth knowing, and why they exist:
+
+| flag | when you need it |
+|---|---|
+| `--marginal` / `--eval-levels` | Score coarser ranks from the species posterior. **Required** for a single-head model (it has no genus/family head); optional otherwise, to compare marginals against trained coarse heads. |
+| `--skip-missing` (default on) | The parquet is a catalogue; image mirrors are often incomplete. Without this one absent file kills a multi-hour eval. |
+| `--num-workers` | Set it explicitly. On a network mount this is the single biggest throughput lever (measured 1 → 898 img/s). |
+| `--tta` | 4-flip average. Worth ~+0.3 pp for 4× the cost — usually not worth it. |
+| `--no-drop-unknown-species` | Open-set evaluation: keep out-of-vocabulary species instead of dropping them. |
+
+### Distillation
+
+`distill_temperature: 1.0` is the default **on purpose**: the textbook T=4 *hurt* this head
+(0.8546 vs 0.8692 from-scratch) because the cosine z-score logits are already near unit scale, so
+dividing by 4 flattens the target toward uniform. At T=1 the student beats from-scratch (0.8786).
 
 ## Config reference (the `train:` block)
 

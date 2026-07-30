@@ -23,22 +23,27 @@ optimizer, `cosine_to_zscore`, the parent-index masks) is reimplemented here. On
 
 ```
 src/lepinet/
-  heads.py       IndependentHead (N-level cosine), PooledHead, build_head, HEAD_REGISTRY,
-                 cosine_to_zscore, sparse_masks_from_labels, build_class_spec
-  loss.py        MultiLevelCELoss (+ FastaiLossWrapper)
+  heads.py       IndependentHead (N-level cosine), ArcFaceHead (angular margin, optional z-score),
+                 PooledHead / FlatHead, build_head, HEAD_REGISTRY, cosine_to_zscore,
+                 sparse_masks_from_labels, build_class_spec
+  loss.py        MultiLevelCELoss (+ FastaiLossWrapper), DistillLoss,
+                 apply_arcface_margin / apply_arcface_margin_zscore
   optim.py       Muon + MuonAuxAdamW (verbatim port) + muon_opt_func
   schedules.py   warmup_cos / front_loaded schedules + fit_scheduled / fit_resume  (Muon-safe, LR-only)
   data.py        gen_df / filter_df / prepare_df / build_hierarchy / make_dls / sample_weights
   metrics.py     LevelAccuracy, LevelMacroF1 (== mini_metrics), StreamingF1MultiHead, default_metrics
-  callbacks.py   NaNGuard, GCCallback (dormant), HostMemoryGuard (re-export)
+  callbacks.py   NaNGuard, MixUpMulti, DistillCallback, GCCallback (dormant), HostMemoryGuard
   memory.py      HostMemoryGuard + cgroup-anon accounting
-  model.py       resolve_arch, arch_body_features, build_backbone_model, build_learner
+  model.py       resolve_arch, arch_is_vit, ViTBody, arch_body_features, build_backbone_model,
+                 build_learner
   config.py      TrainConfig dataclass + YAML loading + run-dir stamping
   train.py       train() / train_from_config()
-  test.py        evaluate() / load_model() + native metric report
+  test.py        evaluate() / load_model() + native metric report; marginalisation
+                 (taxonomy_from_df), dl_num_workers, open-set + TTA + --limit options
   infer.py       predict() with TTA
-  export.py      export_onnx() (dynamo=False) + taxonomy.json + marginalize()
-  cli.py         `lepinet {train,test,predict,export}`
+  export.py      export_onnx() (dynamo=False, fp16 variant) + taxonomy.json + marginalize()
+                 + quantize_dynamic_int8 + make_bundle + publish_to_hf
+  cli.py         `lepinet {train,distill,test,predict,export,bundle}`
 ```
 
 `dev/` stays as the frozen experiment record; new experiments `import lepinet` rather than the
@@ -109,6 +114,20 @@ configs/20260716_heads_global_independent_muon_5ep_oversample.yaml` on a B200, a
 `lepinet test --test-set 0` on a B200-MIG. Expect species macro-F1 **0.9148 ± ~0.2pt**. The package
 defaults to `bf16`; add `precision: fp16` to match the original run exactly (both should land within
 noise of each other).
+
+## Traps this codebase has already hit (do not re-learn them)
+
+These cost real time; each is guarded by a comment and usually a regression test.
+
+| trap | symptom | guard |
+|---|---|---|
+| `fastai.DataLoader.num_workers` is a **hardcoded dummy** (always 1); the real count is on `fake_l` | evaluation at ~1 img/s, GPU idle, a 630 k eval "taking a week" | `test.dl_num_workers()` + a regression test |
+| `isinstance(True, int)` is **True** (bool subclasses int) | `hidden=True` became the number 1 → `sqrt(-1)` | check `bool` *before* `int` (see `heads.py`, `dev/055`) |
+| A DataBlock with `ColSplitter` needs **both** splits non-empty | "single positional indexer is out-of-bounds" | give eval frames a dummy `is_valid` split, as `evaluate()` does |
+| `lowmem=True` loaders index by position, not DataFrame | fastai type assertion inside `test_dl` | build eval loaders with `lowmem=False` |
+| With a **single level** fastai hands metrics a bare tensor, not a tuple | `zip(pred, y)` silently iterates the *batch*; `F1(macro)` read 0.0075 for a good model | `metrics.level_pred_targ()` normalises first |
+| Per-file operations on the `/work` network mount (~90 ms/file) | a "quick" existence check taking 15 h | batch by directory (`test._paths_exist`) |
+| A UCloud job can report **SUCCESS** while the script exited 1 | silently missing results | read the logs, not just the job status |
 
 ## The lessons encoded (don't re-learn them)
 
