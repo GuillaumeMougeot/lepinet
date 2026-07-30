@@ -17,32 +17,57 @@ a moth or butterfly, over ~12,000 species with a heavy long tail.
 | **Understand the problem & method** | [`README.md`](README.md) | What the task is, why it's hard (fine-grained + long-tailed), and the method (per-level cosine head + square-root oversampling) |
 | **Use the package** (train / test / predict / export) | [`docs/user-guide.md`](docs/user-guide.md) | Install, the CLI (`lepinet train|test|predict|export|bundle|distill`), config reference |
 | **Change the code** | [`docs/developer-guide.md`](docs/developer-guide.md) → then [`src/lepinet/README.md`](src/lepinet/README.md) | Architecture, module-by-module design, the lessons encoded in the code |
+| **Know why a setting is what it is** *(before you change it)* | [`docs/design-decisions.md`](docs/design-decisions.md) | The ladder from 0.8297 to 0.9152, each recipe choice with what it was worth, and the things that didn't pay |
 | **See what has been tried and what it scored** | [`RESULTS.md`](RESULTS.md) | Every run, its delta vs baseline, and its test score (+ a hand-kept table of the UCloud runs) |
-| **Understand *why* decisions were made** | [`journal/README.md`](journal/README.md) | The reasoning, the dead ends, the negative results — starts with a big-picture summary of how the project evolved |
+| **Understand *why* decisions were made** | [`journal/README.md`](journal/README.md) | The master doc for *why*: how the project evolved in six phases, plus an index of every entry by kind |
+| **Know what is running right now** | [`journal/PLAN.md`](journal/PLAN.md) | The status board of every run in flight and the ordered backlog — the one file meant to be true *today* |
 | **Run experiments** | [`dev/README.md`](dev/README.md) *(if present)* / the numbered `dev/0NN_*.py` scripts | One script per experiment, importing the `lepinet` package |
 | **Run on the GPU cluster** | [`ucloud/`](ucloud/) | One TOML per job (train / eval / benchmark), plus the shared `setup-lepinet.sh` |
-| **See the phone app** | the companion repo `lepinet-app` + [`journal/2026-07-lepi-app-compression.md`](journal/2026-07-lepi-app-compression.md) | The browser PWA that consumes an exported bundle |
+| **See the phone app** | the companion repo `lepinet-app` + [`journal/2026-07-20-lepi-app-compression.md`](journal/2026-07-20-lepi-app-compression.md) | The browser PWA that consumes an exported bundle |
 
 ## 2. What this project has established
 
-Each line is a result with a number, and links to the journal entry that argues it. Negative results
-are kept deliberately — they cost GPU time to learn and are the first thing a newcomer would
-otherwise repeat.
+Each line is a result with a number, and links to the entry that argues it. Negative results are kept
+deliberately — they cost GPU time to learn and are the first thing a newcomer would otherwise repeat.
+
+The list is split because the two halves answer different questions. **§2a** is what the project
+claims about the *problem* — findings that should hold on any long-tailed hierarchical dataset, and
+the substance of the paper. **§2b** is what it learned building a working system on *this* one:
+narrower, but the part that saves an engineer a week.
+
+### 2a. Scientific findings
 
 | # | finding | evidence |
 |---|---|---|
-| 1 | **Hierarchical prediction heads do not help.** Parent-conditioned 0.8845 and autoregressive 0.69–0.73 both lose to a plain multi-head 0.9110, on identical configs. | [heads](journal/2026-07-why-was-fastai-behind-mini-trainer.md) |
-| 2 | **One species head + marginalisation beats the multi-head at *every* level** (0.9135/0.9606/0.9739 vs 0.9110/0.9587/0.9708) — fewer parameters, and coarse levels cannot contradict the species call. | [story](journal/2026-07-story-and-directions.md) |
-| 3 | **ArcFace × z-score turns novelty detection from chance into usable**: open-set AUROC 0.601 → **0.9115** for −0.4 pt accuracy. The margin *alone* costs 3.3 pt and reaches only 0.732 — the trade-off was an artefact of discarding the calibrated transform, not intrinsic. | [story](journal/2026-07-story-and-directions.md) |
-| 4 | **In-distribution accuracy is near-saturated but generalisation is not**: 0.9316 in-domain → **0.6950** on an external source (~23 pt gap), and open-set AUROC falls 0.9115 → 0.7272 with it. Shift makes *known* species look unfamiliar. | [flemming](journal/2026-07-flemming-generalization.md), [domain shift](journal/2026-07-domain-shift.md) |
-| 5 | **Knowledge distillation works, but the student is the ceiling.** T=1 beats from-scratch (0.8786 vs 0.8692); a 2 pt better teacher moved the student by ~0. **KD temperature is not head-agnostic** — the textbook T=4 *hurt* (0.8546). | [bridge](journal/2026-07-teacher-student-app-bridge.md) |
-| 6 | **Scale pays, then plateaus.** ConvNeXtV2-L 0.9316 (+1.7 pt); a DINOv3-distilled ConvNeXt matches it at ~2× the training speed. | [bigger everything](journal/2026-07-bigger-everything.md) |
-| 7 | **Deployment findings**: int8 cannot run in ORT-Web (no `ConvInteger` kernel) but **source-level fp16 can** (−28 % size, identical top-1); GitHub *release* assets send no CORS so they cannot serve a browser. | [bridge](journal/2026-07-teacher-student-app-bridge.md) |
-| 8 | **Methodological**: an `lr_find`-style range test is invalid for a margin (it mechanically raises the loss); and a 2-D projection is the wrong picture for an angular effect (silhouette barely moves while AUROC moves 30 pt). | [story](journal/2026-07-story-and-directions.md) |
+| 1 | **Hierarchical prediction heads do not help.** Parent-conditioned 0.8845 and autoregressive 0.69–0.73 both lose to a plain multi-head 0.9110, on identical configs. | [heads](journal/2026-07-16-why-was-fastai-behind-mini-trainer.md) |
+| 2 | **One species head + marginalisation beats the multi-head at *every* level** (0.9135/0.9606/0.9739 vs 0.9110/0.9587/0.9708) — fewer parameters, and coarse levels cannot contradict the species call. | [story](journal/DIRECTIONS.md) |
+| 3 | **ArcFace × z-score turns novelty detection from chance into usable**: open-set AUROC 0.601 → **0.9115** for −0.4 pt accuracy. The margin *alone* costs 3.3 pt and reaches only 0.732 — the trade-off was an artefact of discarding the calibrated transform, not intrinsic. | [story](journal/DIRECTIONS.md) |
+| 4 | **In-distribution accuracy is near-saturated but generalisation is not**: 0.9316 in-domain → **0.6950** on an external source (~23 pt gap), and open-set AUROC falls 0.9115 → 0.7272 with it. Shift makes *known* species look unfamiliar. | [flemming](journal/2026-07-28-flemming-generalization.md), [domain shift](journal/2026-07-30-domain-shift.md) |
+| 5 | **Knowledge distillation works, but the student is the ceiling.** T=1 beats from-scratch (0.8786 vs 0.8692); a 2 pt better teacher moved the student by ~0. **KD temperature is not head-agnostic** — the textbook T=4 *hurt* (0.8546). | [bridge](journal/2026-07-25-teacher-student-app-bridge.md) |
+| 6 | **Scale pays, then plateaus.** ConvNeXtV2-L 0.9316 (+1.7 pt); a DINOv3-distilled ConvNeXt matches it at ~2× the training speed. | [bigger everything](journal/2026-07-24-bigger-everything.md) |
+| 7 | **Methodological**: an `lr_find`-style range test is invalid for a margin (it mechanically raises the loss); and a 2-D projection is the wrong picture for an angular effect (silhouette barely moves while AUROC moves 30 pt). | [directions](journal/DIRECTIONS.md) |
 
-> Where this list lives, and why: **here** for newcomers (one line + a link, no argument),
-> formally in [`paper/DRAFT.md`](paper/DRAFT.md) (the scientific claims), and *chronologically* in
-> [`journal/README.md`](journal/README.md) (how it evolved). Three views of one truth, no fourth copy.
+### 2b. How the baseline was built — the engineering findings
+
+The headline model did not arrive designed; it was climbed from **0.8297 to 0.9152** one change at a
+time, and what moved it is not what one would guess. Full argument and the ladder table in
+[`docs/design-decisions.md`](docs/design-decisions.md).
+
+| # | finding | evidence |
+|---|---|---|
+| 8 | **The optimiser was never the lever.** Muon was in place at 0.8297 and stayed. What moved the number was the *schedule* (`one_cycle` over `flat_cos`, +1.2 pt), the *sampler* (√-oversampling, +2.6 pt) and *lighter* augmentation — what the model sees and for how long, not how gradients are applied. | [design decisions](docs/design-decisions.md), [ladder](journal/2026-07-16-why-was-fastai-behind-mini-trainer.md) |
+| 9 | **In a hierarchy, avoid interventions that need one constant to be right at every level.** √-oversampling (0.9148) beat logit adjustment (0.9031) because one shared τ cannot suit 12,041 species, 4,333 genera *and* 102 families — it was wrong for two of the three, and cost genus/family accuracy. | [long tail](journal/2026-07-17-does-longtail-help.md) |
+| 10 | **bf16 is not optional** for cosine heads — fp16 overflows them. The autoregressive head's "wiring bug" was this, and was misdiagnosed for days. | [fp16](journal/2026-07-18-autoregressive-fp16-instability.md) |
+| 11 | **Before hunting a bug, check both numbers mean the same thing.** A "0.92 val vs 0.83 test" fold bug did not exist: one metric averaged three taxonomic levels, the other was species-only. Like-for-like, both were 0.83. | [fastai gap](journal/2026-07-16-why-was-fastai-behind-mini-trainer.md) |
+| 12 | **Audit the eval set before believing the metric.** A port "beat" its own baseline 0.9455 vs 0.9148 — because the eval had filtered the long tail out of a *macro* average. Unfiltered: 0.9152, i.e. an exact reproduction. | [port](journal/2026-07-24-src-lepinet-baseline-port.md) |
+| 13 | **Framework attributes can lie.** fastai hardcodes `num_workers` to 1; the true value is on `fake_l`. Reading the wrong one ran evaluations at ~1 img/s instead of 898 — a ~900× slowdown first misdiagnosed as a hardware problem. | [design decisions](docs/design-decisions.md) |
+| 14 | **Deployment**: int8 cannot run in ORT-Web (no `ConvInteger` kernel) but **source-level fp16 can** (−28 % size, identical top-1); GitHub *release* assets send no CORS, so they cannot serve a browser (Hugging Face Hub can). The cosine head is ~51 % of a small model's parameters, so the bottleneck width (256) is the real size knob. | [bridge](journal/2026-07-25-teacher-student-app-bridge.md), [compression](journal/2026-07-20-lepi-app-compression.md) |
+
+> **Where each list lives, and why.** The scientific findings (§2a) are stated formally in
+> [`paper/DRAFT.md`](paper/DRAFT.md); the engineering ones (§2b) are argued in
+> [`docs/design-decisions.md`](docs/design-decisions.md). Both appear here as one-line summaries for
+> newcomers, and *chronologically* in [`journal/README.md`](journal/README.md). Four views of one
+> truth, each with a different reader — no fifth copy.
 
 ## 3. The current baseline — what to compare against
 
@@ -77,22 +102,28 @@ smaller.
 - **The open problem:** a model at **0.93 in-distribution drops to ~0.70 on external data**, and
   real datasets contain species the model was never trained on. So the current direction is
   *reliable prediction that knows what it doesn't know* — see
-  [`journal/2026-07-story-and-directions.md`](journal/2026-07-story-and-directions.md).
+  [`journal/DIRECTIONS.md`](journal/DIRECTIONS.md).
 
 ## 5. How the layers fit together
 
 ```
 START-HERE.md          <- you are here: the map
 ├── README.md          <- the problem + the method (start reading here)
-├── docs/              <- how to USE it (user guide) and how to CHANGE it (developer guide)
+├── docs/              <- how to USE it, how to CHANGE it, and WHY it is this way
+│   ├── user-guide.md       <- install + the CLI
+│   ├── developer-guide.md  <- architecture + how to extend it
+│   ├── design-decisions.md <- why each recipe choice is what it is, and what it was worth
 │   └── (published as a website via MkDocs; see mkdocs.yml)
 ├── src/lepinet/       <- the package: the stable, tested implementation
 │   └── README.md      <- module-by-module tour
 ├── dev/               <- experiments: numbered scripts that import the package
 ├── configs/           <- one YAML per training run (the source of truth for a run)
 ├── ucloud/            <- one TOML per cluster job
-├── journal/           <- WHY: one entry per question, with the reasoning and the negative results
-│   └── README.md      <- big-picture evolution + an index table of every entry
+├── paper/DRAFT.md     <- the scientific claims, stated formally
+├── journal/           <- WHY, as it happened: one entry per question, dated, negative results kept
+│   ├── README.md      <- the master doc: how the project evolved + an index by kind
+│   ├── PLAN.md        <- LIVING: what is running right now, and what runs next
+│   └── DIRECTIONS.md  <- LIVING: the research strategy
 ├── RESULTS.md         <- WHAT it scored (the numbers)
 └── tests/             <- what must keep working (runs on CPU, no dataset needed)
 ```
@@ -102,6 +133,9 @@ is *how*, and `dev/` is *what we're trying next*.
 
 ## 6. Conventions worth knowing before you dig in
 
+- **The journal splits into living and archival.** `UPPERCASE.md` files (`PLAN`, `DIRECTIONS`) have
+  no date and are kept current; `YYYY-MM-DD-question.md` files are frozen once `RESOLVED`, and the
+  date is when the question was *opened*, so `ls journal/` reads in the order things were asked.
 - **The journal is one file per _question_, not per run** — and a hypothesis is written *before* the
   result lands, so predictions are tested rather than rationalised. Negative results are kept on
   purpose; they cost real GPU time to learn.
@@ -111,4 +145,4 @@ is *how*, and `dev/` is *what we're trying next*.
 - **Metrics:** the headline is **species macro-F1** (every species weighted equally, so the long tail
   counts) on the held-out fold (`set == '0'`) over **all** species. Beware of filtering the test fold
   — see the eval-set lesson in
-  [`journal/2026-07-src-lepinet-baseline-port.md`](journal/2026-07-src-lepinet-baseline-port.md).
+  [`journal/2026-07-24-src-lepinet-baseline-port.md`](journal/2026-07-24-src-lepinet-baseline-port.md).

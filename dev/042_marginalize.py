@@ -1,6 +1,6 @@
 """Phase B1 of the lepi-app plan: is marginalizing beats reading the genus/family heads?
 
-The claim under test, from journal/2026-07-lepi-app.md's Review section: because the winning
+The claim under test, from journal/2026-07-19-lepi-app.md's Review section: because the winning
 model uses **independent** heads, its three predictions are not guaranteed consistent -- it
 can name a species whose genus contradicts the genus head. Deriving genus and family from
 the species distribution instead,

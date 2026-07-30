@@ -15,7 +15,7 @@ the project best. Independent heads, Muon, `one_cycle`, `warmup_epochs: 0.5`, `g
 light aug, **square-root class oversampling** (`oversample_power: 0.5`), only **5 epochs**.
 Beats mini_trainer's own loop (0.896) by +5.5pt and the prior best 10-epoch run (0.8976, no
 oversampling) by +1.7pt, at half the epoch budget. Start new experiments by copying this, not
-the 10ep one below. Story: [`journal/2026-07-does-longtail-help.md`](../journal/2026-07-does-longtail-help.md).
+the 10ep one below. Story: [`journal/2026-07-17-does-longtail-help.md`](../journal/2026-07-17-does-longtail-help.md).
 
 Not yet tested: whether oversampling stacks further at 10 epochs
 (`20260715_heads_global_independent_muon_10ep_oversample.yaml`, not launched). Logit adjustment
@@ -38,7 +38,7 @@ the three mini_trainer heads on the global set. `independent` won and is what ev
 uses.
 
 **The optimiser/schedule ladder** (this is the interesting sequence — each is one step of
-[the ladder](../journal/2026-07-why-was-fastai-behind-mini-trainer.md)):
+[the ladder](../journal/2026-07-16-why-was-fastai-behind-mini-trainer.md)):
 
 | config | change | test F1 |
 |---|---|---|
@@ -67,13 +67,13 @@ permanently, traced to one shared `tau=1.0` being too aggressive for family's mu
 extreme class imbalance than species'. `20260715_*_10ep_{oversample,logitadjust}.yaml`: the
 10-epoch variants; the oversample one is worth running (untested whether the win stacks with
 more epochs), the logitadjust one is not worth running without fixing the per-level tau issue
-first. See [`journal/2026-07-does-longtail-help.md`](../journal/2026-07-does-longtail-help.md).
+first. See [`journal/2026-07-17-does-longtail-help.md`](../journal/2026-07-17-does-longtail-help.md).
 
 **Resume** — `20260716_heads_global_independent_muon_onecycle_10ep_resume.yaml`: a historical
 record of recovering the 10ep run from the machine hang. Its `resume_checkpoint` points at a
 per-epoch `.pth` that has since been reaped (see `models/` note below), so it will **not** re-run
 as-is; the mechanism it exercises (`fit_resume`) is live and documented in
-[`journal/2026-07-gpu-hang.md`](../journal/2026-07-gpu-hang.md).
+[`journal/2026-07-16-gpu-hang.md`](../journal/2026-07-16-gpu-hang.md).
 
 **UCloud** — `20260716_ucloud_smoke_9717_onecycle.yaml`: the heads recipe against `/work/...`
 mounts, family-filtered to Erebidae for a minutes-long correctness smoke. See `ucloud/`.

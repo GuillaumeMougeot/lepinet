@@ -2,9 +2,9 @@
 
 The YAML schema is unchanged from ``dev/030`` (``version`` + ``desc`` + a ``train:`` block) so
 existing configs keep working, with two differences: the package **defaults precision to bf16**
-(``journal/2026-07-autoregressive-fp16-instability.md``) and it **rejects the long-tail knobs that
+(``journal/2026-07-18-autoregressive-fp16-instability.md``) and it **rejects the long-tail knobs that
 lost** (``logit_adjust_tau``, ``class_reg_strength``) rather than silently carrying dead options —
-those live on as ``dev/`` experiments (``journal/2026-07-does-longtail-help.md``).
+those live on as ``dev/`` experiments (``journal/2026-07-17-does-longtail-help.md``).
 """
 from __future__ import annotations
 
@@ -74,7 +74,7 @@ class TrainConfig:
     distill_teacher: str | None = None   # path/glob to a trained teacher .pt (same class vocab)
     distill_alpha: float = 0.5           # blend: 0 = hard labels only, 1 = teacher soft targets only
     distill_temperature: float = 1.0     # KD temperature; T=1 for the cosine z-score head (T=4 hurt,
-                                         # over-softens already-unit-scale logits — journal 2026-07-teacher-student-app-bridge)
+                                         # over-softens already-unit-scale logits — journal 2026-07-25-teacher-student-app-bridge)
 
     # --- augmentation ---
     aug_kwargs: dict | None = None
@@ -130,7 +130,7 @@ class TrainConfig:
             if d.pop(dead, 0):
                 raise ValueError(
                     f"{dead!r} ({where}) is not part of the baseline recipe — it lost "
-                    f"(journal/2026-07-does-longtail-help.md). Run it as a dev/ experiment instead."
+                    f"(journal/2026-07-17-does-longtail-help.md). Run it as a dev/ experiment instead."
                 )
             d.pop(dead, None)  # a zero value is fine; drop it silently
         # Drop autoregressive-only knobs if present (baseline is independent-only).

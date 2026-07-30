@@ -1,6 +1,6 @@
 # Does marginal supervision during *training* help? (the hierarchical head, done right)
 
-**Status:** OPEN — hypotheses written before the run, per the journal convention. 2026-07-30.
+**Kind:** research · **Status:** OPEN — hypotheses written before the run, per the journal convention. 2026-07-30.
 
 ## The correction that prompted this
 
@@ -8,7 +8,7 @@ The owner's original "hierarchical head" idea was: **one species head, coarser l
 marginalisation, and the loss applied at every level *during training*** — so the difficulty of the
 species decision is informed by coarse supervision.
 
-What I actually implemented and benchmarked ([[2026-07-why-was-fastai-behind-mini-trainer]],
+What I actually implemented and benchmarked ([[2026-07-16-why-was-fastai-behind-mini-trainer]],
 `dev/050`) was mini_trainer's `ConditionalClassifier`: **separate per-level prototype layers** plus
 top-down *conditioning* (`C[i] = M[i] + gather_parent(C[i+1] − logΣ_siblings M[i])`). That is a
 different model — it has its own genus/family parameters and pushes information *down*, whereas the

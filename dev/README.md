@@ -26,17 +26,17 @@ through fastai's loop. Configs in [`../configs/`](../configs/), best recipe docu
 
 | script | what it is |
 |---|---|
-| **028**`_lepi_hierarchical_multihead_v4.py` | Foundation: `gen_df`/`filter_df`/`prepare_df` (metadata parquet → filtered dataframe, cached), `make_dls` (the fastai `DataBlock`; `lowmem=True` builds it over numpy-indexed items to avoid the fork/COW memory blowup — see [[journal 2026-07-ucloud-benchmark-oom]]), the metrics (`LevelMacroF1`, `StreamingF1MultiHead`), and the plain-softmax multihead-v4 trainer this line grew out of. |
+| **028**`_lepi_hierarchical_multihead_v4.py` | Foundation: `gen_df`/`filter_df`/`prepare_df` (metadata parquet → filtered dataframe, cached), `make_dls` (the fastai `DataBlock`; `lowmem=True` builds it over numpy-indexed items to avoid the fork/COW memory blowup — see [[journal 2026-07-17-ucloud-benchmark-oom]]), the metrics (`LevelMacroF1`, `StreamingF1MultiHead`), and the plain-softmax multihead-v4 trainer this line grew out of. |
 | **030**`_hierarchical_heads_benchmark.py` | **The trainer.** Wraps mini_trainer's heads in `MTHeadAdapter` (runs the head in fp32 under mixed precision; handles the autoregressive MRO workaround), the Muon optimizer (`muon_opt_func`), LR schedules (`warmup_cos`/`one_cycle`/`front_loaded` + `fit_resume` for crash recovery), and the callbacks: `GCCallback` (mini_trainer GPU cycle), `NaNGuard`, `HostMemoryGuard` (anon-based OOM guard), `SupervisionContextCallback` (autoregressive teacher forcing). Defaults to **bf16** — fp16 overflows the cosine/autoregressive heads. |
 | **032**`_hierarchical_heads_test.py` | Test/inference counterpart to 030: loads a `.pt`, reconstructs the model, runs inference, writes predictions in the `mini_metrics` schema, and computes the report. `model_path` accepts a glob (resolves the run whose timestamp isn't known at config-write time). Threshold-0 = no abstention. |
-| **034**`_longtail.py` | Long-tail helpers: square-root oversampling (`sample_weights` → fastai `WeightedDL`) and logit adjustment (`LogitAdjustment`), both opt-in. Oversampling is the project's biggest single lever ([[journal 2026-07-does-longtail-help]]). |
+| **034**`_longtail.py` | Long-tail helpers: square-root oversampling (`sample_weights` → fastai `WeightedDL`) and logit adjustment (`LogitAdjustment`), both opt-in. Oversampling is the project's biggest single lever ([[journal 2026-07-17-does-longtail-help]]). |
 | **036**`_ledger.py` | Reads every run's saved `config.yaml` + `metrics.json` and prints a table of what each run tested and scored (`--chain` = the ladder; `--snapshot` writes the tracked `RESULTS.md`). The only reader of the otherwise write-only run history. |
 
 ## The app / compression line (040–044)
 
 Turning the trained checkpoint into something a phone can run offline. Plan and decisions in
-[`../journal/2026-07-lepi-app-claude.md`](../journal/2026-07-lepi-app-claude.md); results in
-[`../journal/2026-07-lepi-app-compression.md`](../journal/2026-07-lepi-app-compression.md).
+[`../journal/2026-07-20-lepi-app-claude.md`](../journal/2026-07-20-lepi-app-claude.md); results in
+[`../journal/2026-07-20-lepi-app-compression.md`](../journal/2026-07-20-lepi-app-compression.md).
 These run against a **local image mirror covering 3,696 of 12,041 species**, so their absolute
 numbers are optimistic — relative comparisons are the trustworthy part.
 
@@ -103,7 +103,7 @@ machines and it is not expected to run here. Its configs/launchers are in
 
 - **Never `uv sync` / `uv run` here** — the venv is hand-managed; those prune it or trigger a
   build. Use `.venv/bin/python` or `source .venv/bin/activate`. See
-  [[journal 2026-07-venv-uv-sync-incident]].
+  [[journal 2026-07-16-venv-uv-sync-incident]].
 - Run a trainer/test with `python dev/030_...py -c configs/<name>.yaml`.
 - Numbered scripts import each other via `importlib` and rely on being launched from the repo
   root (so `dev/` is on `sys.path`).

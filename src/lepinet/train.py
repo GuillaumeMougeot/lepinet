@@ -112,7 +112,7 @@ def train(cfg: TrainConfig):
     ]
     # MixUp (opt-in): mix images + labels. Uses MixUpMulti (multi-target-aware) with the loss's
     # y_int=True + reduction toggling, so mixing happens through the per-level loss. A regularizer
-    # for longer/bigger runs (journal/2026-07-bigger-everything.md).
+    # for longer/bigger runs (journal/2026-07-24-bigger-everything.md).
     if cfg.mixup and cfg.mixup > 0:
         from .callbacks import MixUpMulti
 

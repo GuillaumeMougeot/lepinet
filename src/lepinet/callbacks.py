@@ -62,7 +62,7 @@ class MixUpMulti(Callback):
     (:class:`~lepinet.loss.FastaiLossWrapper`), so mixing happens through the loss — each level's
     per-sample loss is lerped between the two label sets — not by mixing integer labels.
 
-    A regulariser for longer / bigger runs (``journal/2026-07-bigger-everything.md``). CutMix for
+    A regulariser for longer / bigger runs (``journal/2026-07-24-bigger-everything.md``). CutMix for
     the multi-target case is a further change (its ``before_batch`` also indexes ``self.y``) and is
     not implemented yet.
     """
@@ -147,7 +147,7 @@ class DistillCallback(Callback):
 class GCCallback(Callback):
     """Force a generation-0 garbage collection after every batch.
 
-    **Kept dormant by default** (``journal/2026-07-src-lepinet-baseline-port.md``, D3). It existed
+    **Kept dormant by default** (``journal/2026-07-24-src-lepinet-baseline-port.md``, D3). It existed
     to break the reference cycle that the original head's ``_weight_bias`` cache created by stashing
     a graph-attached weight view into a persistent buffer each forward — without it, GPU memory
     climbed every batch until OOM. The clean :class:`~lepinet.heads.IndependentHead` has no such

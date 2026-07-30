@@ -8,7 +8,7 @@ and thresholds ship separately).
 Unlike ``dev/040``, this uses **``dynamo=False``** (the legacy TorchScript exporter) and needs **no
 lazy-cache warm-up**: the clean :class:`~lepinet.heads.IndependentHead` has no data-dependent
 control flow (no ``masks`` / ``_weight_bias`` on the forward path), so it traces directly. That is a
-concrete payoff of the simplification (``journal/2026-07-src-lepinet-baseline-port.md``, D4).
+concrete payoff of the simplification (``journal/2026-07-24-src-lepinet-baseline-port.md``, D4).
 
 :func:`marginalize` computes coarser-level probabilities from the finest level
 (``P(genus) = Σ P(species∈genus)``) — export-only, used when shipping a species-only head.
@@ -293,7 +293,7 @@ def quantize_dynamic_int8(onnx_path: str | Path, out_path: str | Path | None = N
     """Dynamic int8 (weights-only) quantization of an ONNX graph via onnxruntime.
 
     ~3.9x smaller for ~-0.6 pp species macro-F1 on the cosine head (measured, ``dev/043`` /
-    [[2026-07-lepi-app-compression]]) — the unit-norm prototypes share one dynamic range, so int8 is
+    [[2026-07-20-lepi-app-compression]]) — the unit-norm prototypes share one dynamic range, so int8 is
     nearly free. Emits ``MatMulInteger``/``ConvInteger`` ops: fine for size + native ORT/CPU, but
     **not runnable in ORT-Web** (that needs static-QDQ, itself still unresolved in-browser — the app
     ships fp32 for now). So this is the size-reduced release variant, not yet the browser format.
@@ -357,7 +357,7 @@ def to_fp16_onnx(onnx_path: str | Path, out_path: str | Path | None = None,
     """Convert an fp32 ONNX graph to fp16 — the leading ORT-Web small-format candidate.
 
     Halves the file (~2x) with no ``ConvInteger``/``MatMulInteger`` (which ORT-Web can't run — the
-    reason int8 QDQ failed in-browser, [[2026-07-lepi-app-compression]]). ``keep_io_types=True`` keeps
+    reason int8 QDQ failed in-browser, [[2026-07-20-lepi-app-compression]]). ``keep_io_types=True`` keeps
     the graph's inputs/outputs fp32 (the app feeds fp32, unchanged); internals run fp16. The cosine
     head's ``Acos`` is kept fp32 (``keep_fp32_ops``) — its domain-clamped ``acos`` is fp16-fragile
     (the same reason ``PooledHead`` runs the head in fp32). Verify top-1 parity, then browser-test.

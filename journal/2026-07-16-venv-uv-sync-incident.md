@@ -1,6 +1,6 @@
 # What broke the venv on 2026-07-16, and what is the known-good version set?
 
-**Status:** RESOLVED. Environment repaired and verified.
+**Kind:** incident · **Status:** RESOLVED. Environment repaired and verified.
 **One-line rule: never run `uv sync` in this repo.**
 
 ## What happened
@@ -52,7 +52,7 @@ breakage. **That does not make `uv sync` safe** — it will still prune.
 `uv sync` also moved `numpy`, `pillow`, `pyarrow`, `fsspec`, `typing_extensions`. **uv keeps no
 record of the versions it replaced**, so those could not be restored exactly. Everything runs,
 but pillow touches image decoding — see the caveat in
-[2026-07-does-longtail-help.md](2026-07-does-longtail-help.md).
+[2026-07-17-does-longtail-help.md](2026-07-17-does-longtail-help.md).
 
 ## Rules learned
 

@@ -1,7 +1,7 @@
 version: 1.0
 # The owner's ACTUAL hierarchical idea: one species head, coarse levels are its marginals,
 # supervised at all three levels DURING training (no genus/family parameters). Identical recipe to
-# the multi-head baseline so only the head differs. Hypotheses in journal/2026-07-marginal-supervision.md
+# the multi-head baseline so only the head differs. Hypotheses in journal/2026-07-30-marginal-supervision.md
 version: 1.0
 desc: lepinet-marginal-effnetv2s-ucloud
 train:

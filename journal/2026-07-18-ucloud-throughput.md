@@ -1,10 +1,10 @@
 # Making the B200 fast: staging, and GPU decode
 
-**Status:** staging built + validated (targeted `ucloud/stage.py`); GPU decode is a design here,
+**Kind:** infrastructure · **Status:** staging built + validated (targeted `ucloud/stage.py`); GPU decode is a design here,
 not yet built. Both attack the same root fact: **the pipeline is CPU-JPEG-decode-bound at
 ~1100 img/s**, so a B200 that could train several× faster sits mostly idle, and the CPU decode
 buffers (~1.2 GB/worker) are what force the worker-count/memory bind
-([[2026-07-ucloud-benchmark-oom]]).
+([[2026-07-17-ucloud-benchmark-oom]]).
 
 ## Where the time goes
 
@@ -146,6 +146,6 @@ the GPU genuinely idle (not the case here).
   a real prototype, so it goes behind a measured probe before any full run -- same discipline
   that kept the OOM investigation to ~25 GPU-hours.
 
-Related: [[2026-07-ucloud-benchmark-oom]] (why worker count was capped), the `ucloud/README.md`
+Related: [[2026-07-17-ucloud-benchmark-oom]] (why worker count was capped), the `ucloud/README.md`
 storage-latency table, `dev/037_dl_memory_probe.py` (the probe to reuse for a GPU-decode memory
 check).

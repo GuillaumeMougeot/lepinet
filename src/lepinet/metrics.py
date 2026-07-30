@@ -1,7 +1,7 @@
 """Per-level training metrics, generic in the number of hierarchy levels.
 
 ``LevelMacroF1`` reproduces ``mini_metrics``' macro-F1 exactly (verified like-for-like in
-``journal/2026-07-why-was-fastai-behind-mini-trainer.md``), which is why the package can drop the
+``journal/2026-07-16-why-was-fastai-behind-mini-trainer.md``), which is why the package can drop the
 ``mini_metrics`` dependency and still report the metric the project is scored on. All three are
 streaming (accumulate TP/FP/FN), so they cost one vector per class and run at global scale.
 """

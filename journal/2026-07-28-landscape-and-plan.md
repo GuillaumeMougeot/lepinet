@@ -1,9 +1,14 @@
 # Landscape & plan — where lepinet is, and the ordered work ahead
 
-**Status:** planning doc (2026-07-28). Written at the owner's request to step back, take stock, and
+**Kind:** subproject · **Status:** **SUPERSEDED (2026-07-30) by [`PLAN.md`](PLAN.md)** — the backlog
+here has been executed or folded forward. Kept because its Q1–Q6 answers (export vs bundle, the
+scaling rationale, distillation modularity, TTA status, ArcFace-for-OOD, Diataxis) and its execution
+log are the reasoning behind decisions still in force; the *ordering* is what went stale.
+
+Written at the owner's request to step back, take stock, and
 order the whole backlog *before* more coding. Consolidates open threads from
-[[2026-07-src-lepinet-baseline-port]], [[2026-07-bigger-everything]],
-[[2026-07-teacher-student-app-bridge]], [[2026-07-lepi-app-compression]]. Nothing here is executed
+[[2026-07-24-src-lepinet-baseline-port]], [[2026-07-24-bigger-everything]],
+[[2026-07-25-teacher-student-app-bridge]], [[2026-07-20-lepi-app-compression]]. Nothing here is executed
 yet; this is the map and the argument for the order.
 
 ## Where we are (settled)
@@ -42,7 +47,7 @@ So `bundle` composes `export`; `export` never mentions the app. One capability p
 
 ### Q2. bigger-everything journal + the scaling rationale
 
-The journal **exists**: [[2026-07-bigger-everything]] (now RESOLVED, with the 0.9316 result). The
+The journal **exists**: [[2026-07-24-bigger-everything]] (now RESOLVED, with the 0.9316 result). The
 owner didn't recall it — noting here so it's findable via the index. The scaling *rationale* the
 owner asked to see argued and stored:
 
@@ -52,7 +57,7 @@ is a *contributing* one, not the main one:
    into the `PooledHead` path we *just* validated with ConvNeXtV2-L (ran clean, 0.9316). The ViT
    path (ViTBody/FlatHead/manual Learner) is built but less battle-tested. Same-family next rung.
 2. **Deployment.** The end product is a browser model. Conv nets give clean ONNX + fast WASM/WebGPU,
-   **no attention kernels in the hot path** ([[2026-07-lepi-app-compression]] §C2). A ViT teacher
+   **no attention kernels in the hot path** ([[2026-07-20-lepi-app-compression]] §C2). A ViT teacher
    distilled into a conv student is fine, but a conv teacher keeps the whole chain conv-native.
 3. **Distillation-family alignment.** Student is a small conv net; a conv teacher's feature
    geometry transfers more directly, and the export/quantize pipeline is conv-proven.
@@ -186,7 +191,7 @@ forward experiments (cheap→expensive), then productionisation.
 1. Copy the 4 keep-models local; **confirm then** delete smokes/old-bench checkpoints, consolidate
    `ucloud_preds/`, remove repo leftovers + stray logs.
 2. Complete RESULTS.md with the UCloud package runs + location column.
-3. Expand [[2026-07-bigger-everything]] with the scaling rationale above (done here; cross-link).
+3. Expand [[2026-07-24-bigger-everything]] with the scaling rationale above (done here; cross-link).
 4. Decide + document the export/bundle seam (above); no code yet.
 
 **Phase 1 — the diagnostic the owner asked for**

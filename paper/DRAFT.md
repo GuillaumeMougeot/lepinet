@@ -112,6 +112,47 @@ weighted equally, so the tail counts). All comparisons change exactly one factor
 released. Open-set benchmark: species with < 50 images, excluded from training but drawn from the
 **same image distribution**, isolating novelty from domain shift.
 
+### 3.1 How the baseline recipe was chosen
+
+Every comparison in §4 is made against a baseline, so it matters how that baseline was arrived at.
+It was not designed; it was built by single-factor ablation from a weak starting point, and we
+report the path because the *ordering* of what mattered is itself informative.
+
+| change | species macro-F1 | Δ |
+|---|---|---|
+| Muon + flat-cosine schedule, heavy augmentation | 0.8297 | — |
+| + warmup, **lighter** augmentation, looser gradient clip | 0.8769 | +4.7 |
+| flat-cosine → **one-cycle** schedule | 0.8887 | +1.2 |
+| 5 → 10 epochs | 0.8976 | +0.9 |
+| 5 epochs + **square-root class oversampling** | **0.9148** | +2.6 |
+
+Three observations, each of which shaped the rest of this work.
+
+**The optimiser was not the lever.** Muon is present in every row, including the 0.8297 one. What
+moved the number was the annealing schedule, the augmentation strength and the sampler — decisions
+about *what the model sees and for how long*, not about how gradients are applied. The one-cycle gain
+in particular is a measurement artefact turned real: under a flat schedule the model was still
+descending when the epoch budget expired, so it was being graded mid-convergence.
+
+**Square-root oversampling is preferred to logit adjustment on structural grounds, not just
+empirical ones.** Logit adjustment reached 0.9031 and *degraded* genus and family to get there. Its
+single temperature $\tau$ is shared across three label distributions with very different class
+counts and tail shapes (12,041 / 4,333 / 102), and no single value is simultaneously correct for
+all of them. Oversampling changes which examples are drawn without changing what the loss means for
+any example, so it acts consistently at every level. This is the same argument that later favours
+marginalisation over per-level heads (§2.4): **in a hierarchy, prefer mechanisms that do not require
+one constant to be right at every level at once.**
+
+**Numerics.** The cosine head overflows in fp16; all runs use bf16. This is not a tuning detail — an
+autoregressive baseline trained visibly broken under fp16 and the failure presents as a modelling
+bug rather than a numerical one.
+
+Two caveats are stated rather than hidden. The +4.7 row bundles three changes, so their individual
+contributions are unrecoverable; and the 10-epoch run was still improving when it stopped, so the
+5-epoch budget used throughout §4 is a comparison convention, not a converged optimum — absolute
+numbers here understate what the architecture can reach, while the *differences* between arms, which
+is what we claim, are measured at matched budget.
+
 ## 4. Results
 
 ### 4.1 Hierarchical heads do not help (C1, C2)

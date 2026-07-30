@@ -3,7 +3,7 @@
 # F1 finished at 0.9096, beating both the 5ep baseline (0.8880) and the 10ep run (0.8977) --
 # this is the arbiter for whether that holds on held-out data, since oversampling is the first
 # intervention in this project that deliberately skews the training-time class distribution
-# away from the fold's natural one. See journal/2026-07-does-longtail-help.md.
+# away from the fold's natural one. See journal/2026-07-17-does-longtail-help.md.
 version: 1.0
 
 test:

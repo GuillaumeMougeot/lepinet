@@ -4,12 +4,12 @@ Muon (MuonAuxAdamW) re-partitions parameter groups and takes tuple betas, so fas
 `fit_one_cycle`/`fit_flat_cos` -- which also schedule *momentum* -- choke on it. These build the
 LR curve as a plain function of position in [0, 1] and drive it with a ParamScheduler over LR
 only. Split out of the fit call so `fit_resume` can rebuild the exact curve and continue it after
-an interruption instead of restarting the anneal (journal/2026-07-gpu-hang.md).
+an interruption instead of restarting the anneal (journal/2026-07-16-gpu-hang.md).
 
 one_cycle >> flat_cos here: flat_cos only anneals its final ~25%, and at this dataset/epoch scale
 the model is still converging hard at the end, so it is graded mid-descent. one_cycle anneals
 ~90% of the run and was the single biggest optimisation lever
-(journal/2026-07-why-was-fastai-behind-mini-trainer.md).
+(journal/2026-07-16-why-was-fastai-behind-mini-trainer.md).
 """
 from __future__ import annotations
 

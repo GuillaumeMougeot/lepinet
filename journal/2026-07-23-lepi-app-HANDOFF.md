@@ -1,5 +1,7 @@
 # Lepinet App — Handoff Report
 
+**Kind:** subproject
+
 **Date:** 2026-07-23 · **Purpose:** everything a developer (or a fresh Claude session) needs to
 resume this work with *only this document + the two codebases*. Self-contained on purpose; deeper
 reasoning is cross-referenced but the essentials are restated here.
@@ -117,7 +119,7 @@ cd ~/codes/lepinet
 
 ### The compression journey — results
 How the model got from the 165 MB research checkpoint to the shipped one. Full reasoning:
-`journal/2026-07-lepi-app-compression.md`. The numbers (test species macro-F1, full held-out fold):
+`journal/2026-07-20-lepi-app-compression.md`. The numbers (test species macro-F1, full held-out fold):
 
 | step | what | result |
 |---|---|---|
@@ -317,10 +319,10 @@ Full, prioritized future work: **`lepinet-app/ROADMAP.md`**.
 ---
 
 ## 9. Where the detailed record lives
-- **`journal/2026-07-lepi-app.md`** — the original proposal + a review.
-- **`journal/2026-07-lepi-app-claude.md`** — the detailed plan (phases A–E) + the resolved product
+- **`journal/2026-07-19-lepi-app.md`** — the original proposal + a review.
+- **`journal/2026-07-20-lepi-app-claude.md`** — the detailed plan (phases A–E) + the resolved product
   decisions (§7 there).
-- **`journal/2026-07-lepi-app-compression.md`** — the blow-by-blow of A→D with every measurement,
+- **`journal/2026-07-20-lepi-app-compression.md`** — the blow-by-blow of A→D with every measurement,
   predictions scored, and every bug/lesson. **The primary reasoning record.**
 - **`RESULTS.md`** (tracked) — the run table. `dev/README.md` — catalogs every `dev/` script.
 - **`lepinet-app/DEVELOPER.md`** — bundle contract / bring-your-own-model. **`ROADMAP.md`** — next.

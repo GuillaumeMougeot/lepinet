@@ -1,6 +1,6 @@
 # Do long-tail interventions push species macro-F1 past the 5-epoch baseline?
 
-**Status:** RESOLVED (2026-07-17), both arms complete. **Oversampling: new project best, test
+**Kind:** research · **Status:** RESOLVED (2026-07-17), both arms complete. **Oversampling: new project best, test
 species macro-F1 0.9148.** Logit adjustment: a smaller, structurally-flawed win (0.9031) that
 sacrificed genus and family for a modest species gain.
 **Written before the results landed**, on purpose: the prediction below is a commitment, so
@@ -68,7 +68,7 @@ and the next lever is epochs, not sampling.
 ## Caveat on this comparison
 
 The venv was damaged and repaired on the day these runs launched (see
-[2026-07-venv-uv-sync-incident.md](2026-07-venv-uv-sync-incident.md)). torch/torchvision/
+[2026-07-16-venv-uv-sync-incident.md](2026-07-16-venv-uv-sync-incident.md)). torch/torchvision/
 fastcore/fastprogress were restored to their exact prior versions, but `numpy`, `pillow`,
 `pyarrow`, `fsspec` and `typing_extensions` may sit at versions the 0.8887 baseline did not
 use, and the replaced versions were not recorded. pillow in particular touches image decoding.

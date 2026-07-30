@@ -1,15 +1,15 @@
 # The teacher → small-model → app bridge: make shipping a model one command
 
-**Status:** OPEN (started 2026-07-25). The long-run shape of lepinet: it produces **two kinds of
+**Kind:** subproject · **Status:** OPEN (started 2026-07-25). The long-run shape of lepinet: it produces **two kinds of
 model** and the path from one to the other, and from there to a running phone app, should be as
 close to one button as possible.
 
 1. **Teachers** — big, accurate models (effnetv2_s 0.9148 baseline; ConvNeXtV2-L / DINOv3 next,
-   [[2026-07-bigger-everything]]). Kept for accuracy and as distillation sources.
+   [[2026-07-24-bigger-everything]]). Kept for accuracy and as distillation sources.
 2. **Students** — small, fast models distilled from a teacher, exported to ONNX and quantized, that
    ship **ready to use**: the `.onnx` plus the sister files that make it work (taxonomy, scientific
    names, calibration, thresholds, a `config.json` descriptor), bundled and uploaded as a **GitHub
-   release**. The companion PWA [[2026-07-lepi-app-compression]] consumes exactly this bundle.
+   release**. The companion PWA [[2026-07-20-lepi-app-compression]] consumes exactly this bundle.
 
 The two must be joined by a **smooth bridge**: when a teacher finishes, turning it into a shipped
 small model should be pressing a button / calling a script — export → (distill) → quantize →
@@ -18,7 +18,7 @@ calibrate → assemble bundle → release.
 ## What already exists (surveyed 2026-07-25)
 
 - **The compression science is done** (old mini_trainer pipeline, `dev/040`–`044`,
-  [[2026-07-lepi-app-compression]]): ONNX export works (parity 2e-5), browser resize is a non-issue,
+  [[2026-07-20-lepi-app-compression]]): ONNX export works (parity 2e-5), browser resize is a non-issue,
   marginalization (species→genus→family) beats separate heads, **int8 is −0.59 pp for 3.9×**,
   temperature/threshold calibration fitted. The app v1 shipped (effnetv2b2, GitHub Pages) and a
   GitHub **release** format exists (`model-v1-effnetv2b2`: model.onnx + qdq + taxonomy + calibration
@@ -35,7 +35,7 @@ calibrate → assemble bundle → release.
    (`speciesKey`, `parents.speciesKey_to_genusKey`) and emitted no `config.json`; the app hardcodes
    `LEVELS=['species','genus','family']` and reads `taxonomy.vocabs.genus` / `parents.species_to_genus`.
    A package model could not load in the app. → **Closed today.**
-3. **QDQ int8 doesn't run in ORT-Web** (documented in [[2026-07-lepi-app-compression]]): static-QDQ
+3. **QDQ int8 doesn't run in ORT-Web** (documented in [[2026-07-20-lepi-app-compression]]): static-QDQ
    verifies in Python (no `ConvInteger`) but throws a raw WASM numeric error at session creation, so
    v1 ships **fp32 (54 MB)**. This is the "forced to use fp32" issue. Candidates to try, in order:
    per-tensor QDQ (current is per-channel), fp16-with-fp32-head, a custom minimal ORT build. **Needs
@@ -71,7 +71,7 @@ Built the teacher→student half of the bridge (planned `dev/045`, never written
 
 - **`DistillLoss`** (`loss.py`): `total = (1-α)·CE(student, labels) + α·Σ_level T²·KL(softmax(student/T)
   ‖ softmax(teacher/T))`. KD per level (fine→coarse), matching the N-level head. Honors the framing
-  from [[2026-07-lepi-app]]: distillation is the student's *training method*, not a post-hoc
+  from [[2026-07-19-lepi-app]]: distillation is the student's *training method*, not a post-hoc
   compressor — the teacher's soft posterior over 12 k species carries the hierarchy + tail structure
   the hard labels can't. `T²` keeps the KD gradient scale comparable to CE.
 - **`DistillCallback`** (`callbacks.py`): runs the **frozen teacher in fp32, no-grad**, on each
@@ -87,7 +87,7 @@ Built the teacher→student half of the bridge (planned `dev/045`, never written
 - **Validated GPU-free**: 5 unit tests (KD=0 when teacher==student; α=0 ⇒ pure CE; KD differentiable;
   mixup guard) + a synthetic **e2e distill** (train teacher → distil student → checkpoint). 40 tests
   green, ruff clean. Unlabelled-data soft targets (train the student on more images than are
-  labelled) remain a future lever, per [[2026-07-lepi-app]].
+  labelled) remain a future lever, per [[2026-07-19-lepi-app]].
 
 **First runs (mock teacher = the 5ep effnetv2_s milestone):** distil into a small
 `tf_efficientnetv2_b0` + 256-bottleneck (the shippable size), vs a from-scratch b0 **control** — the
@@ -110,7 +110,7 @@ wrong for this head**, and the reason is specific and worth recording:
 
 - The teacher is a **cosine z-score head** — its logits are `cosine_to_zscore(cos θ)`, i.e. already
   ~unit-scale (roughly standard-normal), *not* the large-range logits Hinton-style KD assumes. And
-  [[2026-07-lepi-app-compression]] §5 measured the model **under-confident** (calibration T≈0.8).
+  [[2026-07-20-lepi-app-compression]] §5 measured the model **under-confident** (calibration T≈0.8).
 - Dividing already-flat, under-confident logits by **T=4** pushes the 12,041-class softmax target
   toward **uniform** — the KD target carries almost no class information beyond noise. At α=0.5 that
   diffuse signal replaces half the (working) hard-label gradient → the student ends up *worse*.
@@ -172,7 +172,7 @@ as regularisers — pick one per run. Clean test: fix the best backbone, compare
 ConvNeXts distilled from the DINOv3 ViT-7B — they carry most of DINOv3's representation quality but
 (1) **emit 4-D maps → drop into the existing `PooledHead` path with zero new plumbing** (no
 ViTBody/FlatHead), (2) give **clean ONNX + fast WASM/WebGPU, no attention in the hot path** — exactly
-what the browser target wants ([[2026-07-lepi-app-compression]] §C2), (3) **scale to high resolution
+what the browser target wants ([[2026-07-20-lepi-app-compression]] §C2), (3) **scale to high resolution
 cheaply** (no quadratic tokens), and (4) as a **conv teacher align with the conv student family**,
 which the whole export/quantize pipeline is proven on. `convnext_large.dinov3` (~200 M) also compares
 apples-to-apples with the ConvNeXtV2-L run already training. Reserve the ViT path for a focused "can a
@@ -350,7 +350,7 @@ Owner's in-browser test of the deployed candidates:
 
 **Is there a fix?** In principle yes — *static QDQ* quantization emits
 `QuantizeLinear`/`DequantizeLinear` around ordinary `Conv`/`Gemm` instead of `ConvInteger`, which
-ORT-Web does implement. But we **already tried that** ([[2026-07-lepi-app-compression]]): the static
+ORT-Web does implement. But we **already tried that** ([[2026-07-20-lepi-app-compression]]): the static
 QDQ graph verified in Python and then died in-browser at session creation with a raw numeric WASM
 error. So both int8 encodings have now failed in a real browser for *different* reasons, and the
 remaining ideas (per-tensor instead of per-channel QDQ, a custom minimal ORT build) are speculative

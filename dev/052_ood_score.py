@@ -1,6 +1,6 @@
 """Open-set / OOD scoring for an ArcFace (or any cosine) lepinet model — #8.
 
-Face-recognition insight ([[2026-07-teacher-student-app-bridge]] Q5): an ArcFace embedding gives
+Face-recognition insight ([[2026-07-25-teacher-student-app-bridge]] Q5): an ArcFace embedding gives
 each class a tight, well-separated angular region, and the **max cosine similarity to any class
 prototype** is a meaningful "do I know this?" score even for classes never seen in training. So:
 

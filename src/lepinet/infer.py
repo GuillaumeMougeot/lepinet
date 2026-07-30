@@ -3,7 +3,7 @@
 This is the deployment-style prediction path (the ``evaluate`` path in :mod:`lepinet.test` uses
 fastai's ``test_dl`` to reproduce validation numbers exactly). Preprocessing here is the simple,
 explicit contract the ONNX export also bakes in (``resize → [0,1] → ImageNet normalize``); resize
-kernel differences were measured to be a non-issue (``journal/2026-07-lepi-app-compression.md``).
+kernel differences were measured to be a non-issue (``journal/2026-07-20-lepi-app-compression.md``).
 
 TTA averages per-level softmax over the four flips the model was trained to be invariant to
 (identity / hflip / vflip / hflip+vflip — training used ``flip_vert=True`` plus the default

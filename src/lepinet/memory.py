@@ -1,6 +1,6 @@
 """Host-memory accounting and guard — the hard-won OOM lessons.
 
-Two mistakes this module exists to prevent, both from journal/2026-07-ucloud-benchmark-oom.md:
+Two mistakes this module exists to prevent, both from journal/2026-07-17-ucloud-benchmark-oom.md:
 
 1. Watching the wrong number. `psutil.virtual_memory()` reads /proc/meminfo (the physical host),
    so inside a UCloud job it reports 2434 GB while the cgroup caps the job at 288 GB and the

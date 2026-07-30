@@ -6,7 +6,7 @@ blows up host memory and OOMs on a tight cgroup. Moving decode to the GPU makes 
 I/O: a worker holds one ~80 KB JPEG, not a decode+resize+collate pipeline, cutting per-worker
 memory ~10x and removing the worker-count/OOM bind entirely.
 
-Measured trade-off (journal/2026-07-ucloud-throughput.md): for a *small* model (effnetv2s) this
+Measured trade-off (journal/2026-07-18-ucloud-throughput.md): for a *small* model (effnetv2s) this
 is a MEMORY win, not a speed win -- the model is the throughput ceiling (~1100 img/s) either way,
 and even a B200 can't exceed it. It pays off in speed only on a heavier, compute-bound model. And
 it must be used correctly or it is *slower* than CPU decode:

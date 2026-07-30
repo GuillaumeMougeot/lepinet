@@ -1,6 +1,6 @@
 # Why was fastai + MT-heads behind mini_trainer's own loop?
 
-**Status:** RESOLVED (2026-07-16). Gap closed and overtaken: **0.8976 vs 0.896**.
+**Kind:** research · **Status:** RESOLVED (2026-07-16). Gap closed and overtaken: **0.8976 vs 0.896**.
 **Metric:** species (level 0) macro-F1 on the global **test** fold (`set == '0'`), via
 mini_metrics. Every number below is that metric unless stated.
 
@@ -96,7 +96,7 @@ Winning recipe: efficientnet_v2_s, independent heads, Muon, `one_cycle`, `warmup
 Config: `configs/20260715_heads_global_independent_muon_onecycle_10ep.yaml`.
 
 This run also survived a mid-training machine hang (see
-[2026-07-gpu-hang.md](2026-07-gpu-hang.md)) via dev/030's `resume_checkpoint` /
+[2026-07-16-gpu-hang.md](2026-07-16-gpu-hang.md)) via dev/030's `resume_checkpoint` /
 `resume_epochs_done` + `fit_resume`, which rebuild the original LR curve and continue from the
 exact fractional position rather than restarting the anneal.
 
@@ -106,4 +106,4 @@ exact fractional position rather than restarting the anneal.
   grad_clip 5.0). They moved together and bought 4.7 points as a group; nobody knows the split.
 - **10 epochs was still improving** — the budget was never the binding constraint, the
   comparison was.
-- **Long-tail interventions** are the open thread → [2026-07-does-longtail-help.md](2026-07-does-longtail-help.md).
+- **Long-tail interventions** are the open thread → [2026-07-17-does-longtail-help.md](2026-07-17-does-longtail-help.md).

@@ -231,7 +231,7 @@ def build_backbone_model(arch_spec, custom_head):
 
 def build_head(head_name, nf, n_classes, cls2idx, sparse_masks, decoder_kwargs=None, hidden=True):
     """`hidden` is the classifier's bottleneck width, and it is the single biggest size lever
-    in the model (journal/2026-07-lepi-app-compression.md).
+    in the model (journal/2026-07-20-lepi-app-compression.md).
 
     mini_trainer's `Classifier` puts a `Linear(in_features, preclassification_size)` + LeakyReLU
     in front of the cosine layers, and `hidden=True` (the default this project has always run)

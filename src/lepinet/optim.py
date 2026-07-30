@@ -5,7 +5,7 @@ forward-port of the upstream PyTorch ``torch/optim/_muon.py``). They depend only
 this is the whole of what "remove the mini_trainer dependency" costs for the optimizer.
 
 Muon was the single biggest *optimisation* lever in the baseline (``journal/
-2026-07-why-was-fastai-behind-mini-trainer.md``). Two constraints it imposes, both handled in
+2026-07-16-why-was-fastai-behind-mini-trainer.md``). Two constraints it imposes, both handled in
 :func:`muon_opt_func`:
 
 * Muon only updates **2D** parameters (matrices); biases / norms / embeddings go to AdamW. The

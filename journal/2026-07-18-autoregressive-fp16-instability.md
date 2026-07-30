@@ -1,6 +1,6 @@
 # Why the autoregressive head trained broken, and the fix
 
-**Status:** RESOLVED (2026-07-18). The autoregressive head is fp16-unstable; running it in fp32
+**Kind:** incident · **Status:** RESOLVED (2026-07-18). The autoregressive head is fp16-unstable; running it in fp32
 fixes it. It was never a wiring bug.
 
 ## Symptom
@@ -56,5 +56,5 @@ the head.
 were tuned and run in fp16 and are fine there, but they would also work in bf16 -- for a fair
 3-head benchmark, run all three in bf16.
 
-Related: [[2026-07-ucloud-benchmark-oom]] (the run it surfaced in), the dev/030 MTHeadAdapter
+Related: [[2026-07-17-ucloud-benchmark-oom]] (the run it surfaced in), the dev/030 MTHeadAdapter
 docstring (the fp32-head-under-fp16 pattern this extends).

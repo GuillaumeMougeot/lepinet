@@ -270,7 +270,7 @@ def run(onnx_path, out_dir, parquet_path, img_dir, n, val_set, test_set, min_img
     (out_dir / "thresholds.json").write_text(json.dumps({
         "note": "Apply temperature from calibration.json, then grey any level whose calibrated "
                 "top-1 probability is below its threshold. Thresholds are precision-targeted, "
-                "not round numbers -- see journal/2026-07-lepi-app-claude.md D2.",
+                "not round numbers -- see journal/2026-07-20-lepi-app-claude.md D2.",
         "path": "marginal (genus/family derived from species; see dev/042)",
         "levels": thresholds,
         "sweep": sweep,

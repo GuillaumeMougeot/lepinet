@@ -1,6 +1,6 @@
 # Why the UCloud MT-head benchmark keeps OOM-ing
 
-**Status:** ROOT-CAUSED. The per-worker cost is the fastai **image-decode pipeline** (~1.2 GB),
+**Kind:** infrastructure · **Status:** ROOT-CAUSED. The per-worker cost is the fastai **image-decode pipeline** (~1.2 GB),
 not the dataframe -- an earlier diagnosis in this file (fork+COW on the DataFrame) was WRONG and
 is corrected below. Fix: cap the worker count so `workers x 1.2 GB` fits the node (128 on a
 288 GB B200), verified one-job-first.
@@ -161,5 +161,5 @@ train-only), each of which would otherwise have cost ~42 GPU-hours (3 jobs x ~14
 Total GPU spent across the entire investigation: ~18 GPU-hours, most of it the diagnostic runs,
 none of it a completed benchmark. The smoke-first discipline is what kept it that low.
 
-Related: [[does-longtail-help]] (the recipe being benchmarked), the `dev/037` /
+Related: [[2026-07-17-does-longtail-help]] (the recipe being benchmarked), the `dev/037` /
 `HostMemoryGuard` docstrings for the measurement detail.

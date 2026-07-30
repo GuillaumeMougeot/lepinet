@@ -1,6 +1,6 @@
 # How well does the best model generalise to an external dataset (flemming_helsing)?
 
-**Status:** RESOLVED (first pass, 2026-07-28). The first test of a lepinet model on a **truly
+**Kind:** research · **Status:** RESOLVED (first pass, 2026-07-28). The first test of a lepinet model on a **truly
 external** dataset — not a held-out fold of the training distribution. Answers "does the 0.9316
 in-distribution number survive a different data source?" Short answer: **no, it drops hard — that is
 the honest generalisation gap, and it's the case for open-set/OOD work.**
@@ -56,8 +56,8 @@ different questions.)
    `--no-drop-unknown-species` path + the parquet-from-`example_pred` recipe are reusable for the
    next external set.
 
-Predictions + tables: `data/ucloud_preds/flemming-cnxv2l/`. Companion: [[2026-07-bigger-everything]]
-(the teacher), [[2026-07-landscape-and-plan]] (the plan this feeds).
+Predictions + tables: `data/ucloud_preds/flemming-cnxv2l/`. Companion: [[2026-07-24-bigger-everything]]
+(the teacher), [[2026-07-28-landscape-and-plan]] (the plan this feeds).
 
 ## Follow-ups launched (2026-07-28)
 

@@ -3,7 +3,7 @@
 Clean, fastai-only, ``mini_trainer``-free reimplementation of the pipeline developed in ``dev/``.
 It reproduces the project-best independent-head baseline (test species macro-F1 0.9148) and is
 generic in the number of hierarchy levels. See ``src/lepinet/README.md`` and
-``journal/2026-07-src-lepinet-baseline-port.md``.
+``journal/2026-07-24-src-lepinet-baseline-port.md``.
 
 Typical use::
 

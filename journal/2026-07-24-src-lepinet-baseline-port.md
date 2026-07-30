@@ -1,16 +1,16 @@
 # Porting the 0.9148 baseline into `src/lepinet` — a fastai-only, mini_trainer-free clean repo
 
-**Status:** ✅ **RESOLVED (2026-07-25) — the port is a success.** The clean, fastai-only,
+**Kind:** subproject · **Status:** ✅ **RESOLVED (2026-07-25) — the port is a success.** The clean, fastai-only,
 `mini_trainer`/`mini_metrics`-free `src/lepinet` package reproduces the project-best baseline from
 scratch: **species macro-F1 0.9152 vs 0.9148** on the byte-identical eval set (all 12,041 species,
 optimal threshold; see the Train-parity section). This 5ep run is now the project's **milestone
 baseline** to compare future models against. `dev/` continues as the experiment space, but now
 imports the **`lepinet` package** rather than `dev/028/030/034`. Companion in spirit to
-[[2026-07-lepi-app-claude]]: this document is the *how* — module layout, what to keep vs cut, the
+[[2026-07-20-lepi-app-claude]]: this document is the *how* — module layout, what to keep vs cut, the
 sequencing, and the decisions that had to be right before code was written. Written 2026-07-24.
 
 **Goal in one line:** reproduce the project-best **0.9148 test species macro-F1**
-(`20260716-154156`, [[2026-07-does-longtail-help]]) from a clean, installable `src/lepinet`
+(`20260716-154156`, [[2026-07-17-does-longtail-help]]) from a clean, installable `src/lepinet`
 package that has **zero `mini_trainer` / `mini_metrics` imports**, implements only the
 **independent** head, is **fastai-only**, and exports to ONNX without `dynamo`. `dev/030` stays
 frozen as the experiment record; new experiments import `lepinet` instead of `028`/`030`/`034`.
@@ -21,7 +21,7 @@ frozen as the experiment record; new experiments import `lepinet` instead of `02
 
 | quantity | value | source |
 |---|---|---|
-| target run | `20260716-154156` | `RESULTS.md`, [[2026-07-does-longtail-help]] |
+| target run | `20260716-154156` | `RESULTS.md`, [[2026-07-17-does-longtail-help]] |
 | target checkpoint | `data/global/models/20260716-154156-…-oversample-effnetv2s/…​.pt` (173 MB) | on disk |
 | test species macro-F1 to match | **0.9148** (val 0.9096) | `RESULTS.md` |
 | winning recipe | effnetv2_s, independent head, Muon, one_cycle, warmup 0.5ep, grad_clip 5.0, light aug, bs 64, 460→256, **5 ep**, `oversample_power: 0.5`, precision fp16 (bf16 also fine) | `configs/20260716_heads_global_independent_muon_5ep_oversample.yaml` |
@@ -58,7 +58,7 @@ The port is done when **all** of these hold:
   reproduces dev/032's test report to <1e-4 on species macro-F1 (D1). This is the cheap
   validation — no GPU-hours.
 - **Train parity:** a fresh 5-epoch run from the ported `train()` on the same config lands at
-  **0.9148 ± noise** (the run-to-run noise floor in this project is ~0.2pt, [[2026-07-does-longtail-help]]).
+  **0.9148 ± noise** (the run-to-run noise floor in this project is ~0.2pt, [[2026-07-17-does-longtail-help]]).
 - `evaluate()` writes the same per-level macro-F1 / micro-acc table dev/032 produced, computed
   **natively** (no mini_metrics), and those numbers match mini_metrics on one cross-checked run.
 - `predict()` does single-image and folder inference **with TTA**, returning per-level top-k
@@ -73,7 +73,7 @@ The port is done when **all** of these hold:
 ## 2. What to keep, what to cut (the strict minimum)
 
 The whole reason the gap to mini_trainer closed was the *training loop*, not the head
-([[2026-07-why-was-fastai-behind-mini-trainer]]). So the head can be reimplemented faithfully
+([[2026-07-16-why-was-fastai-behind-mini-trainer]]). So the head can be reimplemented faithfully
 and small; the value is in the loop lessons, which are already partly in `src/lepinet`.
 
 **Reimplement (the strict minimum to be mini_trainer-free):**
@@ -95,9 +95,9 @@ and small; the value is in the loop lessons, which are already partly in `src/le
   win and died repeatedly (`RESULTS.md`).
 - `SupervisionContext` / `SupervisionContextCallback` — only the autoregressive head read it.
 - `ClassDistributionRegularizer` — a measured **wash** (0.8860 vs 0.8880,
-  [[2026-07-why-was-fastai-behind-mini-trainer]]). Do not port.
+  [[2026-07-16-why-was-fastai-behind-mini-trainer]]). Do not port.
 - `LogitAdjustment` / `LogitAdjustCallback` — a **structurally-flawed** result (0.9031, wrecked
-  family/genus, [[2026-07-does-longtail-help]]). Do not port into the baseline; leave it as a
+  family/genus, [[2026-07-17-does-longtail-help]]). Do not port into the baseline; leave it as a
   dev/ experiment if revisited (per-level tau).
 - `mini_metrics` — its macro-F1 is *already* reimplemented and verified byte-matching in
   `LevelMacroF1` (`dev/028`, docstring). Reuse that for the native report (D2).
@@ -153,7 +153,7 @@ tiny `_remap_legacy_state_dict()` closes it.
 
 `LevelMacroF1` already reproduces mini_metrics' macro-F1 (per-class P/R harmonic mean, 0 when
 either is 0, unweighted mean over present classes) and was validated like-for-like
-([[2026-07-why-was-fastai-behind-mini-trainer]], the "0.83 == 0.83" resolution). Reimplementing
+([[2026-07-16-why-was-fastai-behind-mini-trainer]], the "0.83 == 0.83" resolution). Reimplementing
 the report also deletes the broken-`--optimal` two-pass workaround (`dev/032.compute_metrics`).
 **Gate:** on the first `evaluate()`, diff native vs mini_metrics on one run and assert
 agreement before trusting it, then never depend on mini_metrics again.
@@ -162,7 +162,7 @@ agreement before trusting it, then never depend on mini_metrics again.
 
 The `GCCallback` (`gc.collect(0)` every batch) exists solely to break the reference cycle that
 mini_trainer's `_weight_bias()` creates by stashing a graph-attached weight view into a
-persistent buffer every forward ([[2026-07-why-was-fastai-behind-mini-trainer]], landmines).
+persistent buffer every forward ([[2026-07-16-why-was-fastai-behind-mini-trainer]], landmines).
 A clean forward that uses `self.linear.weight` directly (no caching, no `active_indices`) **has
 no such cycle**, so the leak should vanish and `GCCallback` becomes unnecessary. But that is a
 claim, not yet a measurement — so: reimplement without the cache, keep `GCCallback` for the
@@ -182,7 +182,7 @@ the independent path needs dynamo, and avoiding it removes a class of exporter s
 
 The 0.9148 run used `precision: fp16` and survived because the head is forced fp32 inside the
 adapter. To *reproduce the number* exactly, run fp16. But the package should **default to bf16**
-(the `src/lepinet/README.md` lesson #1, [[2026-07-autoregressive-fp16-instability]]) since it is
+(the `src/lepinet/README.md` lesson #1, [[2026-07-18-autoregressive-fp16-instability]]) since it is
 strictly safer at scale; verify bf16 lands within noise of fp16 as a second data point.
 
 ---
@@ -241,7 +241,7 @@ The package must not paint experiments into a corner. Seams to leave open:
 - **New heads.** `build_head(name, …)` keeps a registry; the baseline registers only
   `"independent"`. A `dev/` script can register a tiny-ViT head or re-add
   hierarchical/autoregressive *without touching the package* (the C2 sweep already wants tiny
-  ViTs, [[2026-07-lepi-app-claude]] §7). Keep `PooledHead` head-agnostic (it just pools to
+  ViTs, [[2026-07-20-lepi-app-claude]] §7). Keep `PooledHead` head-agnostic (it just pools to
   `[N, nf]` and hands off).
 - **mini_trainer compatibility.** Because `IndependentHead` keeps the persistent buffer names
   (D1), a checkpoint can still be *cross-loaded* both ways during the transition — useful for
@@ -249,13 +249,13 @@ The package must not paint experiments into a corner. Seams to leave open:
   dependency.
 - **nvJPEG GPU decode.** `gpu_decode.py` is already DONE; `make_dls` should accept a
   `reader=` seam so a dev/ run can swap the CPU decode for the nvJPEG reader
-  ([[2026-07-ucloud-throughput]]) — a memory lever, not a speed one for effnetv2s.
+  ([[2026-07-18-ucloud-throughput]]) — a memory lever, not a speed one for effnetv2s.
 - **Distillation.** Re-add a minimal embedding hook (the dropped `EmbeddingContext`, cleanly)
   behind a flag so `dev/045_distill` can pull soft targets / embeddings from a teacher. Keep it
   off the baseline forward.
 - **Backbone/bottleneck sweeps.** `resolve_arch` already routes timm names; `hidden:int`
   already bottlenecks. These stay first-class config knobs, so the C1/C2 sweeps
-  ([[2026-07-lepi-app-claude]]) run through `lepinet` unchanged.
+  ([[2026-07-20-lepi-app-claude]]) run through `lepinet` unchanged.
 
 ---
 
@@ -267,7 +267,7 @@ Kept deliberately separate so it does not leak scope into §5:
   **cutmix/mixup** (the winning recipe deliberately used *light* aug for a 5-epoch budget;
   mixup pays at longer budgets). Ensemble over the CV folds if it earns its inference cost.
 - **Knowledge distillation** from the large teacher into small students — the core of the app's
-  size budget ([[2026-07-lepi-app-claude]] Phase C). The package should make "train teacher →
+  size budget ([[2026-07-20-lepi-app-claude]] Phase C). The package should make "train teacher →
   distil student → export student" a straight line.
 - **Generalization beyond Lepidoptera.** Nothing in the head or loop is moth-specific except the
   `speciesKey/genusKey/familyKey` column names and the 3-level assumption. A later rename could
@@ -280,7 +280,7 @@ Kept deliberately separate so it does not leak scope into §5:
 ## 8. What this proposal asserts that is not yet measured
 
 Stated up front so a future reader can score predictions vs results (the
-[[2026-07-does-longtail-help]] discipline):
+[[2026-07-17-does-longtail-help]] discipline):
 
 - **D1 load parity holds:** the clean head loads `20260716-154156.pt` and reproduces 0.9148 to
   <1e-4. *(Reasoning: persistent keys are few and numerics are copied.)*
@@ -434,7 +434,7 @@ So `LevelMacroF1`/`macro_f1` reproduces `mini_metrics` exactly (both macro-avera
 faithful number — of a *different eval set*.
 
 **2. Is the eval set the same as the 0.9148 baseline?** **No — this was the bug.** The 0.9148
-baseline (`20260716-154156`, journal [[2026-07-does-longtail-help]]) was measured over the *whole*
+baseline (`20260716-154156`, journal [[2026-07-17-does-longtail-help]]) was measured over the *whole*
 test fold: **629,742 images, 12,041 species** (dev/032 test default `min_img_per_spc=0`). My UCloud
 test job (`lepinet-test.toml`) passed **`--min-img-per-spc 50`**, copied thoughtlessly from the
 *training* config. That filter drops every species with <50 images *in fold 0* — the entire hard
@@ -466,16 +466,16 @@ the 0.9148 baseline** (same n, same class count). Numbers:
 The baseline was measured with `mini_metrics --optimal` (per-level threshold that maximises
 macro-F1); the fair comparison is the **@optimal** column, where species macro-F1 is **0.9152 vs
 0.9148** — within 0.0004, i.e. **reproduced**. (Optimal per-level thresholds came out ~0.34; the
-model is under-confident, consistent with [[2026-07-lepi-app-compression]].) Micro-acc is ~1.6 pt
+model is under-confident, consistent with [[2026-07-20-lepi-app-compression]].) Micro-acc is ~1.6 pt
 lower (93.2 vs 94.8) — the fastai-only reimplement + a different seed + the clarity refactor move it
 slightly, but the headline metric lands on target. **Train-parity: DONE.** The clean, mini_trainer-
 free package reproduces the project-best baseline from scratch.
 
 ### Still open
 - (nothing on parity — resolved above). Remaining threads: bigger-everything result
-  [[2026-07-bigger-everything]], the doc/comment reframe, the app artifact path, distillation.
-- The **"bigger everything" teacher run** → [[2026-07-bigger-everything]] (queued this session).
+  [[2026-07-24-bigger-everything]], the doc/comment reframe, the app artifact path, distillation.
+- The **"bigger everything" teacher run** → [[2026-07-24-bigger-everything]] (queued this session).
 - The app artifact path (calibration/thresholds, quantization, the versioned bundle) — the whole
-  [[2026-07-lepi-app-claude]] Phase B/C on the new package.
+  [[2026-07-20-lepi-app-claude]] Phase B/C on the new package.
 - CutMix for multi-target heads (MixUp done; CutMix's `before_batch` also indexes the target tuple).
 - Distillation (teacher→small student) and the geographic prior remain future levers.

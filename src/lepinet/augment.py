@@ -2,7 +2,7 @@
 
 The training images (GBIF: specimens, mostly clean backgrounds, good light) look nothing like the
 deployment images (camera traps: clutter, motion blur, night-time noise, heavy JPEG). That mismatch
-costs ~23 points of macro-F1 (``journal/2026-07-domain-shift.md``), and the cheapest thing to try is
+costs ~23 points of macro-F1 (``journal/2026-07-30-domain-shift.md``), and the cheapest thing to try is
 to make training images look more like trap frames.
 
 **Design constraint: this must not touch the existing recipe.** Every published number in this repo
@@ -101,7 +101,7 @@ class RandomJPEGish(RandTransform):
 
 #: Named presets. ``dev/`` may register more without editing this file.
 DOMAIN_AUG_REGISTRY: dict[str, list] = {
-    # The first hypothesis (journal 2026-07-domain-shift, B1): the three nuisances we can actually
+    # The first hypothesis (journal 2026-07-30-domain-shift, B1): the three nuisances we can actually
     # name for camera traps. Probabilities are deliberately modest — the point is to broaden the
     # training distribution, not to replace it with corrupted images.
     "trap": [RandomMotionBlur(p=0.25), RandomLowLight(p=0.25), RandomJPEGish(p=0.20)],

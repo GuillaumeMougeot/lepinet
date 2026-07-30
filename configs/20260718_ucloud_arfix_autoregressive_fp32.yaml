@@ -3,8 +3,8 @@ version: 1.0
 # (independent, hierarchical) that differ ONLY in `head:` -- everything else is byte-identical,
 # so the comparison isolates the head architecture and nothing else.
 #
-# Recipe = every trick learned locally, per journal/2026-07-why-was-fastai-behind-mini-trainer.md
-# and journal/2026-07-does-longtail-help.md:
+# Recipe = every trick learned locally, per journal/2026-07-16-why-was-fastai-behind-mini-trainer.md
+# and journal/2026-07-17-does-longtail-help.md:
 #   Muon + one_cycle + warmup 0.5 + grad_clip 5.0 + light aug  -> the optimisation ladder
 #   oversample_power 0.5 (sqrt sampling)                       -> +1.7pt, the biggest single lever
 #   nb_epochs 10                                               -> the full budget

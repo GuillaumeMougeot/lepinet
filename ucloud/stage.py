@@ -10,7 +10,7 @@ The /work mount is latency-bound, not bandwidth-bound. Measured on a job (ucloud
 Training over /work needs a high `num_workers` to hit the ~1100 img/s decode ceiling, and each
 fastai worker's image pipeline costs ~1.2 GB of real (anon) memory -- so many workers means a
 large memory footprint, and on a tight cgroup that OOMs (see
-journal/2026-07-ucloud-benchmark-oom.md). Staging to local NVMe removes the latency, so ~24-48
+journal/2026-07-17-ucloud-benchmark-oom.md). Staging to local NVMe removes the latency, so ~24-48
 workers saturate the decode ceiling instead of 128+, cutting the memory footprint several-fold.
 It is the memory lever, not primarily a speed lever (decode stays CPU-bound at ~1100 img/s).
 

@@ -1,4 +1,4 @@
-# C2 of the lepi-app compression plan (journal/2026-07-lepi-app-claude.md, Phase C).
+# C2 of the lepi-app compression plan (journal/2026-07-20-lepi-app-claude.md, Phase C).
 #
 # Backbone sweep at the C1 bottleneck (hidden=256), everything else byte-identical to the
 # 0.9148 recipe (20260716-154156). With the head shrunk to 4.58 M, the backbone now dominates

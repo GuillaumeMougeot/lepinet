@@ -180,7 +180,7 @@ class DistillLoss:
     ``total = (1-α)·CE(student, labels) + α·Σ_level T²·KL(softmax(student/T) ‖ softmax(teacher/T))``.
 
     Distillation is the *training method* for a small student, not a post-hoc compressor
-    ([[2026-07-lepi-app]]): the teacher's soft posterior over 12 k species carries the hierarchy and
+    ([[2026-07-19-lepi-app]]): the teacher's soft posterior over 12 k species carries the hierarchy and
     the tail structure implicitly, so the student learns more than the hard labels alone can teach.
     KD is applied per level (fine→coarse), matching the N-level head.
 

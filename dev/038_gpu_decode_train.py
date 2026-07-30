@@ -3,8 +3,8 @@
 Why
 ---
 The fastai CPU pipeline is decode-bound at ~1100 img/s and each worker's decode+resize+collate
-costs ~1.2 GB, which is what forced the worker-count/OOM bind (journal/2026-07-ucloud-benchmark
--oom.md) and leaves the B200 GPU ~idle (journal/2026-07-ucloud-throughput.md). Moving JPEG
+costs ~1.2 GB, which is what forced the worker-count/OOM bind (journal/2026-07-17-ucloud-benchmark
+-oom.md) and leaves the B200 GPU ~idle (journal/2026-07-18-ucloud-throughput.md). Moving JPEG
 decode to the GPU should (a) break the ~1100 ceiling and (b) collapse per-worker memory, since
 CPU workers then only read ~80 KB of bytes instead of holding a decode pipeline. Measured
 locally: batched GPU decode+resize ~9200 img/s vs ~1100 CPU.

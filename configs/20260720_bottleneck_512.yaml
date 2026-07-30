@@ -1,9 +1,9 @@
-# C1 of the lepi-app compression plan (journal/2026-07-lepi-app-claude.md, Phase C).
+# C1 of the lepi-app compression plan (journal/2026-07-20-lepi-app-claude.md, Phase C).
 #
 # Sweeps mini_trainer's classifier bottleneck, `hidden`, which sets `preclassification_size`
 # -- the width of every cosine prototype row. The project has always run mini_trainer's
 # default (`hidden: true` => 1280, the backbone width), which is why the head is 53% of the
-# model's parameters (journal/2026-07-lepi-app-compression.md). Head sizes:
+# model's parameters (journal/2026-07-20-lepi-app-compression.md). Head sizes:
 #
 #     hidden: true (1280) -> 22.76 M params   (the 0.9148 baseline)
 #     hidden: 512         ->  9.13 M

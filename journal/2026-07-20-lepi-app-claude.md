@@ -1,11 +1,11 @@
 # lepi-app — detailed plan (Claude's companion to the proposal)
 
-**Status:** decisions RESOLVED (§7), **Phases A and B are done and measured** — results in
-[`2026-07-lepi-app-compression.md`](2026-07-lepi-app-compression.md), scripts `dev/040`–`dev/044`.
+**Kind:** subproject · **Status:** decisions RESOLVED (§7), **Phases A and B are done and measured** — results in
+[`2026-07-20-lepi-app-compression.md`](2026-07-20-lepi-app-compression.md), scripts `dev/040`–`dev/044`.
 Phase C (retraining) and Phase D (the app) are open. Note that §1's size table and §8's
 predictions were written *before* those measurements and are deliberately left unedited so the
 compression journal can score them; the measured numbers supersede them. Companion to
-[`2026-07-lepi-app.md`](2026-07-lepi-app.md) (the proposal + the Review section at its end).
+[`2026-07-19-lepi-app.md`](2026-07-19-lepi-app.md) (the proposal + the Review section at its end).
 Written 2026-07-20. This document holds the *how*: budgets, action items, script numbers,
 and the ideas that were not in the proposal. The proposal remains the statement of intent;
 where the two disagree, the proposal is the owner's and wins until edited.
@@ -27,7 +27,7 @@ Measured from the repo, not assumed:
 | **total** | **41.3 M → 165 MB fp32** | matches the ~170 MB observed |
 | head architecture | cosine / L2-normalized prototypes, `normalized=True` | `mini_trainer/modeling/classifier.py` |
 | best head type | **independent** (beats hierarchical) | `RESULTS.md` |
-| median images/species | 177; 31.8% of species have <100 | [[2026-07-does-longtail-help]] |
+| median images/species | 177; 31.8% of species have <100 | [[2026-07-17-does-longtail-help]] |
 
 Two consequences drive everything below:
 
@@ -185,7 +185,7 @@ the weights, which is what prevents §4's parity bug from recurring.
 
 ### 3.3 Top-5, not top-1, is the product metric
 
-macro-F1 is the right research metric — it is why oversampling won ([[2026-07-does-longtail-help]]).
+macro-F1 is the right research metric — it is why oversampling won ([[2026-07-17-does-longtail-help]]).
 But it does not describe app experience, which is dominated by common species, and a user
 shown five candidates can disambiguate themselves. Report **top-1 accuracy and top-5
 recall** alongside macro-F1 for every compression step, and consider whether the UI should
@@ -340,7 +340,7 @@ Two further steers on the plan above:
 ## 8. What this plan asserts that has not been measured
 
 Stated explicitly so that a future reader can tell the predictions from the results — the
-same commitment-before-results discipline as [[2026-07-does-longtail-help]]:
+same commitment-before-results discipline as [[2026-07-17-does-longtail-help]]:
 
 - int8 PTQ on the cosine head costs **< 0.2** macro-F1. *(Reasoning: unit-norm rows share
   one dynamic range.)*

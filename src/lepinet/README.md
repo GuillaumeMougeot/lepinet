@@ -7,7 +7,7 @@ macro-F1 **0.9148**) and is generic in the number of hierarchy levels.
 - **Users:** [`../../docs/user-guide.md`](../../docs/user-guide.md) — install, CLI, Python API, config.
 - **Developers:** [`../../docs/developer-guide.md`](../../docs/developer-guide.md) — architecture, the
   head, adding heads, testing, the lessons encoded.
-- **Why it is built this way:** [`../../journal/2026-07-src-lepinet-baseline-port.md`](../../journal/2026-07-src-lepinet-baseline-port.md).
+- **Why it is built this way:** [`../../journal/2026-07-24-src-lepinet-baseline-port.md`](../../journal/2026-07-24-src-lepinet-baseline-port.md).
 
 ## Status: baseline complete
 

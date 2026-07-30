@@ -116,7 +116,7 @@ Field names match `lepinet.config.TrainConfig`. Common ones:
 - `precision` (`bf16` / `fp16`), `oversample_power`, `aug_kwargs`
 
 Two options are **rejected on purpose** (they were measured to lose): `logit_adjust_tau` and
-`class_reg_strength`. See `journal/2026-07-does-longtail-help.md`.
+`class_reg_strength`. See `journal/2026-07-17-does-longtail-help.md`.
 
 ## Outputs
 

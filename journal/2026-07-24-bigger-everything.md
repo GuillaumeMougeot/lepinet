@@ -1,6 +1,6 @@
 # Does "bigger everything" beat the 0.9148 effnetv2_s baseline — and make a good teacher?
 
-**Status:** ✅ **RESOLVED (2026-07-26) — yes, bigger everything won.** ConvNeXtV2-L reached
+**Kind:** research · **Status:** ✅ **RESOLVED (2026-07-26) — yes, bigger everything won.** ConvNeXtV2-L reached
 **species macro-F1 0.9316 vs the 0.9148 baseline (+1.68 pp)**, genus 0.9739 (+1.36), family 0.9876
 (+1.50), and species micro-acc *also* rose (0.9507 vs 0.9476) — a genuinely better model, not an
 eval artifact, landing in the predicted +1–3 pt range. It is now the project's **best teacher**
@@ -9,7 +9,7 @@ eval artifact, landing in the predicted +1–3 pt range. It is now the project's
 First scaling run of the
 clean `src/lepinet` package: a larger, cutting-edge backbone at higher resolution, bigger batch,
 more epochs, richer augmentation and MixUp, trained on a UCloud B200. Queued 2026-07-24.
-Companion to [[2026-07-src-lepinet-baseline-port]] (the package) and [[2026-07-lepi-app-claude]]
+Companion to [[2026-07-24-src-lepinet-baseline-port]] (the package) and [[2026-07-20-lepi-app-claude]]
 (§7: bigger everything → distill into small students).
 
 ## The question
@@ -19,9 +19,9 @@ this run tests at once:
 
 1. **Does scale help accuracy?** A modern large ConvNet at higher resolution with a longer
    schedule and stronger regularisation should push species macro-F1 above 0.9148 — the tail
-   (53 % of species < 200 images, [[2026-07-does-longtail-help]]) is where a bigger model + richer
+   (53 % of species < 200 images, [[2026-07-17-does-longtail-help]]) is where a bigger model + richer
    aug + MixUp should pay.
-2. **Is it a good teacher?** The app needs a small model (≤ 8 MB, [[2026-07-lepi-app-claude]]).
+2. **Is it a good teacher?** The app needs a small model (≤ 8 MB, [[2026-07-20-lepi-app-claude]]).
    The plan is teacher → knowledge distillation → student. A stronger teacher raises the student's
    ceiling, so this run is step one of that pipeline, not just a bigger number.
 
@@ -96,7 +96,7 @@ epoch, not an epoch-0 caching artifact). Two separable things:
   L2-normalisation (a spatial reduction + broadcast) that is cheap in FLOPs but **memory-bandwidth-
   bound and often un-fused**, so on a compute-monster like B200 it costs disproportionate wall-time
   vs the convs; v1 (DINOv3) has no GRN. **(b) Data-loading throughput** — these runs skirt
-  I/O/CPU-decode-bound ([[2026-07-ucloud-throughput]]); the ConvNeXtV2-L run was the sole big reader
+  I/O/CPU-decode-bound ([[2026-07-18-ucloud-throughput]]); the ConvNeXtV2-L run was the sole big reader
   of `/work/global_lepi`, whereas the DINOv3 run is concurrent with the distill-from-cnx run reading
   the *same* images, so they **share a warm page cache** → faster streaming for both. Definitively
   separating (a) from (b) needs a GPU-util / `nsys` profile (SM-active % vs data-wait %) — worth one
@@ -106,7 +106,7 @@ epoch, not an epoch-0 caching artifact). Two separable things:
 
 ## Scaling rationale — why 6 epochs, moderate aug, and not "full blast" (2026-07-28)
 
-Recorded because the sequencing was deliberate, not timid (full argument in [[2026-07-landscape-and-plan]]):
+Recorded because the sequencing was deliberate, not timid (full argument in [[2026-07-28-landscape-and-plan]]):
 
 - **6 epochs** = a one-day wall-clock budget (~3 h/epoch), an explicit first guess. The result was
   **not under-annealed** (macro *and* micro rose, tail levels most), so it sufficed to answer "does
@@ -241,6 +241,6 @@ obvious next lever** if more is wanted, but the question as posed is answered: b
 the baseline.
 
 **As a teacher:** at 0.9316 it is meaningfully stronger than the effnetv2_s mock (0.911), so the
-next distillation round (T=1, [[2026-07-teacher-student-app-bridge]]) should lift the small student
+next distillation round (T=1, [[2026-07-25-teacher-student-app-bridge]]) should lift the small student
 above the 0.8786 it reached from the mock teacher — the headroom widened by ~2 pp. Swap it in as
 `distill_teacher` and rerun; nothing else changes.

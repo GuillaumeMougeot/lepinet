@@ -4,7 +4,7 @@
 # oversampling's 0.9096), while family F1 never recovered from an epoch-0 collapse (final
 # 0.7897 vs baseline's 0.9695) -- traced to a uniform tau=1.0 being applied across hierarchy
 # levels with very different class-imbalance severity (family's log-prior range is ~2x
-# species'). See journal/2026-07-does-longtail-help.md for the full investigation.
+# species'). See journal/2026-07-17-does-longtail-help.md for the full investigation.
 version: 1.0
 
 test:

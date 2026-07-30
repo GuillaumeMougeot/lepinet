@@ -1,6 +1,9 @@
-# The story & the research directions — what is the actual bottleneck?
+# DIRECTIONS — the story, and what the actual bottleneck is
 
-**Status:** strategic (2026-07-29), owner-driven. We set out to compare **heads** for hierarchical
+**Kind:** living · **Opened:** 2026-07-29 · **Companion:** [`PLAN.md`](PLAN.md) turns these
+directions into scheduled runs.
+
+Owner-driven. We set out to compare **heads** for hierarchical
 image classification. The results say that is *not* the interesting story. This entry records the
 reframe and the directions that follow, so the paper is written around the real finding.
 
@@ -14,7 +17,7 @@ reframe and the directions that follow, so the paper is written around the real 
    The independent head wins; conditioning/sequencing don't earn their complexity. **A "which head
    wins" paper has a null result.**
 2. **The coarse heads are redundant — marginalisation beats them.** From `dev/042`
-   ([[2026-07-lepi-app-compression]] §3): deriving genus/family by log-sum-exp over the *species*
+   ([[2026-07-20-lepi-app-compression]] §3): deriving genus/family by log-sum-exp over the *species*
    posterior beats separately-trained genus/family heads (+0.74 pp genus macro-F1, **+3.1 pp
    family**), and is *consistency-guaranteed* (no genus-argmax that contradicts the species-argmax's
    parent — 1.8 % of images otherwise). So the honest architecture is **one species head +

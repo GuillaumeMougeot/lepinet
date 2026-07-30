@@ -23,4 +23,4 @@ records, not tools.
 | [`bash/`](bash/) | 10 launchers — SLURM submissions for the GPU24 cluster. |
 
 Current work: [`../configs/`](../configs/), [`../bash/`](../bash/). The story of what replaced
-this: [`../journal/2026-07-why-was-fastai-behind-mini-trainer.md`](../journal/2026-07-why-was-fastai-behind-mini-trainer.md).
+this: [`../journal/2026-07-16-why-was-fastai-behind-mini-trainer.md`](../journal/2026-07-16-why-was-fastai-behind-mini-trainer.md).

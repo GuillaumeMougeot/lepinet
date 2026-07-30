@@ -46,4 +46,4 @@ Two gotchas that have bitten:
   directory drifted will fail with `can't open file '.../site-packages/dev/030_...py'`.
 - **`uv run` is broken in this repo** and **`uv sync` will destroy the venv** — use
   `.venv/bin/python` or `source .venv/bin/activate`. See
-  [`journal/2026-07-venv-uv-sync-incident.md`](../journal/2026-07-venv-uv-sync-incident.md).
+  [`journal/2026-07-16-venv-uv-sync-incident.md`](../journal/2026-07-16-venv-uv-sync-incident.md).

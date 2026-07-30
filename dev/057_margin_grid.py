@@ -2,7 +2,7 @@
 
 Replaces the range test in `dev/055`, which was invalid: a margin **mechanically** lowers the
 true-class logit, so cross-entropy rises with `m` regardless of model quality, and a ramp also
-entangles `m` with training progress (journal 2026-07-story-and-directions.md). The signal we want —
+entangles `m` with training progress (journal DIRECTIONS.md). The signal we want —
 open-set separation — only appears once training has *reshaped the embedding*, so the probe must
 include adaptation.
 

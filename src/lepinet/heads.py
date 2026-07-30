@@ -2,7 +2,7 @@
 
 This is the clean, ``mini_trainer``-free reimplementation of the **independent** head that won
 the project baseline (test species macro-F1 **0.9148**, run ``20260716-154156``; see
-``journal/2026-07-does-longtail-help.md``). Only the independent head is implemented here — the
+``journal/2026-07-17-does-longtail-help.md``). Only the independent head is implemented here — the
 hierarchical / conditional / autoregressive variants that lived in ``mini_trainer`` are
 deliberately dropped (autoregressive never won; the marginalization path lives in
 ``export.py``). New head types are added via :data:`HEAD_REGISTRY` without touching this module.
@@ -273,7 +273,7 @@ class PooledHead(nn.Module):
     ``hidden`` output can overflow fp16 → ``inf`` → ``normalize(inf) = NaN`` (the classic
     ArcFace/cosine-margin instability). Forcing the head to fp32 under autocast avoids it while
     the backbone keeps the AMP speedup. This is why bf16 is the package default and why fp16 is
-    still safe here (``journal/2026-07-autoregressive-fp16-instability.md``). Head-agnostic: it
+    still safe here (``journal/2026-07-18-autoregressive-fp16-instability.md``). Head-agnostic: it
     only pools and hands off, so any head in :data:`HEAD_REGISTRY` works behind it.
     """
 

@@ -10,7 +10,7 @@ outlier row forces a coarse scale on everything else.
 This script quantizes and then *measures*, at all three levels, both directly and through the
 marginal path proven in dev/042, against the same held-out fold. A size win that quietly costs
 species macro-F1 is not a win; the accuracy floor for the shipped app is 0.87 test species
-macro-F1 (journal/2026-07-lepi-app-claude.md, §7).
+macro-F1 (journal/2026-07-20-lepi-app-claude.md, §7).
 
 Two practical notes, both learned the hard way here:
 
@@ -122,7 +122,7 @@ def quantize_static_qdq(src, dst, calib_paths, img_size=256):
     Static (activation scales precomputed from a calibration set) + QDQ format produces
     QuantizeLinear/DequantizeLinear nodes around ordinary Conv/MatMul, all of which ONNX Runtime
     Web supports -- unlike the ConvInteger that dynamic quantization emits. Numerically this is
-    the same int8 weight compression measured in [[journal 2026-07-lepi-app-compression]]
+    the same int8 weight compression measured in [[journal 2026-07-20-lepi-app-compression]]
     (-0.59 pp species macro-F1); only the op encoding differs, which is what makes it run in the
     browser.
     """

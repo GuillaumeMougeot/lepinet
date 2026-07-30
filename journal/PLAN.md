@@ -1,6 +1,13 @@
-# The experiment plan — what to run next, and why
+# PLAN — where we are, and what runs next
 
-**Status:** living (2026-07-30). Written after the documentation pass exposed that the *recommended*
+**Kind:** living · **Last updated:** 2026-07-30 · **Supersedes:**
+[[2026-07-28-landscape-and-plan]]
+
+This is the one file in `journal/` that is meant to be true *today*. Everything else is a record of
+a moment. Keep the status board current; when a run lands, move its result into `RESULTS.md` and its
+reasoning into a dated entry.
+
+Written after the documentation pass exposed that the *recommended*
 architecture has never been trained. Compute is not the constraint; **experimental hygiene is** — the
 danger is accumulating results on inconsistent baselines, which is exactly what happened already.
 
@@ -14,7 +21,7 @@ Updated 2026-07-30. `→` = chained eval. Every finished run must land in `RESUL
 | A1 | effnetv2_s, single head + ArcFace × z-score | **running** → eval queued | — |
 | A2 | DINOv3-cnx-L, single head + ArcFace × z-score (final-model candidate) | **queued** → eval queued | — |
 | A3 | distil A2 → small single-head student | blocked on A2 | — |
-| B0 | more capacity / longer schedule | **running**: owner's 12-epoch DINOv3-cnx-L (job 12361261). Must be evaluated on **both** benchmarks — the question is whether a longer schedule moves the *shifted* score, which H4 says is where the headroom is. | — |
+| B0 | more capacity / longer schedule | **deferred, deliberately.** The owner's 12-epoch DINOv3-cnx-L (job 12361261) expired mid-run — no queue daemon was ticking, see [[2026-07-30-ucloud-queue-daemon]]. Not restarted as-is: it trained the *old multi-head* architecture, so its number would land on a superseded baseline. Re-ask as **12 epochs of A2's config** once A2 lands, which isolates schedule length as the single factor. | — |
 | B1 | domain-mimicking augmentation (`domain_aug: trap`) | **running** → eval queued | — |
 | B2 | background suppression (flatbug-style) | not started | — |
 | B3 | self-training on unlabelled OOD images | not started | — |
@@ -91,7 +98,7 @@ section needs revisiting.
 | **B2** | background suppression (flatbug-style) | Removes a whole nameable *category*, not one nuisance dimension. Also a user-facing knob. |
 | **B3** | self-training on unlabelled flemming images | First genuinely general rung; uses OOD images, **no OOD labels**. Needs the grouped split. |
 
-Protocol for all of B (from [[2026-07-domain-shift]]): grouped splits by capture event, validation on
+Protocol for all of B (from [[2026-07-30-domain-shift]]): grouped splits by capture event, validation on
 **held-out species**, and the in-dist/shifted/AUROC triple every time.
 
 ## Group C — finish the open-set story (paper-blocking)

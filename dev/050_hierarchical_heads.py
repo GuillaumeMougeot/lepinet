@@ -1,6 +1,6 @@
 """Reopen the head-comparison question on the clean package: hierarchical (+ autoregressive) heads.
 
-Continues [[2026-07-why-was-fastai-behind-mini-trainer]] — the independent cosine head won the old
+Continues [[2026-07-16-why-was-fastai-behind-mini-trainer]] — the independent cosine head won the old
 mini_trainer benchmark (0.9148). Here we reimplement the other heads **fastai-only, on top of the
 `lepinet` package** (importing it; all experiment code stays in `dev/`), register them into
 `lepinet.heads.HEAD_REGISTRY`, and re-run the independent-vs-hierarchical(-vs-autoregressive)
@@ -165,7 +165,7 @@ Next (this experiment):
      train.py and pass sparse_masks in head_kwargs when the head accepts it (independent ignores it).
   3. Benchmark configs on effnetv2_s (independent | hierarchical | autoregressive), same 0.9148
      recipe, on UCloud B200; report species/genus/family macro-F1. Update
-     journal/2026-07-why-was-fastai-behind-mini-trainer.md with the clean-stack conclusion.
+     journal/2026-07-16-why-was-fastai-behind-mini-trainer.md with the clean-stack conclusion.
 """
 
 if __name__ == "__main__":

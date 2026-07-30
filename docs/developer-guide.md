@@ -2,7 +2,7 @@
 
 This is the clean, `mini_trainer`-free reimplementation of the pipeline that grew up in `dev/`.
 The design intent, decisions, and reasoning live in
-[`journal/2026-07-src-lepinet-baseline-port.md`](https://github.com/GuillaumeMougeot/lepinet/blob/main/journal/2026-07-src-lepinet-baseline-port.md);
+[`journal/2026-07-24-src-lepinet-baseline-port.md`](https://github.com/GuillaumeMougeot/lepinet/blob/main/journal/2026-07-24-src-lepinet-baseline-port.md);
 this guide is the practical map for working in the package.
 
 ## The guarantee
@@ -134,23 +134,23 @@ These cost real time; each is guarded by a comment and usually a regression test
 Each is a scar from a `dev/` investigation; the journal has the full story.
 
 1. **bf16, not fp16, by default** — fp16 overflows the cosine head to NaN; the head is forced fp32
-   regardless. `[[2026-07-autoregressive-fp16-instability]]`
+   regardless. `[[2026-07-18-autoregressive-fp16-instability]]`
 2. **Under-annealing was the biggest optimisation lever** — `one_cycle` ≫ `flat_cos`.
-   **Oversampling was the biggest data lever** — +1.7pt. `[[2026-07-why-was-fastai-behind-mini-trainer]]`,
-   `[[2026-07-does-longtail-help]]`
+   **Oversampling was the biggest data lever** — +1.7pt. `[[2026-07-16-why-was-fastai-behind-mini-trainer]]`,
+   `[[2026-07-17-does-longtail-help]]`
 3. **Muon needs LR-only scheduling and an unfrozen model** (it re-partitions param groups).
 4. **The dataloader's memory is the image-decode pipeline (~1.2 GB/worker)**, guarded on cgroup
-   *anon*, not `memory.current`. `[[2026-07-ucloud-benchmark-oom]]`
+   *anon*, not `memory.current`. `[[2026-07-17-ucloud-benchmark-oom]]`
 5. **Derive the hierarchy from the training df, not a hierarchy.csv** — a stale file silently
    truncates the class set.
 6. **Class-distribution regularization and uniform-tau logit adjustment both lost** — rejected by
-   `TrainConfig`. `[[2026-07-does-longtail-help]]`
+   `TrainConfig`. `[[2026-07-17-does-longtail-help]]`
 
 ## Environment
 
 The venv is **reproducible from `pyproject.toml` + `uv.lock`** — `uv sync` now works (it used to
 break the hand-managed venv because the old pyproject didn't declare the full dependency set or the
-CUDA-13 torch index; `[[2026-07-venv-uv-sync-incident]]` is the historical context, now resolved):
+CUDA-13 torch index; `[[2026-07-16-venv-uv-sync-incident]]` is the historical context, now resolved):
 
 ```bash
 uv sync --all-extras                              # library + export + timm + dev tooling

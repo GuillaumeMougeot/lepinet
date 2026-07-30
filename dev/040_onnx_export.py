@@ -2,7 +2,7 @@
 
 The point of this script is *de-risking*, not compression. 165 MB is unshippable, but it is
 perfectly testable, and exporting it first answers the three questions that would force an
-app redesign if discovered late (see journal/2026-07-lepi-app-claude.md, Phase A):
+app redesign if discovered late (see journal/2026-07-20-lepi-app-claude.md, Phase A):
 
   1. Does the mini_trainer cosine head trace at all? It contains `acos`, a clamp, weight-norm
      caching and `_weight_bias` buffers -- none of it obviously ONNX-friendly until tried.

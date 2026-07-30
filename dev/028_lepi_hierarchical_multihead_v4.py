@@ -186,7 +186,7 @@ def make_dls(df, vocabs, img_dir, aug_img_size, img_size, batch_size, num_worker
     # read, so a worker walking the DataFrame (`df.iloc[i]` -> a Python-object Series, then
     # ColReader materialising Python str cells) dirties a shared COW page per row touched.
     # Host RAM then climbs ~1.1 GB per worker until the OOM killer strikes -- see
-    # dev/037_dl_memory_probe.py and journal/2026-07-ucloud-benchmark-oom.md. At 24 local
+    # dev/037_dl_memory_probe.py and journal/2026-07-17-ucloud-benchmark-oom.md. At 24 local
     # workers that is ~26 GB (invisible on 125 GB); at 256 cloud workers it is ~280 GB against
     # a 288 GB cap (fatal). The fix: the columns workers read (`image_path`, the label keys,
     # `is_valid`) become fixed-width numpy arrays -- one contiguous buffer each, so per-row

@@ -1,7 +1,7 @@
 # Closing the 23-point domain gap — is augmentation a fix or a treadmill?
 
-**Status:** OPEN (2026-07-30). Hypotheses before experiments. Feeds the same paper as
-[[2026-07-story-and-directions]] — a new *section*, not a new project: the flemming result showed
+**Kind:** research · **Status:** OPEN (2026-07-30). Hypotheses before experiments. Feeds the same paper as
+[[DIRECTIONS]] — a new *section*, not a new project: the flemming result showed
 novelty detection degrades under shift, so robustness sits **upstream** of the open-set contribution
 rather than beside it.
 

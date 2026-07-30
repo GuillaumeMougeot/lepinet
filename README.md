@@ -26,7 +26,7 @@ model able to flag species it was never trained on (open-set AUROC 0.601 → 0.9
 > code, results, and the reasoning behind them.
 
 📖 **Docs:** [user guide](docs/user-guide.md) · [developer guide](docs/developer-guide.md) ·
-[design journal](journal/2026-07-src-lepinet-baseline-port.md)
+[design journal](journal/2026-07-24-src-lepinet-baseline-port.md)
 
 ## Install
 
