@@ -107,7 +107,12 @@ class StreamingF1MultiHead(Metric):
         self.tp, self.fp, self.fn = {}, {}, {}
 
     def accumulate(self, learn):
-        for h, (p, y) in enumerate(zip(learn.pred, learn.y)):
+        # Normalise to per-level lists first: with a SINGLE level fastai hands over bare tensors,
+        # and zip() would then iterate the batch *rows* instead of the levels — silently producing
+        # a nonsense aggregate (measured 0.0075 instead of 0.91). Same trap as level_pred_targ.
+        preds = learn.pred if isinstance(learn.pred, (tuple, list)) else [learn.pred]
+        ys = learn.y if isinstance(learn.y, (tuple, list)) else [learn.y]
+        for h, (p, y) in enumerate(zip(preds, ys)):
             n_classes = p.shape[1]
             if h not in self.tp:
                 self.tp[h] = p.new_zeros(n_classes)

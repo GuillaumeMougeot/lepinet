@@ -103,3 +103,19 @@ def test_dl_num_workers_reads_real_count_not_fastai_dummy():
     assert _DL().num_workers == 1          # the trap
     assert dl_num_workers(_DL()) == 12     # the fix
     assert dl_num_workers(object(), default=3) == 3
+
+
+def test_streaming_f1_multihead_handles_single_level():
+    """Regression: with one level fastai passes bare tensors; zip() would iterate batch rows."""
+    import torch
+
+    from lepinet.metrics import StreamingF1MultiHead
+
+    class _Learn:
+        pred = torch.randn(8, 5)          # bare tensor, not a list
+        y = torch.randint(0, 5, (8,))
+
+    m = StreamingF1MultiHead(average="macro", name="F1(macro)")
+    m.reset()
+    m.accumulate(_Learn())
+    assert len(m.tp) == 1 and int(m.tp[0].sum() + m.fn[0].sum()) == 8   # 8 samples, ONE level

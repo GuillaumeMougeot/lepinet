@@ -125,3 +125,38 @@ domain shift) is the harder, more realistic case and still to run.
 of the open-set half of the story**. Next levers: energy / max-cosine variants of the score, the
 margin as a hyperparameter (0.3 was a first guess), per-rank abstention (fall back to genus/family
 when the species score is low), and the same measurement under domain shift.
+
+## Two results that matter (val, 2026-07-30)
+
+Both trainings finished; the fold-0 test evals are queued behind them. Val species macro-F1:
+
+| run | val f1_species | vs its reference |
+|---|---|---|
+| multi-head independent (reference) | 0.9096 | — |
+| **single species head (flat)** | **0.9129** | **+0.33 pp** |
+| plain arcface (`s·cos`, m=0.3) | 0.8781 | −3.15 pp |
+| **arcface × z-score** (`z(cos(θ+m))`, m=0.3) | **0.9065** | **+2.84 pp over plain arcface** |
+
+**1. The multi-head is redundant — confirmed on the training side too.** A model trained with *only*
+a species head matches (slightly beats) the three-head model on species. Combined with `dev/042`
+(marginalising genus/family from the species posterior *beats* the trained coarse heads: +0.7 pp
+genus, +3.1 pp family, and consistency-guaranteed), the conclusion is now end-to-end: **the extra
+heads help neither the backbone during training nor the predictions at inference.** The honest
+architecture is **one species head + marginalise up**. That is a clean, publishable negative result
+and it simplifies the shipped model (fewer parameters, no possibility of contradictory levels).
+
+**2. The z-score composition works.** Plain ArcFace cost 3.15 pp of in-distribution accuracy;
+composing the margin with `cosine_to_zscore` recovers almost all of it (0.9065 vs the 0.9096
+reference, −0.31 pp) — i.e. the two mechanisms were **fighting**, not trading off. The margin's
+open-set geometry appears to be nearly free once the logits keep their calibrated, dimension-aware
+scale. The decisive number is the **OOD AUROC** on the same benchmark: if it holds near 0.73 while
+in-distribution F1 returns to ~0.91, the accuracy-vs-open-set trade-off largely dissolves and this
+becomes the default head. That eval is next.
+
+**A second N=1 metric bug, same root cause as the first.** `StreamingF1MultiHead` did
+`zip(learn.pred, learn.y)`; with a single level fastai passes bare tensors, so `zip` iterated the
+batch *rows* instead of the levels and reported `F1(macro) 0.0075` — which looked like a
+catastrophically broken run until the per-level column (`f1_speciesKey 0.9129`, computed through the
+already-fixed `level_pred_targ`) showed otherwise. Fixed and regression-tested. Lesson: when a
+framework overloads a container for N=1, *every* consumer needs normalising — fixing one call site
+is not enough.
