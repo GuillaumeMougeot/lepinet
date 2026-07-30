@@ -1,5 +1,10 @@
 # Dev guide
 
+> These are the owner's standing rules, in the owner's words, and they are authoritative.
+> [`CLAUDE.md`](CLAUDE.md) expands them into a full operating manual for an AI agent (invariants,
+> project culture, the documentation contract); [`START-HERE.md`](START-HERE.md) is the guided map
+> for a human newcomer. This file stays short on purpose — see rule 1.
+
 0. take note of all README in each subfolders to understand the projects and how to code within it.
 1. journal everything. Use journal folder to write markdown report about your experiments. Use README files in subfolders journal and dev to register what files in the subfolder are. Use RESULTS.md to report what the trained model folders are. Always consider that you will handout your work to someone else. Take the freedom to write additional documents if needed. Structural doc (README.md, DEV.md, HANDOUT.md etc.) must stay succint while journal or sub-doc can be more verbose.
 2. use uv and local venv. (currently broken when uv sync and one day this must be fixed)

@@ -15,6 +15,9 @@ jobs:
           python-version: "3.12"
       - run: pip install ruff
       - run: ruff check src/lepinet tests
+      # Documentation is load-bearing here (see CLAUDE.md): a broken link or a stale status
+      # board fails the build like a broken import. Pure stdlib, so it runs in the lint job.
+      - run: python dev/060_doc_health.py
 
   test:
     runs-on: ubuntu-latest

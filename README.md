@@ -25,7 +25,7 @@ model able to flag species it was never trained on (open-set AUROC 0.601 → 0.9
 > **New to this repository?** [`START-HERE.md`](START-HERE.md) is a guided map of everything —
 > code, results, and the reasoning behind them.
 
-📖 **Docs:** [user guide](docs/user-guide.md) · [developer guide](docs/developer-guide.md) ·
+**Docs:** [user guide](docs/user-guide.md) · [developer guide](docs/developer-guide.md) ·
 [design journal](journal/2026-07-24-src-lepinet-baseline-port.md)
 
 ## Install

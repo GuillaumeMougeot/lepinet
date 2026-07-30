@@ -121,3 +121,5 @@ package instead of the old 028/030/034 chain.
 | `050_hierarchical_heads.py` | **HierarchicalHead** (parent-conditioned cosine), clean reimpl; registers into `HEAD_REGISTRY` |
 | `051_benchmark_run.py` | runner that registers the dev heads then dispatches to `lepinet train/test` |
 | `052_ood_score.py` | open-set scoring: max-logit → AUROC(known vs novel species) |
+| `053`–`059` | embedding geometry, open-set visualisation, margin probes, rank abstention, hierarchical OOD — see each file's docstring |
+| `060_doc_health.py` | **not an experiment.** Checks the documentation for drift (journal naming, `Kind`/`Status`, index completeness, broken links, stale `PLAN.md`). Run before committing docs; CI runs it too. See [`../CLAUDE.md`](../CLAUDE.md). |

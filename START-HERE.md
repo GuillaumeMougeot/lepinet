@@ -108,6 +108,8 @@ smaller.
 
 ```
 START-HERE.md          <- you are here: the map
+├── CLAUDE.md          <- the operating manual for an AI agent: invariants, culture, the
+│                         documentation contract. Auto-loaded; humans may read it too.
 ├── README.md          <- the problem + the method (start reading here)
 ├── docs/              <- how to USE it, how to CHANGE it, and WHY it is this way
 │   ├── user-guide.md       <- install + the CLI

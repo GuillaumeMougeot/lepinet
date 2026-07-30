@@ -27,9 +27,16 @@ ucloud q logs lepi-smoke # setup + training output, readable while it runs
 ucloud q ls
 ```
 
-The daemon is optional. Batch jobs self-terminate when the run exits (UCloud enforces
-that, not the daemon), so stopping it never leaks a running GPU — you only lose
-auto-extend and the launching of queued jobs.
+**The daemon is not optional if you use `auto_extend` or `--after`.** `ucloud q` is a state file,
+not a service: it only advances inside a *tick*. With nothing ticking, `auto_extend` is inert (jobs
+expire at their `time_allocation` regardless of what the TOML says) and `--after` jobs stay QUEUED
+forever even after their dependency finishes. Worse, `ucloud q ls` still looks healthy, because it
+prints the last *recorded* states. This cost a 12-epoch run on 2026-07-30; see
+[[2026-07-30-ucloud-queue-daemon]].
+
+Run `ucloud q daemon` in tmux on an always-on box, or `ucloud q tick` from cron. What *is* safe is
+stopping it: batch jobs self-terminate when the run exits (UCloud enforces that, not the daemon), so
+stopping it never leaks a running GPU — you only stop making progress.
 
 ## Mounts
 
