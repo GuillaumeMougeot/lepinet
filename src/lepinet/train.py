@@ -38,8 +38,11 @@ def train(cfg: TrainConfig):
     sample_wgts = data_mod.sample_weights(df, level=levels[0], power=cfg.oversample_power, levels=levels)
     if sample_wgts is not None:
         print(f"Rare-class oversampling ON (power={cfg.oversample_power}, level={levels[0]}).")
+    if cfg.domain_aug:
+        print(f"Domain-mimicking augmentation ON (preset={cfg.domain_aug!r}).")
     dls = data_mod.make_dls(df, vocabs, cfg.img_dir, cfg.aug_img_size, cfg.img_size, cfg.batch_size,
-                            cfg.num_workers, aug_kwargs=cfg.aug_kwargs, sample_wgts=sample_wgts, levels=levels)
+                            cfg.num_workers, aug_kwargs=cfg.aug_kwargs, sample_wgts=sample_wgts, levels=levels,
+                            domain_aug=cfg.domain_aug)
 
     # --- model ---
     arch = resolve_arch(cfg.model_arch_name)

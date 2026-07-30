@@ -119,3 +119,31 @@ def test_streaming_f1_multihead_handles_single_level():
     m.reset()
     m.accumulate(_Learn())
     assert len(m.tp) == 1 and int(m.tp[0].sum() + m.fn[0].sum()) == 8   # 8 samples, ONE level
+
+
+def test_domain_aug_is_off_by_default_and_train_only():
+    """The opt-in domain augmentation must not perturb the existing recipe.
+
+    Every published number was produced without it, so `domain_aug=None` has to yield an empty
+    transform list, and when enabled the transforms must apply to training only — otherwise the
+    validation distribution shifts and the metric stops comparing to earlier runs.
+    """
+    import torch
+    from fastai.vision.all import TensorImage
+
+    from lepinet.augment import DOMAIN_AUG_REGISTRY, build_domain_aug
+
+    assert build_domain_aug(None) == []
+    assert build_domain_aug("") == []
+
+    x = TensorImage(torch.rand(2, 3, 16, 16))
+    for name in DOMAIN_AUG_REGISTRY:
+        for t in build_domain_aug(name):
+            assert t.split_idx == 0, f"{type(t).__name__} must be train-only"
+            assert torch.equal(t(x, split_idx=1), x)          # validation untouched
+            y = t(x, split_idx=0)
+            assert y.shape == x.shape and torch.isfinite(y).all()
+
+    import pytest
+    with pytest.raises(ValueError):
+        build_domain_aug("no-such-preset")

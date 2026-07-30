@@ -15,12 +15,12 @@ Updated 2026-07-30. `→` = chained eval. Every finished run must land in `RESUL
 | A2 | DINOv3-cnx-L, single head + ArcFace × z-score (final-model candidate) | **queued** → eval queued | — |
 | A3 | distil A2 → small single-head student | blocked on A2 | — |
 | B0 | more capacity / longer schedule | **running**: owner's 12-epoch DINOv3-cnx-L (job 12361261). Must be evaluated on **both** benchmarks — the question is whether a longer schedule moves the *shifted* score, which H4 says is where the headroom is. | — |
-| B1 | domain-mimicking augmentation | not started | — |
+| B1 | domain-mimicking augmentation (`domain_aug: trap`) | **running** → eval queued | — |
 | B2 | background suppression (flatbug-style) | not started | — |
 | B3 | self-training on unlabelled OOD images | not started | — |
 | C1 | rank-abstention curves (no GPU) | **DONE** | 99.18% answered at 95.04% precision; **coarse ranks must be calibrated conditionally** — genus is 0.487 on the hard subset vs 0.970 overall |
 | C2 | OOD AUROC for A1/A2 | blocked on A | — |
-| C3 | larger novel set under shift | not started | — |
+| C3 | hierarchical OOD (near/mid/far), unfiltered parquet | **running** (both heads) | — |
 | D1 | calibration + thresholds + names in `lepinet bundle` | not started | — |
 | D2 | distil into fastvit_sa12 instead of b0 | not started | — |
 | — | marginal supervision (owner's true hierarchical idea) | **running** → eval queued | — |

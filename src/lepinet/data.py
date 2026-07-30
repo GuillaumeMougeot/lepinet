@@ -153,7 +153,8 @@ def sample_weights(df, level=None, power=0.5, levels=DEFAULT_LEVELS):
 # ---------------------------------------------------------------------------
 
 def make_dls(df, vocabs, img_dir, aug_img_size, img_size, batch_size, num_workers=None,
-             aug_kwargs=None, sample_wgts=None, lowmem=True, levels=DEFAULT_LEVELS):
+             aug_kwargs=None, sample_wgts=None, lowmem=True, levels=DEFAULT_LEVELS,
+             domain_aug=None):
     """Build fastai ``DataLoaders`` from the prepared df.
 
     ``aug_kwargs`` overrides fastai's ``aug_transforms`` defaults (the baseline uses light aug:
@@ -176,7 +177,13 @@ def make_dls(df, vocabs, img_dir, aug_img_size, img_size, batch_size, num_worker
     ensure_fork_start_method()
     aug_kwargs = aug_kwargs or {}
     # efficientnet/timm nets aren't in fastai's model_meta, so add ImageNet normalization here.
-    batch_tfms = [*aug_transforms(size=img_size, **aug_kwargs), Normalize.from_stats(*imagenet_stats)]
+    # domain_aug (default None) appends OPT-IN domain-mimicking transforms after the standard
+    # pipeline and before normalization; with it unset the list is byte-identical to every previous
+    # run, so published numbers stay reproducible (lepinet.augment).
+    from .augment import build_domain_aug
+
+    batch_tfms = [*aug_transforms(size=img_size, **aug_kwargs), *build_domain_aug(domain_aug),
+                  Normalize.from_stats(*imagenet_stats)]
 
     if lowmem:
         dblock = _lowmem_datablock(df, vocabs, img_dir, aug_img_size, batch_tfms, levels)

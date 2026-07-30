@@ -78,6 +78,7 @@ class TrainConfig:
 
     # --- augmentation ---
     aug_kwargs: dict | None = None
+    domain_aug: str | None = None    # opt-in domain-mimicking preset ('trap'/'blur'/...); None = off
     mixup: float = 0.0               # fastai MixUp alpha (0 = off); mixes images + labels
     cutmix: float = 0.0              # fastai CutMix alpha (0 = off); patch-mixes images + labels
 

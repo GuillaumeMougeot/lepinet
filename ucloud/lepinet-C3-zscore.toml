@@ -1,0 +1,26 @@
+# C3: hierarchical OOD — AUROC stratified by taxonomic distance (near/mid/far), on the UNFILTERED
+# parquet so the novel set is 64,504 images / 38,907 unseen species instead of 3,171.
+name = "lepinet-C3-zscore"
+replicas = 1
+[application]
+name = "pytorch-te"
+version = "26.05"
+[product]
+id = "gpu-nvidia-b200-1-gpu"
+category = "gpu-nvidia-b200"
+provider = "ucloud"
+[time_allocation]
+hours = 4
+[sync]
+local = ".."
+remote = "/12347837/repos/lepinet"
+[setup]
+script = "setup-lepinet.sh"
+run = "python dev/059_hierarchical_ood.py --model '/work/lepinet/data/ucloud_models/*-lepinet-arcface-zscore-effnetv2s-ucloud/*.pt' --parquet /work/global_lepi/0032836-250426092105405_processing_metadata_postprocessed.parquet --img-dir /work/global_lepi/images --out /work/lepinet/data/ucloud_preds/ood-strat-zscore.json --per-stratum 8000 --num-workers 32"
+[schedule]
+auto_extend = "1h"
+max_time = "8h"
+[[resources]]
+type = "file"
+path = "/12347837/datasets/global_lepi"
+read_only = true
