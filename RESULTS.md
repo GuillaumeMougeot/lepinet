@@ -125,6 +125,22 @@ accuracy-vs-open-set trade-off is an artefact of dropping the calibrated transfo
 Silhouette barely moves — *separability was never the problem*; what changes is the **absolute**
 angular position, which is exactly what an open-set score reads (and what a 2-D projection discards).
 
+### Backbone choice under domain shift (H4)
+
+Every backbone comparison in this project used the in-distribution benchmark. Ranking them on the
+**shifted** set instead (flemming names, same 47,905 images):
+
+| backbone | in-distribution | flemming (shifted) | gap |
+|---|---|---|---|
+| effnetv2_s (20 M) | 0.9110 | 0.6503 | 26.1 pt |
+| ConvNeXtV2-L (198 M) | **0.9316** | **0.7122** | 21.9 pt |
+| DINOv3-ConvNeXt-L (198 M) | 0.9311 | 0.7098 | 22.1 pt |
+| **spread** | **2.1 pt** | **6.2 pt** | **3.0×** |
+
+**The in-distribution benchmark understates backbone choice by 3×.** The mechanism is *scale*, not
+self-supervision: the two 198 M models are indistinguishable under shift despite entirely different
+pretraining. Policy from here: every model comparison reports the shifted score too (a 12-minute eval).
+
 ### Throughput
 
 | what | measurement |
