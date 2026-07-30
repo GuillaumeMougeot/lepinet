@@ -104,11 +104,18 @@ def main(a):
     df = pd.concat(parts).reset_index(drop=True)
     df["is_valid"] = np.arange(len(df)) % 5 == 0
 
-    dls = make_dls(df[["image_path", "is_valid", *LEVELS]], vocabs, a.img_dir,
+    # The loader's CategoryBlock can only encode labels present in the training vocabulary — and
+    # novel taxa are, by definition, absent ("Label '1861242' was not included in the training
+    # dataset"). Scoring never reads y (the novelty score is max cos over prototypes), so feed the
+    # loader an in-vocab placeholder and keep the true stratum in `_strat`.
+    loader_df = df[["image_path", "is_valid", *LEVELS]].copy()
+    for lv in LEVELS:
+        loader_df[lv] = str(vocabs[lv][0])
+    dls = make_dls(loader_df, vocabs, a.img_dir,
                    int(a.img_size * 460 / 256), a.img_size, 128, a.num_workers,
                    lowmem=False, levels=LEVELS)
     model, _ = load_model(ckpt, img_size=a.img_size)
-    score = max_cosine(model, dls, df, torch.device("cuda" if torch.cuda.is_available() else "cpu"),
+    score = max_cosine(model, dls, loader_df, torch.device("cuda" if torch.cuda.is_available() else "cpu"),
                        a.num_workers)
 
     strat = df["_strat"].to_numpy()
