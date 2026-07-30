@@ -84,7 +84,8 @@ in parentheses. Native metric ≡ `mini_metrics` at threshold 0 (verified bit-ex
 | `20260728-184310` | effnetv2_s, **arcface** head (s=30, m=0.3 species-only) | 0.8784 (0.9092) | 0.9465 | 0.9639 | −3.3 pp in-distribution, but **OOD AUROC 0.732 vs 0.601** (see below) | ucloud |
 | `20260729-182718` | effnetv2_s, **single species head** + marginalisation | **0.9135** (0.9344) | **0.9606** | **0.9739** | **beats the multi-head at every level** — coarse heads are not just redundant, they are worse | ucloud |
 | `20260729-183815` | effnetv2_s, **arcface × z-score** (m=0.3) | **0.9069** (0.9316) | 0.9572 | 0.9699 | recovers +2.9 pp over plain arcface **and** lifts OOD AUROC to 0.9115 (see below) | ucloud |
-| `20260729-115003/115103` | convnext_large.dinov3 @320, **12 ep** | _running_ | — | — | owner's "6 ep was budget, not principle" | ucloud |
+| `20260730-074913` | effnetv2_s, single head + **marginal supervision during training** | **0.9135** (0.9339) | **0.9633** | **0.9778** | species identical to inference-only marginalisation; **coarse levels +0.27/+0.39 pp for free** (no coarse parameters) | ucloud |
+| `20260729-115003/115103` | convnext_large.dinov3 @320, **12 ep** | _expired_ | — | — | job died when no queue daemon was ticking; **not restarted** — trained the superseded multi-head architecture, see `journal/2026-07-30-ucloud-queue-daemon.md` | — |
 
 Smoke runs (family 9717, 1 epoch — path validation only, not comparable): `lepinet-smoke-9717`,
 `convnextv2l-smoke` ×2, `arcface-smoke` ×2, `dinov3-vitb-smoke`. Deleted from UCloud.

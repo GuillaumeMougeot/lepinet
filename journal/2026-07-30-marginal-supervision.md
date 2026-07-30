@@ -1,6 +1,9 @@
 # Does marginal supervision during *training* help? (the hierarchical head, done right)
 
-**Kind:** research · **Status:** OPEN — hypotheses written before the run, per the journal convention. 2026-07-30.
+**Kind:** research · **Status:** **RESOLVED (2026-07-30).** H2 confirmed at species level — marginal
+supervision changes species macro-F1 by **exactly nothing** (0.9135 → 0.9135). But it was *not*
+inert: genus **+0.27 pp** and family **+0.39 pp**, which no hypothesis predicted. The architecture
+claim survives intact and gains a footnote.
 
 ## The correction that prompted this
 
@@ -67,6 +70,62 @@ taxonomy, the other the geometry of the embedding).
 the architecture claim becomes "one head, marginalise at inference, nothing else". Below 0.90 ⇒ H3,
 and `level_weights` (e.g. `[1, 0.3, 0.1]`) is the follow-up before abandoning it.
 
-## Result
+## Result (`20260730-074913`, test fold, 629,742 images, 12,041 species)
 
-_(pending)_
+| effnetv2_s, identical recipe | species | (micro) | genus | family |
+|---|---|---|---|---|
+| single head + marginals, **inference only** (`20260729-182718`) | 0.9135 | 0.9344 | 0.9606 | 0.9739 |
+| single head + marginals, **supervised during training** | 0.9135 | 0.9339 | **0.9633** | **0.9778** |
+| Δ | **0.0000** | −0.0005 | **+0.0027** | **+0.0039** |
+
+### Scoring the prediction
+
+The committed prediction was "**≈0 to +0.3 pp species macro-F1**, tail helped more than micro",
+60 % on indistinguishable, 25 % on a small tail win, 15 % on a loss via H3.
+
+**Species landed on the falsification criterion exactly** — not within ±0.1 pp of 0.9135, but
+*identical to four decimals*. So the 60 % branch was right and **H2 is confirmed**: the marginal
+loss adds no information to the species decision, because it is a deterministic function of a
+posterior that species CE is already optimising. H3 (the "cheap win" local optimum) did not
+materialise — micro-accuracy moved −0.05 pp, which is noise, not a trade.
+
+**What the prediction missed: the coarse levels improved.** Nothing in H1–H3 anticipated genus and
+family moving while species stood still, and the prediction only reasoned about species. That is the
+part worth understanding rather than filing away.
+
+### Why coarse can improve when species does not
+
+The marginal is a deterministic function of the species posterior, but **genus macro-F1 is not a
+deterministic function of the species *argmax***. It depends on the argmax of the *summed* posterior.
+So the coarse losses can only redistribute mass **among siblings within a genus** — which leaves the
+species prediction untouched for the overwhelming majority of images, while flipping the genus call
+on borderline cases where mass was previously split across two genera.
+
+That is exactly a **calibration** effect, not a discrimination one: the model was already ranking the
+right species first, but its posterior was diffuse enough that summing it sometimes elected the wrong
+parent. Supervising the sum fixes the sum. It is consistent with the existing finding that this model
+is *under*confident ([[2026-07-20-lepi-app-compression]]).
+
+### What this changes
+
+**Not the architecture claim.** "One species head, marginalise for coarse levels" stands, and its
+justification is unchanged: the coarse *parameters* are what hurt, not the coarse *supervision*.
+
+**A footnote worth having**, because the two knobs are now separable and their effects are disjoint:
+
+| | species | genus / family |
+|---|---|---|
+| marginalise at inference | the win vs multi-head | the win vs multi-head |
+| additionally supervise the marginals | nothing | a further +0.27 / +0.39 pp |
+
+So marginal supervision is **free coarse accuracy** — no parameters, no species cost, ~0 compute.
+Worth enabling by default *if* the coarse ranks matter, which for this project they do: rank
+abstention (C1) backs off to genus and family precisely when species is uncertain, and its weakest
+link was the conditional genus precision of 0.487 on the hard subset. Whether this improvement
+survives *there* — on the hard subset rather than in aggregate — is the follow-up that matters, and
+it is a re-run of `dev/058` on these predictions, not a new training run.
+
+**Do not stack it with `level_weights` tuning yet.** The effect is small enough (+0.3 pp) that a
+hyperparameter search over level weights would be fitting noise without a repeat run to establish the
+seed-to-seed spread — a spread this project has never measured, and which now bounds the
+interpretation of every sub-half-point result in `RESULTS.md`.

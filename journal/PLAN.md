@@ -30,7 +30,7 @@ Updated 2026-07-30. `→` = chained eval. Every finished run must land in `RESUL
 | C3 | hierarchical OOD (near/mid/far), unfiltered parquet | **DONE** | Monotone in taxonomic distance for both heads. ArcFace×z-score: near 0.849 / mid 0.909 / far 0.941; plain 0.561 / 0.618 / 0.666. The hard, common case (`near`) is where the plain head is ~chance. |
 | D1 | calibration + thresholds + names in `lepinet bundle` | not started | — |
 | D2 | distil into fastvit_sa12 instead of b0 | not started | — |
-| — | marginal supervision (owner's true hierarchical idea) | **running** → eval queued | — |
+| — | marginal supervision (owner's true hierarchical idea) | **DONE** | Species **unchanged** (0.9135 → 0.9135, H2 confirmed), but genus **+0.27** / family **+0.39** pp — free coarse accuracy, no parameters. Follow-up is `dev/058` on these predictions: does it help the *hard* subset, where conditional genus precision was 0.487? |
 
 Done and folded in: H4 (backbone × shift, 3.0× spread), margin tuning (abandoned, two principled
 failures), flemming OOD under shift (0.727 vs 0.574).
