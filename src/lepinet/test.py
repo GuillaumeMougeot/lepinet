@@ -77,6 +77,48 @@ def resolve_checkpoint_path(model_path: str | Path) -> Path:
 # Inference
 # ---------------------------------------------------------------------------
 
+def taxonomy_from_df(df, species_vocab, levels):
+    """Coarse vocabs + parent-index arrays derived from an evaluation dataframe.
+
+    A **species-only** model carries no genus/family vocabulary, so the taxonomy has to come from
+    the data. Returns ``(vocabs, parents)`` where ``vocabs`` covers every level and ``parents[i]``
+    maps each class index at level ``i`` to its parent index at level ``i+1`` — exactly what
+    :func:`marginalize` consumes.
+    """
+    pairs = df[list(levels)].astype(str).drop_duplicates()
+    child_of = {lv: {} for lv in levels}
+    for row in pairs.itertuples(index=False):
+        vals = [str(v) for v in row]
+        for lv, v in zip(levels, vals):
+            child_of[lv][v] = vals
+
+    vocabs = {levels[0]: [str(v) for v in species_vocab]}
+    for i, lv in enumerate(levels[1:], start=1):
+        seen = {}
+        for sp in vocabs[levels[0]]:
+            row = child_of[levels[0]].get(sp)
+            if row is not None:
+                seen.setdefault(row[i], None)
+        vocabs[lv] = sorted(seen)
+
+    parents = []
+    for i in range(len(levels) - 1):
+        idx_parent = {v: j for j, v in enumerate(vocabs[levels[i + 1]])}
+        arr = np.zeros(len(vocabs[levels[i]]), dtype=np.int64)
+        for j, child in enumerate(vocabs[levels[i]]):
+            row = child_of[levels[0]].get(child) if i == 0 else None
+            if i == 0 and row is not None:
+                arr[j] = idx_parent.get(row[1], 0)
+            elif i > 0:
+                # child is a level-i class; find any species under it to read its level-(i+1) parent
+                for _sp, vals in child_of[levels[0]].items():
+                    if vals[i] == child:
+                        arr[j] = idx_parent.get(vals[i + 1], 0)
+                        break
+        parents.append(torch.as_tensor(arr))
+    return vocabs, parents
+
+
 def dl_num_workers(dl, default: int = 0) -> int:
     """The *real* worker count of a fastai ``DataLoader``.
 
@@ -122,7 +164,7 @@ def _paths_exist(root: Path, rel_paths) -> pd.Series:
 
 @torch.no_grad()
 def predict_df(model, dls, test_df, vocabs, levels, device, tta: bool = False,
-               num_workers: int | None = None):
+               num_workers: int | None = None, parents=None):
     """Stream the model over ``test_df`` → per-level top-1 label + softmax confidence arrays.
 
     Reduces to top-1 per batch (not accumulating full logits): at global scale the species logit
@@ -143,8 +185,22 @@ def predict_df(model, dls, test_df, vocabs, levels, device, tta: bool = False,
         probs_sum = None
         for v in views:
             out = model(v)
-            p = [torch.softmax(out[i].float(), dim=1) for i in range(len(levels))]
-            probs_sum = p if probs_sum is None else [probs_sum[i] + p[i] for i in range(len(levels))]
+            # Average over the model's OWN heads only — when marginalising there are fewer heads
+            # (often just species) than the levels being scored.
+            p = [torch.softmax(o.float(), dim=1) for o in out]
+            probs_sum = p if probs_sum is None else [a + b for a, b in zip(probs_sum, p)]
+        if parents is not None:
+            # Marginalisation: derive every coarser level from the SPECIES posterior by summing
+            # child probabilities (log-sum-exp up the tree). Measured to beat separately-trained
+            # coarse heads (dev/042) and consistency-guaranteed: a genus can never contradict the
+            # species argmax's parent. Required for a species-only model, optional otherwise.
+            from .export import scatter_logsumexp
+            log_sp = torch.log(probs_sum[0] / len(views) + 1e-12)
+            derived, cur = [log_sp], log_sp
+            for lv, par in enumerate(parents):
+                cur = scatter_logsumexp(cur, par.to(cur.device), len(vocabs[levels[lv + 1]]))
+                derived.append(cur)
+            probs_sum, views = [d.exp() for d in derived], [None]
         for i in range(len(levels)):
             probs = probs_sum[i] / len(views)
             conf, idx = probs.max(dim=1)
@@ -255,6 +311,8 @@ def evaluate(
     tta: bool = False,
     skip_missing: bool = True,
     limit: int | None = None,
+    marginal: bool = False,
+    eval_levels: list | None = None,
 ) -> Path:
     """Evaluate a checkpoint on a held-out fold; write predictions + native metric report.
 
@@ -275,9 +333,14 @@ def evaluate(
     model_path = resolve_checkpoint_path(model_path)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     checkpoint = torch.load(model_path, map_location="cpu", weights_only=False)
-    levels = checkpoint.get("levels", DEFAULT_LEVELS)
+    model_levels = checkpoint.get("levels", DEFAULT_LEVELS)
+    levels = list(eval_levels) if eval_levels else list(model_levels)
     vocabs = checkpoint["vocabs"]
     model_name = model_path.stem
+    # Marginalisation is REQUIRED when the model has fewer heads than the levels being scored (a
+    # species-only model), and OPTIONAL otherwise (to compare marginals against trained coarse heads).
+    if len(levels) > len(model_levels):
+        marginal = True
 
     # --- build test df (held-out fold) ---
     df = pd.read_parquet(parquet_path)
@@ -323,6 +386,11 @@ def evaluate(
     print(f"Test images: {len(test_df)} | {levels[0]} present: {test_df[levels[0]].nunique()}")
 
     # lowmem=False: test_dl feeds a DataFrame, incompatible with the numpy-indexed lowmem getters.
+    parents = None
+    if marginal:
+        vocabs, parents = taxonomy_from_df(df, vocabs[model_levels[0]], levels)
+        print(f"Marginalising {levels[0]} -> {levels[1:]} "
+              f"({[len(vocabs[lv]) for lv in levels]} classes per level).")
     dls = make_dls(test_df, vocabs, img_dir, aug_img_size, img_size, batch_size, num_workers,
                    lowmem=False, levels=levels)
     model, _meta = load_model(checkpoint, img_size=img_size)
@@ -331,7 +399,7 @@ def evaluate(
     print(f"Running inference{' with TTA (4-flip)' if tta else ''}...")
     _t0 = _time.perf_counter()
     preds, confs = predict_df(model, dls, test_df, vocabs, levels, device, tta=tta,
-                              num_workers=num_workers)
+                              num_workers=num_workers, parents=parents)
     _dt = _time.perf_counter() - _t0
     print(f"Inference: {len(test_df)} images in {_dt:.1f}s = {len(test_df)/max(_dt,1e-9):.1f} img/s")
     labels = test_df[levels].to_numpy().astype(str)
@@ -339,7 +407,11 @@ def evaluate(
 
     out_base = Path(out_dir) / model_name / eval_name
     out_base.mkdir(parents=True, exist_ok=True)
-    pd.DataFrame(checkpoint["hierarchy"])[levels].astype(str).to_csv(out_base / "combinations.csv", index=False)
+    hier = pd.DataFrame(checkpoint["hierarchy"])
+    if all(lv in hier.columns for lv in levels):
+        hier[levels].astype(str).to_csv(out_base / "combinations.csv", index=False)
+    else:  # species-only checkpoint: the taxonomy came from the eval data
+        df[levels].astype(str).drop_duplicates().to_csv(out_base / "combinations.csv", index=False)
     save_predictions_csv(out_base / "predictions.csv", filenames, preds, confs, labels, vocabs, levels)
 
     report = metric_report(preds, labels, vocabs, levels)

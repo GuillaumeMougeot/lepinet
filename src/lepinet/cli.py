@@ -85,6 +85,8 @@ def test(
     tta: bool = typer.Option(False, help="Test-time augmentation (4-flip average); ~4x slower."),
     skip_missing: bool = typer.Option(True, help="Skip catalogued images absent from disk (incomplete mirrors)."),
     limit: int | None = typer.Option(None, help="Evaluate only N random images (throughput probe / smoke)."),
+    marginal: bool = typer.Option(False, help="Derive coarser levels from the species posterior (log-sum-exp up the taxonomy)."),
+    eval_levels: str | None = typer.Option(None, help="Comma-separated levels to score, e.g. 'speciesKey,genusKey,familyKey'."),
 ):
     """Evaluate a checkpoint on a held-out fold (native metrics + mini_metrics-format predictions)."""
     from .test import evaluate
@@ -92,7 +94,8 @@ def test(
     evaluate(model_path=model, parquet_path=str(parquet), img_dir=str(img_dir), out_dir=str(out_dir),
              eval_name=eval_name, test_set=test_set, min_img_per_spc=min_img_per_spc,
              batch_size=batch_size, aug_img_size=aug_img_size, img_size=img_size, num_workers=num_workers,
-             drop_unknown_species=drop_unknown_species, tta=tta, skip_missing=skip_missing, limit=limit)
+             drop_unknown_species=drop_unknown_species, tta=tta, skip_missing=skip_missing, limit=limit, marginal=marginal,
+             eval_levels=eval_levels.split(',') if eval_levels else None)
 
 
 @app.command()
