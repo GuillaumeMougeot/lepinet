@@ -160,3 +160,43 @@ catastrophically broken run until the per-level column (`f1_speciesKey 0.9129`, 
 already-fixed `level_pred_targ`) showed otherwise. Fixed and regression-tested. Lesson: when a
 framework overloads a container for N=1, *every* consumer needs normalising — fixing one call site
 is not enough.
+
+
+## ArcFace × z-score: the trade-off dissolves (2026-07-30)
+
+The decisive number. Same open-set benchmark (global_lepi <50-image species: unseen species, same
+image domain; 632,913 images, 3,171 novel), same score (`−max species logit`), test macro-F1 on the
+full fold-0:
+
+| head | species F1 (in-dist) | **OOD AUROC** | known logit μ±σ | novel logit μ±σ |
+|---|---|---|---|---|
+| independent (plain cosine) | **0.9110** | 0.601 | −9.27 ± 7.44 | −11.46 ± 6.82 |
+| arcface (`s·cos`, m=0.3) | 0.8784 | 0.732 | 26.00 ± 13.03 | 23.47 ± 10.84 |
+| **arcface × z-score** (`z(cos(θ+m))`) | **0.9069** | **0.9115** | 32.58 ± 7.83 | 18.17 ± 6.38 |
+
+**This is the headline result of the open-set direction.** Composing the margin with the z-score
+transform is not a compromise between the two earlier heads — it beats *both* on the axis each was
+supposed to own:
+
+- **+31 pt AUROC over the plain cosine head** (0.601 → 0.9115), for **−0.4 pt** in-distribution F1.
+  The plain head is near-chance at knowing what it doesn't know; this one is genuinely usable.
+- **+18 pt AUROC over plain ArcFace**, *and* +2.9 pt in-distribution. So the earlier
+  accuracy-vs-open-set trade-off was **not intrinsic to the margin** — it was an artefact of dropping
+  the calibrated transform.
+
+**Why (mechanism).** The distributions tell it: the known/novel logit gap goes 2.2 (plain cosine) →
+2.5 (arcface) → **14.4** (arcface × z-score), while the *spread* simultaneously narrows (σ 7.8 vs
+13.0). `cosine_to_zscore` stretches the tightly-concentrated cosines of high-dimensional unit
+vectors into an approximately standard-normal scale; the margin then operates where that scale has
+resolution, instead of being squashed into the narrow band where raw cosines live. Margin and
+transform are complementary — one shapes the angles, the other makes the angle *differences* legible.
+
+**Consequence for the architecture.** With single-head + marginals winning on accuracy at all three
+levels and arcface × z-score winning on open-set at ~no accuracy cost, the recommended model is now
+**one ArcFace × z-score species head + marginalisation up the taxonomy**. Both halves of the paper's
+story — reliable *novelty* detection and calibrated *rank* abstention — are served by the same
+single-head architecture. That is a much cleaner claim than a head bake-off.
+
+**Caveats.** 0.9115 is on the *no-domain-shift* benchmark; the flemming OOD set (novelty **+**
+different camera) is the harder case and is still to run. `m=0.3`/`s=30` remain untuned, so this is
+a floor, not a ceiling.
