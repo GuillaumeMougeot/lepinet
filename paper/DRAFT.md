@@ -1,6 +1,6 @@
 # Knowing what you don't know: calibrated open-set hierarchical classification for long-tailed species identification
 
-**Status:** working draft (2026-07-30). Numbers are from `RESULTS.md`; the reasoning behind each is
+**Status:** working draft (2026-07-31). Numbers are from `RESULTS.md`; the reasoning behind each is
 in [`../journal/`](../journal/). Sections marked _(pending)_ await runs that are in flight.
 
 ---
@@ -18,8 +18,8 @@ in-distribution accuracy is close to saturated (0.9316 with a modern large backb
 **0.70 on data from a different source**, so the remaining error is dominated by distribution shift
 rather than by classifier design. Third, and most usefully, we show that composing an **additive
 angular margin with a dimension-aware z-score transform** turns a classifier that is near-chance at
-detecting unseen species (AUROC 0.601) into a reliable one (**0.9115**) at a cost of 0.4 points of
-closed-set accuracy — where the margin *alone* costs 3.3 points and yields only 0.732. Taken
+detecting unseen species (AUROC 0.601) into a reliable one (**0.9115**; **0.9068** on the single-head architecture we
+recommend) at a cost of 0.4 to 1.0 points of closed-set accuracy — where the margin *alone* costs 3.3 points and yields only 0.732. Taken
 together, these give a single-head architecture that (i) predicts species, (ii) degrades gracefully
 to genus/family by marginalisation when the image cannot support a species call, and (iii) flags
 taxa it has never seen. We release the package, the models and the reproduction recipes.
@@ -39,7 +39,10 @@ taxa it has never seen. We release the package, the models and the reproduction 
      rank the evidence supports ("unknown species, but *Noctuidae*").
 - Contributions: (C1) a negative result on hierarchical heads with a like-for-like protocol;
   (C2) the marginalisation-beats-coarse-heads result; (C3) **ArcFace × z-score**, with the analysis
-  of *why* the two compose; (C4) a measured generalisation gap; (C5) an open, reproducible package.
+  of *why* the two compose; (C4) a measured generalisation gap, **decomposed** into the part
+  removable by naming nuisances (17 %) and the part that is not; (C5) an interaction result — an
+  angular margin degrades *marginalisation* more than classification, because summing a posterior is
+  calibration-dependent, replicated across a 10× scale change; (C6) an open, reproducible package.
 
 ## 2. Method
 
@@ -283,6 +286,65 @@ the coarse levels' apparent reliability is borrowed from the easy cases they nev
 user receives as the species bar rises.)
 
 Coverage/precision per rank from marginalised posteriors with per-level thresholds.
+
+### 4.7 The margin and marginalisation interact — through calibration
+
+Sections 4.1 and 4.3 present two independent contributions: coarse ranks by marginalisation, and an
+angular margin composed with the z-score transform. Composing them is not free, and the way it fails
+identifies the mechanism.
+
+| | species | genus | family |
+|---|---|---|---|
+| single head, plain cosine (efficientnet\_v2\_s) | 0.9135 | 0.9606 | 0.9739 |
+| single head + ArcFace × z-score | 0.9035 | 0.9491 | 0.9628 |
+| Δ | −1.00 | **−1.15** | **−1.11** |
+| same Δ, DINOv3-ConvNeXt-L (198 M, 10× larger) | −0.95 | **−1.21** | **−1.13** |
+
+**The coarse ranks lose more than the fine rank they are derived from.** That is the diagnostic. If
+the margin merely cost discriminative power, the species decision would absorb the damage and the
+marginals would inherit it proportionally; instead the derived quantities degrade *further*.
+
+The explanation is that marginalisation is **calibration-dependent** in a way argmax classification is
+not. The coarse posterior $P(g) = \sum_{s \in g} P(s)$ depends on how mass is distributed across all
+children of a parent, not only on which child ranks first. An additive angular margin optimises
+against a deliberately harder target than the true label, which tightens the decision boundary while
+distorting the posterior it induces. Sharper boundaries, worse sums.
+
+Two pieces of evidence support this over the alternatives. First, the effect **replicates at 10×
+parameter scale** (last row), so it is not a capacity artefact and will not be scaled away. Second,
+the *converse* intervention produces the mirror image: supervising the marginals during training
+(§2.4) leaves species macro-F1 **exactly unchanged** at 0.9135 while lifting genus by +0.27 and
+family by +0.39 — a change with no discriminative component at all, acting purely on the sum.
+
+**Practical consequence.** The margin is still worth its cost: it buys open-set AUROC 0.601 → 0.9068
+on this architecture (§4.3), and a classifier that cannot flag an unseen taxon fails in a way
+closed-set macro-F1 does not measure. But a system that both marginalises and uses a margin should
+**supervise the marginals as well**, since the two interventions act on the same quantity in opposite
+directions. We report this as an interaction to be managed rather than a solved problem; the combined
+model is future work.
+
+### 4.8 How much of the domain gap is nameable nuisance?
+
+Section 4.2 measures a ~26-point drop from in-distribution to an external source. That number alone
+does not say whether the shift is *nuisance* (blur, illumination, compression — removable by
+augmentation) or *semantic* (pose, background, taxon-mix, labelling conventions). We separate them by
+augmenting training with three hand-named nuisances and re-measuring.
+
+| efficientnet\_v2\_s, single head + ArcFace × z-score | in-distribution | external | gap |
+|---|---|---|---|
+| standard augmentation | 0.9035 | 0.6437 | 25.98 |
+| + motion blur, low light, JPEG quantisation | 0.8999 | **0.6836** | **21.63** |
+
+**Nameable nuisance is worth about four points, or 17 % of the gap.** The trade is unusually
+favourable — 0.36 points of in-distribution accuracy for 3.99 under shift, an 11:1 ratio, at no
+parameter or inference cost — and larger than any architectural change we measure in this paper. It
+is also *bounded by construction*: each transform encodes a guess about what differs between the
+domains, so the method cannot address a shift nobody anticipated, and the residual is invisible.
+
+The result is therefore best read as a **measurement of the gap's composition** rather than a method
+contribution. Roughly one sixth of cross-source degradation is removable by naming nuisances; five
+sixths are not. That is what motivates treating cross-source generalisation, rather than closed-set
+accuracy, as the open problem.
 
 ## 5. Discussion
 

@@ -1,10 +1,12 @@
 # Closing the 23-point domain gap — is augmentation a fix or a treadmill?
 
-**Kind:** research · **Status:** OPEN (2026-07-30). B1 (`domain_aug: trap`) has trained: in-distribution species macro-F1
-**0.8999** vs A1's 0.9035, i.e. the expected small cost (−0.36 pp) for training on deliberately
-degraded images. **That number decides nothing** — the whole hypothesis is about the *shifted*
-benchmark, queued as `lepi-B1-shift`. Recorded here only so the cost is on the books before the
-benefit is known. Hypotheses before experiments. Feeds the same paper as
+**Kind:** research · **Status:** **B1 RESOLVED (2026-07-31) — a real down-payment, not a fix.**
+Domain-mimicking augmentation buys **+4.0 pt under shift** (0.6437 → 0.6836) for **−0.36 pt**
+in-distribution — the best trade this project has measured on any axis. But it closes only
+**17 % of the gap** (25.98 → 21.63 pt). The answer to the framing question is therefore *neither*
+"fix" nor "treadmill": nameable nuisances are a genuine, cheap sixth of the problem, and the
+remaining five sixths are not nuisance at all. Full analysis below; the wider question stays OPEN
+because B2/B3 are untested. Feeds the same paper as
 [[DIRECTIONS]] — a new *section*, not a new project: the flemming result showed
 novelty detection degrades under shift, so robustness sits **upstream** of the open-set contribution
 rather than beside it.
@@ -94,3 +96,65 @@ Flemming is **timelapse**, so near-duplicate frames abound. Getting this wrong i
 is not "domain shift" in the adaptable sense but a label/definition mismatch, and the honest paper
 sentence becomes "cross-source generalisation is an open problem", with the measurement as the
 contribution.
+
+---
+
+## B1 result: augmentation buys 4 points of the 26 (2026-07-31)
+
+`domain_aug: trap` (motion blur, low light, JPEG-ish quantisation) on the A1 architecture, everything
+else identical.
+
+| | in-distribution | shifted (flemming) | **gap** | open-set AUROC |
+|---|---|---|---|---|
+| A1 (no domain aug) | 0.9035 | 0.6437 | 25.98 pt | 0.9068 |
+| **B1 (`domain_aug: trap`)** | 0.8999 | **0.6836** | **21.63 pt** | 0.9010 |
+| Δ | **−0.36** | **+3.99** | **−4.35** | −0.58 |
+
+### Scoring H1
+
+**H1 predicted "3–8 points recovered, partial not decisive", with "> 15 means I am wrong about the
+shift being partly semantic".** It landed at **+4.0** — inside the range, in its lower half. So the
+committed position stands: **the gap is only partly nuisance.**
+
+Worth stating what the prediction got right for the right reason. The claim was not that augmentation
+fails; it was that hand-authored augmentation can only remove nuisances you can *name*, so it should
+buy something real and then stop. That is exactly the shape of the result: three named nuisances,
+four points, and 21.6 points still standing.
+
+### The trade is the best this project has measured
+
+−0.36 pt in-distribution for +3.99 pt shifted is an **11:1 return**. For comparison, the largest
+architecture win in the project's history is +0.25 pt (single head over multi-head), and the biggest
+backbone jump is +1.7 pt in-distribution / +6.2 pt shifted for **10× the parameters**. Trap
+augmentation is nearly free — no parameters, no inference cost, a few percent of training throughput.
+
+**So `domain_aug: trap` should be on by default for any model intended for deployment**, and off for
+runs whose purpose is comparison against the historical in-distribution ladder. That is precisely the
+split the opt-in design in `src/lepinet/augment.py` was built for, and this result is the
+justification for the seam existing.
+
+### What it costs on the open-set axis
+
+Novelty detection in-distribution slips 0.9068 → 0.9010 (−0.58 pt). Small, and directionally
+expected: training on degraded images widens the *known* class distributions, which brings novel and
+known scores marginally closer. It is worth watching rather than worrying about — but it does mean
+the honest report of B1 is a triple, not a single number, and the triple is mildly mixed.
+
+### What this changes about the direction
+
+**Augmentation is a down-payment, not the answer, and the numbers now say so rather than the
+argument.** The 21.6 pt residual is the interesting quantity: it is not motion blur, not lighting,
+not compression, because those have been sampled and paid for. Candidates, in the order they should
+be tested:
+
+1. **Background/context** (B2, flatbug-style suppression) — a whole nameable *category* rather than a
+   nuisance dimension, and the largest single visual difference between a pinned specimen and a trap
+   frame. Still hand-authored, so still bounded, but bounded higher.
+2. **Pose and scale distribution** — GBIF specimens are spread, dorsal and centred; trap moths are
+   at arbitrary angles, often overlapping. No pixel-level augmentation reaches this.
+3. **Label/taxon semantics** — the residual that no image transformation can touch, and the one the
+   dead-end criterion in this entry was written to detect.
+
+**B3 (self-training on unlabelled trap images) is now the highest-value untested rung**, because it
+is the first that does not require anyone to name the nuisance. B1 has established what the
+name-it-yourself ceiling looks like: about four points.

@@ -1,0 +1,26 @@
+# A2 open-set AUROC. A1 showed open-set survives the single head (0.9068 vs 0.9115); this asks
+# whether it also survives the 10x bigger backbone.
+name = "lepinet-A2-ood"
+replicas = 1
+[application]
+name = "pytorch-te"
+version = "26.05"
+[product]
+id = "gpu-nvidia-b200-1-gpu"
+category = "gpu-nvidia-b200"
+provider = "ucloud"
+[time_allocation]
+hours = 6
+[sync]
+local = ".."
+remote = "/12347837/repos/lepinet"
+[setup]
+script = "setup-lepinet.sh"
+run = "python dev/052_ood_score.py --model '/work/lepinet/data/ucloud_models/*-lepinet-A2-singlehead-arcface-dinov3cnxl-ucloud/*.pt' --parquet /work/global_lepi/0032836-250426092105405_processing_metadata_postprocessed_quality_filtered.parquet --img-dir /work/global_lepi/images --out /work/lepinet/data/ucloud_preds/ood-A2.json --img-size 320"
+[schedule]
+auto_extend = "1h"
+max_time = "12h"
+[[resources]]
+type = "file"
+path = "/12347837/datasets/global_lepi"
+read_only = true

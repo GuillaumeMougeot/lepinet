@@ -1,6 +1,6 @@
 # PLAN — where we are, and what runs next
 
-**Kind:** living · **Last updated:** 2026-07-30 · **Supersedes:**
+**Kind:** living · **Last updated:** 2026-07-31 · **Supersedes:**
 [[2026-07-28-landscape-and-plan]]
 
 This is the one file in `journal/` that is meant to be true *today*. Everything else is a record of
@@ -14,21 +14,21 @@ danger is accumulating results on inconsistent baselines, which is exactly what 
 
 ## Status board (keep this current)
 
-Updated 2026-07-30. `→` = chained eval. Every finished run must land in `RESULTS.md`.
+Updated 2026-07-31. `→` = chained eval. Every finished run must land in `RESULTS.md`.
 
 | id | run | state | result |
 |---|---|---|---|
-| A1 | effnetv2_s, single head + ArcFace × z-score | **in-dist DONE**; shift + OOD queued (`lepi-A1-shift`, `lepi-A1-ood`) | **0.9035** / 0.9491 / 0.9628 — **prediction falsified** (floor was 0.906). The two effects do *not* compose: interference is −0.59 pt at species but **−1.0 pt at genus/family**, so what breaks is the *marginalisation*, via calibration. See [[2026-07-30-does-arcface-compose-with-marginalisation]]. Verdict pending the AUROC, which is the axis ArcFace exists for. |
-| A2 | DINOv3-cnx-L, single head + ArcFace × z-score (final-model candidate) | **queued** → eval queued | — |
-| A3 | distil A2 → small single-head student | blocked on A2 | — |
-| A4 | **A1 + marginal supervision** | not started — *newly indicated* | Two same-day results identified one mechanism from opposite sides: marginal supervision improves the summed posterior's calibration (+0.27/+0.39 coarse), the ArcFace margin degrades it (−1.15/−1.11 coarse). Composing them is the direct test. |
-| A5 | **seed-repeat of the current baseline** | not started — *overdue* | The project has never measured its seed-to-seed spread, yet routinely interprets 0.2–0.4 pt deltas. 1.5 h, and it retroactively sets the believability threshold for every sub-half-point row in `RESULTS.md`. |
+| A1 | effnetv2_s, single head + ArcFace × z-score | **DONE (triple)** | in-dist **0.9035** / shifted **0.6437** / **AUROC 0.9068**. Prediction falsified — the effects do *not* compose — but **A1 stands**: open-set survives the single head (0.9068 vs 0.9115 multi-head, vs ~0.601 plain). Interference is −0.59 species / −1.0 coarse, i.e. the margin damages the *marginalisation*. [[2026-07-30-does-arcface-compose-with-marginalisation]] |
+| A2 | DINOv3-cnx-L, single head + ArcFace × z-score (final-model candidate) | **in-dist DONE**; shift + OOD running | **0.9216** / 0.9610 / 0.9754 — best open-set-capable model in the project (+1.8 pt over A1). Prediction (0.93) falsified by the same premise as A1's. **Replicates A1's interference to within 0.06 pt at 10x scale** — the cost is not capacity-bound. |
+| A3 | distil A2 → small single-head student | **running** (12362155) → eval queued | Predicted ~0.88, still student-capacity-bound. **> 0.89 falsifies "the student is the ceiling"**. |
+| A4 | **A1 + marginal supervision** | not started — *now well-evidenced* (needs a head that composes `marginal` with the ArcFace margin; the margin is applied loss-side today, but marginals are computed in the forward, so it needs a label path) | Two same-day results identified one mechanism from opposite sides: marginal supervision improves the summed posterior's calibration (+0.27/+0.39 coarse), the ArcFace margin degrades it (−1.15/−1.11 coarse). Composing them is the direct test. |
+| A5 | **repeat of the current baseline** | **running** (12362156) → eval queued. Note: lepinet seeds *nothing*, so an identical config is the repeat | The project has never measured its seed-to-seed spread, yet routinely interprets 0.2–0.4 pt deltas. 1.5 h, and it retroactively sets the believability threshold for every sub-half-point row in `RESULTS.md`. |
 | B0 | more capacity / longer schedule | **deferred, deliberately.** The owner's 12-epoch DINOv3-cnx-L (job 12361261) expired mid-run — no queue daemon was ticking, see [[2026-07-30-ucloud-queue-daemon]]. Not restarted as-is: it trained the *old multi-head* architecture, so its number would land on a superseded baseline. Re-ask as **12 epochs of A2's config** once A2 lands, which isolates schedule length as the single factor. | — |
-| B1 | domain-mimicking augmentation (`domain_aug: trap`) | **in-dist DONE**; shift queued (`lepi-B1-shift`) | 0.8999 in-distribution (−0.36 pt vs A1) — the expected cost. **Decides nothing until the shifted number lands.** |
+| B1 | domain-mimicking augmentation (`domain_aug: trap`) | **DONE (triple)** | in-dist 0.8999 / shifted **0.6836** / AUROC 0.9010. **+3.99 pt under shift for −0.36 in-dist — an 11:1 trade, the best in the project.** But closes only **17 % of the gap**: H1 confirmed, the shift is only partly nuisance. [[2026-07-30-domain-shift]] |
 | B2 | background suppression (flatbug-style) | not started | — |
-| B3 | self-training on unlabelled OOD images | not started | — |
+| B3 | self-training on unlabelled OOD images | not started — **now the highest-value untested rung** | B1 established the name-it-yourself ceiling at ~4 pt. B3 is the first rung that adapts to shifts nobody named. |
 | C1 | rank-abstention curves (no GPU) | **DONE** | 99.18% answered at 95.04% precision; **coarse ranks must be calibrated conditionally** — genus is 0.487 on the hard subset vs 0.970 overall |
-| C2 | OOD AUROC for A1/A2 | blocked on A | — |
+| C2 | OOD AUROC for A1/A2 | **A1 DONE**, A2 running | A1 **0.9068** — open-set survives the single head. |
 | C3 | hierarchical OOD (near/mid/far), unfiltered parquet | **DONE** | Monotone in taxonomic distance for both heads. ArcFace×z-score: near 0.849 / mid 0.909 / far 0.941; plain 0.561 / 0.618 / 0.666. The hard, common case (`near`) is where the plain head is ~chance. |
 | D1 | calibration + thresholds + names in `lepinet bundle` | not started | — |
 | D2 | distil into fastvit_sa12 instead of b0 | not started | — |

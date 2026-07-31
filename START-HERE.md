@@ -42,10 +42,12 @@ narrower, but the part that saves an engineer a week.
 | 1 | **Hierarchical prediction heads do not help.** Parent-conditioned 0.8845 and autoregressive 0.69–0.73 both lose to a plain multi-head 0.9110, on identical configs. | [heads](journal/2026-07-16-why-was-fastai-behind-mini-trainer.md) |
 | 2 | **One species head + marginalisation beats the multi-head at *every* level** (0.9135/0.9606/0.9739 vs 0.9110/0.9587/0.9708) — fewer parameters, and coarse levels cannot contradict the species call. | [story](journal/DIRECTIONS.md) |
 | 3 | **ArcFace × z-score turns novelty detection from chance into usable**: open-set AUROC 0.601 → **0.9115** for −0.4 pt accuracy. The margin *alone* costs 3.3 pt and reaches only 0.732 — the trade-off was an artefact of discarding the calibrated transform, not intrinsic. | [story](journal/DIRECTIONS.md) |
-| 4 | **In-distribution accuracy is near-saturated but generalisation is not**: 0.9316 in-domain → **0.6950** on an external source (~23 pt gap), and open-set AUROC falls 0.9115 → 0.7272 with it. Shift makes *known* species look unfamiliar. | [flemming](journal/2026-07-28-flemming-generalization.md), [domain shift](journal/2026-07-30-domain-shift.md) |
-| 5 | **Knowledge distillation works, but the student is the ceiling.** T=1 beats from-scratch (0.8786 vs 0.8692); a 2 pt better teacher moved the student by ~0. **KD temperature is not head-agnostic** — the textbook T=4 *hurt* (0.8546). | [bridge](journal/2026-07-25-teacher-student-app-bridge.md) |
-| 6 | **Scale pays, then plateaus.** ConvNeXtV2-L 0.9316 (+1.7 pt); a DINOv3-distilled ConvNeXt matches it at ~2× the training speed. | [bigger everything](journal/2026-07-24-bigger-everything.md) |
-| 7 | **Methodological**: an `lr_find`-style range test is invalid for a margin (it mechanically raises the loss); and a 2-D projection is the wrong picture for an angular effect (silhouette barely moves while AUROC moves 30 pt). | [directions](journal/DIRECTIONS.md) |
+| 4 | **Domain-mimicking augmentation is a down-payment, not a fix**: three hand-named nuisances (blur, low light, JPEG) buy **+4.0 pt under shift for −0.36 in-distribution** — an 11:1 trade — yet close only **17 %** of the gap. What you can name is worth about four points. | [domain shift](journal/2026-07-30-domain-shift.md) |
+| 5 | **An angular margin degrades marginalisation, not classification.** ArcFace × z-score costs ~1 pt at species but ~1.15 pt at genus/family, because summing a posterior is calibration-dependent and a margin sharpens boundaries at calibration's expense. **Replicated across a 10× backbone scale change.** The mirror image: supervising the marginals leaves species *exactly* unchanged while lifting coarse levels +0.27/+0.39. | [compose](journal/2026-07-30-does-arcface-compose-with-marginalisation.md), [marginal](journal/2026-07-30-marginal-supervision.md) |
+| 6 | **In-distribution accuracy is near-saturated but generalisation is not**: 0.9316 in-domain → **0.6950** on an external source (~23 pt gap), and open-set AUROC falls 0.9115 → 0.7272 with it. Shift makes *known* species look unfamiliar. | [flemming](journal/2026-07-28-flemming-generalization.md), [domain shift](journal/2026-07-30-domain-shift.md) |
+| 7 | **Knowledge distillation works, but the student is the ceiling.** T=1 beats from-scratch (0.8786 vs 0.8692); a 2 pt better teacher moved the student by ~0. **KD temperature is not head-agnostic** — the textbook T=4 *hurt* (0.8546). | [bridge](journal/2026-07-25-teacher-student-app-bridge.md) |
+| 8 | **Scale pays, then plateaus.** ConvNeXtV2-L 0.9316 (+1.7 pt); a DINOv3-distilled ConvNeXt matches it at ~2× the training speed. | [bigger everything](journal/2026-07-24-bigger-everything.md) |
+| 9 | **Methodological**: an `lr_find`-style range test is invalid for a margin (it mechanically raises the loss); and a 2-D projection is the wrong picture for an angular effect (silhouette barely moves while AUROC moves 30 pt). | [directions](journal/DIRECTIONS.md) |
 
 ### 2b. How the baseline was built — the engineering findings
 
@@ -55,13 +57,13 @@ time, and what moved it is not what one would guess. Full argument and the ladde
 
 | # | finding | evidence |
 |---|---|---|
-| 8 | **The optimiser was never the lever.** Muon was in place at 0.8297 and stayed. What moved the number was the *schedule* (`one_cycle` over `flat_cos`, +1.2 pt), the *sampler* (√-oversampling, +2.6 pt) and *lighter* augmentation — what the model sees and for how long, not how gradients are applied. | [design decisions](docs/design-decisions.md), [ladder](journal/2026-07-16-why-was-fastai-behind-mini-trainer.md) |
-| 9 | **In a hierarchy, avoid interventions that need one constant to be right at every level.** √-oversampling (0.9148) beat logit adjustment (0.9031) because one shared τ cannot suit 12,041 species, 4,333 genera *and* 102 families — it was wrong for two of the three, and cost genus/family accuracy. | [long tail](journal/2026-07-17-does-longtail-help.md) |
-| 10 | **bf16 is not optional** for cosine heads — fp16 overflows them. The autoregressive head's "wiring bug" was this, and was misdiagnosed for days. | [fp16](journal/2026-07-18-autoregressive-fp16-instability.md) |
-| 11 | **Before hunting a bug, check both numbers mean the same thing.** A "0.92 val vs 0.83 test" fold bug did not exist: one metric averaged three taxonomic levels, the other was species-only. Like-for-like, both were 0.83. | [fastai gap](journal/2026-07-16-why-was-fastai-behind-mini-trainer.md) |
-| 12 | **Audit the eval set before believing the metric.** A port "beat" its own baseline 0.9455 vs 0.9148 — because the eval had filtered the long tail out of a *macro* average. Unfiltered: 0.9152, i.e. an exact reproduction. | [port](journal/2026-07-24-src-lepinet-baseline-port.md) |
-| 13 | **Framework attributes can lie.** fastai hardcodes `num_workers` to 1; the true value is on `fake_l`. Reading the wrong one ran evaluations at ~1 img/s instead of 898 — a ~900× slowdown first misdiagnosed as a hardware problem. | [design decisions](docs/design-decisions.md) |
-| 14 | **Deployment**: int8 cannot run in ORT-Web (no `ConvInteger` kernel) but **source-level fp16 can** (−28 % size, identical top-1); GitHub *release* assets send no CORS, so they cannot serve a browser (Hugging Face Hub can). The cosine head is ~51 % of a small model's parameters, so the bottleneck width (256) is the real size knob. | [bridge](journal/2026-07-25-teacher-student-app-bridge.md), [compression](journal/2026-07-20-lepi-app-compression.md) |
+| 10 | **The optimiser was never the lever.** Muon was in place at 0.8297 and stayed. What moved the number was the *schedule* (`one_cycle` over `flat_cos`, +1.2 pt), the *sampler* (√-oversampling, +2.6 pt) and *lighter* augmentation — what the model sees and for how long, not how gradients are applied. | [design decisions](docs/design-decisions.md), [ladder](journal/2026-07-16-why-was-fastai-behind-mini-trainer.md) |
+| 11 | **In a hierarchy, avoid interventions that need one constant to be right at every level.** √-oversampling (0.9148) beat logit adjustment (0.9031) because one shared τ cannot suit 12,041 species, 4,333 genera *and* 102 families — it was wrong for two of the three, and cost genus/family accuracy. | [long tail](journal/2026-07-17-does-longtail-help.md) |
+| 12 | **bf16 is not optional** for cosine heads — fp16 overflows them. The autoregressive head's "wiring bug" was this, and was misdiagnosed for days. | [fp16](journal/2026-07-18-autoregressive-fp16-instability.md) |
+| 13 | **Before hunting a bug, check both numbers mean the same thing.** A "0.92 val vs 0.83 test" fold bug did not exist: one metric averaged three taxonomic levels, the other was species-only. Like-for-like, both were 0.83. | [fastai gap](journal/2026-07-16-why-was-fastai-behind-mini-trainer.md) |
+| 14 | **Audit the eval set before believing the metric.** A port "beat" its own baseline 0.9455 vs 0.9148 — because the eval had filtered the long tail out of a *macro* average. Unfiltered: 0.9152, i.e. an exact reproduction. | [port](journal/2026-07-24-src-lepinet-baseline-port.md) |
+| 15 | **Framework attributes can lie.** fastai hardcodes `num_workers` to 1; the true value is on `fake_l`. Reading the wrong one ran evaluations at ~1 img/s instead of 898 — a ~900× slowdown first misdiagnosed as a hardware problem. | [design decisions](docs/design-decisions.md) |
+| 16 | **Deployment**: int8 cannot run in ORT-Web (no `ConvInteger` kernel) but **source-level fp16 can** (−28 % size, identical top-1); GitHub *release* assets send no CORS, so they cannot serve a browser (Hugging Face Hub can). The cosine head is ~51 % of a small model's parameters, so the bottleneck width (256) is the real size knob. | [bridge](journal/2026-07-25-teacher-student-app-bridge.md), [compression](journal/2026-07-20-lepi-app-compression.md) |
 
 > **Where each list lives, and why.** The scientific findings (§2a) are stated formally in
 > [`paper/DRAFT.md`](paper/DRAFT.md); the engineering ones (§2b) are argued in
@@ -77,17 +79,19 @@ sqrt-oversampling → species macro-F1 0.9135.** Config:
 It replaced the old multi-head 0.9110 reference because it dominates it at every level while being
 smaller.
 
-| purpose | model | score |
-|---|---|---|
-| **cheap reference** (change one thing, compare here) | effnetv2_s single head | **0.9135** |
-| best in-distribution / distillation teacher | ConvNeXtV2-L @320 | 0.9316 |
-| best open-set | ArcFace × z-score (multi-head) | 0.9069 F1 / **0.9115** AUROC |
-| shippable student | distilled b0, fp16 | 0.8786 |
+| purpose | model | in-dist F1 | shifted F1 | open-set AUROC |
+|---|---|---|---|---|
+| **cheap reference** (change one thing, compare here) | effnetv2_s, single head + marginals | **0.9135** | — | ~0.60 |
+| best in-distribution | ConvNeXtV2-L @320, multi-head | 0.9316 | 0.7122 | — |
+| **best deployable** (knows what it doesn't know) | **A2**: DINOv3-cnx-L, single head + ArcFace × z-score | **0.9216** | _running_ | _running_ |
+| best small open-set model | A1: effnetv2_s, single head + ArcFace × z-score | 0.9035 | 0.6437 | **0.9068** |
+| most robust small model | B1: A1 + `domain_aug: trap` | 0.8999 | **0.6836** | 0.9010 |
+| shippable student | distilled b0, fp16 | 0.8786 | — | — |
 
-> **Caveat worth knowing before trusting a comparison:** results 3, 5 and 6 above were obtained on
-> the *old multi-head* baseline. The recommended architecture — **single head + ArcFace × z-score +
-> marginalisation** — has therefore **never actually been trained**. That combination, and
-> re-running distillation from a single-head teacher, are the highest-value pending experiments.
+> **Report the triple, not the headline.** Since H4, every model comparison here carries
+> in-distribution *and* shifted *and* open-set numbers, because they disagree: B1 is the *worst*
+> in-distribution model in this table and the best under shift. Ranking on one column is how this
+> project previously reached two conclusions it had to revise.
 
 ## 4. The 90-second version of the project's state
 
