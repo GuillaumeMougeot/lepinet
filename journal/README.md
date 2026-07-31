@@ -91,11 +91,16 @@ Six phases, in order. The engineering lessons each one produced are consolidated
 5. **Scale** (Jul 24–25) — bigger backbones lift it to **0.9316**, and a teacher→student→app bridge
    makes shipping one command. **In-distribution accuracy is essentially solved.**
    [[2026-07-24-bigger-everything]] · [[2026-07-25-teacher-student-app-bridge]]
-6. **The pivot** (Jul 28–) — the head bake-off is a **null result**, and a model at 0.93 drops to
+6. **The pivot** (Jul 28–30) — the head bake-off is a **null result**, and a model at 0.93 drops to
    **~0.70 on external data**. So the story is not heads or accuracy — it is *prediction that knows
    what it doesn't know*: open-set in image space, abstention in hierarchy space, both under domain
    shift. [[2026-07-28-flemming-generalization]] · [[2026-07-30-domain-shift]] ·
    [[2026-07-30-marginal-supervision]] · [`DIRECTIONS.md`](DIRECTIONS.md)
+7. **The inversion** (Jul 31) — with all three axes finally measured on one architecture family, they
+   rank our models in **opposite orders**. The best in-distribution model is the worst at novelty and
+   loses under shift to one a tenth its size. In-distribution macro-F1 is not merely saturated; it is
+   **anti-correlated** with the axes that describe deployment, and can no longer be the headline.
+   [[2026-07-31-best-model-is-not-the-best-model]]
 
 ## Index
 
@@ -114,9 +119,10 @@ Six phases, in order. The engineering lessons each one produced are consolidated
 | [07-17](2026-07-17-does-longtail-help.md) | Do oversampling / logit adjustment push species macro-F1 past 0.8887? | RESOLVED — oversampling **0.9148, project best**; logit adjustment 0.9031, not recommended (broke genus/family) |
 | [07-24](2026-07-24-bigger-everything.md) | Does a bigger backbone beat 0.9148 and make a good distillation teacher? | RESOLVED — ConvNeXtV2-L **0.9316 (+1.68 pp)**, now the best teacher |
 | [07-28](2026-07-28-flemming-generalization.md) | Does the 0.9316 model survive an external dataset? | RESOLVED — drops to **0.6950** (~23 pp gap); family robust; motivates the OOD work |
-| [07-30](2026-07-30-domain-shift.md) | Is domain augmentation a fix for the 23 pp gap, or a treadmill? | OPEN — B1 running |
+| [07-30](2026-07-30-domain-shift.md) | Is domain augmentation a fix for the 23 pp gap, or a treadmill? | **B1 RESOLVED** — a down-payment: **+4.0 pt shifted for −0.36 in-dist** (11:1), but closes only 17 % of the gap. B2/B3 still open |
 | [07-30](2026-07-30-marginal-supervision.md) | Does supervising the marginals *during training* help? | RESOLVED — species **unchanged** (0.9135 → 0.9135), but genus +0.27 / family +0.39 pp. Free coarse accuracy via calibration of the sum |
-| [07-30](2026-07-30-does-arcface-compose-with-marginalisation.md) | Do single-head marginalisation and ArcFace × z-score compose? | OPEN — **they do not**: prediction falsified, and the interference is 2× larger at genus/family than at species, so the *marginalisation* is what the margin breaks. AUROC pending |
+| [07-30](2026-07-30-does-arcface-compose-with-marginalisation.md) | Do single-head marginalisation and ArcFace × z-score compose? | RESOLVED — **they do not**, but A1 stands: open-set survives (AUROC 0.9068). The interference replicates at 10× scale, so it is a calibration effect, not noise |
+| [07-31](2026-07-31-best-model-is-not-the-best-model.md) | Does the best in-distribution model deploy best? | **RESOLVED — no, the ranking inverts.** A 20 M model with augmentation beats a 198 M one under shift (0.6836 vs 0.6616), and the 198 M model is the *worst* at novelty (0.8298 vs 0.9068) |
 
 ### Subprojects
 

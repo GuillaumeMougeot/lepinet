@@ -15,8 +15,10 @@ autoregressive head are all matched or beaten by a *single* species head whose g
 predictions are obtained by marginalising its own posterior (0.9135 vs 0.9110 species macro-F1, and
 better at every coarser level) — while being smaller and consistent by construction. Second,
 in-distribution accuracy is close to saturated (0.9316 with a modern large backbone) yet collapses to
-**0.70 on data from a different source**, so the remaining error is dominated by distribution shift
-rather than by classifier design. Third, and most usefully, we show that composing an **additive
+**0.70 on data from a different source** — and, more sharply, the three evaluation axes rank our
+models in **opposite orders**: our best in-distribution model is the worst at detecting unseen taxa
+and is beaten under shift by one a tenth its size, so the standard metric is not merely saturated but
+**anti-correlated** with deployment quality. Third, and most usefully, we show that composing an **additive
 angular margin with a dimension-aware z-score transform** turns a classifier that is near-chance at
 detecting unseen species (AUROC 0.601) into a reliable one (**0.9115**; **0.9068** on the single-head architecture we
 recommend) at a cost of 0.4 to 1.0 points of closed-set accuracy — where the margin *alone* costs 3.3 points and yields only 0.732. Taken
@@ -345,6 +347,39 @@ The result is therefore best read as a **measurement of the gap's composition** 
 contribution. Roughly one sixth of cross-source degradation is removable by naming nuisances; five
 sixths are not. That is what motivates treating cross-source generalisation, rather than closed-set
 accuracy, as the open problem.
+
+### 4.9 The three axes rank models in opposite orders
+
+Sections 4.2, 4.5 and 4.8 each evaluate on a different axis. Measured together on one architecture
+family — single species head, ArcFace × z-score, marginalisation, varying only backbone and
+augmentation — they do not merely differ in scale. **They disagree about which model is best.**
+
+| model | params | in-distribution | external | open-set AUROC |
+|---|---|---|---|---|
+| efficientnet\_v2\_s | 20 M | 0.9035 | 0.6437 | **0.9068** |
+| efficientnet\_v2\_s + domain aug | 20 M | 0.8999 | **0.6836** | 0.9010 |
+| DINOv3-ConvNeXt-L | 198 M | **0.9216** | 0.6616 | 0.8298 |
+
+The largest model wins the headline metric, loses the external benchmark to a model **ten times
+smaller**, and is the **worst of the three at detecting unseen species** by 7.7 points.
+
+Two mechanisms, both consistent with the rest of this paper. Under shift, invariance to nuisance
+transformations is worth more than representational capacity: a few percent of training throughput
+spent on augmentation exceeds a 10× parameter increase. For open-set detection, capacity is actively
+counterproductive — a model that fits the training taxa more tightly assigns novel inputs to known
+prototypes with greater confidence, which is precisely the failure the max-cosine score cannot see.
+This is the closed-set/open-set tension made quantitative on a 12,041-class problem.
+
+**Consequence for how this task is benchmarked.** In-distribution macro-F1 is not simply saturated
+(§4.2) — across our own model set it is **anti-correlated** with both deployment axes. A model
+selection procedure that optimises it, as essentially all published work on this task does, would
+here select the *worst* deployable system. We therefore report all three numbers for every model and
+decline to aggregate them into a single score; any weighting would encode a deployment scenario we
+have not specified.
+
+*(Caveat: the two backbones differ in input resolution (256 vs 320) and epoch budget (5 vs 6) as
+well as capacity, so "scale" is shorthand for that bundle. The ranking inversion does not depend on
+attributing the cause; the mechanism claim does, and a resolution-matched run is future work.)*
 
 ## 5. Discussion
 
