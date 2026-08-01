@@ -129,6 +129,20 @@ novelty detection is. These attack that axis directly.
 | **E3** | B3 (self-training) | Still the highest-value robustness rung. Note the framing has changed: with the rule fixed, open-set is **not** the binding constraint after all — the shifted axis is, where B4 leads at 0.7101 against an in-distribution 0.9216. | large |
 | **E4** | measure the **AUROC noise floor** | The capacity penalty is now 1.64 pt and no one knows the spread on this axis. Score the two baseline copies (A5 + original) with `dev/061`. | 2 × 5 min |
 
+## Open: is the multi-head's 0.69 pt shifted lead real?
+
+Multi-head 0.6503 vs marginal supervision 0.6434 is **exactly 1.0× the measured noise floor** —
+indistinguishable, not a win. Two jobs settle whether it is a low draw or the centre: `lepi-M2`
+(second marginal-supervision training + shifted eval) and `lepi-cond-shift` (the conditional head's
+missing shifted number, which completes the four-head table).
+
+If a residual gap survives, the mechanism to test is that separate coarse heads give the backbone
+**three independent error signals**, whereas marginal supervision's coarse gradient is a
+deterministic function of the species one — it can only redistribute mass *within* a parent, so it is
+a strictly weaker regulariser. The follow-up would then be **auxiliary coarse heads: supervised
+during training, discarded at export** — the richer gradient, the coherent marginal predictions, and
+no inference cost.
+
 ## Group L — imbalanced learning, benchmarked on the triple (Aug 1)
 
 A 2×2 of resampling × loss reweighting, from [[2026-08-01-imbalance-methods-bench]]. The framing

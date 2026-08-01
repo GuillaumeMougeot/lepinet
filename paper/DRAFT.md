@@ -168,18 +168,61 @@ is what we claim, are measured at matched budget.
 
 ## 4. Results
 
-### 4.1 Hierarchical heads do not help (C1, C2)
+### 4.1 Hierarchical heads: what the taxonomy should and should not touch (C1, C2)
 
-| head | species | genus | family |
+Four ways of getting a label at every level, all sharing the same backbone, bottleneck and cosine
+prototypes, differing only in how the taxonomy enters. Fine = species (12,041 classes); coarse =
+genus (4,333) and family (102).
+
+| head | coarse **parameters** | coarse **supervision** | information flow |
 |---|---|---|---|
-| multi-head independent | 0.9110 | 0.9587 | 0.9708 |
-| parent-conditioned hierarchical | 0.8845 | 0.9471 | 0.9683 |
-| autoregressive | 0.69–0.73 | — | — |
-| **single head + marginalisation** | **0.9135** | **0.9606** | **0.9739** |
+| multi-head independent | yes, one layer per level | yes, one CE per level | none between levels |
+| parent-conditioned ("conditional") | yes | yes | **top-down**: parent conditions child |
+| autoregressive | yes (decoder) | yes | top-down, sequential |
+| single head + marginal *inference* | **no** | **no** | bottom-up, at test time only |
+| single head + marginal *supervision* | **no** | yes | **bottom-up**, during training |
 
-The single head wins at *every* level. Marginalisation also beats separately trained coarse heads in
-a matched comparison (+0.7 pp genus, +3.1 pp family). Marginal supervision *during* training
-_(pending)_.
+The parent-conditioned head corrects each level's independent logits $M^{(i)}$ by the parent's
+already-conditioned score, so a child cannot be more confident than its parent's evidence allows:
+
+$$C^{(\text{top})} = M^{(\text{top})}, \qquad
+C^{(i)} = M^{(i)} + \operatorname{gather}_{\pi}\!\Bigl(C^{(i+1)} - \operatorname*{log\,sum\,exp}_{\text{siblings}} M^{(i)}\Bigr)$$
+
+i.e. $P_{\text{cond}}(\text{child}) = P(\text{child}) \cdot P_{\text{cond}}(\text{parent}) /
+P(\text{siblings})$ in log-space. Marginalisation (§2.4) is the exact mirror: information flows
+*up*, and no coarse parameters exist at all.
+
+| head | species | genus | family | **external (shifted)** |
+|---|---|---|---|---|
+| multi-head independent | 0.9110 | 0.9587 | 0.9708 | **0.6503** |
+| parent-conditioned | 0.8845 | 0.9471 | 0.9683 | _(pending)_ |
+| autoregressive | 0.69–0.73 | — | — | — |
+| single head + marginal inference | **0.9135** | 0.9606 | 0.9739 | 0.6293 |
+| single head + marginal supervision | **0.9135** | **0.9633** | **0.9778** | 0.6434 |
+
+Run-to-run spread, measured by retraining one configuration unchanged: **0.0000** species, 0.0005
+genus, 0.0024 family, **0.0069** external.
+
+Three readings, and the third is the one that matters.
+
+**Coarse *parameters* do not help.** Every head that owns genus/family layers is beaten
+in-distribution by one that does not. Conditioning is worse still (−2.9 pp species): constraining a
+child by its parent propagates the parent's errors downward, and the parent is the *easier* problem
+only because it is coarser, not because it is more reliable.
+
+**Coarse *supervision* does help, but only where in-distribution accuracy cannot see it.** Adding the
+marginal losses leaves species **exactly unchanged** (0.9135 → 0.9135, four decimals) and lifts genus
+by 0.27 pp — a change with no discriminative component, acting purely on how mass is distributed
+within a parent. On the shifted benchmark the same intervention is worth **+1.41 pp**, twenty times
+its in-distribution species effect.
+
+**The two questions therefore have opposite answers, and the standard protocol can only see one.**
+Dropping coarse parameters is right (+0.25 pp in-distribution, smaller, coherent); dropping coarse
+supervision is wrong (−2.10 pp externally, 3× the noise floor). An evaluation restricted to a
+held-out fold of the training distribution — the norm in this literature — measures the first and is
+blind to the second. Marginal supervision keeps the parameter saving and recovers most of the
+robustness, landing within one noise floor of the multi-head; whether the residual 0.69 pp is real
+is below what our replication can resolve.
 
 ### 4.2 Accuracy saturates; generalisation does not (C4)
 
