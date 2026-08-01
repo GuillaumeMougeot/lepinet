@@ -29,6 +29,7 @@ theme:
 
 nav:
   - Home: index.md
+  - Concepts: concepts.md
   - User guide: user-guide.md
   - Developer guide: developer-guide.md
   - Design decisions: design-decisions.md

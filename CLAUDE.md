@@ -41,6 +41,7 @@ Then, by task:
 
 | task | read |
 |---|---|
+| explain the method to a non-specialist | `docs/concepts.md` — the vocabulary, ground up |
 | change training behaviour | `docs/design-decisions.md` — every default has a measured reason |
 | change the package | `docs/developer-guide.md`, then `src/lepinet/README.md` |
 | run an experiment | `dev/README.md`, and the journal entry for the nearest prior question |

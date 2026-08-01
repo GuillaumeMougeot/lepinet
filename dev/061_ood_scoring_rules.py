@@ -83,8 +83,22 @@ def all_scores(model, dls, df, device, num_workers=32) -> dict[str, np.ndarray]:
     return {k: np.concatenate(v) for k, v in out.items()}
 
 
+def _register_dev_heads():
+    """dev/-registered heads (marginal, marginal_arcface, hierarchical) are invisible to the package
+    unless dev/050 is imported. Scoring a checkpoint trained with one otherwise dies in build_head."""
+    import importlib.util
+    from pathlib import Path
+
+    spec = importlib.util.spec_from_file_location(
+        "dev050_heads", Path(__file__).with_name("050_hierarchical_heads.py"))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+
+
 def main(a):
     import pandas as pd
+
+    _register_dev_heads()
 
     from lepinet.data import DEFAULT_LEVELS, filter_df, make_dls
     from lepinet.test import load_model, resolve_checkpoint_path

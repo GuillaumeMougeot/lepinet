@@ -14,6 +14,7 @@ a moth or butterfly, over ~12,000 species with a heavy long tail.
 
 | If you want to… | Go to | What you'll find |
 |---|---|---|
+| **Get up to speed on the vocabulary** *(logits, cosine head, margins, AUROC, marginalisation…)* | [`docs/concepts.md`](docs/concepts.md) | Every recurring term explained from the ground up, with this project's actual numbers |
 | **Understand the problem & method** | [`README.md`](README.md) | What the task is, why it's hard (fine-grained + long-tailed), and the method (per-level cosine head + square-root oversampling) |
 | **Use the package** (train / test / predict / export) | [`docs/user-guide.md`](docs/user-guide.md) | Install, the CLI (`lepinet train|test|predict|export|bundle|distill`), config reference |
 | **Change the code** | [`docs/developer-guide.md`](docs/developer-guide.md) → then [`src/lepinet/README.md`](src/lepinet/README.md) | Architecture, module-by-module design, the lessons encoded in the code |
@@ -120,6 +121,7 @@ START-HERE.md          <- you are here: the map
 │                         documentation contract. Auto-loaded; humans may read it too.
 ├── README.md          <- the problem + the method (start reading here)
 ├── docs/              <- how to USE it, how to CHANGE it, and WHY it is this way
+│   ├── concepts.md         <- the vocabulary, explained from the ground up
 │   ├── user-guide.md       <- install + the CLI
 │   ├── developer-guide.md  <- architecture + how to extend it
 │   ├── design-decisions.md <- why each recipe choice is what it is, and what it was worth

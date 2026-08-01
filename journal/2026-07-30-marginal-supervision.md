@@ -196,3 +196,27 @@ project's most reliable pattern.
 every shifted number in `RESULTS.md` is a floor rather than a ceiling — and B4's 0.7101 has room.
 Queued as **A4** (now motivated by a measured effect rather than a mechanism argument), and it needs
 the head that composes `marginal` with the ArcFace margin.
+
+### M2: the multi-head's apparent lead was not real (2026-08-01)
+
+The entry above reported marginal supervision 0.6434 against the multi-head's 0.6503 and called the
+0.69 pt gap "within one noise floor". A second independent training settles it:
+
+| marginal supervision, shifted | |
+|---|---|
+| draw 1 | 0.6434 |
+| draw 2 (M2) | 0.6485 |
+| **mean** | **0.6460** |
+| multi-head (one draw) | 0.6503 |
+
+The remaining difference is **0.0043**, smaller than marginal supervision's own draw-to-draw spread
+of **0.0051**. **Indistinguishable** — now by measurement rather than by citing a floor.
+
+It also improves the floor estimate itself. Two independent pairs now exist — plain single head
+(0.6258 / 0.6327, spread 0.0069) and marginal supervision (0.6434 / 0.6485, spread 0.0051) — so the
+shifted floor of ~0.006 rests on two samples instead of one.
+
+**Conclusion:** marginal supervision matches the multi-head under shift while using no coarse
+parameters and producing better coarse predictions. There is no residual gap left to explain, so the
+"three independent error signals vs one derived signal" mechanism is not needed — and the
+auxiliary-coarse-heads follow-up it motivated can be dropped unless something else revives it.

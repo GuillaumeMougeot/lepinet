@@ -132,3 +132,63 @@ than it was a week ago: the **noise floors are measured**, so a re-run's differe
 immediately; and the **triple protocol** is automated, so re-scoring a model is three short jobs. The
 real risk is not compute, it is drawing conclusions across a baseline change — which is what
 `PLAN.md`'s hygiene section exists to prevent.
+
+---
+
+## L0: oversampling is an accuracy/robustness trade, not a free win (2026-08-01)
+
+The control nobody had run. Single species head, everything at the project baseline, **oversampling
+switched off.**
+
+| effnetv2_s, 5 ep, single head | species | genus | family | **shifted** |
+|---|---|---|---|---|
+| **L0** — no oversampling | 0.8949 | 0.9514 | 0.9668 | **0.6445** |
+| baseline — √-oversampling | **0.9135** | **0.9606** | **0.9739** | 0.6293 |
+| Δ from oversampling | **+1.86** | +0.92 | +0.71 | **−1.52** |
+
+### Both predictions confirmed
+
+**"0.885–0.895, less than the historical +2.6"** — landed at 0.8949, at the top edge, and oversampling
+is worth **+1.86 pt** here against +2.6 on the multi-head under the older recipe. The reasoning holds:
+the cosine head's unit-norm prototypes are already τ-normalisation at τ=1, so part of the imbalance
+correction oversampling used to supply is now built into the architecture. **A method's value is a
+property of the system it sits in, not of the method.**
+
+**"The more aggressively a method up-weights the tail, the worse it should do under shift"** — the
+first cell agrees, and by more than expected. Turning oversampling *off* **gains 1.52 pt under
+domain shift** (2.5× the noise floor).
+
+### Oversampling is the fourth in-distribution/shift inversion
+
+| intervention | in-distribution | shifted |
+|---|---|---|
+| single head vs multi-head | +0.25 | −2.10 |
+| capacity vs augmentation | capacity wins | augmentation wins |
+| max-logit vs MSP scoring | — | inverts with model scale |
+| **√-oversampling** | **+1.86** | **−1.52** |
+
+And this one lands on **the project's largest historical lever** — the change that took the baseline
+from 0.8887 to 0.9148 and has been in every config since. It is not wrong, but it is not free: it
+buys 1.9 pt of in-distribution macro-F1 by paying 1.5 pt of cross-source robustness.
+
+**Why this is the expected direction.** Macro-F1 weights every species equally, so oversampling
+targets exactly the classes with the fewest images. Those classes have the least evidence behind
+them, so what the model learns for them is the most likely to be an artefact of their particular
+photographs — photographer, background, equipment. Up-weighting them therefore up-weights the part of
+the training signal that is *least* transferable. Under shift that is precisely what stops working.
+
+### What this changes
+
+**The default is now a decision, not a default.** For a model that will be deployed on someone
+else's images, oversampling should be justified rather than assumed. It is worth noting that
+`domain_aug: trap` buys **+4.0 pt** under shift while oversampling costs 1.5 — so the two together
+still come out ahead, but the accounting was never done before.
+
+**It also re-frames the rest of this benchmark.** The question is no longer "which imbalance method
+gives the best macro-F1" — it is **"what does each method cost under shift for the macro-F1 it
+buys?"** L1 and L2 are still running, and the exchange rate is now the number to read, not the
+in-distribution column.
+
+**It weakens no earlier conclusion**, because every architecture comparison in `RESULTS.md` held
+oversampling fixed. But it does mean the shifted numbers throughout are measured *with* a lever that
+suppresses them, which makes them floors — the second such qualifier after marginal supervision.

@@ -23,7 +23,7 @@ Updated 2026-08-01. `→` = chained eval. Every finished run must land in `RESUL
 | A3 | distil A2 → small single-head student | **DONE** | **0.8833** — best student yet (+0.47 over previous). Prediction (~0.88, <0.89) correct: **the ceiling claim survives**. A *worse* teacher (A2 0.9216) beat a better one (CnxV2-L 0.9316) by 0.77 pt, so teacher accuracy is near-irrelevant — target *shape* is what matters. |
 | A6 | single-head b0 from scratch — A3's missing control | **DONE** | **0.8789** (predicted 0.870–0.878, just above). Splits A3's win: **head +0.97 pt, distillation +0.44** — the architecture is worth more than the teacher at b0 scale, and distillation's credit halves |
 
-| A4 | **A1 + marginal supervision** (`marginal_arcface`) | **running** (12362466) → triple chained | Predicted: in-dist 0.903–0.910, shifted **0.655–0.670**, AUROC 0.90±0.01. **Falsified if shifted ≤ 0.6506** (A1 + one noise floor). Marginal supervision is worth **+1.41 pt under shift** (2× the floor), recovering the single head's robustness deficit; every model in the table was trained without it, so every shifted number is a floor. Needs a head composing `marginal` with the ArcFace margin (needs a head that composes `marginal` with the ArcFace margin; the margin is applied loss-side today, but marginals are computed in the forward, so it needs a label path) | Two same-day results identified one mechanism from opposite sides: marginal supervision improves the summed posterior's calibration (+0.27/+0.39 coarse), the ArcFace margin degrades it (−1.15/−1.11 coarse). Composing them is the direct test. |
+| A4 | **A1 + marginal supervision** (`marginal_arcface`) | **DONE** — open-set rescore rerunning | in-dist 0.8998 / **shifted 0.6616** / genus **0.9555** family **0.9725**. Shifted prediction **confirmed** (0.655–0.670); recovers **56 % genus / 87 % family** of the margin's damage, confirming the calibration mechanism. **Best shifted score of any effnetv2_s model, above the multi-head.** New recommended architecture. Marginal supervision is worth **+1.41 pt under shift** (2× the floor), recovering the single head's robustness deficit; every model in the table was trained without it, so every shifted number is a floor. Needs a head composing `marginal` with the ArcFace margin (needs a head that composes `marginal` with the ArcFace margin; the margin is applied loss-side today, but marginals are computed in the forward, so it needs a label path) | Two same-day results identified one mechanism from opposite sides: marginal supervision improves the summed posterior's calibration (+0.27/+0.39 coarse), the ArcFace margin degrades it (−1.15/−1.11 coarse). Composing them is the direct test. |
 | A5 | repeat of the current baseline | **DONE** | Species **0.9135 → 0.9135 (spread 0.0000)**; genus 0.0005; **family 0.0024**. Noise scales inversely with class count. Downgrades marginal supervision's family claim; everything else clears its floor by 4×+. [[2026-08-01-how-noisy-are-our-numbers]] |
 | A5b | shifted-metric spread | **DONE** | **0.0069** (0.6258 vs 0.6327, two trainings). ~10× the in-distribution floor, as the class-count argument predicts. Repeating the *eval* gives 0.0000, so all variance is from training. Every shifted claim ≥1.4 pt survives; nothing below ~0.7 pt is reportable. |
 | — | **coarse supervision vs coarse parameters** (marginal head, shifted) | **DONE** | Plain single head is **−2.10 pt** under shift vs the multi-head (while +0.25 in-distribution); marginal supervision recovers **+1.41** of it with no coarse parameters. **Coarse supervision buys shift robustness; coarse parameters do not.** [[2026-07-30-marginal-supervision]] | The project has never measured its seed-to-seed spread, yet routinely interprets 0.2–0.4 pt deltas. 1.5 h, and it retroactively sets the believability threshold for every sub-half-point row in `RESULTS.md`. |
@@ -129,19 +129,14 @@ novelty detection is. These attack that axis directly.
 | **E3** | B3 (self-training) | Still the highest-value robustness rung. Note the framing has changed: with the rule fixed, open-set is **not** the binding constraint after all — the shifted axis is, where B4 leads at 0.7101 against an in-distribution 0.9216. | large |
 | **E4** | measure the **AUROC noise floor** | The capacity penalty is now 1.64 pt and no one knows the spread on this axis. Score the two baseline copies (A5 + original) with `dev/061`. | 2 × 5 min |
 
-## Open: is the multi-head's 0.69 pt shifted lead real?
+## Closed: the multi-head's 0.69 pt shifted lead was not real
 
-Multi-head 0.6503 vs marginal supervision 0.6434 is **exactly 1.0× the measured noise floor** —
-indistinguishable, not a win. Two jobs settle whether it is a low draw or the centre: `lepi-M2`
-(second marginal-supervision training + shifted eval) and `lepi-cond-shift` **DONE: 0.6213** — the conditional head is worst of the four under shift as well
-as in-distribution, the only head whose two rankings agree.
+M2 (a second marginal-supervision training) scored **0.6485** against draw 1's 0.6434 — mean 0.6460,
+own spread 0.0051, and the multi-head sits 0.0043 away. **Indistinguishable, by measurement rather
+than by citing a floor.** The auxiliary-coarse-heads follow-up this motivated is dropped.
 
-If a residual gap survives, the mechanism to test is that separate coarse heads give the backbone
-**three independent error signals**, whereas marginal supervision's coarse gradient is a
-deterministic function of the species one — it can only redistribute mass *within* a parent, so it is
-a strictly weaker regulariser. The follow-up would then be **auxiliary coarse heads: supervised
-during training, discarded at export** — the richer gradient, the coherent marginal predictions, and
-no inference cost.
+`lepi-cond-shift` also landed: the conditional head is **0.6213**, worst of all four under shift as
+well as in-distribution — the only head whose two rankings agree.
 
 ## Group L — imbalanced learning, benchmarked on the triple (Aug 1)
 

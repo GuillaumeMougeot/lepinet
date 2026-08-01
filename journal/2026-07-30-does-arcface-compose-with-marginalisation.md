@@ -146,3 +146,50 @@ the same wrong assumption of independence. Two falsifications from one bad premi
 A2 is nonetheless the **best open-set-capable model in the project**: +1.8 pt species over A1 with
 the same head. Its shifted and AUROC numbers are queued (`lepi-A2-shift`, `lepi-A2-ood`) and decide
 whether it ships.
+
+---
+
+## A4: the calibration mechanism, confirmed (2026-08-01)
+
+The mechanism proposed above said the ArcFace margin damages *marginalisation* via calibration, and
+predicted that **marginal supervision — which optimises exactly that sum — should recover most of the
+coarse-level loss while leaving species where the margin puts it.** A4 is that run.
+
+| effnetv2_s, 5 ep | species | genus | family | shifted |
+|---|---|---|---|---|
+| single head, plain | 0.9135 | 0.9606 | 0.9739 | 0.6293 |
+| **A1** = + ArcFace × z-score | 0.9035 | 0.9491 | 0.9628 | 0.6437 |
+| **A4** = A1 + marginal supervision | 0.8998 | **0.9555** | **0.9725** | **0.6616** |
+
+Damage from the margin, and how much A4 gets back:
+
+| level | A1's loss vs plain | A4's loss vs plain | **recovered** |
+|---|---|---|---|
+| species | −1.00 | −1.37 | — (slightly worse) |
+| genus | −1.15 | −0.51 | **56 %** |
+| family | −1.11 | −0.14 | **87 %** |
+
+**The prediction was right where it mattered and wrong at the edges.** Coarse recovery is exactly
+what the calibration story requires, and the *gradient* of the recovery — family more than genus —
+is itself a check: family is a coarser sum, so it is more sensitive to how mass spreads and more
+recoverable by supervising that spread. Nothing about "the margin hurts discrimination" predicts
+that ordering.
+
+What the prediction got wrong: species did not stay put, it fell a further 0.37 pt (well above the
+0.0000 species noise floor). So marginal supervision is not free here — it buys coarse calibration
+partly at the species head's expense, which is a real cost the in-distribution-only view of
+[[2026-07-30-marginal-supervision]] did not reveal.
+
+### The shifted number is the one that matters
+
+**A4 scores 0.6616 shifted, +1.79 pt over A1** (2.6× the noise floor) — and above the **multi-head's
+0.6503**. So marginal supervision's robustness benefit *transfers* to the ArcFace architecture, and
+the combination now beats every earlier head under shift while keeping open-set capability.
+
+Committed prediction: in-distribution 0.903–0.910, shifted **0.655–0.670**, falsified if shifted
+≤ 0.6506. Shifted landed at **0.6616** — inside the range. In-distribution landed at 0.8998, just
+below the range, for the reason above.
+
+**A4 is the new recommended architecture**: one species head, ArcFace × z-score, marginals supervised
+during training and used at inference. No coarse parameters, best shifted score of any effnetv2_s
+model, and the coarse levels nearly repaired.
