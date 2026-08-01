@@ -73,17 +73,22 @@ def class_counts_from_config(cfg) -> torch.Tensor:
     Getting this wrong silently trains against a permuted prior, which would look like a mildly bad
     run rather than a bug -- hence the shape assertion in the callback.
     """
-    import pandas as pd
+    from pathlib import Path
 
-    from lepinet.data import prepare_df
+    from lepinet import data as data_mod
 
-    df, vocabs, levels = prepare_df(
-        pd.read_parquet(cfg.parquet_path), fold=cfg.fold,
-        min_img_per_spc=cfg.min_img_per_spc, family_filter=cfg.family_filter,
-        levels=cfg.levels)
-    train = df[~df["is_valid"]]
-    counts = train[levels[0]].astype(str).value_counts()
-    return torch.tensor([float(counts.get(str(v), 0)) for v in vocabs[levels[0]]])
+    # Deliberately the same `gen_df` call `lepinet.train.train` makes, and the vocabulary built the
+    # same way (`sorted(unique)`), because the prior must be indexed exactly like the head's outputs.
+    # A permuted prior would train against the wrong class frequencies and look like a mildly bad run
+    # rather than a bug -- which is why the callback also asserts the length.
+    levels = list(cfg.levels)
+    hierarchy_path = (Path(cfg.hierarchy_path) if cfg.hierarchy_path
+                      else Path(cfg.parquet_path).parent / "hierarchy.csv")
+    df, _ = data_mod.gen_df(cfg.parquet_path, Path(cfg.out_dir), cfg.min_img_per_spc, cfg.fold,
+                            hierarchy_path, cfg.family_filter, levels=levels)
+    vocab = sorted(df[levels[0]].unique().tolist())
+    counts = df[~df["is_valid"]][levels[0]].value_counts()
+    return torch.tensor([float(counts.get(v, 0)) for v in vocab])
 
 
 def main(argv):

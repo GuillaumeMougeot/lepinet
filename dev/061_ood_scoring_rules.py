@@ -50,6 +50,27 @@ SCORE_RULES = {
 }
 
 
+def degenerate_rules(z: torch.Tensor) -> set[str]:
+    """Rules that carry no information for *this* head's output convention.
+
+    The `marginal*` heads emit **log-probabilities**, not raw z-scores, and two rules collapse:
+
+    * ``energy`` = ``logsumexp(log p)`` = ``log(sum p)`` = **0 for every image** -- a constant, so its
+      AUROC is whatever the tie-breaking in the rank sort happens to produce (it printed 0.4399 for
+      A4, which looks like a catastrophic result and is actually an empty one).
+    * ``msp`` = ``softmax(log p)`` = ``p``, so it is a monotone function of ``max`` and must give the
+      *identical* AUROC (A4 printed 0.8591 for both, exactly).
+
+    Reporting those as findings would be worse than not reporting them, so they are flagged. Detected
+    from the data rather than from the head name, because a future head could do the same thing.
+    """
+    out = set()
+    lse = torch.logsumexp(z, dim=1)
+    if (lse.abs() < 1e-3).all():          # rows already normalised: sum of exp == 1
+        out |= {"energy", "msp"}
+    return out
+
+
 def auroc(novel: np.ndarray, known: np.ndarray) -> float:
     """P(score_novel > score_known), by Mann-Whitney. No sklearn dependency."""
     if len(novel) == 0 or len(known) == 0:
@@ -62,7 +83,7 @@ def auroc(novel: np.ndarray, known: np.ndarray) -> float:
 
 
 @torch.no_grad()
-def all_scores(model, dls, df, device, num_workers=32) -> dict[str, np.ndarray]:
+def all_scores(model, dls, df, device, num_workers=32):
     """One forward pass, every rule. Only the reductions are kept, never the [N, 12041] matrix."""
     from lepinet.test import dl_num_workers
 
@@ -71,16 +92,19 @@ def all_scores(model, dls, df, device, num_workers=32) -> dict[str, np.ndarray]:
     print(f"  dataloader: num_workers={nw}, batches={len(dl)}")
     model.to(device).eval()
     out = {k: [] for k in SCORE_RULES}
+    degenerate: set[str] = set()
     t0 = time.time()
     for batch in dl:
         logits = model(batch[0].to(device))
         z = (logits[0] if isinstance(logits, (list, tuple)) else logits).float()
+        if not degenerate:
+            degenerate = degenerate_rules(z)
         for name, fn in SCORE_RULES.items():
             out[name].append(fn(z).cpu().numpy())
     dt = time.time() - t0
     n = sum(len(a) for a in out["max"])
     print(f"  inference: {n} images in {dt:.1f}s = {n / max(dt, 1e-9):.1f} img/s")
-    return {k: np.concatenate(v) for k, v in out.items()}
+    return {k: np.concatenate(v) for k, v in out.items()}, degenerate
 
 
 def _register_dev_heads():
@@ -126,19 +150,27 @@ def main(a):
                    vocabs, a.img_dir, int(a.img_size * 460 / 256), a.img_size, 128,
                    a.num_workers, lowmem=False, levels=levels)
     model, _ = load_model(ckpt, img_size=a.img_size)
-    scores = all_scores(model, dls, df, device, a.num_workers)
+    scores, degenerate = all_scores(model, dls, df, device, a.num_workers)
 
     nv = is_novel.to_numpy()
     res = {"n_known": int((~nv).sum()), "n_novel": int(nv.sum()),
-           "head": ckpt.get("head"), "auroc": {}}
+           "head": ckpt.get("head"), "degenerate": sorted(degenerate), "auroc": {}}
     for name, s in scores.items():
         res["auroc"][name] = auroc(s[nv], s[~nv])
 
     print("\nAUROC by scoring rule (same embedding, same images):")
-    best = max(res["auroc"], key=lambda k: res["auroc"][k])
+    live = {k: v for k, v in res["auroc"].items() if k not in degenerate}
+    best = max(live, key=lambda k: live[k])
     for name, v in sorted(res["auroc"].items(), key=lambda kv: -kv[1]):
+        if name in degenerate:
+            why = ("constant (log-probs sum to 1)" if name == "energy"
+                   else "identical to max by construction")
+            print(f"  {name:8s} {v:.4f}   -- NOT MEANINGFUL for this head: {why}")
+            continue
         mark = "  <- best" if name == best else ""
         print(f"  {name:8s} {v:.4f}   ({v - res['auroc']['max']:+.4f} vs max-logit){mark}")
+    if degenerate:
+        print(f"  (head emits log-probabilities; {sorted(degenerate)} excluded from the ranking)")
     json.dump(res, open(a.out, "w"), indent=2)
     print(f"wrote {a.out}")
 

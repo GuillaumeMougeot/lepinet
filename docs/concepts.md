@@ -4,7 +4,14 @@ Written for someone who knows the *problem* well but not the deep-learning jargo
 documents lean on. Every term below appears in `RESULTS.md`, the journal or the paper, and each is
 explained with the actual numbers from this project rather than in the abstract.
 
-Read top to bottom the first time; the later sections build on the earlier ones.
+Sections 1–9 are the **method** and build on each other — read them in order the first time.
+Sections 10–14 are reference: the **training**, **data**, **evaluation**, **shipping** and
+**experiment-design** vocabulary, each entry standalone.
+
+| | |
+|---|---|
+| **The method** | [logits & softmax](#1-logits-softmax-and-why-the-scale-matters) · [cosine head](#2-the-cosine-head-and-why-a-raw-cosine-is-a-bad-logit) · [z-score](#3-the-z-score-transform--a-scale-you-dont-have-to-guess) · [margin](#4-a-margin--making-the-model-work-harder-than-it-has-to) · [ArcFace × z-score](#5-arcface--z-score--what-the-composition-actually-is) · [open-set & AUROC](#6-open-set-and-how-you-score-i-dont-know) · [marginalisation](#7-fine-coarse-and-marginalisation) · [the three numbers](#8-the-three-numbers-every-model-is-reported-with) · [long tail](#9-the-long-tail) |
+| **Reference** | [training](#10-training-vocabulary) · [data](#11-data-vocabulary) · [evaluation](#12-evaluation-vocabulary) · [shipping](#13-shipping-a-model) · [experiment design](#14-experiment-design-vocabulary) |
 
 ---
 
@@ -226,6 +233,161 @@ A finding worth carrying: **oversampling costs 1.52 pt under domain shift while 
 in-distribution.** Rare classes have the least evidence behind them, so what the model learns for them
 is the most likely to be an artefact of their particular photographs — and up-weighting them
 up-weights exactly the least transferable part of the signal.
+
+---
+
+## 10. Training vocabulary
+
+**Backbone / head.** The model is two pieces. The **backbone** is the large pretrained image network
+(here `efficientnet_v2_s`, 20 M parameters, or `DINOv3-ConvNeXt-L`, 198 M) that turns a photo into an
+embedding. The **head** is the small piece bolted on top that turns that embedding into per-species
+scores. Almost every experiment in this project changes one or the other, never both.
+
+**Bottleneck / `hidden`.** A narrow layer between backbone and prototypes — 256 numbers here. It
+matters far more than it sounds: the prototype matrix is `hidden × 12,041`, so the bottleneck width
+sets **~51 % of a small model's parameters**. Measured: 128 → 0.8843, 256 → 0.9002, 512 → 0.9058.
+256 is the knee, and the reason a phone app was feasible at all.
+
+**Pretrained / fine-tuning.** The backbone starts with weights learned on a different, larger task
+(usually ImageNet), then *all* of it is retrained on moths. Starting from pretrained weights rather
+than randomly is worth far more than any single choice in this repo — it is simply assumed.
+
+**Self-supervised / DINOv3.** A pretraining style that uses no labels at all, learning from image
+structure alone. DINOv3 backbones were expected to be more robust for that reason. Measured here:
+they match a conventionally pretrained model of the same size, so the benefit was **scale, not the
+pretraining style**.
+
+**Epoch / batch.** A **batch** is the group of images processed together (64 here); an **epoch** is
+one pass over the whole training set (~3 M images). This project trains for 5 epochs by convention —
+a comparison budget, not a converged optimum, and 10-epoch runs were still improving when they
+stopped.
+
+**Learning rate, schedule, annealing.** The learning rate is the step size. It is not constant: a
+**schedule** raises it at the start (**warmup**) and lowers it toward the end (**annealing**), so the
+model explores early and settles late. `one_cycle` anneals over ~90 % of the run and beat `flat_cos`
+(which anneals over the last 25 %) by **1.2 points** — the model was previously being graded
+mid-descent. The single largest lever in the project's history was this, not the optimiser.
+
+**Optimizer (Muon, AdamW).** The rule for turning gradients into weight updates. This project uses
+**Muon** for the matrix-shaped parameters and AdamW for the rest. Worth knowing: Muon was in place
+from the very first run at 0.8297 and never changed — **the optimiser was never what moved the
+number.**
+
+**fp16 / bf16 / mixed precision.** Training in 16-bit instead of 32-bit numbers, for speed and
+memory. The two 16-bit formats differ in what they sacrifice: **fp16** keeps precision and loses
+*range*; **bf16** keeps range and loses precision. The cosine head produces large intermediate
+values, so it **overflows in fp16** and trains visibly broken. bf16 is mandatory here, and this is an
+invariant, not a preference.
+
+**Gradient clipping.** Cap the size of a weight update so one strange batch cannot wreck the model.
+
+**Label smoothing.** Instead of training toward "100 % this species, 0 % everything else", train
+toward "99 % / a little spread around". Prevents the model becoming absurdly overconfident.
+
+**MixUp.** Train on blended pairs of images with correspondingly blended labels. A regulariser for
+longer runs; incompatible with the ArcFace margin (which needs a single true class to rotate).
+
+## 11. Data vocabulary
+
+**Fold / split / held-out.** The dataset is partitioned so no image is both trained on and tested on.
+**`set == '0'`** is the held-out **test** fold (629,742 images) — touched only for final numbers.
+The **validation** split is carved from the training data and watched *during* training. Confusing
+them inflates everything.
+
+**Parquet.** The file format holding the image metadata table — one row per image, with its filename
+and its species/genus/family keys. All dataset filtering happens on this table, never on the images.
+
+**`min_img_per_spc`.** A filter dropping species with fewer than *N* images. Legitimate when building
+a *training* set; **catastrophic on the test fold**, because it removes the tail from an average that
+weights every species equally. Applying it to evaluation once inflated a score from 0.9152 to 0.9455
+and briefly looked like a win.
+
+**Augmentation.** Random distortions applied to training images — flips, rotations, small zooms — so
+the model sees each photo differently every epoch and cannot memorise it. Counter-intuitively,
+**lighter augmentation helped here**: species differ by fine wing texture, and aggressive distortion
+destroys the signal the task depends on.
+
+**Domain augmentation (`domain_aug: trap`).** A separate, opt-in set that deliberately *degrades*
+images to look like camera-trap frames — motion blur, low light, JPEG artefacts. Costs 0.36 pt
+in-distribution and buys **4.0 pt** on real trap images.
+
+**Domain shift.** The deployment images come from a different source than the training images (museum
+specimens vs a camera trap in a field). Everything degrades: our best in-distribution model drops
+from 0.92 to 0.66. This is the project's central open problem.
+
+**In-distribution vs OOD.** *In-distribution* = same source as training. **OOD** (out-of-distribution)
+is used for two different things and it is worth keeping them apart: a **novel species** (open-set,
+§6) and a **different image source** (domain shift). This repo says "open-set" for the first and
+"shifted" for the second.
+
+**TTA (test-time augmentation).** At prediction time, run several augmented copies of the image and
+average. Costs inference time, buys a little accuracy.
+
+## 12. Evaluation vocabulary
+
+**Precision / recall / F1.** Of the images you *called* this species, what fraction were right
+(**precision**); of the images that *were* this species, what fraction did you find (**recall**).
+**F1** is their harmonic mean — it can only be high if both are, so it cannot be gamed by always
+guessing, or never guessing.
+
+**Macro vs micro.** **Macro** averages the per-species F1 with every species weighted equally;
+**micro** effectively weights by image count. With a long tail these differ enormously, and macro is
+the honest one — under micro, a handful of common moths can hide thousands of rare-species failures.
+
+**Calibration.** Whether a stated confidence means what it says: of the predictions made at "80 %
+confident", are ~80 % right? A model can be highly *accurate* and badly *calibrated*. This matters
+here more than usual, because marginalisation **sums** probabilities — summing badly-calibrated
+numbers gives a badly-wrong genus, even when the top species is right. Several results in this repo
+turn out to be calibration effects rather than accuracy ones.
+
+**Abstention / coverage.** Letting the model answer "I'm not sure" instead of guessing. **Coverage**
+is the fraction of images it does answer. The interesting operating point here is *rank* abstention:
+back off from species to genus to family rather than refusing outright, so the user still gets
+something useful.
+
+**AUROC.** See §6 — the probability a random novel image scores as more novel than a random known
+one.
+
+## 13. Shipping a model
+
+**Checkpoint.** The saved file holding trained weights plus the vocabularies needed to interpret
+them. Without the vocabulary the numbers are meaningless — output 7,412 means nothing on its own.
+
+**ONNX.** A portable model format that runs outside PyTorch, including in a browser. Exporting
+requires the model's forward pass to be **label-free** and free of data-dependent branching — which
+is exactly why the ArcFace margin lives in the loss rather than the head (§5).
+
+**Quantization.** Storing weights in fewer bits to shrink the file. **int8** gives ~3.9× for −0.59 pt
+of accuracy but **cannot run in the browser** (the runtime lacks the needed kernel); **fp16** gives
+−28 % for no measurable loss and does run. Measured, not assumed.
+
+**Distillation (teacher / student / temperature).** Train a small **student** to imitate a large
+**teacher**'s full output distribution, not just the correct answer — the teacher's "this is probably
+species A, possibly B, definitely not C" carries more information than the label alone.
+**Temperature** controls how much of that spread is exposed; the textbook value of 4 *hurt* here
+(0.8546 vs 0.8692), and T=1 was needed, because the z-score head's outputs are already spread out.
+
+## 14. Experiment-design vocabulary
+
+**Ablation.** Remove one component and re-measure, to find out what it was worth. The whole baseline
+was built this way.
+
+**Control.** The run that *isolates* what you are claiming. Getting this wrong is the most expensive
+mistake here: distillation appeared worth +1.41 pt until the correct control showed the architecture
+change was worth +0.97 of it, leaving distillation +0.44.
+
+**Factorial (2×2).** Test two changes *and their combination*, not one at a time — the only way to
+find out whether they help each other, cancel, or double-count. Used for capacity × augmentation
+(they compose better than additively) and oversampling × balanced softmax.
+
+**Noise floor / seed.** Retrain an identical configuration and the score moves a little; that
+movement is the floor below which a difference means nothing. A **seed** fixes the random choices so
+a run can be reproduced exactly — this project sets none, which is precisely what made the floor
+measurable. Measured: **0.0000** species, 0.0005 genus, 0.0024 family, **~0.006** shifted.
+
+**Falsification line.** A number written down *before* the run, at which the hypothesis would be
+declared wrong. The journal convention here; it is what stops a result being rationalised after the
+fact.
 
 ---
 

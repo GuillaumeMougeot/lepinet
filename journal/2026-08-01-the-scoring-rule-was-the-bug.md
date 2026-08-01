@@ -108,3 +108,46 @@ recording that a choice had been made.
 **Adopted:** open-set results are reported **with the rule named**, and `dev/061` (all five rules,
 one pass) replaces `dev/052` as the default open-set tool. Reporting one number without its rule is
 now the same category of error as reporting macro-F1 without saying which level.
+
+---
+
+## Addendum: two rules are *degenerate* for log-probability heads (2026-08-01)
+
+Rescoring A4 (`marginal_arcface`) produced a table that looked alarming and was actually empty:
+
+```
+entropy  0.8950   <- best
+margin   0.8871
+max      0.8591
+msp      0.8591          <- identical to max, to four decimals
+energy   0.4399          <- apparently catastrophic
+```
+
+Neither oddity is a result. The `marginal*` heads emit **log-probabilities**, not raw z-scores,
+because the marginals are computed by `logsumexp` inside `forward` and must live on a normalised
+scale for that sum to mean anything. On log-probabilities:
+
+- $\mathrm{energy} = \operatorname{logsumexp}(\log p) = \log \sum_j p_j = \log 1 = \mathbf{0}$ for
+  every image. A **constant**, so its "AUROC" is whatever the tie-breaking in the rank sort produces.
+  0.4399 is noise, not a failure.
+- $\mathrm{msp} = \operatorname{softmax}(\log p) = p$, so it is a strictly monotone function of
+  $\max_j \log p_j$ and **must** give bit-identical AUROC to `max`. It did.
+
+Both were predictable from the head's output convention, and neither was predicted — the script
+applied five rules without asking whether all five were defined for the model in front of it.
+
+**Fixed in `dev/061`:** degeneracy is now detected *from the data* (`logsumexp` identically zero
+implies normalised rows) rather than from the head's name, so a future head with the same convention
+is caught too. Degenerate rules are printed with an explanation and excluded from the "best rule"
+ranking.
+
+**A4's real open-set numbers**, with the degenerate rules removed: **entropy 0.8950**, margin 0.8871,
+max/msp 0.8591. So the best rule differs *again* — `max` for the small raw-z-score models, `msp` for
+the large ones, `entropy` for the log-probability heads. That strengthens rather than weakens this
+entry's conclusion: **the scoring rule is a per-model choice, not a project-wide constant**, and it
+now depends on the head's output convention as well as on capacity.
+
+**The recurring shape.** This is the third time this week that something arriving as a default
+escaped scrutiny: `-max_logit` as "the" score, "consistent by construction" as a definition, and now
+five rules applied without checking they were all defined. Each was caught by taking the claim
+literally and testing it.

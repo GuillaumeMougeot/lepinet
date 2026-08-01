@@ -148,9 +148,9 @@ single-head architecture supervises only one. Separately, τ-normalisation is *a
 
 | id | run | state |
 |---|---|---|
-| **L0** | no oversampling, no balanced softmax — **the control nobody ran** on this architecture | running (12362502) |
-| **L1** | balanced softmax instead of oversampling | running (12362503) |
-| **L2** | both | running (12362504) |
+| **L0** | no oversampling, no balanced softmax — the control nobody ran | **DONE**: 0.8949 in-dist / **0.6445 shifted**. Oversampling is **+1.86 in-dist and −1.52 shifted** — an accuracy/robustness trade, the 4th inversion |
+| **L1** | balanced softmax instead of oversampling | **relaunched** (12362570) — first attempt died on a `prepare_df` signature I guessed instead of checking |
+| **L2** | both | **relaunched** (12362571) — same cause |
 | — | √-oversampling alone | **have it: 0.9135** |
 
 Deferred with reasons: **LDAM** (per-class margin ∝ n⁻¹ᐟ⁴ — needs per-class margin support, and is
