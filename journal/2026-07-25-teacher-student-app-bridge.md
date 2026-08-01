@@ -467,3 +467,33 @@ Queued as **A6**: single-head b0, no teacher, everything else identical.
 **Prediction (committed): 0.870–0.878.** If it lands near 0.883, distillation from A2 bought nothing
 and the win was the head all along — which would be a more useful finding than the one this entry
 currently claims.
+
+### A6: the control lands, and it halves distillation's credit (2026-08-01)
+
+| b0, hidden 256, 5 ep | species macro-F1 |
+|---|---|
+| from scratch, **multi-head** | 0.8692 |
+| from scratch, **single-head** (A6) | **0.8789** |
+| distilled from A2, single-head (A3) | **0.8833** |
+
+**Prediction was 0.870–0.878; it landed at 0.8789, just above the range.** The direction of the
+reasoning was right — the head change should be worth *more* at b0 than the +0.25 pt it buys at
+`effnetv2_s`, because coarse heads are proportionally more expensive when parameters are scarce —
+but the size was underestimated.
+
+**The attribution changes materially:**
+
+| | credited before | actual |
+|---|---|---|
+| dropping the coarse heads | — | **+0.97 pt** |
+| distillation from A2 | +1.41 | **+0.44 pt** |
+
+So distillation is worth **less than half** what the missing control implied, and **the head change
+is worth more than distillation** at this scale. Every earlier KD number in this entry compared a
+multi-head student against a multi-head from-scratch control, which was internally consistent — but
+the moment A3's student became single-head, the old control stopped being a control.
+
+Distillation still works (+0.44 pt is 4× the species noise floor, [[2026-08-01-how-noisy-are-our-numbers]]),
+and the ceiling claim is untouched. But the honest headline for the shipped student is that **most of
+its advantage comes from the architecture, not the teacher** — which is consistent with the other
+finding here, that teacher *accuracy* barely matters.

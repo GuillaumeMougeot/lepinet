@@ -1,0 +1,40 @@
+# L1: balanced softmax INSTEAD of oversampling. Note this is logit adjustment at tau=1, which
+# this project already ran and rejected (0.9031 vs 0.9148) -- but the reason it lost was one
+# shared tau across three distributions of very different size, and the single-head
+# architecture supervises only ONE. That objection is now structurally impossible.
+# Prediction (committed): 0.905-0.915, i.e. roughly matching oversampling. Below 0.90 means
+# the shared-tau reading was wrong and the method is simply worse here.
+version: 1.0
+desc: lepinet-L1-longtail-effnetv2s-ucloud
+train:
+  parquet_path: /work/global_lepi/0032836-250426092105405_processing_metadata_postprocessed_quality_filtered.parquet
+  img_dir: /work/global_lepi/images
+  out_dir: /work/lepinet/data/ucloud_models
+  fold: '1'
+  min_img_per_spc: 50
+  num_workers: 256
+  model_name: lepinet-L1-longtail-effnetv2s-ucloud
+  model_arch_name: efficientnet_v2_s
+  head: independent
+  nb_epochs: 5
+  base_lr: 0.001
+  batch_size: 64
+  aug_img_size: 460
+  img_size: 256
+  optimizer: muon
+  fp16: true
+  precision: fp16
+  schedule: one_cycle
+  warmup_epochs: 0.5
+  grad_clip: 5.0
+  oversample_power: 0.0
+  family_filter: []
+  aug_kwargs:
+    max_warp: 0.0
+    max_lighting: 0.0
+    p_lighting: 0.0
+    flip_vert: true
+    max_rotate: 15.0
+    max_zoom: 1.1
+  levels:
+  - speciesKey

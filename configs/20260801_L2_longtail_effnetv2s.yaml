@@ -1,0 +1,38 @@
+# L2: both levers at once. Prediction (committed): WORSE than the better of L1 and the 0.9135
+# oversampling cell. Both correct the same frequency bias -- one by showing rare classes more
+# often, the other by lowering their effective threshold -- so applying both should
+# over-correct toward the tail. ~65% a small loss, ~25% a wash, ~10% a genuine gain.
+version: 1.0
+desc: lepinet-L2-longtail-effnetv2s-ucloud
+train:
+  parquet_path: /work/global_lepi/0032836-250426092105405_processing_metadata_postprocessed_quality_filtered.parquet
+  img_dir: /work/global_lepi/images
+  out_dir: /work/lepinet/data/ucloud_models
+  fold: '1'
+  min_img_per_spc: 50
+  num_workers: 256
+  model_name: lepinet-L2-longtail-effnetv2s-ucloud
+  model_arch_name: efficientnet_v2_s
+  head: independent
+  nb_epochs: 5
+  base_lr: 0.001
+  batch_size: 64
+  aug_img_size: 460
+  img_size: 256
+  optimizer: muon
+  fp16: true
+  precision: fp16
+  schedule: one_cycle
+  warmup_epochs: 0.5
+  grad_clip: 5.0
+  oversample_power: 0.5
+  family_filter: []
+  aug_kwargs:
+    max_warp: 0.0
+    max_lighting: 0.0
+    p_lighting: 0.0
+    flip_vert: true
+    max_rotate: 15.0
+    max_zoom: 1.1
+  levels:
+  - speciesKey
