@@ -103,3 +103,28 @@ def test_sparse_masks_conflict_raises():
     labels = OrderedDict([("a1", ("a", "g1")), ("a2", ("a", "g2"))])
     with pytest.raises(ValueError):
         sparse_masks_from_labels(labels, cls2idx)
+
+
+def test_marginalisation_is_coherent_but_not_argmax_consistent():
+    """Marginalisation gives probabilistic coherence, NOT argmax agreement.
+
+    The repo claimed the latter ("consistent by construction") in eight places including the paper's
+    method section, and it is false: ``max`` and ``sum`` do not commute over a partition, so a
+    confident species can be outvoted by many diffuse siblings of another genus. This pins the true
+    property so the wrong one cannot creep back in.
+    See journal/2026-08-01-marginalisation-is-not-argmax-consistent.md.
+    """
+    import torch
+
+    # genus A = {s0}; genus B = {s1..s5}
+    p_species = torch.tensor([[0.40, 0.12, 0.12, 0.12, 0.12, 0.12]])
+    parent = torch.tensor([0, 1, 1, 1, 1, 1])
+    p_genus = torch.zeros(1, 2).index_add_(1, parent, p_species)
+
+    # coherence: the coarse posterior *is* the sum, and still a distribution
+    assert torch.allclose(p_genus.sum(), torch.tensor(1.0))
+    assert torch.allclose(p_genus, torch.tensor([[0.40, 0.60]]))
+
+    # ...but the argmaxes disagree, which is exactly what "consistent by construction" denied
+    top_species = p_species.argmax(1)
+    assert parent[top_species].item() != p_genus.argmax(1).item()

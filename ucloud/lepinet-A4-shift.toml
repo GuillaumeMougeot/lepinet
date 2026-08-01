@@ -1,0 +1,26 @@
+# A1 on the SHIFTED benchmark (flemming). Project policy since H4: every model
+# comparison reports the shifted score next to the in-distribution one.
+name = "lepinet-A4-shift"
+replicas = 1
+[application]
+name = "pytorch-te"
+version = "26.05"
+[product]
+id = "gpu-nvidia-b200-1-gpu"
+category = "gpu-nvidia-b200"
+provider = "ucloud"
+[time_allocation]
+hours = 3
+[sync]
+local = ".."
+remote = "/12347837/repos/lepinet"
+[setup]
+script = "setup-lepinet.sh"
+run = "python dev/051_benchmark_run.py test --model '/work/lepinet/data/ucloud_models/*-lepinet-A4-marginal-arcface-effnetv2s-ucloud/*.pt' --parquet /work/lepinet/data/flemming/flemming_names_labels.parquet --img-dir /work/flemming/images --out-dir /work/lepinet/data/ucloud_preds/A4-shift --test-set 0 --min-img-per-spc 0 --img-size 256 --aug-img-size 460 --batch-size 128 --num-workers 32 --no-drop-unknown-species"
+[schedule]
+auto_extend = "1h"
+max_time = "6h"
+[[resources]]
+type = "file"
+path = "/12347837/datasets/flemming"
+read_only = true

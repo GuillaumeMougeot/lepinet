@@ -103,6 +103,13 @@ converged outcome. Both were abandoned with the reasoning written down, which is
 idea explains two separate results: why oversampling beat logit adjustment, and why marginalisation
 beat per-level heads. It is the closest thing this project has to a design principle.
 
+**A claim phrased as a *definition* still needs a test.** Two claims survived unchallenged for weeks
+because they did not look like results: `-max_logit` (it looked like the definition of the score, and
+was wrong across a scale change) and "marginalisation is consistent by construction" (it looked like
+a theorem, and is false — `max` and `Σ` do not commute over a partition). Both were caught by writing
+an assertion that took the words literally. If a property cannot be falsified by a test, it is not a
+property, it is a hope.
+
 **Prove what you can without a GPU first.** The clean package was made to load the old checkpoint
 bit-exactly, so export, prediction and evaluation were all validated before any retraining.
 

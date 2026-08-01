@@ -15,21 +15,30 @@ import sys
 from pathlib import Path
 
 
-def _register_dev_heads() -> None:
+def _register_dev_heads():
     p = Path(__file__).with_name("050_hierarchical_heads.py")
     spec = importlib.util.spec_from_file_location("dev050_heads", p)
     module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)  # side effect: registers HierarchicalHead (+ future ones)
+    spec.loader.exec_module(module)  # side effect: registers the dev heads
+    return module
 
 
 def main(argv: list[str]) -> None:
-    _register_dev_heads()
+    heads = _register_dev_heads()
     if not argv:
         raise SystemExit(__doc__)
     mode, rest = argv[0], argv[1:]
     if mode == "train":
+        import yaml
+
         from lepinet.train import train_from_config
-        train_from_config(rest[0])
+
+        # `marginal_arcface` computes its marginals inside forward, so the ArcFace margin has to be
+        # applied there too -- which means forward needs the labels. Everything else keeps the
+        # label-free forward and lets the loss inject the margin. See the head's docstring.
+        head = (yaml.safe_load(open(rest[0])) or {}).get("train", {}).get("head")
+        cbs = [heads.MarginContextCallback()] if head == "marginal_arcface" else None
+        train_from_config(rest[0], extra_cbs=cbs)
     elif mode == "test":
         # Reuse lepinet's typer CLI for `test` so all its flags work unchanged.
         from lepinet.cli import app

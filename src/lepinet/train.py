@@ -21,7 +21,7 @@ from .metrics import default_metrics
 from .model import arch_body_features, arch_is_vit, build_learner, resolve_arch
 
 
-def train(cfg: TrainConfig):
+def train(cfg: TrainConfig, extra_cbs=None):
     """Run one training job from a :class:`~lepinet.config.TrainConfig`. Writes ``<out_dir>/<model_name>.pt``."""
     data_mod.ensure_fork_start_method()
     levels = list(cfg.levels)
@@ -48,15 +48,21 @@ def train(cfg: TrainConfig):
     arch = resolve_arch(cfg.model_arch_name)
     vit = arch_is_vit(arch, img_size=cfg.img_size)  # ViT/DINOv3 → FlatHead + manual Learner
     nf = arch_body_features(arch, img_size=cfg.img_size)
-    head_kwargs = ({"scale": cfg.arcface_scale, "margin": cfg.arcface_margin, "zscore": cfg.arcface_zscore}
-                   if cfg.head == "arcface" else {})
-    # Taxonomy-needing heads (hierarchical / autoregressive, registered from dev/) declare a
-    # `sparse_masks` argument; build it from the training labels and pass it. Signature-driven so a
-    # head that doesn't want it never sees it (the independent/arcface heads don't).
+    # Head construction is **signature-driven**: a config key reaches the head only if the head's
+    # constructor declares it. That keeps `dev/`-registered heads first-class (a head combining, say,
+    # marginalisation with an ArcFace margin picks up `margin`/`scale` without this module knowing it
+    # exists) and stops a key being silently ignored -- which is how `arcface_margin` would have been
+    # dropped for `marginal_arcface` under the old `cfg.head == "arcface"` test.
     import inspect
 
     from .heads import HEAD_REGISTRY, build_class_spec
-    if cfg.head in HEAD_REGISTRY and "sparse_masks" in inspect.signature(HEAD_REGISTRY[cfg.head]).parameters:
+    _params = (inspect.signature(HEAD_REGISTRY[cfg.head]).parameters
+               if cfg.head in HEAD_REGISTRY else {})
+    head_kwargs = {k: v for k, v in (("scale", cfg.arcface_scale), ("margin", cfg.arcface_margin),
+                                     ("zscore", cfg.arcface_zscore)) if k in _params}
+    # Taxonomy-needing heads (hierarchical / autoregressive / marginal) declare a `sparse_masks`
+    # argument; build it from the training labels and pass it. Same rule.
+    if "sparse_masks" in _params:
         _cls2idx, sparse_masks = build_class_spec(df, vocabs, levels)
         head_kwargs["sparse_masks"] = sparse_masks
         print(f"Head {cfg.head!r} takes sparse_masks -> built {len(sparse_masks)} parent mask(s).")
@@ -130,6 +136,14 @@ def train(cfg: TrainConfig):
         cbs.append(DistillCallback(teacher_model))
     # GCCallback is intentionally omitted (D3): the clean head has no per-batch reference cycle.
     # Add `GCCallback()` here if a future head reintroduces one and GPU memory climbs.
+    #
+    # `extra_cbs` is the callback counterpart of HEAD_REGISTRY: a dev/ experiment whose head needs
+    # something the training loop does not provide (e.g. the batch labels inside forward, for a
+    # margin applied before an in-forward marginalisation) can supply it without editing this module.
+    # Package defaults must never depend on it -- if a callback becomes load-bearing, promote it here.
+    if extra_cbs:
+        cbs.extend(extra_cbs)
+        print(f"Extra callbacks: {[type(c).__name__ for c in extra_cbs]}")
 
     learn = build_learner(dls, arch, custom_head, loss_func, default_metrics(levels),
                           out_dir / "models", cbs, optimizer=cfg.optimizer, vit=vit)
@@ -203,8 +217,11 @@ def _save_checkpoint(learn, cfg: TrainConfig, levels, vocabs, df, out_dir: Path,
     return model_path
 
 
-def train_from_config(config_path: str):
-    """Load a YAML config, stamp a run dir, and train. Returns the run directory."""
+def train_from_config(config_path: str, extra_cbs=None):
+    """Load a YAML config, stamp a run dir, and train. Returns the run directory.
+
+    ``extra_cbs`` is for ``dev/`` experiments only (see :func:`train`); the CLI never passes it.
+    """
     cfg, run_dir = prepare_run_dir(config_path)
-    train(cfg)
+    train(cfg, extra_cbs=extra_cbs)
     return run_dir

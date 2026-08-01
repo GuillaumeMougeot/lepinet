@@ -17,7 +17,7 @@ Two things make this hard, and shape the whole design:
 The method: a shared image backbone feeds a **cosine classification head** — L2-normalised class
 prototypes scored by angle — trained with square-root class oversampling. Coarser ranks are obtained
 by **marginalising the species posterior** rather than from separate heads, which measures better and
-cannot contradict the species prediction. On the reference Lepidoptera dataset this reaches **species
+are probabilistically coherent with it (the coarse posterior *is* the sum of the species one). On the reference Lepidoptera dataset this reaches **species
 macro-F1 0.9135** (0.9316 with a larger backbone). An optional **ArcFace × z-score** variant makes the
 model able to flag species it was never trained on (open-set AUROC 0.601 → 0.9115). See
 [The method](#the-method).
@@ -81,7 +81,7 @@ Each design choice answers one of the two difficulties above.
   few examples it sees.
 - **Marginalisation instead of coarse heads.** `P(genus) = Σ P(species ∈ genus)`, applied up the
   taxonomy. Measured *better* than separately trained genus/family heads (+0.7 pp genus, +3.1 pp
-  family) and consistent by construction — a genus can never contradict the species argmax's parent.
+  family) and probabilistically coherent — the coarse posterior is by definition the sum of the species one, unlike independent heads, which contradict each other on 1.81 % of images.
   The head is still N-level generic; you simply do not need the extra levels.
 - **ArcFace × z-score (optional, `head: arcface`).** An angular margin composed with the z-score
   transform. Costs ~0.4 pt of accuracy and takes open-set detection of unseen species from

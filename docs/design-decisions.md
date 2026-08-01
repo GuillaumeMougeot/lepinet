@@ -119,7 +119,7 @@ head is ~51 % of a small model's parameters, which is the whole reason the phone
 ### Coarse levels: marginalise, don't add heads
 
 Genus and family come from summing the species posterior, not from their own classifiers. This is
-smaller, cannot contradict itself, and scores better at every level (0.9135/0.9606/0.9739 vs
+smaller, probabilistically coherent (the coarse posterior *is* the sum of the species one — argmax agreement is *not* guaranteed, see the journal entry on that), and scores better at every level (0.9135/0.9606/0.9739 vs
 0.9110/0.9587/0.9708 like-for-like). It is one of the paper's contributions; see §2.4 there.
 
 ---

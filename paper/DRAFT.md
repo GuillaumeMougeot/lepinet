@@ -13,7 +13,7 @@ results on a 12,041-species Lepidoptera benchmark. First, **hierarchical predict
 help**: an independent multi-head cosine classifier, a parent-conditioned hierarchical head and an
 autoregressive head are all matched or beaten by a *single* species head whose genus and family
 predictions are obtained by marginalising its own posterior (0.9135 vs 0.9110 species macro-F1, and
-better at every coarser level) — while being smaller and consistent by construction. Second,
+better at every coarser level) — while being smaller and probabilistically coherent. Second,
 in-distribution accuracy is close to saturated (0.9316 with a modern large backbone) yet collapses to
 **0.70 on data from a different source**, so the remaining error is dominated by distribution shift
 rather than by classifier design; we further decompose that gap, showing that hand-named nuisances
@@ -103,9 +103,18 @@ posterior rather than from dedicated heads:
 
 $$\log P(g) \;=\; \operatorname*{log\,sum\,exp}_{\{\,s\,:\,\pi(s)=g\,\}} \log P(s),$$
 
-applied recursively up the taxonomy. This is exact, adds no parameters, and is **consistent by
-construction**: the genus argmax can never contradict the parent of the species argmax (measured at
-1.81 % of images for independently trained heads).
+applied recursively up the taxonomy. This is exact, adds no parameters, and makes the levels
+**probabilistically coherent**: the reported coarse posterior *is* the sum of the fine one, so the
+two are statements from a single distribution. Independent per-level heads have no such relation and
+can report a genus probability incompatible with their own species distribution — they contradict
+each other's argmax on 1.81 % of images.
+
+Coherence is what the downstream machinery needs: rank abstention (§4.6) compares $P(\mathrm{genus})$
+against $P(\mathrm{species})$, which is only meaningful within one distribution. Note that coherence
+does **not** imply argmax agreement — $\max$ and $\sum$ do not commute over a partition, so a
+confident species can be outvoted by many diffuse siblings of another genus. When that happens the
+coarse answer is arguably the better one, since aggregating sibling evidence is exactly what the
+marginal is for.
 
 ## 3. Experimental setup
 

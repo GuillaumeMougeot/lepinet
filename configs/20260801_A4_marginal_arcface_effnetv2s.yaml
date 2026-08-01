@@ -1,0 +1,46 @@
+# A4: the two interventions that act on the SAME quantity, composed.
+#   * the ArcFace margin degrades the calibration of the summed posterior (-1.15/-1.11 coarse)
+#   * marginal supervision optimises exactly that sum (+0.27 genus, and +1.41 pt under SHIFT)
+# Every model in RESULTS.md was trained without marginal supervision, so every shifted number
+# is a floor rather than a ceiling.
+# Prediction (committed): in-dist species 0.903-0.910 (the margin's species cost is unchanged),
+# coarse levels recovered toward 0.955/0.970, shifted 0.655-0.670 (A1's 0.6437 + most of the
+# +1.41), AUROC 0.90 +/- 0.01. Falsified if shifted <= 0.6506 (A1 + one noise floor).
+version: 1.0
+desc: lepinet-A4-marginal-arcface-effnetv2s-ucloud
+train:
+  parquet_path: /work/global_lepi/0032836-250426092105405_processing_metadata_postprocessed_quality_filtered.parquet
+  img_dir: /work/global_lepi/images
+  out_dir: /work/lepinet/data/ucloud_models
+  fold: '1'
+  min_img_per_spc: 50
+  num_workers: 256
+  model_name: lepinet-A4-marginal-arcface-effnetv2s-ucloud
+  model_arch_name: efficientnet_v2_s
+  head: marginal_arcface
+  nb_epochs: 5
+  base_lr: 0.001
+  batch_size: 64
+  aug_img_size: 460
+  img_size: 256
+  optimizer: muon
+  fp16: true
+  precision: bf16
+  schedule: one_cycle
+  warmup_epochs: 0.5
+  grad_clip: 5.0
+  oversample_power: 0.5
+  family_filter: []
+  aug_kwargs:
+    max_warp: 0.0
+    max_lighting: 0.0
+    p_lighting: 0.0
+    flip_vert: true
+    max_rotate: 15.0
+    max_zoom: 1.1
+  levels:
+  - speciesKey
+  - genusKey
+  - familyKey
+  arcface_margin: 0.3
+  arcface_scale: 30.0
