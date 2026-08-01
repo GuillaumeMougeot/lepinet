@@ -56,6 +56,12 @@ way to know has been to run the cell.
 
 ### 3. Everything helps accuracy and everything hurts novelty detection
 
+> **Corrected the same day.** This section's AUROC column uses `max-logit`, which
+> [[2026-08-01-the-scoring-rule-was-the-bug]] shows is the wrong rule for the 198 M models. With each
+> model's best rule the column reads 0.9068 / 0.9010 / 0.8904 / 0.8893 — still monotone downward, but
+> spanning **1.75 pt rather than 9.4**. The direction stands; the magnitude, and hence the claim that
+> open-set is "the binding constraint", does not. Retained below as written, with this caveat.
+
 The open-set column is monotone downward across the whole table: 0.9068 → 0.9010 → 0.8298 → 0.8132.
 **Every intervention that improved accuracy on either axis cost AUROC**, and the two costs stack.
 
@@ -104,6 +110,10 @@ But there is still no single best model, and the split is now sharp:
 default: it is the only cell that does not sacrifice one axis outright.
 
 ## What this makes worth running next
+
+> **Superseded in part.** E2 ran immediately after this was written and cancelled E1 — see
+> [[2026-08-01-the-scoring-rule-was-the-bug]]. The ordering that put E2 first is the reason ~36
+> GPU-hours were not spent chasing an artifact.
 
 **The open-set degradation is now the binding constraint**, not accuracy. Three of four cells trade
 AUROC for accuracy and none trades the other way, so the next experiments should attack that axis

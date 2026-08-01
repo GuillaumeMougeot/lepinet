@@ -64,7 +64,7 @@ teacher. Re-running those two on the new baseline is the highest-value pending w
 package runs on **UCloud B200** and its checkpoints/results are not in that ledger, so this table is
 maintained by hand and kept exhaustive.
 
-**Noise floor (measured 2026-08-01, [`journal/2026-08-01-how-noisy-are-our-numbers.md`](journal/2026-08-01-how-noisy-are-our-numbers.md)):** species **0.0000**, genus **0.0005**, family **0.0024** across an exact repeat. Read every delta below against its level's floor — **family differences under ~0.25 pp are not reportable.** The shifted benchmark's floor is still being measured; it has 25× fewer classes, so expect it to be much larger.
+**Noise floor (measured 2026-08-01, [`journal/2026-08-01-how-noisy-are-our-numbers.md`](journal/2026-08-01-how-noisy-are-our-numbers.md)):** species **0.0000**, genus **0.0005**, family **0.0024** across an exact repeat. Read every delta below against its level's floor — **family differences under ~0.25 pp are not reportable.** The shifted benchmark's floor is **0.0069** (two trainings, 486 species) — treat any shifted difference under ~0.7 pp as noise.
 
 **Metric:** species (level-0) **macro-F1** on the held-out fold `set=='0'`, over **all** species
 (`min_img_per_spc=0`, 629,742 images / 12,041 species) unless the row says otherwise; micro-accuracy

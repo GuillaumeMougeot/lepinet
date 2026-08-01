@@ -1,0 +1,29 @@
+# Does coarse SUPERVISION or coarse PARAMETERS buy robustness under shift? The single-head
+# baseline scores ~0.629 shifted vs the multi-head's 0.6503 -- it loses ~2 pt (3x the measured
+# 0.69 pt floor) while winning in-distribution. Marginal supervision has the coarse signal and
+# no coarse parameters, so it separates the two. mh-shift2 is a second draw of the multi-head,
+# because 0.6503 is currently a single measurement carrying the comparison.
+name = "lepinet-marg-shift"
+replicas = 1
+[application]
+name = "pytorch-te"
+version = "26.05"
+[product]
+id = "gpu-nvidia-b200-1-gpu"
+category = "gpu-nvidia-b200"
+provider = "ucloud"
+[time_allocation]
+hours = 3
+[sync]
+local = ".."
+remote = "/12347837/repos/lepinet"
+[setup]
+script = "setup-lepinet.sh"
+run = "python dev/051_benchmark_run.py test --model '/work/lepinet/data/ucloud_models/*-lepinet-marginal-effnetv2s-ucloud/*.pt' --parquet /work/lepinet/data/flemming/flemming_names_labels.parquet --img-dir /work/flemming/images --out-dir /work/lepinet/data/ucloud_preds/marg-shift --test-set 0 --min-img-per-spc 0 --img-size 256 --aug-img-size 460 --batch-size 128 --num-workers 32 --no-drop-unknown-species"
+[schedule]
+auto_extend = "1h"
+max_time = "6h"
+[[resources]]
+type = "file"
+path = "/12347837/datasets/flemming"
+read_only = true

@@ -1,6 +1,6 @@
 # Knowing what you don't know: calibrated open-set hierarchical classification for long-tailed species identification
 
-**Status:** working draft (2026-07-31). Numbers are from `RESULTS.md`; the reasoning behind each is
+**Status:** working draft (2026-08-01). Numbers are from `RESULTS.md`; the reasoning behind each is
 in [`../journal/`](../journal/). Sections marked _(pending)_ await runs that are in flight.
 
 ---
@@ -15,10 +15,9 @@ autoregressive head are all matched or beaten by a *single* species head whose g
 predictions are obtained by marginalising its own posterior (0.9135 vs 0.9110 species macro-F1, and
 better at every coarser level) — while being smaller and consistent by construction. Second,
 in-distribution accuracy is close to saturated (0.9316 with a modern large backbone) yet collapses to
-**0.70 on data from a different source** — and, more sharply, the three evaluation axes rank our
-models in **opposite orders**: our best in-distribution model is the worst at detecting unseen taxa
-and is beaten under shift by one a tenth its size, so the standard metric is not merely saturated but
-**anti-correlated** with deployment quality. Third, and most usefully, we show that composing an **additive
+**0.70 on data from a different source**, so the remaining error is dominated by distribution shift
+rather than by classifier design; we further decompose that gap, showing that hand-named nuisances
+account for only about one sixth of it. Third, and most usefully, we show that composing an **additive
 angular margin with a dimension-aware z-score transform** turns a classifier that is near-chance at
 detecting unseen species (AUROC 0.601) into a reliable one (**0.9115**; **0.9068** on the single-head architecture we
 recommend) at a cost of 0.4 to 1.0 points of closed-set accuracy — where the margin *alone* costs 3.3 points and yields only 0.732. Taken
@@ -348,38 +347,58 @@ contribution. Roughly one sixth of cross-source degradation is removable by nami
 sixths are not. That is what motivates treating cross-source generalisation, rather than closed-set
 accuracy, as the open problem.
 
-### 4.9 The three axes rank models in opposite orders
+### 4.9 Open-set scoring rules do not transfer across model scale
 
-Sections 4.2, 4.5 and 4.8 each evaluate on a different axis. Measured together on one architecture
-family — single species head, ArcFace × z-score, marginalisation, varying only backbone and
-augmentation — they do not merely differ in scale. **They disagree about which model is best.**
+All open-set numbers above use $-\max_j z_j$, the standard max-logit score. Measured that way, a 10×
+larger backbone appears to *lose* 7.7 points of AUROC, and the three evaluation axes appear to rank
+models in opposite orders. Both conclusions are largely artifacts of that choice.
 
-| model | params | in-distribution | external | open-set AUROC |
-|---|---|---|---|---|
-| efficientnet\_v2\_s | 20 M | 0.9035 | 0.6437 | **0.9068** |
-| efficientnet\_v2\_s + domain aug | 20 M | 0.8999 | **0.6836** | 0.9010 |
-| DINOv3-ConvNeXt-L | 198 M | **0.9216** | 0.6616 | 0.8298 |
+Recomputing five rules from the same forward pass, on the same images and embeddings:
 
-The largest model wins the headline metric, loses the external benchmark to a model **ten times
-smaller**, and is the **worst of the three at detecting unseen species** by 7.7 points.
+| model | params | `max` | `energy` | `entropy` | `margin` | `msp` |
+|---|---|---|---|---|---|---|
+| efficientnet\_v2\_s | 20 M | **0.9068** | 0.9064 | 0.9047 | 0.8979 | 0.8953 |
+| + domain aug | 20 M | **0.9010** | 0.9005 | 0.9008 | 0.8945 | 0.8917 |
+| DINOv3-ConvNeXt-L | 198 M | 0.8298 | 0.8287 | 0.8813 | 0.8807 | **0.8904** |
+| + domain aug | 198 M | 0.8132 | 0.8118 | 0.8802 | 0.8789 | **0.8893** |
 
-Two mechanisms, both consistent with the rest of this paper. Under shift, invariance to nuisance
-transformations is worth more than representational capacity: a few percent of training throughput
-spent on augmentation exceeds a 10× parameter increase. For open-set detection, capacity is actively
-counterproductive — a model that fits the training taxa more tightly assigns novel inputs to known
-prototypes with greater confidence, which is precisely the failure the max-cosine score cannot see.
-This is the closed-set/open-set tension made quantitative on a 12,041-class problem.
+**The best rule inverts with scale.** Max-logit wins at 20 M and is beaten by max-softmax-probability
+by 6.1–7.6 points at 198 M. Using each model's best rule, the apparent capacity penalty falls from
+**7.70 to 1.64 points**.
 
-**Consequence for how this task is benchmarked.** In-distribution macro-F1 is not simply saturated
-(§4.2) — across our own model set it is **anti-correlated** with both deployment axes. A model
-selection procedure that optimises it, as essentially all published work on this task does, would
-here select the *worst* deployable system. We therefore report all three numbers for every model and
-decline to aggregate them into a single score; any weighting would encode a deployment scenario we
-have not specified.
+The mechanism is a saturation argument. Since $\mathrm{msp} \approx z_{\max} -
+\operatorname{logsumexp}(z)$, max-logit asks *how strongly does the best prototype match*, while MSP
+asks *how much better than the alternatives*. In a well-fitted embedding every input — known or novel
+— attains a high cosine to some prototype, so the absolute maximum saturates and stops
+discriminating; what still separates them is whether one prototype **dominates**. Only the
+shape-sensitive rules (MSP, entropy, top-2 margin) see that, and they are exactly the three that gain.
+Energy tracks max-logit to within 0.15 points everywhere, as it must: $\operatorname{logsumexp}$ is
+dominated by its largest term for peaked logits and is therefore near-monotone in $z_{\max}$.
 
-*(Caveat: the two backbones differ in input resolution (256 vs 320) and epoch budget (5 vs 6) as
-well as capacity, so "scale" is shorthand for that bundle. The ranking inversion does not depend on
-attributing the cause; the mechanism claim does, and a resolution-matched run is future work.)*
+**Recommendation.** Open-set results should be reported *with the scoring rule named*, and rules
+should be re-selected whenever model capacity changes materially. A rule validated on a small model
+is not a property of the method; carrying one silently across a scale change is enough to invert a
+published ranking.
+
+### 4.10 What the axes then say
+
+With each model's best rule, the picture is a mild disagreement rather than an inversion:
+
+| model | in-distribution | external | open-set |
+|---|---|---|---|
+| efficientnet\_v2\_s | 0.9035 | 0.6437 | **0.9068** |
+| + domain aug | 0.8999 | 0.6836 | 0.9010 |
+| DINOv3-ConvNeXt-L | **0.9216** | 0.6616 | 0.8904 |
+| + domain aug | **0.9216** | **0.7101** | 0.8893 |
+
+The largest augmented model leads two axes and gives up 1.75 points on the third; the smallest model
+leads open-set detection. Selecting on in-distribution macro-F1 alone would still pick a model 6.6
+points worse on external data, which is the practical argument for reporting all three — but it would
+not, as an earlier version of this analysis claimed, pick the worst deployable system.
+
+We report this correction explicitly because it illustrates the failure mode the section above
+describes: an inherited default that was never visible as a decision propagated through every
+downstream comparison until it was checked directly.
 
 ## 5. Discussion
 

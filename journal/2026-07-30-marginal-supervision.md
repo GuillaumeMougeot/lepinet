@@ -134,3 +134,65 @@ it is a re-run of `dev/058` on these predictions, not a new training run.
 hyperparameter search over level weights would be fitting noise without a repeat run to establish the
 seed-to-seed spread — a spread this project has never measured, and which now bounds the
 interpretation of every sub-half-point result in `RESULTS.md`.
+
+---
+
+## The result that matters, found by accident (2026-08-01)
+
+Measuring the shifted-benchmark noise floor required scoring two independently trained copies of the
+plain single-head baseline on the external set. Those numbers exposed something nobody had looked
+for.
+
+| effnetv2_s, 5 ep, shifted (flemming) benchmark | species macro-F1 |
+|---|---|
+| multi-head (genus + family heads, supervised) | 0.6503 |
+| **single head, marginalise at inference only** | 0.6258 / 0.6327 (two draws, mean **0.6293**) |
+| **single head + marginal supervision** | **0.6434** |
+
+Measured noise floor on this benchmark: **0.0069** ([[2026-08-01-how-noisy-are-our-numbers]]).
+
+### The single-head architecture loses under domain shift
+
+Plain single-head is **2.10 pt worse** than the multi-head externally — 3× the noise floor — while
+being **0.25 pt better** in-distribution. The project's central architectural recommendation wins on
+the metric it was selected by and loses on the one that describes deployment.
+
+### Marginal supervision recovers two thirds of that, for free
+
+**+1.41 pt** over plain single-head (2× the floor), landing at 0.6434 — within **one noise floor**
+(0.69 pt) of the multi-head, i.e. statistically indistinguishable from it.
+
+### What this identifies
+
+The multi-head and the plain single head differ in two ways: the multi-head has **coarse parameters**
+*and* receives **coarse supervision**. Marginal supervision has the supervision and **no coarse
+parameters at all**. It recovers the robustness. So:
+
+> **Coarse supervision buys shift robustness; coarse parameters do not.**
+
+The auxiliary genus/family cross-entropies act as a regulariser on the shared representation. In
+distribution they are redundant — the species loss already implies them, which is exactly what H2
+predicted and the 0.9135 → 0.9135 result confirmed. Under shift they are not redundant, because
+taxonomically coherent features degrade more gracefully than species-discriminative ones.
+
+That reconciles two results that looked contradictory: marginal supervision appeared nearly inert
+(species unchanged, coarse +0.27/+0.39) precisely because it was only ever measured
+in-distribution, where its mechanism has nothing to do.
+
+### Consequences
+
+**The recommendation changes.** "One species head, marginalise at inference" becomes **"one species
+head, supervise the marginals during training, marginalise at inference"**. Same parameter count,
+same inference cost, and it is the difference between losing 2.1 pt under shift and losing nothing
+measurable.
+
+**The in-distribution/shift disagreement now has three instances** — the head choice, the scoring
+rule ([[2026-08-01-the-scoring-rule-was-the-bug]]), and capacity
+([[2026-08-01-capacity-x-augmentation]]). Each was selected on the in-distribution metric and each
+behaved differently under shift. That is no longer a curiosity about one comparison; it is the
+project's most reliable pattern.
+
+**Open next:** A1/B1/A2/B4 were all trained *without* marginal supervision. If the +1.41 pt transfers,
+every shifted number in `RESULTS.md` is a floor rather than a ceiling — and B4's 0.7101 has room.
+Queued as **A4** (now motivated by a measured effect rather than a mechanism argument), and it needs
+the head that composes `marginal` with the ArcFace margin.

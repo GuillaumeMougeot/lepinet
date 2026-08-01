@@ -1,6 +1,15 @@
 # The best in-distribution model is the worst deployable one
 
-**Kind:** research · **Status:** **RESOLVED (2026-07-31)** — the three evaluation axes rank our
+**Kind:** research · **Status:** **RESOLVED (2026-07-31), SUBSTANTIALLY CORRECTED (2026-08-01).**
+The open-set column below used `max-logit`, and that rule turns out to be badly suited to the large
+model: rescoring with `msp` recovers +6.05 pt on A2, cutting the capacity penalty from 8.8 pt to
+**1.64 pt**. **The strong form of this entry's claim — that the best in-distribution model is the
+*worst* deployable one — is not supported.** The axes do still disagree in ordering, and
+in-distribution macro-F1 still should not be the sole criterion, but the trade-off was largely
+manufactured by the readout. See [[2026-08-01-the-scoring-rule-was-the-bug]] before quoting anything
+below.
+
+Original status: **RESOLVED (2026-07-31)** — the three evaluation axes rank our
 models in **opposite orders**, and the model that wins the headline metric loses on both axes that
 describe deployment. A 20 M model with augmentation beats a 198 M model without it under shift, and
 the 198 M model is the *worst* of the three at detecting unseen species.
@@ -35,7 +44,7 @@ rate **between** the two levers: a few percent of training throughput spent on a
 robustness than a 10× parameter increase. If the goal is a model that works on someone else's
 camera, augmentation is the better purchase, and it is not close.
 
-### 2. Scale *hurts* open-set detection
+### 2. Scale *hurts* open-set detection — *(corrected 2026-08-01: mostly a scoring-rule artifact; the real penalty is 1.64 pt, not 7.7. See [[2026-08-01-the-scoring-rule-was-the-bug]].)*
 
 Same head, same margin, same open-set benchmark: **0.9068 at 20 M, 0.8298 at 198 M.** A 7.7 pt loss
 from making the model an order of magnitude larger and 1.8 pt better in-distribution.
