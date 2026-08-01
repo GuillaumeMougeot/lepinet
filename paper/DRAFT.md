@@ -195,7 +195,7 @@ P(\text{siblings})$ in log-space. Marginalisation (§2.4) is the exact mirror: i
 | head | species | genus | family | **external (shifted)** |
 |---|---|---|---|---|
 | multi-head independent | 0.9110 | 0.9587 | 0.9708 | **0.6503** |
-| parent-conditioned | 0.8845 | 0.9471 | 0.9683 | _(pending)_ |
+| parent-conditioned | 0.8845 | 0.9471 | 0.9683 | 0.6213 |
 | autoregressive | 0.69–0.73 | — | — | — |
 | single head + marginal inference | **0.9135** | 0.9606 | 0.9739 | 0.6293 |
 | single head + marginal supervision | **0.9135** | **0.9633** | **0.9778** | 0.6434 |
@@ -206,9 +206,11 @@ genus, 0.0024 family, **0.0069** external.
 Three readings, and the third is the one that matters.
 
 **Coarse *parameters* do not help.** Every head that owns genus/family layers is beaten
-in-distribution by one that does not. Conditioning is worse still (−2.9 pp species): constraining a
-child by its parent propagates the parent's errors downward, and the parent is the *easier* problem
-only because it is coarser, not because it is more reliable.
+in-distribution by one that does not. Conditioning is worse still (−2.9 pp species) **and worst of
+all four under shift** (0.6213): constraining a child by its parent propagates the parent's errors
+downward, and the parent is the *easier* problem only because it is coarser, not because it is more
+reliable. Domain shift degrades the parent too, so the conditioning amplifies a now-unreliable prior
+— the one head whose in-distribution and shifted rankings agree, both last.
 
 **Coarse *supervision* does help, but only where in-distribution accuracy cannot see it.** Adding the
 marginal losses leaves species **exactly unchanged** (0.9135 → 0.9135, four decimals) and lifts genus

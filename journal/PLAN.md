@@ -133,8 +133,8 @@ novelty detection is. These attack that axis directly.
 
 Multi-head 0.6503 vs marginal supervision 0.6434 is **exactly 1.0× the measured noise floor** —
 indistinguishable, not a win. Two jobs settle whether it is a low draw or the centre: `lepi-M2`
-(second marginal-supervision training + shifted eval) and `lepi-cond-shift` (the conditional head's
-missing shifted number, which completes the four-head table).
+(second marginal-supervision training + shifted eval) and `lepi-cond-shift` **DONE: 0.6213** — the conditional head is worst of the four under shift as well
+as in-distribution, the only head whose two rankings agree.
 
 If a residual gap survives, the mechanism to test is that separate coarse heads give the backbone
 **three independent error signals**, whereas marginal supervision's coarse gradient is a

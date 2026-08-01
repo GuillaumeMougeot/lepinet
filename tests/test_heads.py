@@ -128,3 +128,56 @@ def test_marginalisation_is_coherent_but_not_argmax_consistent():
     # ...but the argmaxes disagree, which is exactly what "consistent by construction" denied
     top_species = p_species.argmax(1)
     assert parent[top_species].item() != p_genus.argmax(1).item()
+
+
+def test_arcface_zscore_margin_is_correct_and_invertible():
+    """Pin the ArcFace x z-score composition: the head emits Z(cos), the loss must recover cos,
+    rotate the true class by m, and re-apply Z.
+
+    Worth a test because the step everything rests on -- ``cos = sin(Z/sqrt(d-2))`` -- is only valid
+    while the sine's argument stays inside +-pi/2. It does, *by construction*: cos in [-1,1] means
+    arccos(-cos) in [0,pi], so |Z| <= sqrt(d-2)*pi/2 and the inverse can never fold back. That is a
+    property of the transform rather than of the data, and this test says so out loud.
+    """
+    import math
+
+    import torch
+
+    from lepinet.heads import cosine_to_zscore
+    from lepinet.loss import apply_arcface_margin_zscore
+
+    d = 1280
+    zvar = 1.0 / math.sqrt(d - 2)
+
+    # invertible across the entire reachable range, with the bound where theory says it is
+    cos = torch.linspace(-1 + 1e-6, 1 - 1e-6, 4001)
+    z = cosine_to_zscore(cos, d)
+    assert torch.allclose(torch.sin(z * zvar), cos, atol=1e-5)
+    assert z.abs().max() <= math.sqrt(d - 2) * math.pi / 2 + 1e-3
+
+    logits = cosine_to_zscore(torch.rand(8, 50) * 2 - 1, d)
+    y = torch.randint(0, 50, (8,))
+    rows = torch.arange(8)
+
+    # m = 0 changes nothing
+    assert torch.allclose(apply_arcface_margin_zscore(logits, y, 0.0, d), logits, atol=1e-3)
+
+    out = apply_arcface_margin_zscore(logits, y, 0.3, d)
+    # ...only the true class moves, and it moves *down* (that is the margin's entire purpose)
+    assert torch.allclose(out.scatter(1, y[:, None], 0), logits.scatter(1, y[:, None], 0), atol=1e-3)
+    assert bool((out[rows, y] < logits[rows, y]).all())
+
+    # ...and it equals Z(cos(theta + m)) derived independently
+    c = torch.sin(logits * zvar).clamp(-1 + 1e-7, 1 - 1e-7)
+    ref = cosine_to_zscore(torch.cos(torch.acos(c) + 0.3).clamp(-1 + 1e-7, 1 - 1e-7), d)
+    assert torch.allclose(out[rows, y], ref[rows, y], atol=2e-3)
+
+
+def test_head_bias_stays_frozen_at_zero():
+    """The z-score inverse assumes the emitted logit *is* Z(cos). A trainable bias would break that
+    (Z + b can leave the invertible range), so the frozen-zero bias is load-bearing, not cosmetic."""
+    from lepinet.heads import IndependentHead
+
+    b = IndependentHead(64, [50], hidden=32).layers[0].bias
+    assert float(b.abs().max()) == 0.0
+    assert b.requires_grad is False
