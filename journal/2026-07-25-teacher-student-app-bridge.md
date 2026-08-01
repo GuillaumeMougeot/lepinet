@@ -425,3 +425,45 @@ make one of them authoritative and *visible* rather than reconciling them.
 
 **Remaining:** purge the old model blobs from the app repo's **history** (`git filter-repo` +
 force-push — rewrites history, needs a deliberate go-ahead); optionally move `ort/` to a CDN.
+
+---
+
+## A3: re-running distillation with both ends on the new architecture (2026-08-01)
+
+Every earlier KD number in this entry used a **multi-head teacher and a multi-head student**, so none
+of them tested the architecture that will actually ship. A3 fixes both ends: teacher is A2
+(single head + ArcFace × z-score, DINOv3-ConvNeXt-L, 0.9216), student is a single-head
+`tf_efficientnetv2_b0` with hidden 256.
+
+| student (b0, hidden 256) | teacher | species macro-F1 |
+|---|---|---|
+| from scratch (multi-head) | — | 0.8692 |
+| distilled, T=4 (multi-head) | effnetv2_s 0.9110 | 0.8546 |
+| distilled, T=1 (multi-head) | effnetv2_s 0.9110 | 0.8786 |
+| distilled, T=1 (multi-head) | ConvNeXtV2-L **0.9316** | 0.8756 |
+| **A3: distilled, T=1 (single-head)** | **A2 0.9216** | **0.8833** |
+
+**Prediction (committed): ~0.88, still student-capacity-bound; > 0.89 falsifies "the student is the
+ceiling".** Landed at **0.8833** — inside the prediction, below the falsification line. **The ceiling
+claim survives**, and this is now the best student the project has produced (+0.47 pt over the
+previous best).
+
+### The interesting part: a *worse* teacher produced a *better* student
+
+A2 is 1.0 pt worse in-distribution than ConvNeXtV2-L (0.9216 vs 0.9316), and its student beats that
+teacher's student by 0.77 pt. Combined with the earlier finding that a 2 pt better teacher moved the
+student by ~0, this makes the pattern clear: **teacher accuracy is close to irrelevant to student
+quality here.** What changed between those two runs was not the teacher's score but the *shape* of
+what it teaches — a single 12,041-way posterior instead of three separate per-level posteriors.
+
+### The control this is missing
+
+A3's +0.77 pt over "from scratch" is **not attributable to distillation yet**, because the 0.8692
+control was multi-head while A3's student is single-head. Single-head is independently worth about
++0.25 pt at effnetv2_s scale, and possibly more at b0 where parameters are scarcer and the coarse
+heads proportionally more expensive.
+
+Queued as **A6**: single-head b0, no teacher, everything else identical.
+**Prediction (committed): 0.870–0.878.** If it lands near 0.883, distillation from A2 bought nothing
+and the win was the head all along — which would be a more useful finding than the one this entry
+currently claims.

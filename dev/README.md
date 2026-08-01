@@ -122,4 +122,5 @@ package instead of the old 028/030/034 chain.
 | `051_benchmark_run.py` | runner that registers the dev heads then dispatches to `lepinet train/test` |
 | `052_ood_score.py` | open-set scoring: max-logit → AUROC(known vs novel species) |
 | `053`–`059` | embedding geometry, open-set visualisation, margin probes, rank abstention, hierarchical OOD — see each file's docstring |
+| `061_ood_scoring_rules.py` | Five OOD scoring rules (max-logit / energy / MSP / entropy / top-2 margin) in one forward pass. Built for E2: is the open-set loss in the embedding or in the rule? |
 | `060_doc_health.py` | **not an experiment.** Checks the documentation for drift (journal naming, `Kind`/`Status`, index completeness, broken links, stale `PLAN.md`). Run before committing docs; CI runs it too. See [`../CLAUDE.md`](../CLAUDE.md). |

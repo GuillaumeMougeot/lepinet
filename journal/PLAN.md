@@ -1,6 +1,6 @@
 # PLAN — where we are, and what runs next
 
-**Kind:** living · **Last updated:** 2026-07-31 · **Supersedes:**
+**Kind:** living · **Last updated:** 2026-08-01 · **Supersedes:**
 [[2026-07-28-landscape-and-plan]]
 
 This is the one file in `journal/` that is meant to be true *today*. Everything else is a record of
@@ -14,18 +14,20 @@ danger is accumulating results on inconsistent baselines, which is exactly what 
 
 ## Status board (keep this current)
 
-Updated 2026-07-31. `→` = chained eval. Every finished run must land in `RESULTS.md`.
+Updated 2026-08-01. `→` = chained eval. Every finished run must land in `RESULTS.md`.
 
 | id | run | state | result |
 |---|---|---|---|
 | A1 | effnetv2_s, single head + ArcFace × z-score | **DONE (triple)** | in-dist **0.9035** / shifted **0.6437** / **AUROC 0.9068**. Prediction falsified — the effects do *not* compose — but **A1 stands**: open-set survives the single head (0.9068 vs 0.9115 multi-head, vs ~0.601 plain). Interference is −0.59 species / −1.0 coarse, i.e. the margin damages the *marginalisation*. [[2026-07-30-does-arcface-compose-with-marginalisation]] |
 | A2 | DINOv3-cnx-L, single head + ArcFace × z-score | **DONE (triple)** | in-dist **0.9216** / shifted 0.6616 / **AUROC 0.8298**. Best in-distribution — and **worst deployable**: loses to B1 (10× smaller) under shift and to A1 on novelty by 7.7 pt. **No longer the final-model candidate.** [[2026-07-31-best-model-is-not-the-best-model]] |
-| A3 | distil A2 → small single-head student | **running** (12362155) → eval queued | Predicted ~0.88, still student-capacity-bound. **> 0.89 falsifies "the student is the ceiling"**. |
+| A3 | distil A2 → small single-head student | **DONE** | **0.8833** — best student yet (+0.47 over previous). Prediction (~0.88, <0.89) correct: **the ceiling claim survives**. A *worse* teacher (A2 0.9216) beat a better one (CnxV2-L 0.9316) by 0.77 pt, so teacher accuracy is near-irrelevant — target *shape* is what matters. |
+| A6 | **single-head b0 from scratch** — A3's missing control | **running** (12362458) → eval chained | A3's +0.77 pt over "from scratch" bundles the head change (that control was multi-head). Predicted **0.870–0.878**; near 0.883 means distillation bought nothing. |
 | A4 | **A1 + marginal supervision** | not started — *now well-evidenced* (needs a head that composes `marginal` with the ArcFace margin; the margin is applied loss-side today, but marginals are computed in the forward, so it needs a label path) | Two same-day results identified one mechanism from opposite sides: marginal supervision improves the summed posterior's calibration (+0.27/+0.39 coarse), the ArcFace margin degrades it (−1.15/−1.11 coarse). Composing them is the direct test. |
-| A5 | **repeat of the current baseline** | **running** (12362156) → eval queued. Note: lepinet seeds *nothing*, so an identical config is the repeat | The project has never measured its seed-to-seed spread, yet routinely interprets 0.2–0.4 pt deltas. 1.5 h, and it retroactively sets the believability threshold for every sub-half-point row in `RESULTS.md`. |
+| A5 | repeat of the current baseline | **DONE** | Species **0.9135 → 0.9135 (spread 0.0000)**; genus 0.0005; **family 0.0024**. Noise scales inversely with class count. Downgrades marginal supervision's family claim; everything else clears its floor by 4×+. [[2026-08-01-how-noisy-are-our-numbers]] |
+| A5b | **shifted-metric spread** (base + A5 copies on the 486-species shifted set) | **running** (12362456/7) | The shifted set has 25× fewer classes than in-distribution — the same ratio that makes family 25× noisier. Every shift conclusion assumes a spread nobody has measured. | The project has never measured its seed-to-seed spread, yet routinely interprets 0.2–0.4 pt deltas. 1.5 h, and it retroactively sets the believability threshold for every sub-half-point row in `RESULTS.md`. |
 | B0 | more capacity / longer schedule | **deferred, deliberately.** The owner's 12-epoch DINOv3-cnx-L (job 12361261) expired mid-run — no queue daemon was ticking, see [[2026-07-30-ucloud-queue-daemon]]. Not restarted as-is: it trained the *old multi-head* architecture, so its number would land on a superseded baseline. Re-ask as **12 epochs of A2's config** once A2 lands, which isolates schedule length as the single factor. | — |
 | B1 | domain-mimicking augmentation (`domain_aug: trap`) | **DONE (triple)** | in-dist 0.8999 / shifted **0.6836** / AUROC 0.9010. **+3.99 pt under shift for −0.36 in-dist — an 11:1 trade, the best in the project.** But closes only **17 % of the gap**: H1 confirmed, the shift is only partly nuisance. [[2026-07-30-domain-shift]] |
-| B4 | **A2 backbone + B1 augmentation** (the two winners combined) | **running** (12362159) → full triple chained | Prediction committed: shifted 0.70–0.73, in-dist 0.915–0.920, **AUROC 0.83–0.86 — above 0.88 falsifies the "scale hurts open-set" mechanism**. |
+| B4 | A2 backbone + B1 augmentation | **DONE (triple)** | in-dist **0.9216** / shifted **0.7101** (project best) / AUROC 0.8132. Shifted prediction correct; **AUROC prediction wrong in the direction that confirms the mechanism**. Augmentation tax vanishes at scale; its shifted gain grows. [[2026-08-01-capacity-x-augmentation]] |
 | B2 | background suppression (flatbug-style) | not started | — |
 | B3 | self-training on unlabelled OOD images | not started — **now the highest-value untested rung** | B1 established the name-it-yourself ceiling at ~4 pt. B3 is the first rung that adapts to shifts nobody named. |
 | C1 | rank-abstention curves (no GPU) | **DONE** | 99.18% answered at 95.04% precision; **coarse ranks must be calibrated conditionally** — genus is 0.487 on the hard subset vs 0.970 overall |
@@ -111,6 +113,18 @@ Protocol for all of B (from [[2026-07-30-domain-shift]]): grouped splits by capt
 | **C1** | rank-abstention curves: per-rank thresholds → coverage/precision | The paper's §4.5 is empty and this is the *product* metric ("at 95 % species precision we cover X %, the rest resolve to genus"). Pure post-processing on saved predictions — no GPU. |
 | **C2** | OOD AUROC for A1/A2 | Confirms open-set survives the architecture change. |
 | **C3** | a larger novel set under shift | Today's flemming OOD has only 234 novel images (±0.03). Use the un-reconciled flemming_helsing OOD species, or hold out species from the trap data. |
+
+## Group E — open-set is now the binding constraint (Aug 1)
+
+Across the capacity × augmentation factorial, **every** intervention that bought accuracy cost
+open-set AUROC (0.9068 → 0.8132) and none traded the other way. Accuracy is no longer scarce;
+novelty detection is. These attack that axis directly.
+
+| id | work | why | cost |
+|---|---|---|---|
+| **E1** | re-tune the ArcFace margin **at 198 M** | `m = 0.3` was chosen on a 20 M model; larger embeddings concentrate cosines differently, so the margin may simply be too small at scale. Cheapest hypothesis for the 8.8 pt. **Note this reverses the earlier decision to abandon margin tuning** — that was taken when the margin only had to justify itself in-distribution. | ~18 h ×2 |
+| **E2** | compare **five OOD scoring rules** (max / energy / msp / entropy / top-2 margin) on one forward pass — `dev/061` | Asks whether the 8.8 pt loss is in the *embedding* or in the *rule*. **Must run before E1**: if another rule reads the same embedding better, there is nothing to retune. *(The originally planned temperature scaling was dropped as vacuous — AUROC is a rank statistic and `max_logit/T` is monotone in `max_logit`, so T cannot change it. Verified in the script's self-test.)* | 4 × ~5 min, **running** |
+| **E3** | B3 (self-training), scored on AUROC first | Still the highest-value robustness rung, but evaluate where the headroom now is. | large |
 
 ## Group D — product (independent of A–C)
 

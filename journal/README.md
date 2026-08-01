@@ -101,6 +101,11 @@ Six phases, in order. The engineering lessons each one produced are consolidated
    loses under shift to one a tenth its size. In-distribution macro-F1 is not merely saturated; it is
    **anti-correlated** with the axes that describe deployment, and can no longer be the headline.
    [[2026-07-31-best-model-is-not-the-best-model]]
+8. **Open-set becomes the binding constraint** (Aug 1) — the capacity × augmentation factorial closes,
+   and *every* intervention that buys accuracy costs novelty detection (AUROC 0.9068 → 0.8132 across
+   the four cells), with none trading the other way. Accuracy is no longer the thing in short supply.
+   Meanwhile the noise floor is finally measured, and it is level-dependent.
+   [[2026-08-01-capacity-x-augmentation]] · [[2026-08-01-how-noisy-are-our-numbers]]
 
 ## Index
 
@@ -122,6 +127,8 @@ Six phases, in order. The engineering lessons each one produced are consolidated
 | [07-30](2026-07-30-domain-shift.md) | Is domain augmentation a fix for the 23 pp gap, or a treadmill? | **B1 RESOLVED** — a down-payment: **+4.0 pt shifted for −0.36 in-dist** (11:1), but closes only 17 % of the gap. B2/B3 still open |
 | [07-30](2026-07-30-marginal-supervision.md) | Does supervising the marginals *during training* help? | RESOLVED — species **unchanged** (0.9135 → 0.9135), but genus +0.27 / family +0.39 pp. Free coarse accuracy via calibration of the sum |
 | [07-30](2026-07-30-does-arcface-compose-with-marginalisation.md) | Do single-head marginalisation and ArcFace × z-score compose? | RESOLVED — **they do not**, but A1 stands: open-set survives (AUROC 0.9068). The interference replicates at 10× scale, so it is a calibration effect, not noise |
+| [08-01](2026-08-01-how-noisy-are-our-numbers.md) | How large is our run-to-run spread? | **RESOLVED** — species macro-F1 is essentially **deterministic** (0.0000 across a repeat) but family moves **0.24 pp**: noise scales inversely with class count. Downgrades one earlier claim; the shifted metric's noise is still unmeasured |
+| [08-01](2026-08-01-capacity-x-augmentation.md) | Do capacity and domain augmentation compose? | **RESOLVED — better than additively on accuracy, jointly harmful on open-set.** The augmentation tax vanishes at scale (−0.36 → 0.00) while its shifted gain grows (+3.99 → +4.85). AUROC falls monotonically across all four cells |
 | [07-31](2026-07-31-best-model-is-not-the-best-model.md) | Does the best in-distribution model deploy best? | **RESOLVED — no, the ranking inverts.** A 20 M model with augmentation beats a 198 M one under shift (0.6836 vs 0.6616), and the 198 M model is the *worst* at novelty (0.8298 vs 0.9068) |
 
 ### Subprojects

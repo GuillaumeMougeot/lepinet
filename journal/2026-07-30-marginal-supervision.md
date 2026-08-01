@@ -1,9 +1,11 @@
 # Does marginal supervision during *training* help? (the hierarchical head, done right)
 
-**Kind:** research · **Status:** **RESOLVED (2026-07-30).** H2 confirmed at species level — marginal
-supervision changes species macro-F1 by **exactly nothing** (0.9135 → 0.9135). But it was *not*
-inert: genus **+0.27 pp** and family **+0.39 pp**, which no hypothesis predicted. The architecture
-claim survives intact and gains a footnote.
+**Kind:** research · **Status:** **RESOLVED (2026-07-30), amended 2026-08-01.** H2 confirmed at
+species level — marginal supervision changes species macro-F1 by **exactly nothing**
+(0.9135 → 0.9135). It was *not* inert at the coarse levels: genus **+0.27 pp** (real — 5× the
+measured noise floor) and family **+0.39 pp** (**suggestive only** — the repeat run
+[[2026-08-01-how-noisy-are-our-numbers]] puts family's run-to-run spread at 0.24 pp, so this clears
+it by just 1.6×). The architecture claim survives intact and gains a footnote.
 
 ## The correction that prompted this
 
@@ -119,6 +121,9 @@ justification is unchanged: the coarse *parameters* are what hurt, not the coars
 | additionally supervise the marginals | nothing | a further +0.27 / +0.39 pp |
 
 So marginal supervision is **free coarse accuracy** — no parameters, no species cost, ~0 compute.
+*(Amended 2026-08-01: read this as a genus result. Family's +0.39 pp is only 1.6× its measured
+noise floor of 0.24 pp and should not be quoted as established — see
+[[2026-08-01-how-noisy-are-our-numbers]].)*
 Worth enabling by default *if* the coarse ranks matter, which for this project they do: rank
 abstention (C1) backs off to genus and family precisely when species is uncertain, and its weakest
 link was the conditional genus precision of 0.487 on the hard subset. Whether this improvement

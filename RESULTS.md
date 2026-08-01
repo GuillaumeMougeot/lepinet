@@ -64,6 +64,8 @@ teacher. Re-running those two on the new baseline is the highest-value pending w
 package runs on **UCloud B200** and its checkpoints/results are not in that ledger, so this table is
 maintained by hand and kept exhaustive.
 
+**Noise floor (measured 2026-08-01, [`journal/2026-08-01-how-noisy-are-our-numbers.md`](journal/2026-08-01-how-noisy-are-our-numbers.md)):** species **0.0000**, genus **0.0005**, family **0.0024** across an exact repeat. Read every delta below against its level's floor — **family differences under ~0.25 pp are not reportable.** The shifted benchmark's floor is still being measured; it has 25× fewer classes, so expect it to be much larger.
+
 **Metric:** species (level-0) **macro-F1** on the held-out fold `set=='0'`, over **all** species
 (`min_img_per_spc=0`, 629,742 images / 12,041 species) unless the row says otherwise; micro-accuracy
 in parentheses. Native metric ≡ `mini_metrics` at threshold 0 (verified bit-exact).
@@ -88,6 +90,9 @@ in parentheses. Native metric ≡ `mini_metrics` at threshold 0 (verified bit-ex
 | `20260730-*` (A1) | effnetv2_s, **single head + ArcFace × z-score** | **0.9035** (0.9293) | 0.9491 | 0.9628 | the recommended architecture, finally trained. Effects **do not compose** (−0.59 species / −1.0 coarse: the margin breaks the *marginalisation*) — but **shifted 0.6437, open-set AUROC 0.9068**, so it stands | ucloud |
 | `20260730-*` (B1) | A1 + **domain-mimicking augmentation** (`domain_aug: trap`) | 0.8999 (0.9261) | 0.9479 | 0.9608 | **shifted 0.6836 (+3.99 vs A1) for −0.36 in-dist — an 11:1 trade**, the best measured here. AUROC 0.9010. Closes 17 % of the domain gap | ucloud |
 | `20260730-*` (A2) | **DINOv3-cnx-L, single head + ArcFace × z-score** | **0.9216** (0.9436) | 0.9610 | 0.9754 | best in-distribution **and worst deployable**: shifted 0.6616 (loses to B1, 10× smaller) and **AUROC 0.8298** (loses to A1 by 7.7 pt). Replicates A1's ArcFace cost within 0.06 pt at 10× scale | ucloud |
+| `20260731-*` (B4) | **A2 + `domain_aug: trap`** — the capacity × augmentation cell | **0.9216** (0.9434) | 0.9617 | 0.9752 | **shifted 0.7101 — project best**; AUROC 0.8132. Augmentation tax is **0.00** at this scale (vs −0.36 at 20 M) while its shifted gain *grows* (+4.85 vs +3.99) | ucloud |
+| `20260731-*` (A3) | b0 h256, distilled from **A2**, single-head both ends, T=1 | **0.8833** (0.9116) | 0.9414 | 0.9616 | **best student yet.** A *worse* teacher (0.9216) beat a better one (0.9316 → 0.8756): teacher accuracy is near-irrelevant, target *shape* is what matters. Control A6 running | ucloud |
+| `20260731-080034` (A5) | **repeat of the baseline**, nothing changed | 0.9135 (0.9342) | 0.9601 | 0.9763 | **the noise floor.** Species spread **0.0000**, genus 0.0005, **family 0.0024** — macro-F1 noise scales inversely with class count | ucloud |
 | `20260729-115003/115103` | convnext_large.dinov3 @320, **12 ep** | _expired_ | — | — | job died when no queue daemon was ticking; **not restarted** — trained the superseded multi-head architecture, see `journal/2026-07-30-ucloud-queue-daemon.md` | — |
 
 Smoke runs (family 9717, 1 epoch — path validation only, not comparable): `lepinet-smoke-9717`,
