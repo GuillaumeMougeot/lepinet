@@ -1,0 +1,56 @@
+# F1: the flagship. Every intervention that won, composed for the first time.
+#   backbone      DINOv3-ConvNeXt-L   best in-distribution (+1.8 pt over effnetv2_s)
+#   ArcFace x z-score                 open-set AUROC 0.601 -> ~0.90, the reason the model can say
+#                                     "I have never seen this"
+#   marginal supervision              +1.79 pt shifted at 20 M (A4); recovers the coarse levels the
+#                                     margin damages (56% genus / 87% family)
+#   domain_aug: trap                  +4.85 pt shifted at this scale (B4), and its in-distribution
+#                                     cost VANISHES at 198 M
+# No coarse parameters. The three-way composition has never been run; A4 proved it only at 20 M and
+# B4 proved capacity x augmentation only without marginal supervision.
+#
+# Runtime, computed not guessed: 5.04 M images/epoch x 6 epochs / ~1100 img/s = ~7.6 h.
+#
+# Prediction (committed): in-dist 0.918-0.925, shifted 0.720-0.745 (B4's 0.7101 + most of A4's
+# +1.79), open-set entropy-rule 0.88-0.90. Falsified if shifted <= 0.717 (B4 + one noise floor):
+# that would mean marginal supervision's robustness benefit does NOT survive scale, which would be
+# the single most surprising result of the project so far.
+version: 1.0
+desc: lepinet-F1-flagship-dinov3cnxl-ucloud
+train:
+  parquet_path: /work/global_lepi/0032836-250426092105405_processing_metadata_postprocessed_quality_filtered.parquet
+  img_dir: /work/global_lepi/images
+  out_dir: /work/lepinet/data/ucloud_models
+  fold: '1'
+  min_img_per_spc: 50
+  num_workers: 128
+  model_name: lepinet-F1-flagship-dinov3cnxl-ucloud
+  model_arch_name: convnext_large.dinov3_lvd1689m
+  head: marginal_arcface
+  nb_epochs: 6
+  base_lr: 0.0008
+  batch_size: 96
+  aug_img_size: 384
+  img_size: 320
+  optimizer: muon
+  fp16: true
+  precision: bf16
+  schedule: one_cycle
+  warmup_epochs: 0.5
+  grad_clip: 5.0
+  oversample_power: 0.5
+  domain_aug: trap
+  family_filter: []
+  aug_kwargs:
+    max_warp: 0.1
+    max_lighting: 0.2
+    p_lighting: 0.5
+    flip_vert: true
+    max_rotate: 20.0
+    max_zoom: 1.2
+  levels:
+  - speciesKey
+  - genusKey
+  - familyKey
+  arcface_scale: 30.0
+  arcface_margin: 0.3

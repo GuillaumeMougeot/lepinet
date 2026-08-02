@@ -7,11 +7,57 @@ This is the one file in `journal/` that is meant to be true *today*. Everything 
 a moment. Keep the status board current; when a run lands, move its result into `RESULTS.md` and its
 reasoning into a dated entry.
 
-Written after the documentation pass exposed that the *recommended*
-architecture has never been trained. Compute is not the constraint; **experimental hygiene is** — the
-danger is accumulating results on inconsistent baselines, which is exactly what happened already.
+---
 
+## OWNER AWAY 2026-08-02 → ~2026-08-23
 
+The owner delegated the project for three weeks. Two things follow, and the second is the one that
+gets forgotten.
+
+**The queue now survives unattended.** A cron entry ticks `ucloud q` every 5 minutes
+(`crontab -l`). Before this, the tick ran only inside a shell session, so `auto_extend` was inert and
+`--after` jobs never launched the moment the session ended — that failure already cost a 12-epoch run
+([[2026-07-30-ucloud-queue-daemon]]). **If jobs appear stuck, check the cron entry first.**
+
+**An agent session is not a monitor.** Work advances only when a session is invoked. So the queue is
+loaded with runs that finish and self-evaluate (`--after` chains), and the backlog below is ordered
+so any future session can pick the top item without asking. Do not design work that needs a human
+mid-flight.
+
+### Ordered backlog — take the top unblocked item
+
+Costs use the measured formula, **not** guesses: `images_per_epoch × epochs / 1100 img/s`, where the
+training fold is **5.04 M images/epoch**. A 5-epoch `effnetv2_s` run is **≈6.4 h**, not the "~1.5 h"
+this file claimed for weeks.
+
+| # | work | GPU | why it is here, and the gate |
+|---|---|---|---|
+| 1 | **collect F1 + D2**, journal, update `RESULTS.md`/`START-HERE` | — | Running now. F1 is the flagship; **falsified if shifted ≤ 0.717**. |
+| 2 | **D1 — finish `lepinet bundle`**: calibration + thresholds + names in one artifact | none | Pure code, product-blocking, pending since July. Best use of a session while the GPU is busy. |
+| 3 | **B3 — self-training on unlabelled trap images** | ~7 h + build | **The highest-value untested rung.** B1 established the name-a-nuisance ceiling at ~4 pt; B3 is the first rung that adapts to shifts nobody named. Needs grouped splits by capture event and held-out-*species* validation, or it will manufacture a phantom win. |
+| 4 | **L4 — cRT / decoupled** | ~2 h (stage 2 only) | The 2×2 showed tail-reweighting trades robustness for accuracy monotonically. cRT rebalances *only the classifier*, so it tests **where the damage lives**. Reuses L0's checkpoint; stage 2 must not use Muon (it re-partitions param groups and breaks freezing). |
+| 5 | **L3 — LDAM** | ~6.4 h + build | Its per-class margin ∝ n^(−1/4) is *gentler* than √-oversampling, so the monotone curve **predicts it beats oversampling under shift**. An out-of-sample prediction, which is the right reason to run something. |
+| 6 | **B2 — background suppression** (flatbug-style) | ~6.4 h + build | Removes a nameable *category* rather than a nuisance dimension. Bounded by imagination like B1, but bounded higher. |
+| 7 | **C3b — hold out *common* taxa** | ~6.4 h + build | The controlled version of C3, whose novel species were all rare and so possibly just harder. Needs a species-exclusion filter, which does not exist yet. |
+
+**Do not do** (each has a reason on record): re-tune the ArcFace margin (E1, cancelled — the loss it
+targeted was mostly a scoring-rule artifact); chase in-distribution accuracy; the autoregressive head;
+balanced softmax at other τ (the 2×2 settled it on both axes).
+
+### What to tell the owner on their return
+
+The three findings that changed what the project claims, in order: **(1)** tail-reweighting trades
+robustness for accuracy monotonically, and the long-tail literature cannot see this because its
+benchmarks ship no shifted test set; **(2)** the open-set scoring rule does not transfer across model
+scale or head convention, which invalidated a headline and cancelled ~80 GPU-hours; **(3)** coarse
+*supervision* helps and coarse *parameters* hurt, so the original head question has two opposite
+answers and the standard protocol sees only one.
+
+Also flag, because they are corrections rather than results: "consistent by construction" was false
+and is retracted; the shared-τ explanation for logit adjustment's failure was a rationalisation and
+is retracted; runtime estimates in this file were 4× low until 2026-08-02.
+
+---
 ## Status board (keep this current)
 
 Updated 2026-08-01. `→` = chained eval. Every finished run must land in `RESULTS.md`.
@@ -19,6 +65,8 @@ Updated 2026-08-01. `→` = chained eval. Every finished run must land in `RESUL
 | id | run | state | result |
 |---|---|---|---|
 | A1 | effnetv2_s, single head + ArcFace × z-score | **DONE (triple)** | in-dist **0.9035** / shifted **0.6437** / **AUROC 0.9068**. Prediction falsified — the effects do *not* compose — but **A1 stands**: open-set survives the single head (0.9068 vs 0.9115 multi-head, vs ~0.601 plain). Interference is −0.59 species / −1.0 coarse, i.e. the margin damages the *marginalisation*. [[2026-07-30-does-arcface-compose-with-marginalisation]] |
+| **F1** | **flagship: DINOv3-cnx-L + ArcFace × z-score + marginal supervision + `domain_aug: trap`** | **running** (12362597) → triple chained | Every intervention that won, composed for the first time. Predicted in-dist 0.918–0.925, **shifted 0.720–0.745**, open-set 0.88–0.90. **Falsified if shifted ≤ 0.717** — that would mean marginal supervision's robustness benefit does not survive scale. |
+| D2 | distil A2 → **fastvit_sa12** (not b0) | **running** (12362598) → eval + shift chained | b0 was the binding constraint on the shipped model (A6: student capacity dominates). Predicted 0.895–0.905. |
 | A2 | DINOv3-cnx-L, single head + ArcFace × z-score | **DONE (triple)** | in-dist **0.9216** / shifted 0.6616 / **AUROC 0.8298**. Best in-distribution — and **worst deployable**: loses to B1 (10× smaller) under shift and to A1 on novelty by 7.7 pt. **No longer the final-model candidate.** [[2026-07-31-best-model-is-not-the-best-model]] |
 | A3 | distil A2 → small single-head student | **DONE** | **0.8833** — best student yet (+0.47 over previous). Prediction (~0.88, <0.89) correct: **the ceiling claim survives**. A *worse* teacher (A2 0.9216) beat a better one (CnxV2-L 0.9316) by 0.77 pt, so teacher accuracy is near-irrelevant — target *shape* is what matters. |
 | A6 | single-head b0 from scratch — A3's missing control | **DONE** | **0.8789** (predicted 0.870–0.878, just above). Splits A3's win: **head +0.97 pt, distillation +0.44** — the architecture is worth more than the teacher at b0 scale, and distillation's credit halves |

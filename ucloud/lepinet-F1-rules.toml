@@ -1,0 +1,28 @@
+# E2: five OOD scoring rules on one forward pass. Asks whether the 8.8 pt AUROC loss at scale
+# is a property of the embedding or of the max-logit rule we happened to pick. Must run before
+# E1 (~36 GPU-h re-tuning the margin) -- if another rule reads the same embedding better there
+# is nothing to retune.
+name = "lepinet-F1-rules"
+replicas = 1
+[application]
+name = "pytorch-te"
+version = "26.05"
+[product]
+id = "gpu-nvidia-b200-1-gpu"
+category = "gpu-nvidia-b200"
+provider = "ucloud"
+[time_allocation]
+hours = 6
+[sync]
+local = ".."
+remote = "/12347837/repos/lepinet"
+[setup]
+script = "setup-lepinet.sh"
+run = "python dev/061_ood_scoring_rules.py --model '/work/lepinet/data/ucloud_models/*-lepinet-F1-flagship-dinov3cnxl-ucloud/*.pt' --parquet /work/global_lepi/0032836-250426092105405_processing_metadata_postprocessed_quality_filtered.parquet --img-dir /work/global_lepi/images --out /work/lepinet/data/ucloud_preds/rules-A2.json --img-size 320"
+[schedule]
+auto_extend = "1h"
+max_time = "12h"
+[[resources]]
+type = "file"
+path = "/12347837/datasets/global_lepi"
+read_only = true
