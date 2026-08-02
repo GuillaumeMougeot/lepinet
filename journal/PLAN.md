@@ -33,7 +33,7 @@ this file claimed for weeks.
 | # | work | GPU | why it is here, and the gate |
 |---|---|---|---|
 | 1 | **collect F1 + D2**, journal, update `RESULTS.md`/`START-HERE` | — | Running now. F1 is the flagship; **falsified if shifted ≤ 0.717**. |
-| 2 | **D1 — finish `lepinet bundle`**: calibration + thresholds + names in one artifact | none | Pure code, product-blocking, pending since July. Best use of a session while the GPU is busy. |
+| ~~2~~ | ~~D1 — finish `lepinet bundle`~~ **DONE 2026-08-02**: `--parquet` adds `names.json`, `--calibrate` fits per-level temperature + precision-targeted thresholds on validation and verifies on test. Ported from `dev/044`/`dev/047` into `lepinet.calibrate`, with the pure core unit-tested. | none | |
 | 3 | **B3 — self-training on unlabelled trap images** | ~7 h + build | **The highest-value untested rung.** B1 established the name-a-nuisance ceiling at ~4 pt; B3 is the first rung that adapts to shifts nobody named. Needs grouped splits by capture event and held-out-*species* validation, or it will manufacture a phantom win. |
 | 4 | **L4 — cRT / decoupled** | ~2 h (stage 2 only) | The 2×2 showed tail-reweighting trades robustness for accuracy monotonically. cRT rebalances *only the classifier*, so it tests **where the damage lives**. Reuses L0's checkpoint; stage 2 must not use Muon (it re-partitions param groups and breaks freezing). |
 | 5 | **L3 — LDAM** | ~6.4 h + build | Its per-class margin ∝ n^(−1/4) is *gentler* than √-oversampling, so the monotone curve **predicts it beats oversampling under shift**. An out-of-sample prediction, which is the right reason to run something. |

@@ -139,16 +139,31 @@ def bundle(
     publish_hf: str | None = typer.Option(None, "--publish-hf",
         help="Also upload to this Hugging Face repo (e.g. 'user/lepinet-models'). Needs `hf auth login`."),
     hf_path: str | None = typer.Option(None, help="Folder name inside the HF repo (default: the bundle dir name)."),
+    parquet: str | None = typer.Option(None, "--parquet",
+        help="Dataset parquet. Enables names.json (display names), and is required for --calibrate."),
+    img_dir: str | None = typer.Option(None, "--img-dir", help="Image root. Required for --calibrate."),
+    calibrate: bool = typer.Option(False, "--calibrate",
+        help="Fit per-level temperature + precision-targeted thresholds. Needs --parquet and --img-dir."),
+    target_precision: float = typer.Option(0.95, help="Precision the shown (un-greyed) names should achieve."),
+    calib_n: int = typer.Option(20000, help="Images sampled per fold for calibration."),
+    num_workers: int = typer.Option(8),
 ):
-    """Build a deployable app bundle: ONNX (fp32 + int8) + taxonomy + config + MANIFEST.
+    """Build a deployable app bundle: ONNX (fp32 + fp16 + int8) + taxonomy + config + MANIFEST.
 
-    One command from a checkpoint to a ready-to-ship folder (export + quantize). Add data-dependent
-    sidecars (names.json / calibration.json / thresholds.json) beside it when available.
+    One command from a checkpoint to a ready-to-ship folder. Pass ``--parquet`` to also write
+    ``names.json`` (display names, cheap), and add ``--calibrate --img-dir ...`` to fit the
+    temperature and thresholds so the app can grey a name on a defensible claim rather than on
+    ``p > 0.5``. A release should use all of them:
+
+        lepinet bundle -m 'runs/*/best.pt' -o bundles/v2 \
+            --parquet data/global/meta.parquet --img-dir data/global/images --calibrate
     """
     from .export import make_bundle
 
     make_bundle(model, str(out_dir), img_size=img_size, quantize=quantize, bundle_name=name,
-                publish_hf=publish_hf, hf_path=hf_path)
+                publish_hf=publish_hf, hf_path=hf_path, parquet_path=parquet, img_dir=img_dir,
+                calibrate=calibrate, target_precision=target_precision, calib_n=calib_n,
+                num_workers=num_workers)
 
 
 def main(argv=None) -> int:

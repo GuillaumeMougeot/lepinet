@@ -328,14 +328,30 @@ def make_bundle(
     fp16: bool = True,
     publish_hf: str | None = None,
     hf_path: str | None = None,
+    parquet_path: str | None = None,
+    img_dir: str | None = None,
+    calibrate: bool = False,
+    target_precision: float = 0.95,
+    calib_n: int = 20000,
+    num_workers: int = 8,
 ) -> Path:
-    """One command: checkpoint -> a deployable app bundle folder (Phase 3's "one button").
+    """One command: checkpoint -> a **complete** deployable app bundle.
 
-    Composes :func:`export_onnx` (fp32 ``model.onnx`` + ``taxonomy.json`` + ``config.json`` +
-    ``MANIFEST.json``, the app-ready fp32 bundle) and, when ``quantize`` is set, adds a
-    ``model.int8.onnx`` size-reduced variant. ``names.json`` / ``calibration.json`` /
-    ``thresholds.json`` are data-dependent (``dev/044`` / ``dev/047``) and dropped in beside these
-    when available; the app's ``config.json`` already references them and degrades if absent.
+    Always emits the model and its taxonomy. Two further artifacts are data-dependent, so they are
+    produced only when the data is supplied:
+
+    ``names.json`` (needs ``parquet_path``)
+        Display names aligned to the taxonomy vocab order. Cheap -- a table join, no inference --
+        so it is written whenever the parquet is given.
+
+    ``calibration.json`` + ``thresholds.json`` (needs ``parquet_path``, ``img_dir``, ``calibrate``)
+        A temperature per level and a precision-targeted threshold per level, so the app can grey a
+        name on a defensible claim instead of on ``p > 0.5``. Costs an inference pass over two
+        folds, hence opt-in. See :mod:`lepinet.calibrate` for why the split discipline matters.
+
+    A bundle without these still works -- the app's ``config.json`` degrades gracefully -- but it
+    ships a confidence number that does not mean what a user reads it to mean, which is why
+    ``calibrate=True`` is the right default for anything released.
     """
     out_dir = Path(out_dir)
     onnx_path = export_onnx(checkpoint_path, str(out_dir), img_size=img_size, bundle_name=bundle_name)
@@ -346,10 +362,75 @@ def make_bundle(
                     write_config=False, check=False)
     if quantize:
         quantize_dynamic_int8(onnx_path, out_dir / "model.int8.onnx")
+
+    if parquet_path:
+        from .calibrate import build_names
+
+        missing = build_names(parquet_path, out_dir / "taxonomy.json", out_dir / "names.json")
+        print(f"names.json written (missing, shown as keys in the app: {missing})")
+    if calibrate:
+        if not (parquet_path and img_dir):
+            raise ValueError("calibrate=True needs parquet_path and img_dir (it runs inference "
+                             "over the validation and test folds).")
+        summary = _calibrate_bundle(checkpoint_path, out_dir, parquet_path, img_dir,
+                                    img_size=img_size, target_precision=target_precision,
+                                    n=calib_n, num_workers=num_workers)
+        for lv, r in summary["achieved_on_test"].items():
+            p = r["precision_among_shown"]
+            print(f"  {lv:12s} T={summary['temperatures'][lv]['temperature']:.2f}  "
+                  f"threshold={r['threshold'] if r['threshold'] is None else round(r['threshold'], 3)}  "
+                  f"-> test precision {p if p is None else round(p, 4)} at coverage {r['coverage']:.2%}")
+
     print(f"Bundle ready: {out_dir}  (files: {sorted(p.name for p in out_dir.iterdir())})")
     if publish_hf:
         publish_to_hf(out_dir, publish_hf, path_in_repo=hf_path, commit_message=bundle_name)
     return out_dir
+
+
+def _calibrate_bundle(checkpoint_path, out_dir, parquet_path, img_dir, img_size,
+                      target_precision, n, num_workers):
+    """Fit temperatures + thresholds on the validation fold, verify on the held-out test fold.
+
+    Uses the **torch** checkpoint rather than the exported ONNX graph. They are numerically
+    equivalent -- ``export_onnx`` verifies parity before writing -- and this keeps the calibration
+    path free of an onnxruntime dependency and able to reuse the package's own marginalisation.
+    """
+    import pandas as pd
+    import torch
+
+    from .calibrate import collect_stats, write_calibration
+    from .data import make_dls
+    from .heads import build_class_spec
+    from .test import load_model, resolve_checkpoint_path
+
+    ckpt = torch.load(resolve_checkpoint_path(checkpoint_path), map_location="cpu",
+                      weights_only=False)
+    levels, vocabs = list(ckpt["levels"]), ckpt["vocabs"]
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model, _ = load_model(ckpt, img_size=img_size)
+
+    df_all = pd.read_parquet(parquet_path)
+    for lv in levels:
+        df_all[lv] = df_all[lv].astype(str)
+    df_all["image_path"] = df_all[levels[0]] + "/" + df_all["filename"]
+    known = {str(v) for v in vocabs[levels[0]]}
+    df_all = df_all[df_all[levels[0]].isin(known)]
+    _cls2idx, sparse_masks = build_class_spec(df_all, vocabs, levels)
+
+    def fold(set_id):
+        d = df_all[df_all["set"].astype(str) == set_id]
+        d = d.sample(min(len(d), n), random_state=0).reset_index(drop=True)
+        d["is_valid"] = True
+        return d
+
+    val_df, test_df = fold(ckpt.get("fold", "1")), fold("0")
+    print(f"Calibrating on {len(val_df)} validation images, verifying on {len(test_df)} test images")
+    dls = make_dls(val_df[["image_path", "is_valid", *levels]], vocabs, img_dir,
+                   int(img_size * 460 / 256), img_size, 128, num_workers,
+                   lowmem=False, levels=levels)
+    val = collect_stats(model, dls, val_df, levels, vocabs, sparse_masks, device, num_workers)
+    test = collect_stats(model, dls, test_df, levels, vocabs, sparse_masks, device, num_workers)
+    return write_calibration(out_dir, val[0], val[1], test[0], test[1], levels, target_precision)
 
 
 def to_fp16_onnx(onnx_path: str | Path, out_path: str | Path | None = None,

@@ -138,3 +138,23 @@ Two options are **rejected on purpose** (they were measured to lose): `logit_adj
   you want the newer exporter.
 - **GBIF labels:** vocab entries are GBIF taxon keys; a species page is
   `https://www.gbif.org/species/<key>`.
+
+### A release bundle (with calibration)
+
+`lepinet bundle` alone emits the model and taxonomy. A *release* should also carry display names and
+calibrated thresholds, so the app can grey a name on a defensible claim instead of on `p > 0.5`:
+
+```bash
+lepinet bundle -m 'data/models/<run>/*.pt' -o bundles/v2 \
+    --parquet data/global/metadata.parquet \
+    --img-dir data/global/images \
+    --calibrate --target-precision 0.95
+```
+
+- `--parquet` alone adds **`names.json`** (display names aligned to the vocab order). Cheap.
+- `--calibrate` additionally fits a **temperature per level** on the validation fold and a
+  **precision-targeted threshold**, then *verifies both on the held-out test fold* and writes the
+  achieved precision alongside. Costs one inference pass per fold.
+
+Temperature scaling changes no prediction — accuracy is untouched by construction — it only makes
+the number attached to the prediction honest. See [concepts](concepts.md#12-evaluation-vocabulary).
