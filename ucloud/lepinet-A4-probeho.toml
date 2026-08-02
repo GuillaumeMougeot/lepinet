@@ -1,0 +1,29 @@
+# B3 prerequisite. Every shifted number in RESULTS.md used all 47,905 trap images, and B3
+# trains on 27,230 of them -- so none of those numbers is a valid reference for it. This
+# scores the model on `probe` only (15,200 images, whole (trap,night) groups that training
+# never touches), and separately on the held-out-species subset, which is what would expose
+# B3 specialising on the ~500 trap species rather than generalising.
+name = "lepinet-A4-probeho"
+replicas = 1
+[application]
+name = "pytorch-te"
+version = "26.05"
+[product]
+id = "gpu-nvidia-b200-1-gpu"
+category = "gpu-nvidia-b200"
+provider = "ucloud"
+[time_allocation]
+hours = 3
+[sync]
+local = ".."
+remote = "/12347837/repos/lepinet"
+[setup]
+script = "setup-lepinet.sh"
+run = "python dev/051_benchmark_run.py test --model '/work/lepinet/data/ucloud_models/*-lepinet-A4-marginal-arcface-effnetv2s-ucloud/*.pt' --parquet /work/lepinet/data/flemming/splits/flemming_probe_heldout_species.parquet --img-dir /work/flemming/images --out-dir /work/lepinet/data/ucloud_preds/A4-probeho --test-set 0 --min-img-per-spc 0 --img-size 256 --aug-img-size 460 --batch-size 128 --num-workers 32 --no-drop-unknown-species"
+[schedule]
+auto_extend = "1h"
+max_time = "6h"
+[[resources]]
+type = "file"
+path = "/12347837/datasets/flemming"
+read_only = true

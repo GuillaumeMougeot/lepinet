@@ -64,6 +64,11 @@ teacher. Re-running those two on the new baseline is the highest-value pending w
 package runs on **UCloud B200** and its checkpoints/results are not in that ledger, so this table is
 maintained by hand and kept exhaustive.
 
+**The shifted column is measured on all 47,905 trap images.** That set is *also* the only source of
+unlabelled trap data, so anything that trains on it (self-training, fine-tuning) invalidates this
+column as its baseline and must use the grouped `probe` split instead —
+[`journal/2026-08-02-the-shifted-benchmark-is-also-the-adaptation-set.md`](journal/2026-08-02-the-shifted-benchmark-is-also-the-adaptation-set.md).
+
 **Runtime:** a standard 5-epoch `effnetv2_s` run is **≈6.4 h**, not the ~1.5 h earlier plans assumed — 5.04 M images/epoch at the pipeline's ~1100 img/s CPU-decode bound. Estimate as `images × epochs / 1100 s`.
 
 **Noise floor (measured 2026-08-01, [`journal/2026-08-01-how-noisy-are-our-numbers.md`](journal/2026-08-01-how-noisy-are-our-numbers.md)):** species **0.0000**, genus **0.0005**, family **0.0024** across an exact repeat. Read every delta below against its level's floor — **family differences under ~0.25 pp are not reportable.** The shifted benchmark's floor is **0.0069** (two trainings, 486 species) — treat any shifted difference under ~0.7 pp as noise.
