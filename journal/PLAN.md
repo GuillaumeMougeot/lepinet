@@ -44,6 +44,38 @@ this file claimed for weeks.
 targeted was mostly a scoring-rule artifact); chase in-distribution accuracy; the autoregressive head;
 balanced softmax at other τ (the 2×2 settled it on both axes).
 
+### The check-in schedule, and its hard limit
+
+Scheduled in-session (2026-08-02): a **morning report at 06:22** the owner reads, plus queue-advance
+passes at **12:47** and **19:13** that stay silent unless something failed or a result contradicts a
+current claim. Three passes a day suits a 6.4 h run length — nothing waits more than one cycle.
+
+**These schedules are session-only and expire after 7 days.** They do *not* span the owner's absence,
+and no scheduling tool available here does. What actually persists is:
+
+- the **crontab** entry ticking `ucloud q` every 5 minutes — real cron, survives everything, and is
+  what keeps queued jobs launching and running jobs extending for the full three weeks;
+- **this file**, which is why the backlog above is ordered and gated. Any future session, started for
+  any reason, can read it and take the top item without asking.
+
+So the design is: *jobs* are durable, *supervision* is best-effort. Queue long chains rather than
+relying on being woken to launch the next thing.
+
+### The 23 August final report
+
+The owner asked for a full account on their return. Recipe, so any session can produce it:
+
+1. Read every journal entry dated after 2026-08-02, plus this file and `RESULTS.md`.
+2. Cover, in this order: **what ran and what it scored**; **every committed prediction and whether it
+   held** (the journal convention makes this mechanical — each entry has one); **every claim
+   corrected or retracted**; **what the project now asserts that it did not on 2 August**; what is
+   still running; and the ordered backlog with its reasons.
+3. Include the dead ends and the failures. The owner asked to follow the *adventures and decisions*,
+   and a report of only the wins would misrepresent how the fortnight actually went — three of the
+   most useful results in the preceding week were corrections to earlier claims.
+4. Write it to `journal/2026-08-23-three-week-report.md`, commit, and give a condensed version in
+   chat.
+
 ### What to tell the owner on their return
 
 The three findings that changed what the project claims, in order: **(1)** tail-reweighting trades
