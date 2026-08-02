@@ -64,6 +64,8 @@ teacher. Re-running those two on the new baseline is the highest-value pending w
 package runs on **UCloud B200** and its checkpoints/results are not in that ledger, so this table is
 maintained by hand and kept exhaustive.
 
+**Runtime:** a standard 5-epoch `effnetv2_s` run is **≈6.4 h**, not the ~1.5 h earlier plans assumed — 5.04 M images/epoch at the pipeline's ~1100 img/s CPU-decode bound. Estimate as `images × epochs / 1100 s`.
+
 **Noise floor (measured 2026-08-01, [`journal/2026-08-01-how-noisy-are-our-numbers.md`](journal/2026-08-01-how-noisy-are-our-numbers.md)):** species **0.0000**, genus **0.0005**, family **0.0024** across an exact repeat. Read every delta below against its level's floor — **family differences under ~0.25 pp are not reportable.** The shifted benchmark's floor is **0.0069** (two trainings, 486 species) — treat any shifted difference under ~0.7 pp as noise.
 
 **Metric:** species (level-0) **macro-F1** on the held-out fold `set=='0'`, over **all** species
@@ -91,6 +93,8 @@ in parentheses. Native metric ≡ `mini_metrics` at threshold 0 (verified bit-ex
 | `20260730-*` (B1) | A1 + **domain-mimicking augmentation** (`domain_aug: trap`) | 0.8999 (0.9261) | 0.9479 | 0.9608 | **shifted 0.6836 (+3.99 vs A1) for −0.36 in-dist — an 11:1 trade**, the best measured here. AUROC 0.9010. Closes 17 % of the domain gap | ucloud |
 | `20260730-*` (A2) | **DINOv3-cnx-L, single head + ArcFace × z-score** | **0.9216** (0.9436) | 0.9610 | 0.9754 | best in-distribution **and worst deployable**: shifted 0.6616 (loses to B1, 10× smaller) and **AUROC 0.8298** (loses to A1 by 7.7 pt). Replicates A1's ArcFace cost within 0.06 pt at 10× scale | ucloud |
 | `20260731-*` (B4) | **A2 + `domain_aug: trap`** — the capacity × augmentation cell | **0.9216** (0.9434) | 0.9617 | 0.9752 | **shifted 0.7101 — project best**; AUROC 0.8132. Augmentation tax is **0.00** at this scale (vs −0.36 at 20 M) while its shifted gain *grows* (+4.85 vs +3.99) | ucloud |
+| `20260802-*` (L1) | single head, **balanced softmax** (τ=1), no oversampling | 0.8970 (0.9274) | 0.9531 | 0.9722 | **shifted 0.5726.** Balanced softmax = logit adjustment at τ=1; loses in-distribution *and* collapses under shift | ucloud |
+| `20260802-*` (L2) | single head, **oversampling + balanced softmax** | 0.8689 (0.8988) | 0.9380 | 0.9665 | **shifted 0.5492 — worst cell on both axes.** The two levers double-count | ucloud |
 | `20260801-*` (A4) | **single head + ArcFace × z-score + marginal supervision** | 0.8998 (0.9273) | **0.9555** | **0.9725** | **shifted 0.6616 — best of any effnetv2_s model, above the multi-head's 0.6503.** Recovers 56 % genus / 87 % family of the margin's calibration damage. **New recommended architecture** | ucloud |
 | `20260801-*` (L0) | single head, **no oversampling** (the control) | 0.8949 (0.9327) | 0.9514 | 0.9668 | **shifted 0.6445.** So oversampling is +1.86 in-distribution and **−1.52 under shift** — an accuracy/robustness trade, not a free win | ucloud |
 | `20260801-*` (M2) | marginal supervision, second draw | — | — | — | shifted **0.6485** (draw 1: 0.6434). Settles that the multi-head's apparent 0.69 pt shifted lead is **not real** | ucloud |

@@ -192,3 +192,78 @@ in-distribution column.
 **It weakens no earlier conclusion**, because every architecture comparison in `RESULTS.md` held
 oversampling fixed. But it does mean the shifted numbers throughout are measured *with* a lever that
 suppresses them, which makes them floors — the second such qualifier after marginal supervision.
+
+---
+
+## The 2×2 completes: balanced softmax loses, and tail-reweighting is monotonically bad under shift (2026-08-02)
+
+| cell | oversampling | balanced softmax | in-distribution | **shifted** | shifted micro |
+|---|---|---|---|---|---|
+| **L0** | — | — | 0.8949 | **0.6445** | 0.6589 |
+| baseline | √ (p=0.5) | — | **0.9135** | 0.6293 | 0.6156 |
+| **L1** | — | τ=1 | 0.8970 | 0.5726 | 0.5214 |
+| **L2** | √ (p=0.5) | τ=1 | 0.8689 | **0.5492** | 0.4694 |
+
+### Scoring the four predictions: three right, and the one I wanted is wrong
+
+**L0 ≈ 0.885–0.895** → **0.8949**, at the top edge. Correct, including the reasoning: oversampling is
+worth **+1.86 pt** here versus +2.6 historically, because the cosine head's unit-norm prototypes
+already supply part of the correction.
+
+**L1 ≈ 0.905–0.915, "balanced softmax roughly matches oversampling"** → **0.8970. Falsified**, and the
+criterion was written explicitly: *"If L1 lands below 0.90 that reading is wrong and logit adjustment
+simply is worse here."* It landed below 0.90.
+
+So **the shared-τ explanation was wrong.** Balanced softmax was blamed in
+[[2026-07-17-does-longtail-help]] on one τ spanning three level distributions; with a single level
+and no shared constant it still loses to oversampling by 1.65 pt. The method is simply worse on this
+problem, and the original diagnosis — which sounded mechanistic and satisfying — was a
+rationalisation. Corrected there.
+
+**L2 < max(L1, baseline)** → **0.8689**, worse than *every* other cell. Correct, and by more than
+predicted (I put 65 % on "a small loss"; it is 4.5 pt below the baseline). The two levers do not
+compose, they double-count.
+
+**Shifted ordering L0 ≥ baseline ≥ L1 ≥ L2** → **0.6445 > 0.6293 > 0.5726 > 0.5492. Exactly right**,
+all four cells in order, and the spread is **9.5 pt** — enormous next to the 0.69 pt noise floor.
+
+### The result: shifted accuracy is monotone in tail-reweighting aggressiveness
+
+Rank the cells by how hard they push probability mass toward rare classes — nothing, √-oversampling
+(which deliberately *softens* the correction), full prior correction at τ=1, both — and the shifted
+score falls monotonically at every step, while the in-distribution score does not order at all
+(0.8949, 0.9135, 0.8970, 0.8689).
+
+**The micro-accuracy column shows the mechanism directly.** For the un-reweighted cells macro < micro
+(0.6445 < 0.6589), the normal pattern: rare species are harder. For both balanced-softmax cells the
+sign **flips** — macro 0.5492 > micro 0.4694 for L2 — meaning the model now does *relatively better*
+on rare species than common ones. It is not merely helping the tail; it is **over-predicting the
+tail**, and under shift, where the tail's evidence was flimsiest to begin with, that collapses
+ordinary accuracy by 19 pt of micro.
+
+**Why this is the expected direction, stated before the runs:** macro-F1 weights every species
+equally, so every one of these methods targets the classes with the fewest images. What a model
+learns from 43 photographs is disproportionately about *those photographs* — one photographer, one
+background, one camera. Up-weighting rare classes up-weights the least transferable part of the training
+signal. In-distribution that is invisible, because the test fold shares those artefacts.
+
+### What this settles, and what it opens
+
+**Settled: balanced softmax is not worth pursuing here**, on either axis, and the earlier diagnosis
+of why logit adjustment failed is retracted. √-oversampling stays the recommended long-tail
+treatment — and the reason is now visible: it is the *mildest* of the interventions tested. The
+square root is not a tuning detail, it is what keeps the method on the right side of this trade.
+
+**Opened: the tail/robustness trade appears to be a law here, not a property of one method.** Four
+points on a monotone curve is the strongest version of the hypothesis this project committed to, and
+it is a result the long-tail literature cannot report, because CIFAR-LT / ImageNet-LT / iNat ship no
+shifted test set. Worth its own paper section rather than a line in a bake-off.
+
+**LDAM is now much more interesting than when it was deferred.** Its per-class margin
+$\propto n_j^{-1/4}$ is a *fourth-root* softening, gentler even than √-oversampling — so the monotone
+curve predicts it should sit **above** oversampling under shift. That is a real out-of-sample
+prediction from the curve rather than a method to try, which is the right reason to run something.
+
+**cRT/decoupled is the other one the curve speaks to:** it applies the rebalancing *only* to the
+classifier and leaves the representation trained on the natural distribution. If the damage is to the
+representation, cRT should escape the trade entirely.

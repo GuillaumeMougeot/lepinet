@@ -1,6 +1,13 @@
 # Do long-tail interventions push species macro-F1 past the 5-epoch baseline?
 
-**Kind:** research · **Status:** RESOLVED (2026-07-17), both arms complete. **Oversampling: new project best, test
+**Kind:** research · **Status:** RESOLVED, **explanation AMENDED 2026-08-02.** The *result* stands — oversampling 0.9148 beats
+logit adjustment 0.9031 — but the **explanation offered below is retracted.** This entry blamed one
+shared τ spanning three level distributions of very different size. Re-run on a single-head
+architecture, where no shared constant exists, balanced softmax (= logit adjustment at τ=1) still
+loses by 1.65 pt: [[2026-08-01-imbalance-methods-bench]]. The mechanism was a rationalisation that
+sounded satisfying; the method is simply worse on this problem.
+
+**As written on 2026-07-17:** both arms complete. **Oversampling: new project best, test
 species macro-F1 0.9148.** Logit adjustment: a smaller, structurally-flawed win (0.9031) that
 sacrificed genus and family for a modest species gain.
 **Written before the results landed**, on purpose: the prediction below is a commitment, so

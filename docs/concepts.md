@@ -229,10 +229,25 @@ Two families of fix, both in this repo's history:
   classes. **Balanced softmax** adds $\log n_j$ to each logit during training, which is exactly
   **logit adjustment** at $\tau = 1$ (the two names describe the same formula).
 
-A finding worth carrying: **oversampling costs 1.52 pt under domain shift while buying 1.86
-in-distribution.** Rare classes have the least evidence behind them, so what the model learns for them
-is the most likely to be an artefact of their particular photographs — and up-weighting them
-up-weights exactly the least transferable part of the signal.
+**The finding worth carrying.** Rank four models by how hard they push probability mass toward rare
+classes and the *shifted* score falls at every step, while the in-distribution score does not order
+at all:
+
+| tail up-weighting | in-distribution | shifted |
+|---|---|---|
+| none | 0.8949 | **0.6445** |
+| √-oversampling (softened) | **0.9135** | 0.6293 |
+| balanced softmax (full) | 0.8970 | 0.5726 |
+| both | 0.8689 | 0.5492 |
+
+Rare classes have the least evidence behind them, so what a model learns from 43 photographs is
+disproportionately about *those photographs* — one photographer, one background, one camera.
+Up-weighting them up-weights exactly the least transferable part of the signal. In-distribution this
+is invisible, because the test fold shares the same artefacts.
+
+The micro-accuracy column shows it directly: normally macro < micro (rare species are harder), but
+for the balanced-softmax models the sign **flips** — the model does relatively *better* on rare
+species than common ones, i.e. it has stopped helping the tail and started over-predicting it.
 
 ---
 

@@ -1,6 +1,6 @@
 # PLAN — where we are, and what runs next
 
-**Kind:** living · **Last updated:** 2026-08-01 · **Supersedes:**
+**Kind:** living · **Last updated:** 2026-08-02 · **Supersedes:**
 [[2026-07-28-landscape-and-plan]]
 
 This is the one file in `journal/` that is meant to be true *today*. Everything else is a record of
@@ -124,7 +124,7 @@ novelty detection is. These attack that axis directly.
 
 | id | work | why | cost |
 |---|---|---|---|
-| ~~E1~~ | ~~re-tune the ArcFace margin at 198 M~~ **CANCELLED** — E2 showed two thirds of the loss it targeted was a scoring-rule artifact, found in 5 minutes instead of 36 GPU-hours | `m = 0.3` was chosen on a 20 M model; larger embeddings concentrate cosines differently, so the margin may simply be too small at scale. Cheapest hypothesis for the 8.8 pt. **Note this reverses the earlier decision to abandon margin tuning** — that was taken when the margin only had to justify itself in-distribution. | ~18 h ×2 |
+| ~~E1~~ | ~~re-tune the ArcFace margin at 198 M~~ **CANCELLED** — E2 showed two thirds of the loss it targeted was a scoring-rule artifact, found in 5 minutes instead of the ~36 GPU-hours estimated (really closer to 80, see the runtime note above) | `m = 0.3` was chosen on a 20 M model; larger embeddings concentrate cosines differently, so the margin may simply be too small at scale. Cheapest hypothesis for the 8.8 pt. **Note this reverses the earlier decision to abandon margin tuning** — that was taken when the margin only had to justify itself in-distribution. | ~18 h ×2 |
 | **E2** | **DONE — `msp` beats `max-logit` by +6.1/+7.6 pt at 198 M.** Compare five OOD scoring rules (max / energy / msp / entropy / top-2 margin) on one forward pass — `dev/061` | Asks whether the 8.8 pt loss is in the *embedding* or in the *rule*. **Must run before E1**: if another rule reads the same embedding better, there is nothing to retune. *(The originally planned temperature scaling was dropped as vacuous — AUROC is a rank statistic and `max_logit/T` is monotone in `max_logit`, so T cannot change it. Verified in the script's self-test.)* | 4 × ~5 min, **running** |
 | **E3** | B3 (self-training) | Still the highest-value robustness rung. Note the framing has changed: with the rule fixed, open-set is **not** the binding constraint after all — the shifted axis is, where B4 leads at 0.7101 against an in-distribution 0.9216. | large |
 | **E4** | measure the **AUROC noise floor** | The capacity penalty is now 1.64 pt and no one knows the spread on this axis. Score the two baseline copies (A5 + original) with `dev/061`. | 2 × 5 min |
@@ -149,14 +149,21 @@ single-head architecture supervises only one. Separately, τ-normalisation is *a
 | id | run | state |
 |---|---|---|
 | **L0** | no oversampling, no balanced softmax — the control nobody ran | **DONE**: 0.8949 in-dist / **0.6445 shifted**. Oversampling is **+1.86 in-dist and −1.52 shifted** — an accuracy/robustness trade, the 4th inversion |
-| **L1** | balanced softmax instead of oversampling | **relaunched** (12362570) — first attempt died on a `prepare_df` signature I guessed instead of checking |
-| **L2** | both | **relaunched** (12362571) — same cause |
+| **L1** | balanced softmax instead of oversampling | **DONE**: 0.8970 in-dist / **0.5726 shifted**. **Prediction falsified** — the shared-τ explanation for logit adjustment's original failure is retracted |
+| **L2** | both | **DONE**: 0.8689 / **0.5492** — worse than every other cell. They double-count, as predicted |
 | — | √-oversampling alone | **have it: 0.9135** |
 
-Deferred with reasons: **LDAM** (per-class margin ∝ n⁻¹ᐟ⁴ — needs per-class margin support, and is
-interesting because margins are now known to interact with marginalisation); **cRT/decoupled** (Kang
-et al. claim instance-balanced sampling gives the *best* representations, which would mean our
-oversampling is harming the backbone — the highest-value hypothesis here, deserves its own entry).
+**Result: shifted accuracy is monotone in tail-reweighting aggressiveness** — 0.6445 (none) >
+0.6293 (√-oversampling) > 0.5726 (balanced softmax) > 0.5492 (both), a **9.5 pt spread** against a
+0.69 pt floor, while the in-distribution column does not order at all. The predicted ordering was
+committed before the runs and came back exactly.
+
+Next, and now motivated by the curve rather than by the literature:
+
+| id | run | why |
+|---|---|---|
+| **L3** | **LDAM** (per-class margin ∝ n⁻¹ᐟ⁴) | A *fourth-root* softening — gentler than √-oversampling — so the monotone curve **predicts it should beat oversampling under shift**. An out-of-sample prediction to test, not a method to try. Needs per-class margin support in the loss. |
+| **L4** | **cRT / decoupled** | Rebalances only the classifier, leaving the representation trained on the natural distribution. If the damage is to the *representation*, cRT escapes the trade entirely. Cheap: stage 2 reuses a frozen backbone. |
 
 ## Group D — product (independent of A–C)
 
