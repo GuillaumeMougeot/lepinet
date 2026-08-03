@@ -160,6 +160,11 @@ lives on `fake_l`. Reading the wrong one silently ran evaluations single-threade
 instead of 898**, a ~900× slowdown that was first misdiagnosed as a hardware sizing problem. The
 `dl_num_workers()` helper in `lepinet/test.py` exists solely to stop this recurring.
 
+**An all-`True` `is_valid` gives an `IndexError` about pandas indexing.** fastai's `ColSplitter`
+leaves the *train* split empty and `DataBlock.setup` dies far from the cause. It cost debugging time
+twice — both times on inference-only loaders, where every row was marked valid because the labels
+were placeholders. `make_dls` now raises a message naming the actual problem.
+
 **`isinstance(True, int)` is `True`** in Python, which is how a boolean reached a `sqrt()` and
 produced `sqrt(-1)`.
 

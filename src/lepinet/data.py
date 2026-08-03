@@ -162,6 +162,19 @@ def make_dls(df, vocabs, img_dir, aug_img_size, img_size, batch_size, num_worker
     ``sample_wgts`` (from :func:`sample_weights`) turns the *train* loader into a ``WeightedDL``;
     the valid loader stays a plain sequential pass over the natural distribution.
     """
+    # An all-True (or all-False) `is_valid` leaves one side of ColSplitter empty, and fastai then
+    # dies inside DataBlock.setup with `IndexError: single positional indexer is out-of-bounds` --
+    # a message that points at pandas indexing and says nothing about the split. It has cost debugging
+    # time twice: once building an eval loader, once building an inference-only loader where every
+    # row was marked valid because the labels were placeholders. Fail here instead, where the fix is.
+    n_valid = int(df["is_valid"].sum())
+    if n_valid in (0, len(df)):
+        raise ValueError(
+            f"`is_valid` is all-{bool(n_valid)}: ColSplitter needs a non-empty split on BOTH sides "
+            f"({len(df)} rows, {n_valid} valid). For an inference-only loader the column is not read "
+            f"-- it only has to make the block buildable -- so use a dummy split such as "
+            f"`df['is_valid'] = np.arange(len(df)) % 5 == 0`."
+        )
     from fastai.vision.all import (
         CategoryBlock,
         ColReader,

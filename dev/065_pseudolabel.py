@@ -57,8 +57,13 @@ def main(a):
     sp_vocab = [str(v) for v in vocabs[levels[0]]]
 
     df = pd.read_parquet(a.adapt_parquet).reset_index(drop=True)
-    df["is_valid"] = True
-    loader_df = df[["image_path", "is_valid"]].copy()
+    loader_df = df[["image_path"]].copy()
+    # NOT all-True: fastai's ColSplitter would then hand DataBlock an empty *train* split and
+    # `setup()` dies on `IndexError: single positional indexer is out-of-bounds`, far from the
+    # cause. Inference reads every row through `test_dl` regardless of this column -- it exists
+    # only to keep the block buildable. Same convention as dev/059 and dev/061, where this has
+    # already bitten once.
+    loader_df["is_valid"] = np.arange(len(loader_df)) % 5 == 0
     for lv in levels:                      # placeholders: scoring never reads y
         loader_df[lv] = str(vocabs[lv][0])
     dls = make_dls(loader_df, vocabs, a.img_dir, int(a.img_size * 460 / 256), a.img_size,
