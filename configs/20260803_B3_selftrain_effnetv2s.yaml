@@ -1,0 +1,53 @@
+# B3 stage 2b: self-training. B1's recipe exactly -- same backbone, same trap augmentation, same
+# ArcFace x z-score head -- with ONE factor changed: the training parquet now includes 12,230
+# pseudo-labelled trap images (98.15% label accuracy after the strict gate), replicated 13x to ~5%
+# of training.
+#
+# Compared against B1's PROBE score of 0.6912, not its full-set 0.6836: the full trap set is what
+# B3 trains on. See journal/2026-08-02-the-shifted-benchmark-is-also-the-adaptation-set.md.
+#
+# Prediction (committed): probe 0.695-0.715. The pseudo-labels are 98% correct but cover only 346
+# species and come from B4's own beliefs, so this measures whether target-domain PIXELS help once
+# the labels are nearly right -- not whether the labels help. Falsified below 0.6981 (B1 + one
+# noise floor). The number that decides whether it generalised is the held-out-species column
+# (B1: 0.6974): a gain on probe overall with none there means it specialised on the 346 species
+# it pseudo-labelled, which is the risk the owner named for this direction.
+version: 1.0
+desc: lepinet-B3-selftrain-effnetv2s-ucloud
+train:
+  parquet_path: /work/lepinet/data/flemming/splits/combined_b3.parquet
+  img_dir: /work/global_lepi/images
+  out_dir: /work/lepinet/data/ucloud_models
+  fold: '1'
+  min_img_per_spc: 50
+  num_workers: 256
+  model_name: lepinet-B3-selftrain-effnetv2s-ucloud
+  model_arch_name: efficientnet_v2_s
+  head: arcface
+  nb_epochs: 5
+  base_lr: 0.001
+  batch_size: 64
+  aug_img_size: 460
+  img_size: 256
+  optimizer: muon
+  fp16: true
+  precision: bf16
+  schedule: one_cycle
+  warmup_epochs: 0.5
+  grad_clip: 5.0
+  oversample_power: 0.5
+  family_filter: []
+  aug_kwargs:
+    max_warp: 0.0
+    max_lighting: 0.0
+    p_lighting: 0.0
+    flip_vert: true
+    max_rotate: 15.0
+    max_zoom: 1.1
+  levels:
+  - speciesKey
+  arcface_zscore: true
+  arcface_scale: 30.0
+  arcface_margin:
+  - 0.3
+  domain_aug: trap

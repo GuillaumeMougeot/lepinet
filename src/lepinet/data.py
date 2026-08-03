@@ -65,9 +65,18 @@ def filter_df(df, remove_in=(), keep_in=(), min_img_per_spc=0, family_filter=(),
 
 
 def prepare_df(df, valid_set="1", levels=DEFAULT_LEVELS):
-    """Add ``image_path`` (``<finest_level>/<filename>``), ``is_valid``, and stringified levels."""
+    """Add ``image_path`` (``<finest_level>/<filename>``), ``is_valid``, and stringified levels.
+
+    A **pre-supplied ``image_path`` column is preserved**, matching what :func:`lepinet.test.evaluate`
+    already does. Two cases need it: datasets whose folders are not named by the finest-level key
+    (the trap set uses species *names*), and training sets that mix image trees — a row can carry a
+    relative escape such as ``../../flemming/images/<...>`` so a single ``img_dir`` reaches both.
+    Rebuilding the column unconditionally silently discarded both, which is a data bug that shows up
+    only as missing files.
+    """
     df = df.copy()
-    df["image_path"] = df[levels[0]].astype(str) + "/" + df["filename"]
+    if "image_path" not in df.columns:
+        df["image_path"] = df[levels[0]].astype(str) + "/" + df["filename"]
     df["is_valid"] = df["set"].eq(valid_set)
     for level in levels:
         df[level] = df[level].astype(str)

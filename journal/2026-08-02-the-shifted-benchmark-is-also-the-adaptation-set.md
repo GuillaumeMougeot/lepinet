@@ -85,3 +85,44 @@ decision.**
 
 `RESULTS.md` now states that the shifted column is measured on all 47,905 trap images, so the next
 person to reach for them as training data sees the conflict in the same place they read the score.
+
+
+---
+
+## Stage 1 landed: the gate works, and it exposes the confidence saturation (2026-08-03)
+
+B4 pseudo-labelled the 27,230 `adapt` images. Strict gate, owner-approved.
+
+| | |
+|---|---|
+| pseudo-label accuracy, **ungated** | **0.7108** |
+| pseudo-label accuracy, **gated** | **0.9815** |
+| what the gate bought | **+27.1 pt** |
+| images retained | 12,230 |
+
+The ungated 0.7108 is a useful consistency check: it is B4's shifted score (0.7101) recomputed on a
+disjoint subset of the same domain, which is what it should be.
+
+**The gate is blunter than requested, and the reason is worth recording.** Asking for the top 30 %
+retained 44.9 %, because the confidence distribution is *saturated*: the median is 0.9999996 and the
+90th percentile is exactly 1.0, so the 0.70 quantile lands at 1.0 and everything tied there is kept.
+That is the same overconfidence D1's temperature scaling was built to correct
+— **a calibrated confidence would give a gate with actual resolution**, and it is the obvious
+refinement if the replication fraction turns out to matter.
+
+## Stage 2: dilution, and why replication is not optional
+
+12,230 pseudo rows against ~3.1 M real ones is **0.39 % of training** — roughly one batch in 250.
+Run that way, B3 would almost certainly return a null result meaning only *"0.4 % more data changes
+nothing"*, which is not the question. The pseudo rows are therefore replicated **13×** to ~5 % of
+training, making the size of the intervention an explicit, reportable hyperparameter rather than an
+accident of how many images cleared the gate.
+
+**The cost is stated with the result, not after it:** ~12 k unique images seen many times can be
+memorised. Augmentation differs per epoch and they are 5 % of batches rather than the objective, but
+if B3 wins, a replication sweep is the first control to run, not an afterthought.
+
+**Committed prediction:** probe **0.695–0.715**, against B1's probe 0.6912. Falsified below 0.6981
+(B1 + one noise floor). And the column that decides whether it *generalised* is
+held-out-species (B1: 0.6974) — a gain on probe overall with none there means B3 specialised on the
+346 species it pseudo-labelled, which is exactly the risk this direction was warned about.

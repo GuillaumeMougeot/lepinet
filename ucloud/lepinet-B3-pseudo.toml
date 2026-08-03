@@ -1,6 +1,8 @@
 # B3 stage 1: pseudo-label the 27,230 `adapt` trap images with B4, keeping the most confident
 # 30% (owner approved 'strict'). No trap labels are used for training; the script reports
 # pseudo-label accuracy as a diagnostic so the downstream result is interpretable.
+# No --hierarchy: B4 is species-only (levels=[speciesKey]), so there are no coarse columns to
+# fill, and the comparison target B1 is species-only too.
 name = "lepinet-B3-pseudo"
 replicas = 1
 [application]
@@ -17,7 +19,7 @@ local = ".."
 remote = "/12347837/repos/lepinet"
 [setup]
 script = "setup-lepinet.sh"
-run = "python dev/065_pseudolabel.py --model '/work/lepinet/data/ucloud_models/*-lepinet-B4-A2-trapaug-dinov3cnxl-ucloud/*.pt' --adapt-parquet /work/lepinet/data/flemming/splits/flemming_adapt.parquet --img-dir /work/flemming/images --out /work/lepinet/data/flemming/splits/pseudo_strict.parquet --hierarchy /work/global_lepi/hierarchy.csv --keep-frac 0.30 --img-size 320 --num-workers 32"
+run = "python dev/065_pseudolabel.py --model '/work/lepinet/data/ucloud_models/*-lepinet-B4-A2-trapaug-dinov3cnxl-ucloud/*.pt' --adapt-parquet /work/lepinet/data/flemming/splits/flemming_adapt.parquet --img-dir /work/flemming/images --out /work/lepinet/data/flemming/splits/pseudo_strict.parquet --keep-frac 0.30 --img-size 320 --num-workers 32"
 [schedule]
 auto_extend = "1h"
 max_time = "6h"
