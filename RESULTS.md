@@ -64,6 +64,12 @@ teacher. Re-running those two on the new baseline is the highest-value pending w
 package runs on **UCloud B200** and its checkpoints/results are not in that ledger, so this table is
 maintained by hand and kept exhaustive.
 
+**Name the shifted benchmark, and never compare across benchmarks.** Measured noise floors: full set
+**0.0069**, `probe` **0.0041**, `probe-heldout-species` **0.0052**. Macro-F1 does not decompose over
+subsets — the full set weights 486 species, `probe` weights 368 — so a model can tie on one and win
+on the other with both results correct ([`journal/2026-08-03-macro-f1-does-not-decompose.md`](journal/2026-08-03-macro-f1-does-not-decompose.md)).
+Take differences **within** a column only.
+
 **The shifted column is measured on all 47,905 trap images.** That set is *also* the only source of
 unlabelled trap data, so anything that trains on it (self-training, fine-tuning) invalidates this
 column as its baseline and must use the grouped `probe` split instead —
@@ -98,7 +104,7 @@ in parentheses. Native metric ≡ `mini_metrics` at threshold 0 (verified bit-ex
 | `20260730-*` (B1) | A1 + **domain-mimicking augmentation** (`domain_aug: trap`) | 0.8999 (0.9261) | 0.9479 | 0.9608 | **shifted 0.6836 (+3.99 vs A1) for −0.36 in-dist — an 11:1 trade**, the best measured here. AUROC 0.9010. Closes 17 % of the domain gap | ucloud |
 | `20260730-*` (A2) | **DINOv3-cnx-L, single head + ArcFace × z-score** | **0.9216** (0.9436) | 0.9610 | 0.9754 | best in-distribution **and worst deployable**: shifted 0.6616 (loses to B1, 10× smaller) and **AUROC 0.8298** (loses to A1 by 7.7 pt). Replicates A1's ArcFace cost within 0.06 pt at 10× scale | ucloud |
 | `20260731-*` (B4) | **A2 + `domain_aug: trap`** — the capacity × augmentation cell | **0.9216** (0.9434) | 0.9617 | 0.9752 | **shifted 0.7101 — project best**; AUROC 0.8132. Augmentation tax is **0.00** at this scale (vs −0.36 at 20 M) while its shifted gain *grows* (+4.85 vs +3.99) | ucloud |
-| `20260802-*` (F1) | **flagship: DINOv3-cnx-L + ArcFace × z-score + marginal supervision + trap aug** | **0.9219** (0.9441) | **0.9657** | **0.9826** | shifted **0.7103**, open-set 0.8800 (entropy). Identical to B4 on species and shift — marginal supervision's robustness gain **does not survive scale** — but genus +0.40 / family +0.74 do. **Ship this over B4 if the app shows coarse ranks** | ucloud |
+| `20260802-*` (F1) | **flagship (SHIP THIS): DINOv3-cnx-L + ArcFace × z-score + marginal supervision + trap aug** | **0.9219** (0.9441) | **0.9657** | **0.9826** | shifted **0.7103**, open-set 0.8800 (entropy). Identical to B4 on species and shift — marginal supervision's robustness gain **does not survive scale** — but genus +0.40 / family +0.74 do. **Ship this over B4 if the app shows coarse ranks** | ucloud |
 | `20260802-*` (D2) | b0→**fastvit_sa12**, distilled from A2, T=1 | **0.8967** (—) | — | — | shifted 0.6301. **Best small model in the project** (+1.34 over A3's b0). Confirms student capacity, not the teacher, was the constraint | ucloud |
 | `20260802-*` (L1) | single head, **balanced softmax** (τ=1), no oversampling | 0.8970 (0.9274) | 0.9531 | 0.9722 | **shifted 0.5726.** Balanced softmax = logit adjustment at τ=1; loses in-distribution *and* collapses under shift | ucloud |
 | `20260802-*` (L2) | single head, **oversampling + balanced softmax** | 0.8689 (0.8988) | 0.9380 | 0.9665 | **shifted 0.5492 — worst cell on both axes.** The two levers double-count | ucloud |

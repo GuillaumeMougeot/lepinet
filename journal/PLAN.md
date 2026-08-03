@@ -257,6 +257,7 @@ Next, and now motivated by the curve rather than by the literature:
 
 | id | run | why |
 |---|---|---|
+| **L5** | **√-oversampling at 198 M** | **running** (12363198) → triple chained. One of only two adopted interventions never re-tested across the scale boundary, and the larger one. Predicted: if the 20 M trade is real at scale, in-dist −1.5–2 pt and probe +1.5; if capacity absorbs it, both barely move. |
 | **L3** | **LDAM** (per-class margin ∝ n⁻¹ᐟ⁴) | A *fourth-root* softening — gentler than √-oversampling — so the monotone curve **predicts it should beat oversampling under shift**. An out-of-sample prediction to test, not a method to try. Needs per-class margin support in the loss. |
 | **L4** | **cRT / decoupled** | Rebalances only the classifier, leaving the representation trained on the natural distribution. If the damage is to the *representation*, cRT escapes the trade entirely. Cheap: stage 2 reuses a frozen backbone. |
 

@@ -1,0 +1,52 @@
+# L5: is sqrt-oversampling's robustness cost also a small-model effect?
+#
+# At 20 M, oversampling is +1.86 pt in-distribution and -1.52 pt shifted (L0) -- an accuracy/
+# robustness trade. But three interventions have now behaved differently at 198 M than at 20 M
+# (journal/2026-08-02-f1-flagship.md), and oversampling has never been re-tested there. It is one of
+# only two adopted interventions never checked across the scale boundary, and it is the larger one.
+#
+# F1's exact config with oversample_power: 0.0. One factor.
+#
+# Prediction (committed): if the trade is real at scale, in-dist drops ~1.5-2 pt to ~0.902-0.907 and
+# probe RISES ~1.5 pt to ~0.735-0.740. If instead capacity absorbs it -- the pattern of the other
+# three -- in-dist drops less and probe barely moves. Falsified as a "trade" if probe stays within
+# 0.7209 +/- 0.0041 (F1's probe score, one floor).
+version: 1.0
+desc: lepinet-L5-nooversample-dinov3cnxl-ucloud
+train:
+  parquet_path: /work/global_lepi/0032836-250426092105405_processing_metadata_postprocessed_quality_filtered.parquet
+  img_dir: /work/global_lepi/images
+  out_dir: /work/lepinet/data/ucloud_models
+  fold: '1'
+  min_img_per_spc: 50
+  num_workers: 128
+  model_name: lepinet-L5-nooversample-dinov3cnxl-ucloud
+  model_arch_name: convnext_large.dinov3_lvd1689m
+  head: marginal_arcface
+  nb_epochs: 6
+  base_lr: 0.0008
+  batch_size: 96
+  aug_img_size: 384
+  img_size: 320
+  optimizer: muon
+  fp16: true
+  precision: bf16
+  schedule: one_cycle
+  warmup_epochs: 0.5
+  grad_clip: 5.0
+  oversample_power: 0.0
+  domain_aug: trap
+  family_filter: []
+  aug_kwargs:
+    max_warp: 0.1
+    max_lighting: 0.2
+    p_lighting: 0.5
+    flip_vert: true
+    max_rotate: 20.0
+    max_zoom: 1.2
+  levels:
+  - speciesKey
+  - genusKey
+  - familyKey
+  arcface_scale: 30.0
+  arcface_margin: 0.3

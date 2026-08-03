@@ -8,8 +8,8 @@
 #
 # Prediction (committed): probe 0.695-0.715. The pseudo-labels are 98% correct but cover only 346
 # species and come from B4's own beliefs, so this measures whether target-domain PIXELS help once
-# the labels are nearly right -- not whether the labels help. Falsified below 0.6981 (B1 + one
-# noise floor). The number that decides whether it generalised is the held-out-species column
+# the labels are nearly right -- not whether the labels help. Falsified below 0.6953 (B1's probe 0.6912 + probe's
+# OWN measured floor of 0.0041; the earlier 0.6981 wrongly used the full-set floor). The number that decides whether it generalised is the held-out-species column
 # (B1: 0.6974): a gain on probe overall with none there means it specialised on the 346 species
 # it pseudo-labelled, which is the risk the owner named for this direction.
 version: 1.0

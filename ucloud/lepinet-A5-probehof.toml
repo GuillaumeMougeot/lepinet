@@ -1,0 +1,28 @@
+# Noise floor for the PROBE benchmark. The measured 0.0069 floor is for the full 47,905-image
+# trap set; probe is 3.2x smaller (15,200 / 368 species) and probeho 19x smaller (2,455 / 58),
+# so both must be noisier -- and B3's falsification line currently uses the full-set figure.
+# These are the two independently trained copies of the identical baseline config.
+name = "lepinet-A5-probehof"
+replicas = 1
+[application]
+name = "pytorch-te"
+version = "26.05"
+[product]
+id = "gpu-nvidia-b200-1-gpu"
+category = "gpu-nvidia-b200"
+provider = "ucloud"
+[time_allocation]
+hours = 3
+[sync]
+local = ".."
+remote = "/12347837/repos/lepinet"
+[setup]
+script = "setup-lepinet.sh"
+run = "lepinet test --model '/work/lepinet/data/ucloud_models/*-lepinet-A5-seedrepeat-effnetv2s-ucloud/*.pt' --parquet /work/lepinet/data/flemming/splits/flemming_probe_heldout_species.parquet --img-dir /work/flemming/images --out-dir /work/lepinet/data/ucloud_preds/A5-probehof --test-set 0 --min-img-per-spc 0 --img-size 256 --aug-img-size 460 --batch-size 128 --num-workers 32 --no-drop-unknown-species"
+[schedule]
+auto_extend = "1h"
+max_time = "6h"
+[[resources]]
+type = "file"
+path = "/12347837/datasets/flemming"
+read_only = true
