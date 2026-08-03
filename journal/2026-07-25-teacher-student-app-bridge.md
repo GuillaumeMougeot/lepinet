@@ -497,3 +497,19 @@ Distillation still works (+0.44 pt is 4× the species noise floor, [[2026-08-01-
 and the ceiling claim is untouched. But the honest headline for the shipped student is that **most of
 its advantage comes from the architecture, not the teacher** — which is consistent with the other
 finding here, that teacher *accuracy* barely matters.
+
+### D2: fastvit_sa12 confirms the student was the constraint (2026-08-03)
+
+| student, distilled from A2, T=1 | species | shifted |
+|---|---|---|
+| `tf_efficientnetv2_b0` (A3) | 0.8833 | — |
+| **`fastvit_sa12` (D2)** | **0.8967** | 0.6301 |
+
+**Predicted 0.895-0.905; landed at 0.8967.** Correct, and it closes the argument A6 opened: A6 showed
+the head was worth +0.97 pt at b0 scale against distillation's +0.44, i.e. **student capacity
+dominates the teacher**. Swapping the student for a better one of similar size buys **+1.34 pt** --
+three times what distillation from a 2 pt better teacher ever bought.
+
+The July backbone sweep already had this number (fastvit_sa12 0.8920 vs b0 0.8760) and it went
+unused for six weeks while the effort went into teachers. **The shipped student is now 0.8967**, the
+best small model the project has produced.

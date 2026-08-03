@@ -54,11 +54,26 @@ images of 58 taxa the adaptation never saw. If B3's gain appears on `probe` over
 that subset, it specialised and did not generalise — and that is a distinction no aggregate number
 can make.
 
-## What is running
+## The baselines B3 must beat (landed 2026-08-03)
 
-Three models re-scored on `probe` and on `probe_heldout_species`: **A4** (the best small
-architecture), **B1** (the best small robust model) and **B4** (the best overall). Those six numbers
-are the honest reference B3 must beat. Until they land, **B3 has no baseline** and must not run.
+| model | full trap set (contaminated for B3) | **probe** (15,200) | **probe, held-out species** (2,455) |
+|---|---|---|---|
+| A4 -- best small architecture | 0.6616 | 0.6749 | 0.6992 |
+| B1 -- best small robust | 0.6836 | 0.6912 | 0.6974 |
+| B4 -- best overall | 0.7101 | **0.7006** | **0.7101** |
+
+Two things to note before B3 runs.
+
+**`probe` is not systematically easier or harder than the full set** -- A4 and B1 score higher on it,
+B4 lower. So the split did not accidentally select a soft subset; it selected a different sample,
+which is what makes it usable as an independent reference.
+
+**Held-out species score *higher* than probe overall for all three models.** That is not a
+generalisation signal -- none of these models has seen any trap data, so "held out from adapt" means
+nothing to them and the 58 taxa are simply an easier subset. Measuring it beforehand is what makes it
+usable: without these numbers, B3 scoring well on that subset would have looked like proof it
+generalises, when the subset was easier all along. The quantity that will mean something for B3 is
+the **change** in each column, not the level.
 
 ## The lesson, which is a familiar shape
 

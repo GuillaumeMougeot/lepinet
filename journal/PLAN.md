@@ -1,6 +1,6 @@
 # PLAN — where we are, and what runs next
 
-**Kind:** living · **Last updated:** 2026-08-02 · **Supersedes:**
+**Kind:** living · **Last updated:** 2026-08-03 · **Supersedes:**
 [[2026-07-28-landscape-and-plan]]
 
 This is the one file in `journal/` that is meant to be true *today*. Everything else is a record of
@@ -34,7 +34,7 @@ this file claimed for weeks.
 |---|---|---|---|
 | 1 | **collect F1 + D2**, journal, update `RESULTS.md`/`START-HERE` | — | Running now. F1 is the flagship; **falsified if shifted ≤ 0.717**. |
 | ~~2~~ | ~~D1 — finish `lepinet bundle`~~ **DONE 2026-08-02**: `--parquet` adds `names.json`, `--calibrate` fits per-level temperature + precision-targeted thresholds on validation and verifies on test. Ported from `dev/044`/`dev/047` into `lepinet.calibrate`, with the pure core unit-tested. | none | |
-| 3 | **B3 — self-training on unlabelled trap images** | ~7 h + build | **Split + leakage guards built** (`dev/064`); grouped by (trap, night), 27,230 adapt / 15,200 probe / 58 held-out species. **Blocked until the six `probe` baselines land** — the shifted benchmark is the same images B3 trains on, so it has no valid reference until then. | **The highest-value untested rung.** B1 established the name-a-nuisance ceiling at ~4 pt; B3 is the first rung that adapts to shifts nobody named. Needs grouped splits by capture event and held-out-*species* validation, or it will manufacture a phantom win. |
+| 3 | **B3 — self-training on unlabelled trap images** | ~7 h + build | **Split + leakage guards built** (`dev/064`); grouped by (trap, night), 27,230 adapt / 15,200 probe / 58 held-out species. **UNBLOCKED 2026-08-03** — probe baselines landed (A4 0.6749 / B1 0.6912 / **B4 0.7006**; held-out-species 0.6992 / 0.6974 / 0.7101). Pseudo-labelling stage running. | **The highest-value untested rung.** B1 established the name-a-nuisance ceiling at ~4 pt; B3 is the first rung that adapts to shifts nobody named. Needs grouped splits by capture event and held-out-*species* validation, or it will manufacture a phantom win. |
 | 4 | **L4 — cRT / decoupled** | ~2 h (stage 2 only) | The 2×2 showed tail-reweighting trades robustness for accuracy monotonically. cRT rebalances *only the classifier*, so it tests **where the damage lives**. Reuses L0's checkpoint; stage 2 must not use Muon (it re-partitions param groups and breaks freezing). |
 | 5 | **L3 — LDAM** | ~6.4 h + build | Its per-class margin ∝ n^(−1/4) is *gentler* than √-oversampling, so the monotone curve **predicts it beats oversampling under shift**. An out-of-sample prediction, which is the right reason to run something. |
 | 6 | **B2 — background suppression** (flatbug-style) | ~6.4 h + build | Removes a nameable *category* rather than a nuisance dimension. Bounded by imagination like B1, but bounded higher. |
@@ -97,8 +97,8 @@ Updated 2026-08-01. `→` = chained eval. Every finished run must land in `RESUL
 | id | run | state | result |
 |---|---|---|---|
 | A1 | effnetv2_s, single head + ArcFace × z-score | **DONE (triple)** | in-dist **0.9035** / shifted **0.6437** / **AUROC 0.9068**. Prediction falsified — the effects do *not* compose — but **A1 stands**: open-set survives the single head (0.9068 vs 0.9115 multi-head, vs ~0.601 plain). Interference is −0.59 species / −1.0 coarse, i.e. the margin damages the *marginalisation*. [[2026-07-30-does-arcface-compose-with-marginalisation]] |
-| **F1** | **flagship: DINOv3-cnx-L + ArcFace × z-score + marginal supervision + `domain_aug: trap`** | **running** (12362597) → triple chained | Every intervention that won, composed for the first time. Predicted in-dist 0.918–0.925, **shifted 0.720–0.745**, open-set 0.88–0.90. **Falsified if shifted ≤ 0.717** — that would mean marginal supervision's robustness benefit does not survive scale. |
-| D2 | distil A2 → **fastvit_sa12** (not b0) | **running** (12362598) → eval + shift chained | b0 was the binding constraint on the shipped model (A6: student capacity dominates). Predicted 0.895–0.905. |
+| **F1** | flagship: DINOv3-cnx-L + ArcFace × z-score + marginal supervision + trap aug | **DONE (triple)** | 0.9219 / **0.7103** / 0.8800. **Prediction falsified at its own line.** Identical to B4 on species+shift; marginal supervision's robustness gain is capacity-dependent and vanishes at 198 M, while its coarse gain grows (+0.40 genus / +0.74 family). [[2026-08-02-f1-flagship]] |
+| D2 | distil A2 → fastvit_sa12 | **DONE** | **0.8967** (predicted 0.895–0.905, correct), shifted 0.6301. Best small model in the project, +1.34 over b0. |
 | A2 | DINOv3-cnx-L, single head + ArcFace × z-score | **DONE (triple)** | in-dist **0.9216** / shifted 0.6616 / **AUROC 0.8298**. Best in-distribution — and **worst deployable**: loses to B1 (10× smaller) under shift and to A1 on novelty by 7.7 pt. **No longer the final-model candidate.** [[2026-07-31-best-model-is-not-the-best-model]] |
 | A3 | distil A2 → small single-head student | **DONE** | **0.8833** — best student yet (+0.47 over previous). Prediction (~0.88, <0.89) correct: **the ceiling claim survives**. A *worse* teacher (A2 0.9216) beat a better one (CnxV2-L 0.9316) by 0.77 pt, so teacher accuracy is near-irrelevant — target *shape* is what matters. |
 | A6 | single-head b0 from scratch — A3's missing control | **DONE** | **0.8789** (predicted 0.870–0.878, just above). Splits A3's win: **head +0.97 pt, distillation +0.44** — the architecture is worth more than the teacher at b0 scale, and distillation's credit halves |
