@@ -153,6 +153,11 @@ long tail from a *macro* average. With the filter removed it scored 0.9152, i.e.
 the baseline. A metric that improves when you change how it is computed has not improved.
 → [journal: 2026-07-24-src-lepinet-baseline-port](https://github.com/GuillaumeMougeot/lepinet/blob/main/journal/2026-07-24-src-lepinet-baseline-port.md)
 
+**A cloned job spec inherits the wrong mounts.** `[[resources]]` is easy to overlook when a TOML is
+copied from a neighbouring job: the B3 combine step was cloned from a flemming-only job and died on a
+missing `/work/global_lepi` after five hours of the chain behind it sitting `BLOCKED`. When copying a
+spec, check the mounts against what the command actually reads.
+
 **A job can report SUCCESS while the script inside it exits 1.** Read the logs, not the job status.
 
 **Framework attributes can lie.** fastai hardcodes `DataLoader.num_workers` to `1`; the real value

@@ -24,6 +24,21 @@ loaded with runs that finish and self-evaluate (`--after` chains), and the backl
 so any future session can pick the top item without asking. Do not design work that needs a human
 mid-flight.
 
+**Never leave a single serial chain as the only queued work.** On 2026-08-03 the head of the B3
+chain failed at 14:00 and everything behind it went `BLOCKED`; the next scheduled pass was 19:13, so
+the GPU sat idle for five hours. The cron tick was working perfectly — a blocked dependency is
+*supposed* to stop the chain, and nothing was going to unblock it but a session.
+
+The fix is scheduling discipline, not more supervision, because more supervision is the thing that
+is not available:
+
+- **Always keep at least one independent job queued** alongside any chain, so a blocked chain costs
+  progress on one line of work rather than all of it.
+- **Put the untested step at the head of its own chain**, or verify it before chaining hours behind
+  it. A one-off script that has never run is the most likely thing in the queue to fail.
+- **Prefer several short chains to one long one.** The blast radius of a failure is everything
+  downstream of it.
+
 ### Ordered backlog — take the top unblocked item
 
 Costs use the measured formula, **not** guesses: `images_per_epoch × epochs / 1100 img/s`, where the

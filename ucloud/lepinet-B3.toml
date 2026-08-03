@@ -22,3 +22,10 @@ max_time = "40h"
 type = "file"
 path = "/12347837/datasets/global_lepi"
 read_only = true
+
+# The combined parquet points at trap images via ../../flemming/images/..., so that tree must be
+# mounted for training too -- otherwise 5% of every epoch is missing files.
+[[resources]]
+type = "file"
+path = "/12347837/datasets/flemming"
+read_only = true
