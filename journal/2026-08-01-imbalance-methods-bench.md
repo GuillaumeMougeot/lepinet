@@ -267,3 +267,59 @@ prediction from the curve rather than a method to try, which is the right reason
 **cRT/decoupled is the other one the curve speaks to:** it applies the rebalancing *only* to the
 classifier and leaves the representation trained on the natural distribution. If the damage is to the
 representation, cRT should escape the trade entirely.
+
+---
+
+## L5: oversampling's trade does not vanish at scale — it grows (2026-08-04)
+
+Three interventions have behaved differently at 198 M than at 20 M
+([[2026-08-02-f1-flagship]]), all in the same direction: capacity absorbed them. √-oversampling was
+one of only two adopted interventions never re-tested across that boundary, and the larger.
+
+F1's config with `oversample_power: 0.0`. One factor.
+
+| | in-distribution | **probe** | probe held-out sp. |
+|---|---|---|---|
+| F1 — with √-oversampling | **0.9219** | 0.7209 | 0.7559 |
+| **L5 — without** | 0.9055 | **0.7497** | **0.7641** |
+| Δ | **−1.64** | **+2.88** (7.0× floor) | +0.82 (1.6× floor) |
+
+**Prediction: in-distribution 0.902–0.907, probe 0.735–0.740.** In-distribution landed at **0.9055**,
+inside the range. Probe landed at **0.7497**, *above* it — the effect is larger than predicted.
+
+### Oversampling is the exception to the scale pattern, and the reason is what it acts on
+
+| intervention | effect at 20 M | effect at 198 M |
+|---|---|---|
+| domain augmentation's in-distribution cost | −0.36 | **0.00** (absorbed) |
+| marginal supervision's shifted benefit | +1.79 | **+0.02** (absorbed) |
+| marginal supervision's coarse benefit | +0.27/+0.39 | +0.40/+0.74 (persists) |
+| **√-oversampling's robustness cost** | **−1.52** | **−2.88** (**grows**) |
+
+The three that were absorbed all act as **constraints on the optimisation** — auxiliary losses,
+corrupted inputs — and a model with enough capacity satisfies them without giving anything up.
+Oversampling is not a constraint. It **changes which data the model sees**, and no amount of capacity
+makes a model learn from images it is shown less often. So its effect is not absorbed, and at higher
+capacity the model fits the reweighted distribution *better* — which means it also fits its bias
+better. That is why the cost grows rather than shrinks.
+
+**Generalisable form:** interventions that constrain the *objective* weaken with capacity;
+interventions that reshape the *data distribution* do not, and may strengthen. Predicting which of
+the two an intervention is, is worth more than measuring it at one scale.
+
+### The practical consequence is large
+
+**L5's probe score of 0.7497 is the best of any model in the project**, including B3's self-training
+(0.7370) and every 198 M variant. It was obtained by *deleting* a line from a config.
+
+That is uncomfortable, because √-oversampling has been in every recipe since July and is the change
+that took the baseline from 0.8887 to 0.9148. It is not wrong — it buys 1.64 pt of the headline
+metric at this scale, and macro-F1 over 12,041 species is a legitimate thing to want. But **for a
+model that will meet someone else's images, it is a net loss**, and that was invisible for six weeks
+because nothing was measured off the training distribution.
+
+### What it makes necessary
+
+B6 (F1 + self-training, running) **has oversampling on**. The two best levers found —
+self-training (+4.58 at 20 M) and dropping oversampling (+2.88 at 198 M) — have never been combined,
+and both act on the shifted axis. **B7** is queued: L5's config plus the pseudo-labels.
