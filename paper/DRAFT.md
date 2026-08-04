@@ -45,6 +45,53 @@ taxa it has never seen. We release the package, the models and the reproduction 
   angular margin degrades *marginalisation* more than classification, because summing a posterior is
   calibration-dependent, replicated across a 10× scale change; (C6) an open, reproducible package.
 
+## 1b. Related work _(drafted from memory — every citation marked [VERIFY] needs checking against the source before submission; author lists, years and venues are not reliable)_
+
+**Cosine classifiers and angular margins.** Normalised-prototype classifiers and additive angular
+margins are standard in face recognition — SphereFace, CosFace and ArcFace [Deng et al., CVPR 2019,
+VERIFY] — where the goal is an embedding whose *distances* are meaningful, not merely a decision
+boundary. NormFace [Wang et al., ACM MM 2017, VERIFY] gives the scale-factor lower bound we invoke in
+§2.3. Our contribution is not the margin but its **composition with a dimension-aware calibration**:
+applied to raw cosines the margin costs 3.3 points of accuracy for AUROC 0.732, and composed with the
+z-score transform it costs 0.4 for 0.9115. We are not aware of prior work reporting that the margin's
+accuracy/open-set trade-off is an artefact of the scale it is applied on.
+
+**Hierarchical classification.** The literature encodes the taxonomy in the architecture —
+hierarchical softmax, conditional/parent-gated heads, autoregressive decoders over the label path
+[VERIFY: representative citations needed]. We test three such heads against marginalisation and find
+none of them pay (§4.1). The distinction we draw — coarse *parameters* hurt while coarse
+*supervision* helps, visible only off the training distribution — does not appear in that literature,
+which to our knowledge evaluates in-distribution throughout.
+
+**Long-tailed recognition.** Square-root resampling [Mahajan et al., ECCV 2018, VERIFY], logit
+adjustment [Menon et al., ICLR 2021, VERIFY], Balanced Softmax [Ren et al., NeurIPS 2020, VERIFY],
+LDAM [Cao et al., NeurIPS 2019, VERIFY], class-balanced reweighting by effective number [Cui et al.,
+CVPR 2019, VERIFY] and the decoupling/τ-normalisation line [Kang et al., ICLR 2020, VERIFY]. Two
+observations. Balanced Softmax and logit adjustment at τ=1 are the **same objective** (§4.x), which
+the two papers do not note. And the cosine head already implements τ-normalisation at τ=1 by
+construction, so results transferred from a linear-classifier setting should not be expected to hold.
+Our contribution here is the **evaluation axis**: these methods are benchmarked on in-distribution
+held-out splits (CIFAR-LT, ImageNet-LT, iNaturalist) essentially without exception, and we show their
+ranking inverts under source shift.
+
+**Open-set recognition and OOD detection.** Max-softmax-probability [Hendrycks & Gimpel, ICLR 2017,
+VERIFY], energy scores [Liu et al., NeurIPS 2020, VERIFY], and the max-logit family. §4.9 reports
+that the best rule among these **changes with model capacity and with the head's output convention**
+— max-logit at 20 M, MSP at 198 M, entropy for log-probability heads — with a 6–7.6 point spread. We
+have not seen this reported, and it is the kind of result that invalidates comparisons rather than
+adding to them.
+
+**Domain adaptation and self-training.** Pseudo-labelling with confidence thresholds is long
+established [Lee, ICML workshop 2013, VERIFY], with FixMatch and noisy-student as modern
+representatives [Sohn et al. 2020; Xie et al. 2020, VERIFY]. Our finding of a sharp interior optimum
+in the *share* of target-domain data (§4.x) — and specifically that transfer to unseen classes falls
+monotonically as that share rises — is, as far as we know, not documented; the usual concern is
+label noise rather than dosage.
+
+**Calibration.** Temperature scaling [Guo et al., ICML 2017, VERIFY]. We use it as shipped, and note
+in §4.7 that marginalisation makes calibration *load-bearing* rather than cosmetic: summing a
+poorly-calibrated posterior gives a wrong parent even when the top-1 is right.
+
 ## 2. Method
 
 ### 2.1 Cosine classification head

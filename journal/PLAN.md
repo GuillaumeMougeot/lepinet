@@ -90,6 +90,23 @@ and no scheduling tool available here does. What actually persists is:
 So the design is: *jobs* are durable, *supervision* is best-effort. Queue long chains rather than
 relying on being woken to launch the next thing.
 
+### The paper
+
+Owner's direction (2026-08-04): **let the story unroll** — the 23rd is not a deadline for deciding
+the headline. Keep §4 current as runs land; do not freeze the spine early.
+
+- **Related work: drafted 2026-08-04** with every citation marked `[VERIFY]`. Written from memory, so
+  author lists, years and venues are unreliable — the owner will fact-check. What is *not* from
+  memory, and is the actual contribution of that section, is where each line says our result differs
+  from the cited literature.
+- **Figures: deliberately last.** Three exist unused in `paper/figures/` from the open-set work.
+  Building more before the storyline settles would mean drawing the wrong plots twice; the owner
+  agreed to defer. When the spine is fixed, the figures the results now demand are: the
+  replication-share curve with its transfer overlay, the three-benchmark comparison, and the
+  scale-boundary table as a plot.
+- **Keep §4 in step.** The drift 2026-08-01 → 08-04 (four results missing) happened because the
+  journal was treated as primary and the paper as downstream. Both are primary.
+
 ### The 23 August final report
 
 The owner asked for a full account on their return. Recipe, so any session can produce it:
