@@ -1,0 +1,34 @@
+# Label-budget arm N=12230: build a REAL-labelled trap subset and merge it at its natural share
+# (--target-frac 0, no replication) so it matches the 1x pseudo-label arm exactly. At N=12230
+# the only difference from that arm is that the labels are correct rather than 98.15% correct.
+name = "lepinet-lab12230-prep"
+replicas = 1
+[application]
+name = "pytorch-te"
+version = "26.05"
+[product]
+id = "gpu-nvidia-b200-1-gpu"
+category = "gpu-nvidia-b200"
+provider = "ucloud"
+[time_allocation]
+hours = 3
+[sync]
+local = ".."
+remote = "/12347837/repos/lepinet"
+[setup]
+script = "setup-lepinet.sh"
+run = "python dev/067_label_budget.py --adapt-parquet /work/lepinet/data/flemming/splits/flemming_adapt.parquet --groups /work/lepinet/data/flemming/splits/flemming_groups.parquet --n 12230 --out /work/lepinet/data/flemming/splits/labels_12230.parquet && python dev/066_combine_pseudo.py --global-parquet /work/global_lepi/0032836-250426092105405_processing_metadata_postprocessed_quality_filtered.parquet --pseudo-parquet /work/lepinet/data/flemming/splits/labels_12230.parquet --out /work/lepinet/data/flemming/splits/combined_lab12230.parquet --levels speciesKey,genusKey,familyKey --min-img-per-spc 50 --target-frac 0"
+[schedule]
+auto_extend = "1h"
+max_time = "6h"
+# BOTH mounts: this step reads the global training parquet and writes beside the trap splits.
+# The first attempt was cloned from a flemming-only job and died on a missing /work/global_lepi.
+[[resources]]
+type = "file"
+path = "/12347837/datasets/flemming"
+read_only = true
+
+[[resources]]
+type = "file"
+path = "/12347837/datasets/global_lepi"
+read_only = true

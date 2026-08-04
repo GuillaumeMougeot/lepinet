@@ -264,6 +264,29 @@ than by citing a floor.** The auxiliary-coarse-heads follow-up this motivated is
 `lepi-cond-shift` also landed: the conditional head is **0.6213**, worst of all four under shift as
 well as in-distribution — the only head whose two rankings agree.
 
+## Group T — what would target labels have bought? (new section, owner-requested 2026-08-04)
+
+The robustness result is label-free, so the reviewer question is *"how many real labels would that
+have taken, and what would they have cost?"* — better answered than deflected. Three axes; the first
+is running.
+
+**T1 — the label budget curve.** Real trap labels at N = 500 / 2500 / 12230, merged at their natural
+share with no replication, so each arm matches the **1x self-training arm exactly**. At N = 12230 the
+only difference from that arm is that the labels are correct rather than 98.15 % correct — label
+quality, isolated. Labels drawn from `adapt` only; sampling spreads round-robin over (trap, night)
+groups, because a user labelling 500 images would not label 500 frames of one night. Anchors:
+pseudo-labels at 1x scored probe **0.7354**, and at 2 % **0.7706**.
+
+**T2 — integration strategy** (not started; needs a small package addition). Full mixed training
+versus fine-tuning from the GBIF model versus fine-tuning with GBIF replay. `lepinet` has no
+`init_from` option, so fine-tuning needs one — a contained change to `train()`. Note the forgetting
+worry is **already answered**: B3 scored 0.9003 in-distribution against B1's 0.8999, so mixing target
+data at these shares costs nothing on the source task.
+
+**T3 — the cost side.** Labelling effort is the axis a reviewer will actually weigh, and it is not a
+GPU experiment: an estimate of seconds-per-image from the flemming annotation process, multiplied by
+the budget the curve says is needed, next to the zero-cost self-training result.
+
 ## Group L — imbalanced learning, benchmarked on the triple (Aug 1)
 
 A 2×2 of resampling × loss reweighting, from [[2026-08-01-imbalance-methods-bench]]. The framing

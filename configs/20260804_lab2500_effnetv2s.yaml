@@ -1,0 +1,52 @@
+# Label budget N=2500: what would REAL trap labels have bought?
+#
+# Anchor for the comparison: the 1x self-training arm used 12,230 images at 0.39% of
+# training with 98.15%-accurate MACHINE labels and scored probe 0.7354. At N=12230 this
+# arm is identical except the labels are real, so the difference is label quality alone.
+# Smaller N traces how few labels still buy something.
+#
+# Labels drawn from `adapt` only and spread round-robin over (trap, night) groups, since a
+# user labelling 500 images would not label 500 consecutive frames of one night.
+# Prediction (committed): N=500 probe ~0.70-0.72, N=2500 ~0.72-0.74, N=12230 ~0.735-0.755
+# -- i.e. real labels beat 98%-accurate pseudo-labels by little, because the pseudo-labels
+# were already nearly right. If N=12230 lands above 0.77 that reasoning is wrong and label
+# quality matters more than the gate's accuracy suggested.
+version: 1.0
+desc: lepinet-lab2500-effnetv2s-ucloud
+train:
+  parquet_path: /work/lepinet/data/flemming/splits/combined_lab2500.parquet
+  img_dir: /work/global_lepi/images
+  out_dir: /work/lepinet/data/ucloud_models
+  fold: '1'
+  min_img_per_spc: 50
+  num_workers: 256
+  model_name: lepinet-lab2500-effnetv2s-ucloud
+  model_arch_name: efficientnet_v2_s
+  head: arcface
+  nb_epochs: 5
+  base_lr: 0.001
+  batch_size: 64
+  aug_img_size: 460
+  img_size: 256
+  optimizer: muon
+  fp16: true
+  precision: bf16
+  schedule: one_cycle
+  warmup_epochs: 0.5
+  grad_clip: 5.0
+  oversample_power: 0.5
+  family_filter: []
+  aug_kwargs:
+    max_warp: 0.0
+    max_lighting: 0.0
+    p_lighting: 0.0
+    flip_vert: true
+    max_rotate: 15.0
+    max_zoom: 1.1
+  levels:
+  - speciesKey
+  arcface_zscore: true
+  arcface_scale: 30.0
+  arcface_margin:
+  - 0.3
+  domain_aug: trap
