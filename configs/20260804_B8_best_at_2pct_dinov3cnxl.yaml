@@ -1,0 +1,52 @@
+# B8: everything that won, at the setting the sweep says is right.
+#   DINOv3-cnx-L + ArcFace x z-score + marginal supervision + trap aug   (F1)
+#   minus sqrt-oversampling                                             (L5, +2.88 probe at 198 M)
+#   plus self-training pseudo-labels at 2% of training, not 6%          (sweep: +7.94 vs +4.58)
+#
+# B6 and B7 were launched before the sweep landed and both use 13% (~6% of training), which costs
+# ~3.4 pt on probe and halves transfer to unseen species. B8 is the corrected version.
+#
+# Prediction (committed): probe 0.790-0.815, held-out species within 0.01 of probe (at 2% the sweep
+# showed the gain transfers essentially entirely: 0.7706 vs 0.7704). In-distribution 0.900-0.910,
+# since dropping oversampling costs ~1.6 and self-training costs nothing.
+# Falsified as a composition if probe <= 0.7747 (B3rep5x's 0.7706 + one probe floor) -- that would
+# mean scale and oversampling-removal add nothing on top of self-training at its best setting.
+version: 1.0
+desc: lepinet-B8-best-at-2pct-dinov3cnxl-ucloud
+train:
+  parquet_path: /work/lepinet/data/flemming/splits/combined_b3_3lvl_2pct.parquet
+  img_dir: /work/global_lepi/images
+  out_dir: /work/lepinet/data/ucloud_models
+  fold: '1'
+  min_img_per_spc: 50
+  num_workers: 128
+  model_name: lepinet-B8-best-at-2pct-dinov3cnxl-ucloud
+  model_arch_name: convnext_large.dinov3_lvd1689m
+  head: marginal_arcface
+  nb_epochs: 6
+  base_lr: 0.0008
+  batch_size: 96
+  aug_img_size: 384
+  img_size: 320
+  optimizer: muon
+  fp16: true
+  precision: bf16
+  schedule: one_cycle
+  warmup_epochs: 0.5
+  grad_clip: 5.0
+  oversample_power: 0.0
+  domain_aug: trap
+  family_filter: []
+  aug_kwargs:
+    max_warp: 0.1
+    max_lighting: 0.2
+    p_lighting: 0.5
+    flip_vert: true
+    max_rotate: 20.0
+    max_zoom: 1.2
+  levels:
+  - speciesKey
+  - genusKey
+  - familyKey
+  arcface_scale: 30.0
+  arcface_margin: 0.3

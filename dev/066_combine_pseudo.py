@@ -71,7 +71,14 @@ def main(a):
 
     keep_cols = ["image_path", "filename", "set", *levels]
 
-    # Replication, and why it is not optional. The gate retains ~12k trap images against ~3.1M real
+    # Replication. NOTE (2026-08-04): the paragraph below was written before the sweep and its
+    # central claim is FALSE. 0.39 % of training (no replication) buys +4.42 pt, 97 % of what 13x
+    # buys, with better transfer to unseen species. The optimum is ~2 %; above it, replication
+    # converts adaptation into memorisation of the pseudo-labelled images. Default `--target-frac`
+    # is now 0.02. Kept as written because the reasoning failed in an instructive way --
+    # journal/2026-08-04-replication-sweep.md.
+    #
+    # Original comment, wrong: The gate retains ~12k trap images against ~3.1M real
     # ones -- **0.39 % of training**. At that share the pseudo rows appear in roughly one batch in
     # 250, and B3 would return a null result that says nothing about self-training, only that 0.4 %
     # more data changes nothing. Repeating them to a stated fraction is the standard fix and makes
@@ -115,6 +122,7 @@ if __name__ == "__main__":
                     help="Comma-separated levels the training config needs, fine->coarse. A head "
                          "such as marginal_arcface needs all three or prepare_df raises KeyError.")
     ap.add_argument("--min-img-per-spc", type=int, default=50)
-    ap.add_argument("--target-frac", type=float, default=0.05,
-                    help="Replicate pseudo rows until they are this fraction of training. 0 disables.")
+    ap.add_argument("--target-frac", type=float, default=0.02,
+                    help="Replicate pseudo rows to this fraction of training. 0.02 is the measured optimum; "
+                         "above ~0.05 the gain falls and transfer to unseen species halves. 0 disables.")
     main(ap.parse_args())

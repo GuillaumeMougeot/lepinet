@@ -1,6 +1,12 @@
 # B3: self-training is the largest robustness lever this project has found
 
-**Kind:** research · **Status:** **RESOLVED (2026-08-04). Prediction beaten** — probe **0.7370**
+**Kind:** research · **Status:** **RESOLVED (2026-08-04), SETTING CORRECTED same day.** The result
+below used 13x replication (~6 % of training). The sweep
+[[2026-08-04-replication-sweep]] shows that is the wrong setting: **2 % scores probe 0.7706 against
+this entry's 0.7370**, and transfers 92 % of its gain to unseen species against 56 % here. The
+finding stands and is *larger* than reported; the number quoted below is not the one to cite.
+
+**Prediction beaten** — probe **0.7370**
 against a predicted 0.695–0.715. Self-training on pseudo-labelled trap images buys **+4.58 pt** on
 held-out trap groups for **+0.04 pt** in-distribution, and **56 % of that gain transfers to species
 the adaptation never saw**. A 20 M model with it beats a 198 M model without it.
@@ -84,8 +90,9 @@ Combining them is the obvious next run.
 
 1. **B3 at 198 M** — F1's config plus the pseudo-labels. If the two effects compose, this is the
    deployment model. On the week's evidence they should: they act on different failure modes.
-2. **A replication sweep.** 13× on 12 k unique images is a memorisation risk that was stated in the
-   design; with a result this size it now has to be controlled. 1×, 5×, 13×, 26×.
+2. ~~**A replication sweep.**~~ **DONE, and it moved the result**: the optimum is 2 % of training,
+   not 6 % ([[2026-08-04-replication-sweep]]). Replication was never necessary at all — 0.39 %
+   already buys 97 % of the gain.
 3. **A calibrated gate.** The confidence distribution was saturated (median 0.9999996), so "top 30 %"
    actually kept 45 %. D1's temperature scaling would give a gate with real resolution, and the gate
    is the one hyperparameter that decides label quality.
