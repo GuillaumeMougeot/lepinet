@@ -44,6 +44,8 @@ narrower, but the part that saves an engineer a week.
 | 2 | **One species head + marginalisation beats the multi-head at *every* level** (0.9135/0.9606/0.9739 vs 0.9110/0.9587/0.9708) — fewer parameters, and the coarse posterior is by definition the sum of the species one (**probabilistic coherence — not argmax agreement, which is not guaranteed**). **But it loses 2.1 pt under domain shift** unless the marginals are also *supervised during training*, which recovers 1.41 of it for free: **coarse supervision buys robustness, coarse parameters do not.** | [story](journal/DIRECTIONS.md), [marginal](journal/2026-07-30-marginal-supervision.md) |
 | 3 | **ArcFace × z-score turns novelty detection from chance into usable**: open-set AUROC 0.601 → **0.9115** for −0.4 pt accuracy. The margin *alone* costs 3.3 pt and reaches only 0.732 — the trade-off was an artefact of discarding the calibrated transform, not intrinsic. | [story](journal/DIRECTIONS.md) |
 | 4 | **An open-set scoring rule does not transfer across model scale.** `max-logit` is the best rule at 20 M and among the worst at 198 M, where `max-softmax-probability` beats it by **+6.1 to +7.6 pt**. Reading every model with one rule made a 1.6 pt capacity penalty look like 8.8 and produced a "ranking inversion" that was largely an artifact. As a model's fit improves, open-set signal moves from the *magnitude* of the top score to its *dominance* over the rest. | [scoring rule](journal/2026-08-01-the-scoring-rule-was-the-bug.md) |
+| 4a | **Macro-F1 does not decompose over subsets, so two benchmarks on the *same images* can disagree and both be right.** F1 ties B4 on all 47,905 trap images (+0.0002) and beats it by **+2.03 pt** on a 15,200-image subset of them — because the full set weights 486 species at 1/486 and the subset weights its 368 at 1/368. Differences are only meaningful *within* a column. | [decomposition](journal/2026-08-03-macro-f1-does-not-decompose.md) |
+| 4b | **A benchmark's exclusivity has to be written down or it gets spent twice.** The trap set was *the* external benchmark since July and also the only source of unlabelled trap images; nothing recorded that those roles conflict, so self-training would have trained on its own test set and reported a higher number. Caught before running, by building the split rather than by the pipeline. | [contamination](journal/2026-08-02-the-shifted-benchmark-is-also-the-adaptation-set.md) |
 | 5 | **The three evaluation axes still disagree, but mildly.** With each model's best rule: A1 leads open-set (0.9068), B4 leads in-distribution (0.9216) and shift (0.7101) while giving up 1.75 pt of AUROC. In-distribution macro-F1 should not be the sole selection criterion — but the strong claim that the best in-distribution model is the *worst* deployable one did not survive scrutiny. | [inversion, corrected](journal/2026-07-31-best-model-is-not-the-best-model.md) |
 | 6 | **Self-training on unlabelled target-domain images is the largest robustness lever, and the only free one.** +4.58 pt on held-out trap groups for +0.04 in-distribution, with **56 % transferring to species the adaptation never saw**. A 20 M model with it beats a 198 M model without. It is also the first rung requiring nobody to *name* what differs between domains — unlike augmentation, which is bounded by imagination at ~4 pt. | [B3](journal/2026-08-03-b3-self-training.md) |
 | 7 | **Long-tail methods trade robustness for accuracy, monotonically.** Rank four cells by how hard they push mass toward rare classes — none / √-oversampling / balanced softmax / both — and the shifted score falls at *every* step: **0.6445 > 0.6293 > 0.5726 > 0.5492** (9.5 pt spread, 0.69 pt floor), while the in-distribution column does not order at all. Rare classes carry the least transferable evidence, so up-weighting them up-weights the part that breaks first. | [imbalance bench](journal/2026-08-01-imbalance-methods-bench.md) |
@@ -81,24 +83,36 @@ time, and what moved it is not what one would guess. Full argument and the ladde
 **For any new experiment: `efficientnet_v2_s`, single species head, marginalisation, 5 epochs,
 sqrt-oversampling → species macro-F1 0.9135.** Config:
 [`configs/20260729_ucloud_singlehead_species_effnetv2s.yaml`](configs/20260729_ucloud_singlehead_species_effnetv2s.yaml).
-It replaced the old multi-head 0.9110 reference because it dominates it at every level while being
-smaller.
+Cheap, and every architectural comparison in the project is anchored to it.
 
-| purpose | model | in-dist F1 | shifted F1 | open-set AUROC |
-|---|---|---|---|---|
-| **cheap reference** (change one thing, compare here) | effnetv2_s, single head + marginals | **0.9135** | — | ~0.60 |
-| best in-distribution | ConvNeXtV2-L @320, multi-head | 0.9316 | 0.7122 | — |
-| **best overall** | **B4**: DINOv3-cnx-L + ArcFace × z-score + `domain_aug: trap` | **0.9216** | **0.7101** | 0.8893 |
-| best novelty detection | A1: effnetv2_s, single head + ArcFace × z-score | 0.9035 | 0.6437 | **0.9068** |
-| **best deployable at 20 M** (ships today) | B1: A1 + `domain_aug: trap` | 0.8999 | 0.6836 | 0.9010 |
-| best in-distribution, no open-set | ConvNeXtV2-L, multi-head | 0.9316 | 0.7122 | — |
-| shippable student | distilled b0, fp16 | 0.8786 | — | — |
+There are **three different external benchmarks** and they are not interchangeable (finding 4a):
 
-> **Report the triple, and name the open-set rule.** AUROC here is each model's *best* rule
-> (`max-logit` at 20 M, `max-softmax-probability` at 198 M) — reading all models with one rule
-> understated the large ones by 6–7.6 pt and manufactured a ranking inversion (finding 4). Measured
-> noise floors: species **0.0000**, genus 0.0005, family 0.0024, **shifted 0.0069**. Treat any
-> shifted difference under ~0.7 pt as noise.
+| column | images | species | what it is |
+|---|---|---|---|
+| **full trap** | 47,905 | 486 | every trap image. **Contaminated for anything trained on trap data** |
+| **probe** | 15,200 | 368 | whole (trap, night) groups held out of adaptation. The honest column |
+| **probe-HO** | 2,455 | 58 | probe restricted to species adaptation never saw. Tests *generalisation* |
+
+| purpose | model | in-dist | full trap | probe | probe-HO | open-set |
+|---|---|---|---|---|---|---|
+| cheap reference | effnetv2_s, single head + marginals | **0.9135** | 0.629 | 0.627 | 0.641 | ~0.60 |
+| best in-distribution, no open-set | ConvNeXtV2-L @320, multi-head | **0.9316** | 0.7122 | — | — | — |
+| **best deployable — SHIP THIS** | **F1**: DINOv3-cnx-L + ArcFace × z-score + marginal supervision + trap aug | 0.9219 | 0.7103 | 0.7209 | **0.7559** | 0.8800 |
+| best robustness per parameter | **B3**: B1 + self-training on trap images (20 M) | 0.9003 | *n/a* | **0.7370** | 0.7231 | — |
+| best novelty detection | A1: effnetv2_s + ArcFace × z-score | 0.9035 | 0.6437 | — | — | **0.9068** |
+| best small robust model, no trap data | B1: A1 + `domain_aug: trap` | 0.8999 | 0.6836 | 0.6912 | 0.6974 | 0.9010 |
+| shippable student | fastvit_sa12, distilled from A2 | **0.8967** | 0.6301 | — | — | — |
+
+> **Three rules for reading this table**, each learned by getting it wrong:
+>
+> 1. **Take differences within a column only.** Macro-F1 averages per-class scores *within* the set
+>    it is given, so the full-trap and probe columns weight different species sets. F1 ties B4 on
+>    full trap and beats it by 2 pt on probe, and both are correct (finding 4a).
+> 2. **Name the open-set rule.** AUROC is each model's *best* rule — `max-logit` at 20 M,
+>    `max-softmax-probability` at 198 M, `entropy` for log-probability heads. One rule across all
+>    models understated the large ones by 6–7.6 pt (finding 4).
+> 3. **Check the noise floor before believing a difference.** Measured: species **0.0000**, genus
+>    0.0005, family 0.0024, full trap **0.0069**, probe **0.0041**, probe-HO **0.0052**.
 
 ## 4. The 90-second version of the project's state
 
