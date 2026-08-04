@@ -1,0 +1,35 @@
+# B3 stage 2a: merge pseudo rows into the global training parquet. Guards: pseudo rows carry
+# set='2' so they can never be validation or test; min_img_per_spc is applied to the REAL rows
+# only, so pseudo rows cannot push a rare species over the floor and change the label set; and
+# the script exits non-zero if the species count grows.
+name = "lepinet-combine3"
+replicas = 1
+[application]
+name = "pytorch-te"
+version = "26.05"
+[product]
+id = "gpu-nvidia-b200-1-gpu"
+category = "gpu-nvidia-b200"
+provider = "ucloud"
+[time_allocation]
+hours = 3
+[sync]
+local = ".."
+remote = "/12347837/repos/lepinet"
+[setup]
+script = "setup-lepinet.sh"
+run = "python dev/066_combine_pseudo.py --global-parquet /work/global_lepi/0032836-250426092105405_processing_metadata_postprocessed_quality_filtered.parquet --pseudo-parquet /work/lepinet/data/flemming/splits/pseudo_strict.parquet --out /work/lepinet/data/flemming/splits/combined_b3_3lvl.parquet --min-img-per-spc 50 --levels speciesKey,genusKey,familyKey --target-frac 0.05"
+[schedule]
+auto_extend = "1h"
+max_time = "6h"
+# BOTH mounts: this step reads the global training parquet and writes beside the trap splits.
+# The first attempt was cloned from a flemming-only job and died on a missing /work/global_lepi.
+[[resources]]
+type = "file"
+path = "/12347837/datasets/flemming"
+read_only = true
+
+[[resources]]
+type = "file"
+path = "/12347837/datasets/global_lepi"
+read_only = true

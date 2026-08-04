@@ -43,17 +43,33 @@ def main(a):
     if (pseudo["set"].astype(str) != "2").any():
         raise ValueError("pseudo rows must all carry set='2' so they can never be validation/test")
 
-    cols = [c for c in ("image_path", "filename", "set", level) if c in real.columns]
-    for c in cols:
-        if c not in pseudo.columns:
-            raise ValueError(f"pseudo parquet is missing {c!r}; the merge would produce NaNs")
+    # Coarse levels for the pseudo rows. The labeller was species-only, but a head like
+    # `marginal_arcface` needs genus and family columns or `prepare_df` dies on a KeyError six hours
+    # into the queue. They are derived from the REAL parquet's species->genus->family mapping, which
+    # is taxonomy rather than label information -- the pseudo row's species key is still the model's
+    # own prediction, and looking up that species' genus is a fact about the taxonomy.
+    levels = [c.strip() for c in a.levels.split(",")]
+    missing = [lv for lv in levels[1:] if lv not in pseudo.columns]
+    if missing:
+        tax = real.drop_duplicates(subset=[level])[[level, *levels[1:]]].copy()
+        for c in tax.columns:
+            tax[c] = tax[c].astype("string").astype(str)
+        tax = tax.set_index(level)
+        for lv in missing:
+            pseudo[lv] = pseudo[level].astype(str).map(tax[lv])
+        n_unmapped = int(pseudo[missing].isna().any(axis=1).sum())
+        if n_unmapped:
+            print(f"dropping {n_unmapped} pseudo rows whose species has no taxonomy entry")
+            pseudo = pseudo.dropna(subset=missing)
+        print(f"derived {missing} for the pseudo rows from the real parquet's taxonomy")
+
     # `real` has no image_path column -- prepare_df builds it. Give it one explicitly so the two
     # halves are homogeneous and the preserved-path branch applies uniformly.
     real = real.copy()
     if "image_path" not in real.columns:
         real["image_path"] = real[level].astype(str) + "/" + real["filename"]
 
-    keep_cols = ["image_path", "filename", "set", level]
+    keep_cols = ["image_path", "filename", "set", *levels]
 
     # Replication, and why it is not optional. The gate retains ~12k trap images against ~3.1M real
     # ones -- **0.39 % of training**. At that share the pseudo rows appear in roughly one batch in
@@ -95,6 +111,9 @@ if __name__ == "__main__":
     ap.add_argument("--pseudo-parquet", required=True)
     ap.add_argument("--out", required=True)
     ap.add_argument("--level", default="speciesKey")
+    ap.add_argument("--levels", default="speciesKey",
+                    help="Comma-separated levels the training config needs, fine->coarse. A head "
+                         "such as marginal_arcface needs all three or prepare_df raises KeyError.")
     ap.add_argument("--min-img-per-spc", type=int, default=50)
     ap.add_argument("--target-frac", type=float, default=0.05,
                     help="Replicate pseudo rows until they are this fraction of training. 0 disables.")

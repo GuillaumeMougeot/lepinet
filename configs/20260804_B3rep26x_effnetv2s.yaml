@@ -1,0 +1,46 @@
+# B3 replication sweep, 26x: ~10 % of training.
+# B3 scored probe 0.7370 with 13x replication of 12,230 unique images. That is a
+# memorisation risk stated in the design and now large enough to need controlling: the
+# question is whether the gain tracks the FRACTION of target-domain data or the number of
+# times each image is seen. Everything else is B3's config exactly.
+# Prediction (committed): probe rises with the fraction and then flattens or falls as
+# memorisation sets in -- 1x near B1's 0.6912, 5x ~0.72, 26x <= 13x's 0.7370.
+version: 1.0
+desc: lepinet-B3rep26x-effnetv2s-ucloud
+train:
+  parquet_path: /work/lepinet/data/flemming/splits/combined_b3_26x.parquet
+  img_dir: /work/global_lepi/images
+  out_dir: /work/lepinet/data/ucloud_models
+  fold: '1'
+  min_img_per_spc: 50
+  num_workers: 256
+  model_name: lepinet-B3rep26x-effnetv2s-ucloud
+  model_arch_name: efficientnet_v2_s
+  head: arcface
+  nb_epochs: 5
+  base_lr: 0.001
+  batch_size: 64
+  aug_img_size: 460
+  img_size: 256
+  optimizer: muon
+  fp16: true
+  precision: bf16
+  schedule: one_cycle
+  warmup_epochs: 0.5
+  grad_clip: 5.0
+  oversample_power: 0.5
+  family_filter: []
+  aug_kwargs:
+    max_warp: 0.0
+    max_lighting: 0.0
+    p_lighting: 0.0
+    flip_vert: true
+    max_rotate: 15.0
+    max_zoom: 1.1
+  levels:
+  - speciesKey
+  arcface_zscore: true
+  arcface_scale: 30.0
+  arcface_margin:
+  - 0.3
+  domain_aug: trap

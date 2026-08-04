@@ -34,6 +34,10 @@ is not available:
 
 - **Always keep at least one independent job queued** alongside any chain, so a blocked chain costs
   progress on one line of work rather than all of it.
+- **Run the whole arm of a sweep at once, not one at a time.** The cluster takes concurrent jobs and
+  the owner has said to use it freely, so a four-point replication sweep is four simultaneous jobs
+  and one wait, not four waits. Serialising independent work was costing days: on 2026-08-04 the
+  queue held a single running job while four independent ones were sitting in the backlog.
 - **Put the untested step at the head of its own chain**, or verify it before chaining hours behind
   it. A one-off script that has never run is the most likely thing in the queue to fail.
 - **Prefer several short chains to one long one.** The blast radius of a failure is everything
@@ -51,7 +55,7 @@ this file claimed for weeks.
 | ~~2~~ | ~~D1 — finish `lepinet bundle`~~ **DONE 2026-08-02**: `--parquet` adds `names.json`, `--calibrate` fits per-level temperature + precision-targeted thresholds on validation and verifies on test. Ported from `dev/044`/`dev/047` into `lepinet.calibrate`, with the pure core unit-tested. | none | |
 | ~~3~~ | ~~B3 — self-training~~ **DONE 2026-08-04: probe +4.58 pt for +0.04 in-distribution, 56 % transferring to unseen species. The largest robustness lever found, and the only one that costs nothing.** Follow-ups now at the top of the list. | — |
 | ~~3~~ | **B6 = B3 at 198 M** (F1's config + the pseudo-labels) | **running** (12363259) → triple chained. Each lever leads the column the other trails: B3 wins probe (0.7370 vs 0.7209), F1 wins held-out species (0.7559 vs 0.7231). Predicted probe 0.750–0.775; **falsified as a composition if probe ≤ 0.7411** (B3 + one floor). |
-| 3b | **replication sweep** (1x / 5x / 13x / 26x) — 13x on 12 k unique images is a memorisation risk stated in the design and now large enough to need controlling | 4 x ~6.4 h |
+| ~~3b~~ | replication sweep | **running in parallel**: 1x (12363273), 5x (12363274), 26x (12363277); 13x is B3 itself. Predicted: probe rises with the target-domain *fraction* then flattens or falls as memorisation sets in. |
 | 3c | **second self-training round** — pseudo-label with B3 rather than B4, whose trap accuracy is now 4.58 pt lower | ~7 h |
 | ~~old 3~~ | ~~B3 v1~~ | ~~~~ | **Split + leakage guards built** (`dev/064`); grouped by (trap, night), 27,230 adapt / 15,200 probe / 58 held-out species. **UNBLOCKED 2026-08-03** — probe baselines landed (A4 0.6749 / B1 0.6912 / **B4 0.7006**; held-out-species 0.6992 / 0.6974 / 0.7101). **Stage 1 running** (12362768): pseudo-label the 27,230 adapt images with B4, strict gate keeping the top 30 % (owner-approved). Stage 2 is a combined-parquet training run vs **B1's probe 0.6912** at 20 M — one factor, since B1 is the same recipe without trap data. | **The highest-value untested rung.** B1 established the name-a-nuisance ceiling at ~4 pt; B3 is the first rung that adapts to shifts nobody named. Needs grouped splits by capture event and held-out-*species* validation, or it will manufacture a phantom win. |
 | 4 | **L4 — cRT / decoupled** | ~2 h (stage 2 only) | The 2×2 showed tail-reweighting trades robustness for accuracy monotonically. cRT rebalances *only the classifier*, so it tests **where the damage lives**. Reuses L0's checkpoint; stage 2 must not use Muon (it re-partitions param groups and breaks freezing). |

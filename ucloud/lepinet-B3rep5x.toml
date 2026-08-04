@@ -1,0 +1,31 @@
+name = "lepinet-B3rep5x"
+replicas = 1
+[application]
+name = "pytorch-te"
+version = "26.05"
+[product]
+id = "gpu-nvidia-b200-1-gpu"
+category = "gpu-nvidia-b200"
+provider = "ucloud"
+[time_allocation]
+hours = 10
+[sync]
+local = ".."
+remote = "/12347837/repos/lepinet"
+[setup]
+script = "setup-lepinet.sh"
+run = "lepinet train -c configs/20260804_B3rep5x_effnetv2s.yaml"
+[schedule]
+auto_extend = "3h"
+max_time = "40h"
+[[resources]]
+type = "file"
+path = "/12347837/datasets/global_lepi"
+read_only = true
+
+# The combined parquet points at trap images via ../../flemming/images/..., so that tree must be
+# mounted for training too -- otherwise 5% of every epoch is missing files.
+[[resources]]
+type = "file"
+path = "/12347837/datasets/flemming"
+read_only = true

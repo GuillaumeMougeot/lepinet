@@ -15,7 +15,7 @@
 version: 1.0
 desc: lepinet-B6-f1-selftrain-dinov3cnxl-ucloud
 train:
-  parquet_path: /work/lepinet/data/flemming/splits/combined_b3.parquet
+  parquet_path: /work/lepinet/data/flemming/splits/combined_b3_3lvl.parquet
   img_dir: /work/global_lepi/images
   out_dir: /work/lepinet/data/ucloud_models
   fold: '1'
