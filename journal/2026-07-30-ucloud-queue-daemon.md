@@ -61,6 +61,24 @@ Corollary for this project: **before diagnosing a lost run as a cluster or hardw
 queue daemon.** That is now the first question, ahead of node health
 ([[2026-07-16-gpu-hang]]) and ahead of reading logs for an exit code.
 
+## A second sticky-state trap: relaunching a chain head does not unblock its dependents
+
+Found 2026-08-04. When a job fails, everything queued `--after` it goes `BLOCKED` — correct. But
+that state is **sticky against the job name**: re-submitting a fresh job under the same name puts a
+new `RUNNING` record in the queue while the dependents stay `BLOCKED` against the recorded failure.
+They never fire, and nothing complains.
+
+B6 (the 8-hour flagship composition) was relaunched after a config failure and ran happily for five
+hours with its three evaluations frozen. It would have finished, written a checkpoint, and scored
+nothing.
+
+**Rule: after relaunching a failed job, remove and re-submit every dependent too.** `ucloud q ls |
+grep BLOCKED` should be empty except for jobs whose dependency genuinely failed and is not coming
+back — anything else is a chain that will complete into silence.
+
+This is the same shape as the daemon problem above: the listing shows a *recorded* state, and a
+recorded state that nobody is going to revisit looks exactly like a healthy one.
+
 ## Consequence for the plan
 
 The expired 12-epoch run was **not** restarted as-is. It trained the *old* multi-head architecture,

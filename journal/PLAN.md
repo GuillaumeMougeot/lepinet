@@ -42,6 +42,10 @@ is not available:
   it. A one-off script that has never run is the most likely thing in the queue to fail.
 - **Prefer several short chains to one long one.** The blast radius of a failure is everything
   downstream of it.
+- **After relaunching a failed job, remove and re-submit its dependents.** `BLOCKED` is sticky
+  against the job *name*, so a fresh run under the same name leaves them frozen and they never
+  fire. `ucloud q ls | grep BLOCKED` should be empty; anything there is a chain that will complete
+  into silence. Caught on B6 after five hours ([[2026-07-30-ucloud-queue-daemon]]).
 
 ### Ordered backlog — take the top unblocked item
 
