@@ -1,0 +1,53 @@
+# B6: the two levers that each won, composed. F1's config (DINOv3-cnx-L, ArcFace x z-score,
+# marginal supervision, trap augmentation) trained on the SAME combined parquet B3 used.
+#
+# They act on different failure modes, and the evidence says so rather than the intuition:
+#   B3 at 20 M  probe 0.7370, held-out species 0.7231  -- adaptation wins on unseen CONDITIONS
+#   F1 at 198 M probe 0.7209, held-out species 0.7559  -- scale wins on unseen TAXA
+# Each leads the column the other trails.
+#
+# Prediction (committed): probe 0.750-0.775, held-out species 0.760-0.785, in-distribution
+# 0.918-0.923 (self-training cost B1 nothing in-distribution, and capacity absorbed the
+# augmentation tax at this scale). Falsified as a composition if probe <= 0.7411 -- that is B3's
+# 0.7370 plus one probe floor, i.e. scale adds nothing on top of adaptation.
+#
+# Runtime: 5.37M images/epoch (5.04M real + 330k pseudo) x 6 epochs / 1100 img/s = ~8.1 h.
+version: 1.0
+desc: lepinet-B6-f1-selftrain-dinov3cnxl-ucloud
+train:
+  parquet_path: /work/lepinet/data/flemming/splits/combined_b3.parquet
+  img_dir: /work/global_lepi/images
+  out_dir: /work/lepinet/data/ucloud_models
+  fold: '1'
+  min_img_per_spc: 50
+  num_workers: 128
+  model_name: lepinet-B6-f1-selftrain-dinov3cnxl-ucloud
+  model_arch_name: convnext_large.dinov3_lvd1689m
+  head: marginal_arcface
+  nb_epochs: 6
+  base_lr: 0.0008
+  batch_size: 96
+  aug_img_size: 384
+  img_size: 320
+  optimizer: muon
+  fp16: true
+  precision: bf16
+  schedule: one_cycle
+  warmup_epochs: 0.5
+  grad_clip: 5.0
+  oversample_power: 0.5
+  domain_aug: trap
+  family_filter: []
+  aug_kwargs:
+    max_warp: 0.1
+    max_lighting: 0.2
+    p_lighting: 0.5
+    flip_vert: true
+    max_rotate: 20.0
+    max_zoom: 1.2
+  levels:
+  - speciesKey
+  - genusKey
+  - familyKey
+  arcface_scale: 30.0
+  arcface_margin: 0.3
