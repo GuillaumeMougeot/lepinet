@@ -97,7 +97,8 @@ There are **three different external benchmarks** and they are not interchangeab
 |---|---|---|---|---|---|---|
 | cheap reference | effnetv2_s, single head + marginals | **0.9135** | 0.629 | 0.627 | 0.641 | ~0.60 |
 | best in-distribution, no open-set | ConvNeXtV2-L @320, multi-head | **0.9316** | 0.7122 | — | — | — |
-| **best deployable — SHIP THIS** | **F1**: DINOv3-cnx-L + ArcFace × z-score + marginal supervision + trap aug | 0.9219 | 0.7103 | 0.7209 | **0.7559** | 0.8800 |
+| **best deployable — SHIP THIS** | **B7**: F1 minus √-oversampling, plus self-training on trap images | 0.9050 | — | **0.7796** | **0.7712** | — |
+| best in-distribution, open-set capable | F1: DINOv3-cnx-L + ArcFace × z-score + marginal supervision + trap aug | **0.9219** | 0.7103 | 0.7209 | 0.7559 | 0.8800 |
 | best robustness per parameter | **B3**: B1 + self-training on trap images (20 M) | 0.9003 | *n/a* | **0.7370** | 0.7231 | — |
 | best novelty detection | A1: effnetv2_s + ArcFace × z-score | 0.9035 | 0.6437 | — | — | **0.9068** |
 | best small robust model, no trap data | B1: A1 + `domain_aug: trap` | 0.8999 | 0.6836 | 0.6912 | 0.6974 | 0.9010 |

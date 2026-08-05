@@ -323,3 +323,33 @@ because nothing was measured off the training distribution.
 B6 (F1 + self-training, running) **has oversampling on**. The two best levers found —
 self-training (+4.58 at 20 M) and dropping oversampling (+2.88 at 198 M) — have never been combined,
 and both act on the shifted axis. **B7** is queued: L5's config plus the pseudo-labels.
+
+---
+
+## B7: removing oversampling and adding target data are complementary (2026-08-05)
+
+The two levers that each won the shifted axis alone, composed at 198 M. B7 = F1's config minus
+√-oversampling, plus self-training pseudo-labels at 6 % share.
+
+| | in-distribution | **probe** | probe held-out sp. |
+|---|---|---|---|
+| L5 — no oversampling, no target data | 0.9055 | 0.7497 | 0.7641 |
+| B6 — **with** oversampling + self-training | **0.9225** | 0.7699 | 0.7422 |
+| **B7 — no oversampling + self-training** | 0.9050 | **0.7796** | **0.7712** |
+
+**Predicted probe 0.765–0.790; landed 0.7796, inside**, and well clear of the 0.7538 falsification
+line. They compose.
+
+**The one-factor reading is clean.** B7 vs L5 adds self-training: **+2.99 pt** (7.3× floor). B7 vs B6
+removes oversampling: **+0.97 pt** on probe (2.4× floor) and **+2.90 pt** on held-out species (5.6×
+floor). So the two act on different parts of the problem and neither subsumes the other.
+
+**The held-out column is where oversampling's cost is clearest.** B6 and B7 differ *only* in
+oversampling, and the gap on species the adaptation never saw is 2.90 pt — three times the probe gap.
+That fits the mechanism proposed when L5 landed: oversampling up-weights rare classes, whose learned
+features are the most tied to their particular photographs, so it damages generalisation to *new*
+taxa more than to new images of familiar ones.
+
+**B7 is the best shifted model in the project** — probe 0.7796, held-out 0.7712 — at the cost of
+1.75 pt in-distribution against B6. It is still trained at the 6 % share the sweep showed is wrong;
+**B8** (the same recipe at 2 %) is running and should be better again.

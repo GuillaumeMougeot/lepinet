@@ -125,8 +125,15 @@ def main(a):
         if cap and len(df) > cap:
             # Cap per class, not globally: a global sample would starve rare species of the very
             # examples a centroid needs, and the metric is macro.
-            df = df.groupby(lvl, group_keys=False).apply(
-                lambda d: d.sample(min(len(d), max(1, cap // n_classes)), random_state=0))
+            #
+            # Done by index rather than `groupby.apply`, because that drops the grouping column from
+            # the result (pandas keeps it as the index) and the next line then fails with
+            # `KeyError: ['speciesKey'] not in index` -- a message about a column the caller can see
+            # in the dataframe it passed in.
+            per = max(1, cap // n_classes)
+            keep = df.groupby(lvl, sort=False).head(per).index if per == 1 else (
+                df.sample(frac=1.0, random_state=0).groupby(lvl, sort=False).head(per).index)
+            df = df.loc[keep]
         df = df.reset_index(drop=True)
         df["is_valid"] = np.arange(len(df)) % 5 == 0
         return df

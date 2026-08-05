@@ -65,7 +65,15 @@ two epochs), so longer schedules remain the cheapest untested lever.
 The default is 5 epochs only because that is what the published comparisons used.
 → [journal: 2026-07-16-why-was-fastai-behind-mini-trainer](https://github.com/GuillaumeMougeot/lepinet/blob/main/journal/2026-07-16-why-was-fastai-behind-mini-trainer.md)
 
-### Long tail: √-oversampling (`power=0.5`), not logit adjustment — worth +2.6 pt
+### Long tail: √-oversampling (`power=0.5`) — worth +1.9 pt in-distribution, and **−2.9 pt where it matters**
+
+> **Read this before enabling it.** The paragraph below is the in-distribution case, which is real.
+> But measured off the training distribution, oversampling *costs*: −1.52 pt at 20 M, −2.88 pt at
+> 198 M, and **−2.90 pt on species a model has never seen** (B6 vs B7, identical otherwise). It is
+> the one intervention whose cost *grows* with capacity, because it reshapes the data rather than
+> constraining the objective. For a model that will meet someone else's images, leave it off.
+
+### The in-distribution case: √-oversampling, not logit adjustment — worth +2.6 pt
 
 Both were tested head-to-head at 5 epochs. Oversampling reached **0.9148**; logit adjustment reached
 0.9031 *and damaged genus and family* to buy it.
