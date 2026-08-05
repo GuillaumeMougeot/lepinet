@@ -42,6 +42,10 @@ is not available:
   it. A one-off script that has never run is the most likely thing in the queue to fail.
 - **Prefer several short chains to one long one.** The blast radius of a failure is everything
   downstream of it.
+- **Check `ucloud jobs list` before trusting `ucloud q logs`.** Logs are keyed by job *name*, so a
+  resubmitted job serves its predecessor's output until the new one produces any — which means a
+  re-run can appear to confirm the number it was launched to correct. `IN_QUEUE` in
+  `ucloud jobs list` means every readable log is stale.
 - **After relaunching a failed job, remove and re-submit its dependents.** `BLOCKED` is sticky
   against the job *name*, so a fresh run under the same name leaves them frozen and they never
   fire. `ucloud q ls | grep BLOCKED` should be empty; anything there is a chain that will complete

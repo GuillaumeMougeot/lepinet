@@ -79,6 +79,24 @@ back — anything else is a chain that will complete into silence.
 This is the same shape as the daemon problem above: the listing shows a *recorded* state, and a
 recorded state that nobody is going to revisit looks exactly like a healthy one.
 
+## A third trap: `ucloud q logs <name>` can return a *previous* job's output
+
+Found 2026-08-05. Job records are keyed by **name**, so after `ucloud q rm` + resubmit under the same
+name, `ucloud q logs <name>` may still serve the old job's log — and a finished old job has a log
+while the new one (`IN_QUEUE`) has none, so the stale output is what you get.
+
+That is how a re-run "confirms" the very number it was meant to correct. It nearly happened here:
+the centroid jobs were relaunched after a normalisation fix, and the logs read straight afterwards
+were the *pre-fix* output, complete with the diagnostic line the fix was supposed to remove.
+
+**Rule: check state before reading a log.** `ucloud jobs list` gives the real UCloud-side state
+(`IN_QUEUE` / `RUNNING` / `SUCCESS`) with creation timestamps; `ucloud q ls` shows only what the
+queue last recorded. If a job is `IN_QUEUE`, any log you can read is from a previous run of that
+name.
+
+Same family as the two traps above, and now the third: **the tooling reports a name's last-known
+state, and last-known looks exactly like current.**
+
 ## Consequence for the plan
 
 The expired 12-epoch run was **not** restarted as-is. It trained the *old* multi-head architecture,

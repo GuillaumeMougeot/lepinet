@@ -1,6 +1,6 @@
 # Knowing what you don't know: calibrated open-set hierarchical classification for long-tailed species identification
 
-**Status:** working draft (2026-08-01). Numbers are from `RESULTS.md`; the reasoning behind each is
+**Status:** working draft (2026-08-05). Numbers are from `RESULTS.md`; the reasoning behind each is
 in [`../journal/`](../journal/). Sections marked _(pending)_ await runs that are in flight.
 
 ---
@@ -8,22 +8,26 @@ in [`../journal/`](../journal/). Sections marked _(pending)_ await runs that are
 ## Abstract (draft)
 
 Automated species identification is usually framed as fine-grained classification over a fixed label
-set. We argue this framing is the wrong one for deployment, and support the argument with three
-results on a 12,041-species Lepidoptera benchmark. First, **hierarchical prediction heads do not
-help**: an independent multi-head cosine classifier, a parent-conditioned hierarchical head and an
-autoregressive head are all matched or beaten by a *single* species head whose genus and family
-predictions are obtained by marginalising its own posterior (0.9135 vs 0.9110 species macro-F1, and
-better at every coarser level) — while being smaller and probabilistically coherent. Second,
-in-distribution accuracy is close to saturated (0.9316 with a modern large backbone) yet collapses to
-**0.70 on data from a different source**, so the remaining error is dominated by distribution shift
-rather than by classifier design; we further decompose that gap, showing that hand-named nuisances
-account for only about one sixth of it. Third, and most usefully, we show that composing an **additive
-angular margin with a dimension-aware z-score transform** turns a classifier that is near-chance at
-detecting unseen species (AUROC 0.601) into a reliable one (**0.9115**; **0.9068** on the single-head architecture we
-recommend) at a cost of 0.4 to 1.0 points of closed-set accuracy — where the margin *alone* costs 3.3 points and yields only 0.732. Taken
-together, these give a single-head architecture that (i) predicts species, (ii) degrades gracefully
-to genus/family by marginalisation when the image cannot support a species call, and (iii) flags
-taxa it has never seen. We release the package, the models and the reproduction recipes.
+set. We argue this framing is the wrong one for deployment, and support the argument with results on
+a 12,041-species Lepidoptera benchmark evaluated on three axes: a held-out fold, an external
+camera-trap source, and open-set detection of unseen taxa. First, **hierarchical prediction heads do
+not help** — an independent multi-head cosine classifier, a parent-conditioned head and an
+autoregressive head are all matched or beaten by a *single* species head whose coarse ranks come from
+marginalising its own posterior — but the finer statement is that coarse **parameters** hurt while
+coarse **supervision** helps, and only the second is visible off the training distribution. Second,
+in-distribution accuracy is close to saturated (0.9316) yet falls to **0.69 on data from a different
+source**, and interventions selected on the first axis routinely invert on the others: square-root
+resampling buys 1.9 points in-distribution and costs 2.9 under shift; the best open-set scoring rule
+changes with model capacity, a 6–7.6 point effect that inverted a published ranking of our own.
+Third, and most usefully, **unlabelled** target-domain images are the strongest lever we find:
+self-training on machine-generated labels beats 12,230 human labels, costs nothing in-distribution,
+and lets a 20 M model outperform a 198 M one — with a sharp interior optimum in the *share* of target
+data, beyond which adaptation silently becomes memorisation. We also show an **additive angular
+margin composed with a dimension-aware z-score transform** turns near-chance novelty detection
+(AUROC 0.601) into usable detection (**0.9115**) for 0.4 points of accuracy, and that the resulting
+classifier matrix can be replaced at inference by class centroids for 0.29 points — though it is not
+low-rank, because the margin spends dimensions rather than economising on them. We release the
+package, the models and the reproduction recipes.
 
 ---
 
@@ -500,6 +504,86 @@ not, as an earlier version of this analysis claimed, pick the worst deployable s
 We report this correction explicitly because it illustrates the failure mode the section above
 describes: an inherited default that was never visible as a decision propagated through every
 downstream comparison until it was checked directly.
+
+### 4.11 Unlabelled target-domain data beats labels, capacity, and augmentation
+
+The gap of §4.2 is a *source* gap: training images are museum-style specimen photographs, deployment
+images are camera-trap frames. Three interventions address it, and we can price them against each
+other because all three were measured on the same held-out split.
+
+The split matters and is not the one used elsewhere in this paper. Self-training consumes the same
+trap images that serve as the external benchmark, so we partition them by **capture group (trap,
+night)** — nights running midday-to-midday, since moths fly across midnight — into an *adaptation*
+set (27,230 images) and a **probe** set (15,200) that no training run touches. Fifteen percent of
+species are withheld from adaptation entirely, giving a **held-out-species** subset (2,455 images,
+58 taxa) that separates domain adaptation from specialisation on the taxa being adapted to.
+Run-to-run floors, measured by retraining one configuration unchanged: probe 0.0041, held-out 0.0052.
+
+| intervention (efficientnet\_v2\_s, 20 M) | in-distribution | probe | held-out species |
+|---|---|---|---|
+| none | 0.8999 | 0.6912 | 0.6974 |
+| hand-named nuisance augmentation (§4.8) | — | — | — |
+| 500 real target labels | — | 0.7060 | — |
+| 2,500 real target labels | — | 0.7196 | — |
+| 12,230 real target labels | — | 0.7568 | — |
+| **self-training, 12,230 pseudo-labels** | **0.9003** | **0.7706** | **0.7704** |
+
+**Self-training on machine-generated labels beats 12,230 human labels** (0.7706 vs 0.7568) and costs
+nothing in-distribution (+0.04, inside the 0.0000 floor). At matched size and share, real labels *are*
+better than 98.15 %-accurate pseudo-labels by 2.14 points — label quality is not free — but the
+label-free method has a hyperparameter the labelled one cannot exploit as cheaply, which is the
+subject of the next paragraph.
+
+**There is a sharp interior optimum in the *share* of target data, and it is low.** Replicating the
+pseudo-labelled images to a target fraction of the training set:
+
+| share of training | probe | held-out species | fraction of gain transferring |
+|---|---|---|---|
+| 0.39 % (no replication) | 0.7354 | 0.7508 | 121 % |
+| **2 %** | **0.7706** | **0.7704** | **92 %** |
+| 6 % | 0.7370 | 0.7231 | 56 % |
+| 10 % | 0.7159 | 0.7042 | 39 % |
+
+Two things here are, to our knowledge, unreported. First, **0.39 % of training — one image in 250 —
+already buys 97 % of the gain**: what unlabelled target data supplies is not gradient volume but
+coverage of a region of input space the source distribution never visits, and a handful of samples
+suffices to mark that region. Second, **the fraction of the gain that transfers to classes the
+adaptation never saw falls monotonically with the share**, from 121 % to 39 %. Over-replication does
+not merely stop helping; it converts domain adaptation into memorisation of the specific images.
+At 2 % the probe and held-out-species scores are equal (0.7706, 0.7704) — the gain transfers
+entirely, with no memorisation signature.
+
+**Adaptation dominates capacity.** A 20 M model with unlabelled target data (0.7706) beats a 198 M
+model without it (0.7209) on the probe benchmark. They are complementary rather than substitutes —
+the larger model leads on held-out species (0.7559 vs 0.7231), so capacity buys generalisation to
+unseen *taxa* while adaptation buys generalisation to unseen *conditions* — and combining them, while
+also removing the resampling of §4.x, gives the best model we obtain: **probe 0.7798, held-out
+0.7816**.
+
+*(The dose effect is itself capacity-dependent: moving from 6 % to 2 % is worth 3.36 points at 20 M
+and 0.02 at 198 M. A larger model can memorise the replicated images and fit everything else, so the
+probe cost disappears — but the transfer cost does not, and the held-out gap remains at 1.04 points.)*
+
+### 4.12 The classifier matrix is replaceable at inference, and not compressible
+
+A practical obstacle to scaling this method to the ~1 M species of a global taxonomy is the
+classifier itself: at $d = 1280$ a prototype matrix is 5.1 GB in fp32, plus twice that in optimiser
+state. Two measurements bear on it.
+
+**Class centroids match trained prototypes.** Replacing the learned matrix at inference with the mean
+training embedding per class costs **0.29 points** (0.9077 vs 0.9105). Single means outperform both
+k-means centroids ($k=3$, 0.8988) and medoids (0.8960), indicating classes are unimodal blobs rather
+than multimodal — which is what an angular margin is designed to produce, and it means the cheapest
+summary is also the best. Centroids are computed from data rather than trained, can be extended
+incrementally as taxa are added, and are directly indexable for approximate nearest-neighbour search,
+so the inference-time matrix need not exist.
+
+**But the matrix is not low-rank.** Its singular spectrum requires **rank 1035 of 1280** for 90 % of
+the energy; truncating to rank 512 costs 0.35 points, 256 costs 1.06, and 128 costs 3.14. Factorising
+the head is therefore not a route to a 1 M-class model. The reason is visible in the objective: an
+angular margin *pushes classes apart*, so it spends dimensions rather than economising on them. **The
+margin and low-rank compression want opposite things** — a trade-off worth stating for anyone
+combining metric learning with extreme classification.
 
 ## 5. Discussion
 
