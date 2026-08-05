@@ -185,7 +185,42 @@ The margin and low-rank compression want opposite things.
 exploitable structure, and the spectrum says the trained ones do not. Retrieval (E) is the option
 that survived contact with data.
 
-## An unresolved discrepancy — the plain-head control is not reportable yet
+## The discrepancy, resolved: the bug was mine, and it invalidates one number above
+
+The instrumented re-run localised it in one line:
+
+```
+model forward vs e@W.T agreement: 0.5309
+  linear_head          0.9182     <- the model's own forward, matching its known 0.9135
+  linear_head_reimpl   0.5589     <- my e @ W.T
+```
+
+So the model is fine and the embeddings are fine (centroids from them score 0.8809); **the weight
+matrix I read is not the one the model uses.** The cause is a single `F.normalize` in `dev/068`.
+
+`cosine_to_zscore` is monotone, so `argmax(zscore(e @ W))` equals `argmax(e @ W)` *for the same W*.
+The only way the argmax can change is if the true rows are **not** unit-norm — if the head holds
+per-class magnitudes $g_c$, then $\arg\max_c\, g_c \cos_c \neq \arg\max_c \cos_c$, and
+normalising strips exactly that $g_c$. `_normalize_layer` is supposed to freeze every row norm at 1;
+this checkpoint's evidently did not stay there.
+
+**Consequence for what is written above: the "rank 196" figure for the plain head is not a
+measurement of direction structure.** The raw matrix's spectrum confounds direction spread with
+row-norm variation, and a matrix with varying row norms has a small participation ratio (213) even
+when its directions are spread. The ArcFace figure (rank 1035, participation 1152) is unaffected —
+its forward agreed at 0.9801, so its rows *are* unit — and the conclusion drawn from it, that option
+A is dead, stands.
+
+`dev/068` now uses the weight as the model uses it, reports the row norms with a warning when they
+are not unit, and computes the spectrum on the normalised matrix while truncating the raw one.
+Both models re-running.
+
+**Two things this cost, worth recording.** The first attempt reported a plain-head result that was
+32 points above its own linear head — an impossible-looking number that was correctly *not*
+published. The second attempt would still have been wrong, but silently, had it not printed the
+agreement. **The instrumentation was worth more than the experiment.**
+
+## The original discrepancy note (kept)
 
 The same script scored the **plain cosine** model's linear head at **0.5589**, against its known
 0.9135. Its centroids scored 0.8809, i.e. **32 points above its own linear head**, which is not a

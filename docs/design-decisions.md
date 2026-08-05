@@ -161,6 +161,12 @@ long tail from a *macro* average. With the filter removed it scored 0.9152, i.e.
 the baseline. A metric that improves when you change how it is computed has not improved.
 → [journal: 2026-07-24-src-lepinet-baseline-port](https://github.com/GuillaumeMougeot/lepinet/blob/main/journal/2026-07-24-src-lepinet-baseline-port.md)
 
+**Do not re-normalise a weight matrix you did not train.** The cosine head is *supposed* to keep
+every prototype row at unit norm, so re-normalising it before use looks like a no-op. On one
+checkpoint it was not: the rows had drifted, `argmax(g_c * cos_c)` is not `argmax(cos_c)`, and a
+known-0.9135 model scored 0.5589. Use the weight as the model uses it, and assert the row norms if
+the code depends on them being 1.
+
 **A cloned job spec inherits the wrong mounts.** `[[resources]]` is easy to overlook when a TOML is
 copied from a neighbouring job: the B3 combine step was cloned from a flemming-only job and died on a
 missing `/work/global_lepi` after five hours of the chain behind it sitting `BLOCKED`. When copying a

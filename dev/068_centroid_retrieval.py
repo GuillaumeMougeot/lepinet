@@ -165,15 +165,25 @@ def main(a):
            "n_train": len(e_tr), "n_test": len(e_te), "macro_f1": {}}
 
     # --- the incumbent: the trained prototype matrix
-    W = F.normalize(model[1].head.layers[0].weight.detach().cpu().float(), dim=1)
+    # Use the weight **as the model uses it** -- do NOT normalise. `_normalize_layer` is supposed to
+    # freeze every row norm at 1, but a checkpoint whose rows drifted (or was trained before that
+    # freeze) has per-class magnitudes g_c, and argmax_c (g_c * cos_c) is not argmax_c (cos_c).
+    # Normalising strips exactly that g_c, which scored a known-0.9135 model at 0.5589 with 53 %
+    # agreement against its own forward. The row norms are reported so a drifted head is visible.
+    W_raw = model[1].head.layers[0].weight.detach().cpu().float()
+    W = F.normalize(W_raw, dim=1)                     # directions only, for the spectrum
     res["macro_f1"]["linear_head"] = macro_f1(te_top1, y_te, n_classes)           # model's own forward
-    res["macro_f1"]["linear_head_reimpl"] = macro_f1((e_te @ W.T).argmax(1), y_te, n_classes)
-    agree = float((te_top1 == (e_te @ W.T).argmax(1)).float().mean())
+    res["macro_f1"]["linear_head_reimpl"] = macro_f1((e_te @ W_raw.T).argmax(1), y_te, n_classes)
+    agree = float((te_top1 == (e_te @ W_raw.T).argmax(1)).float().mean())
     res["forward_vs_reimpl_agreement"] = agree
     print(f"  model forward vs e@W.T agreement: {agree:.4f}"
           + ("" if agree > 0.99 else "   <-- DISAGREE: the reimplementation is wrong, not the model"))
-    row_norms = model[1].head.layers[0].weight.detach().norm(dim=1)
-    res["prototype_row_norms"] = {"min": float(row_norms.min()), "max": float(row_norms.max())}
+    row_norms = W_raw.norm(dim=1)
+    res["prototype_row_norms"] = {"min": float(row_norms.min()), "max": float(row_norms.max()),
+                                  "mean": float(row_norms.mean()), "std": float(row_norms.std())}
+    print(f"  prototype row norms: {res['prototype_row_norms']}"
+          + ("" if float(row_norms.std()) < 1e-3 else
+             "   <-- NOT unit-norm: this head is not a pure cosine classifier"))
 
     # --- retrieval variants
     for kind in a.variants.split(","):
@@ -183,6 +193,9 @@ def main(a):
         res[f"n_centroids_{kind}"] = int(len(cen))
 
     # --- option 0: how low-rank is the trained prototype matrix?
+    # Spectrum of the *directions*. Computed on the normalised matrix on purpose: the raw one's
+    # spectrum confounds direction structure with row-norm variation, which is what made the plain
+    # head look rank-196 when its directions are not.
     s = torch.linalg.svdvals(W)
     energy = (s ** 2).cumsum(0) / (s ** 2).sum()
     res["prototype_spectrum"] = {
@@ -192,9 +205,9 @@ def main(a):
         "d": int(W.shape[1]),
     }
     res["macro_f1_truncated"] = {}
-    U, S, Vh = torch.linalg.svd(W, full_matrices=False)
-    for r in [int(x) for x in a.ranks.split(",") if int(x) < min(W.shape)]:
-        Wr = F.normalize((U[:, :r] * S[:r]) @ Vh[:r], dim=1)
+    U, S, Vh = torch.linalg.svd(W_raw, full_matrices=False)
+    for r in [int(x) for x in a.ranks.split(",") if int(x) < min(W_raw.shape)]:
+        Wr = (U[:, :r] * S[:r]) @ Vh[:r]      # truncate as-used, not as-normalised
         res["macro_f1_truncated"][str(r)] = macro_f1((e_te @ Wr.T).argmax(1), y_te, n_classes)
 
     print("\nmacro-F1:")
