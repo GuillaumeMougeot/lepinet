@@ -135,3 +135,72 @@ computed from the training set.
 
 Options B and C are documented above so they are not re-proposed, but neither is a priority: B has
 already lost once in this project, and C fixes the cost we care about least.
+
+---
+
+## First results: centroid retrieval works, and the ArcFace prediction holds (2026-08-05)
+
+`dev/068` on the ArcFace × z-score model, 12,041 species, test fold.
+
+| method | species macro-F1 | vs linear head |
+|---|---|---|
+| **linear head** (the 15.4 M prototype matrix) | **0.9105** | — |
+| **centroid, mean** | **0.9077** | **−0.29 pt** |
+| centroid, k-means (k=3) | 0.8988 | −1.18 |
+| centroid, medoid | 0.8960 | −1.45 |
+
+**Predicted "centroid-kNN within 1 pt of the linear head for the ArcFace model". It landed at
+0.29 pt.** The prototype matrix can be replaced, at inference, by the mean training embedding per
+class — which is a *derived* quantity, not a learned parameter.
+
+**Why this matters for 1 M species.** The prototype matrix does not have to be trained *or stored as
+weights*: centroids are computed from data, can be built incrementally as species are added, and are
+exactly what an ANN index wants. It does not fix training cost (option 0/A/C still apply), but it
+removes the 5 GB matrix from the *inference* path and makes adding a species a matter of averaging
+its images rather than retraining a head.
+
+**Mean beats k-means and medoid**, which is worth noting because the opposite is often assumed. The
+mean is the better summary here, so the classes behave like single tight blobs rather than multimodal
+ones — consistent with what the margin is designed to produce, and it means the simplest option is
+also the best one.
+
+### The prototypes are *not* low-rank — option A is dead
+
+| | 90 % energy | 99 % energy | participation ratio |
+|---|---|---|---|
+| ArcFace × z-score | **rank 1035** / 1280 | 1250 | 1152 |
+
+Rank-truncating the head confirms it: rank 512 costs 0.35 pt, 256 costs 1.06, 128 costs 3.14, 64
+costs 13.4. So a rank-512 factorisation is *nearly* free but only halves the matrix, and anything
+aggressive enough to matter at 1 M classes destroys accuracy.
+
+**My prediction was wrong**, and specifically: I expected effective rank 300–600 because the taxonomy
+should make related species point in similar directions. It does not work out that way — the head
+uses nearly the full 1280 dimensions. In hindsight the reason is visible in the training objective:
+ArcFace *actively pushes classes apart*, so it spends dimensions rather than economising on them.
+The margin and low-rank compression want opposite things.
+
+**Consequence:** option A (low-rank factorisation) is not the answer, and **option D
+(taxonomy-structured fixed codes) is now less attractive too** — it assumes class directions have
+exploitable structure, and the spectrum says the trained ones do not. Retrieval (E) is the option
+that survived contact with data.
+
+## An unresolved discrepancy — the plain-head control is not reportable yet
+
+The same script scored the **plain cosine** model's linear head at **0.5589**, against its known
+0.9135. Its centroids scored 0.8809, i.e. **32 points above its own linear head**, which is not a
+credible finding — it is a symptom.
+
+Reporting it would have been reporting a bug as a result. The candidates, none yet eliminated: the
+glob resolved to a different checkpoint than `lepinet test` used; the per-class test cap interacts
+with that model differently; or the script's reimplementation of the head (`e @ W.T`) diverges from
+the model's own forward for this head type.
+
+`dev/068` now prints the **resolved checkpoint path**, the **prototype row norms**, and scores the
+linear head **through the model's own forward** alongside the reimplementation, reporting their
+agreement. If they disagree the bug is in the script; if they agree and the number is still 0.5589,
+the checkpoint is not the one that scored 0.9135. Re-running both models with that instrumentation.
+
+The ArcFace result above stands regardless — its linear head reproduced at 0.9105 against a known
+0.9035, so the pipeline is sound for that model. But the *comparison* between heads, which is the
+whole point of running both, waits for the control.

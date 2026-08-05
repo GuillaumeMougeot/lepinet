@@ -38,23 +38,33 @@ import torch.nn.functional as F
 
 
 @torch.no_grad()
-def embed(model, dls, df, device, num_workers=32):
-    """Per-image normalised embeddings — the vector the head would dot with its prototypes."""
+def embed(model, dls, df, device, num_workers=32, want_logits=False):
+    """Per-image normalised embeddings, and optionally the head's own top-1.
+
+    ``want_logits`` returns what the *model* predicts, not what a reimplementation of the head
+    predicts. Comparing the two localises a disagreement immediately: if they differ, the bug is in
+    this script; if they agree and both look wrong, the checkpoint is not what was expected.
+    Added after the first run scored a known-0.9135 model at 0.5589 with no way to tell which.
+    """
     from lepinet.test import dl_num_workers
 
     nw = num_workers if num_workers is not None else dl_num_workers(dls.train)
     dl = dls.test_dl(df, num_workers=nw)
     model.to(device).eval()
     body, head = model[0], model[1].head
-    out = []
+    out, top1 = [], []
     t0 = time.time()
     for batch in dl:
-        feats = body(batch[0].to(device))
+        x = batch[0].to(device)
+        feats = body(x)
         pooled = (F.adaptive_avg_pool2d(feats, 1).flatten(1) if feats.ndim == 4 else feats).float()
         out.append(F.normalize(head.preclassification(pooled), dim=1).cpu())
+        if want_logits:
+            z = model(x)
+            top1.append((z[0] if isinstance(z, (list, tuple)) else z).float().argmax(1).cpu())
     e = torch.cat(out)
     print(f"  embedded {len(e)} images in {time.time()-t0:.0f}s")
-    return e
+    return (e, torch.cat(top1)) if want_logits else e
 
 
 def build_centroids(emb, y, n_classes, kind="mean", k=3, seed=0):
@@ -106,7 +116,9 @@ def main(a):
     from lepinet.data import DEFAULT_LEVELS, filter_df, make_dls
     from lepinet.test import load_model, resolve_checkpoint_path
 
-    ckpt = torch.load(resolve_checkpoint_path(a.model), map_location="cpu", weights_only=False)
+    ckpt_path = resolve_checkpoint_path(a.model)
+    print(f"checkpoint: {ckpt_path}")
+    ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=False)
     levels = ckpt.get("levels", DEFAULT_LEVELS)
     vocabs = ckpt["vocabs"]
     lvl = levels[0]
@@ -145,7 +157,7 @@ def main(a):
                    lowmem=False, levels=levels)
 
     e_tr = embed(model, dls, train_df, device, a.num_workers)
-    e_te = embed(model, dls, test_df, device, a.num_workers)
+    e_te, te_top1 = embed(model, dls, test_df, device, a.num_workers, want_logits=True)
     y_tr = torch.tensor([idx[s] for s in train_df[lvl]])
     y_te = torch.tensor([idx[s] for s in test_df[lvl]])
 
@@ -154,7 +166,14 @@ def main(a):
 
     # --- the incumbent: the trained prototype matrix
     W = F.normalize(model[1].head.layers[0].weight.detach().cpu().float(), dim=1)
-    res["macro_f1"]["linear_head"] = macro_f1((e_te @ W.T).argmax(1), y_te, n_classes)
+    res["macro_f1"]["linear_head"] = macro_f1(te_top1, y_te, n_classes)           # model's own forward
+    res["macro_f1"]["linear_head_reimpl"] = macro_f1((e_te @ W.T).argmax(1), y_te, n_classes)
+    agree = float((te_top1 == (e_te @ W.T).argmax(1)).float().mean())
+    res["forward_vs_reimpl_agreement"] = agree
+    print(f"  model forward vs e@W.T agreement: {agree:.4f}"
+          + ("" if agree > 0.99 else "   <-- DISAGREE: the reimplementation is wrong, not the model"))
+    row_norms = model[1].head.layers[0].weight.detach().norm(dim=1)
+    res["prototype_row_norms"] = {"min": float(row_norms.min()), "max": float(row_norms.max())}
 
     # --- retrieval variants
     for kind in a.variants.split(","):

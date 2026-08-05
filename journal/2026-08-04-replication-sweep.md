@@ -106,3 +106,34 @@ That is the memorisation signature again: probe holds up, transfer degrades. It 
 independent confirmation, and the first at 198 M, that **share matters more than capacity** for this
 lever. B8 (the same composition at 2 %) is the run that should settle whether scale adds anything
 once the dose is right.
+
+
+---
+
+## B8: at 198 M, the 2 % dose no longer beats 6 % (2026-08-05)
+
+B8 is B7's recipe (198 M, no oversampling, self-training) at the sweep's optimum share of 2 %
+instead of 6 %.
+
+| | in-distribution | probe | probe held-out sp. |
+|---|---|---|---|
+| B7 — same recipe @ 6 % | 0.9050 | 0.7796 | 0.7712 |
+| **B8 — @ 2 %** | 0.9060 | **0.7798** | **0.7816** |
+| Δ | +0.10 | **+0.02** (0.05x floor) | **+1.04** (2.0x floor) |
+
+**Predicted probe 0.790–0.815; landed 0.7798, below the range.** Falsified — though the
+falsification line (0.7747, B3rep5x + one floor) was cleared, so the composition itself holds.
+
+**The dose effect is capacity-dependent, and that is the finding.** At 20 M, moving from 6 % to 2 %
+was worth **+3.36 pt** on probe (0.7370 → 0.7706). At 198 M it is worth **+0.02** — nothing. What
+survives is the *transfer* benefit: held-out species improve by 1.04 pt, two floors, in the same
+direction as at 20 M but a third the size.
+
+This fits the memorisation reading rather than complicating it. Over-replication hurts because the
+model memorises the repeated images; a 198 M model has enough capacity to memorise them *and* fit
+everything else, so the probe cost disappears. What it cannot avoid is that memorised examples do not
+generalise to new taxa — hence the residual held-out gap.
+
+**So the sweep's recommendation narrows: the 2 % dose matters at small scale and is optional at
+large.** B8 is nonetheless the model to prefer — same probe, better transfer, and less data to
+prepare.
