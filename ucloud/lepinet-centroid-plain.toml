@@ -1,0 +1,30 @@
+# Head-scaling option E: can class centroids replace the trained prototype matrix at inference?
+# Run on BOTH heads on purpose -- the prediction is that ArcFace x z-score (tight clusters,
+# mean max-cos 0.671) nearly matches its linear head while the plain cosine head (diffuse,
+# 0.144) does not. A single number would not distinguish 'retrieval works' from 'this
+# embedding is good'. Also reports the prototype matrix's singular spectrum, answering the
+# low-rank question in the same pass.
+name = "lepinet-centroid-plain"
+replicas = 1
+[application]
+name = "pytorch-te"
+version = "26.05"
+[product]
+id = "gpu-nvidia-b200-1-gpu"
+category = "gpu-nvidia-b200"
+provider = "ucloud"
+[time_allocation]
+hours = 6
+[sync]
+local = ".."
+remote = "/12347837/repos/lepinet"
+[setup]
+script = "setup-lepinet.sh"
+run = "python dev/068_centroid_retrieval.py --model '/work/lepinet/data/ucloud_models/*-lepinet-singlehead-species-effnetv2s-ucloud/*.pt' --parquet /work/global_lepi/0032836-250426092105405_processing_metadata_postprocessed_quality_filtered.parquet --img-dir /work/global_lepi/images --out /work/lepinet/data/ucloud_preds/centroid-plain.json --img-size 256 --num-workers 32"
+[schedule]
+auto_extend = "1h"
+max_time = "12h"
+[[resources]]
+type = "file"
+path = "/12347837/datasets/global_lepi"
+read_only = true

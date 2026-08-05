@@ -79,3 +79,30 @@ follow-up rather than an afterthought.
 turned a +4.58 pt result into +7.94 and doubled its transfer. It was queued only because the
 memorisation risk was written into the design as something to control later — the kind of caveat that
 usually stays a caveat. Writing it down is what caused it to be run.
+
+
+---
+
+## B6 lands, and confirms the sweep's verdict on itself (2026-08-05)
+
+B6 = F1's config (198 M, with oversampling) + self-training at **13x / 6 %**, launched before the
+sweep landed.
+
+| | in-distribution | probe | probe held-out sp. |
+|---|---|---|---|
+| F1 — no target data | 0.9219 | 0.7209 | 0.7559 |
+| **B6** — F1 + self-training @ 6 % | **0.9225** | **0.7699** | 0.7422 |
+| B3rep5x — 20 M, self-training @ 2 % | — | 0.7706 | **0.7704** |
+
+**Scale and adaptation do compose**: +4.90 pt on probe over F1, for nothing in-distribution
+(+0.06, inside the floor). The composition prediction (probe 0.750–0.775) was correct.
+
+But the sweep's warning holds exactly as stated. **B6 at 198 M and 6 % share scores 0.7699 on probe —
+statistically identical to a 20 M model at 2 % (0.7706) — and is 2.82 pt *worse* on held-out
+species** (0.7422 vs 0.7704). Ten times the parameters, and the only thing it buys is undone by
+running the share too high.
+
+That is the memorisation signature again: probe holds up, transfer degrades. It is the third
+independent confirmation, and the first at 198 M, that **share matters more than capacity** for this
+lever. B8 (the same composition at 2 %) is the run that should settle whether scale adds anything
+once the dose is right.

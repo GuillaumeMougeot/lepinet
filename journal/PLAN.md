@@ -1,6 +1,6 @@
 # PLAN — where we are, and what runs next
 
-**Kind:** living · **Last updated:** 2026-08-04 · **Supersedes:**
+**Kind:** living · **Last updated:** 2026-08-05 · **Supersedes:**
 [[2026-07-28-landscape-and-plan]]
 
 This is the one file in `journal/` that is meant to be true *today*. Everything else is a record of
@@ -264,13 +264,31 @@ than by citing a floor.** The auxiliary-coarse-heads follow-up this motivated is
 `lepi-cond-shift` also landed: the conditional head is **0.6213**, worst of all four under shift as
 well as in-distribution — the only head whose two rankings agree.
 
+## Group H — scaling the head to 1 M species (owner-raised 2026-08-05)
+
+A 1280 x 1M prototype matrix is 1.28 B parameters / 5 GB, larger than the backbone. Options and
+their costs are in [[2026-08-05-scaling-the-head]]. Nothing is committed yet — the two cheapest
+diagnostics run first because they decide which option is worth building.
+
+| id | work | state |
+|---|---|---|
+| **H0+H1** | prototype singular spectrum (is the head low-rank?) **and** centroid retrieval vs the linear head, in one pass — `dev/068`, on **both** the ArcFace and plain heads | **running** (12363750/1). Predicted: ArcFace centroids within ~1 pt of its linear head, plain head far behind — the margin is what makes centroids meaningful. |
+| H2 | taxonomy-structured fixed codes (`code(species) = code(genus) + offset`) — zero prototype parameters, keeps ArcFace x z-score unchanged | not started; the most interesting untested idea |
+| H3 | low-rank factorisation `W = UV` | gated on H0's spectrum: if rank-512 retains accuracy it is nearly free |
+
+**Not priorities, with reasons:** hierarchical/two-stage softmax (conditioning already lost 2.9 pt
+here and is worst-of-four under shift); sampled softmax (fixes compute, not memory, and uniform
+negatives undercut the margin).
+
 ## Group T — what would target labels have bought? (new section, owner-requested 2026-08-04)
 
 The robustness result is label-free, so the reviewer question is *"how many real labels would that
 have taken, and what would they have cost?"* — better answered than deflected. Three axes; the first
 is running.
 
-**T1 — the label budget curve.** Real trap labels at N = 500 / 2500 / 12230, merged at their natural
+**T1 — the label budget curve. DONE 2026-08-05:** real labels 0.7060 / 0.7196 / 0.7568 at N = 500 / 2500 / 12230. Real beats machine by +2.14 pt at matched size; **self-training at 2 % beats 12,230 real labels** (0.7706). The held-out column is uninterpretable for these arms (the 75 held-out species are absent from `adapt`, so every budget has zero labels for them). [[2026-08-05-label-budget]]
+
+*Original design:* Real trap labels at N = 500 / 2500 / 12230, merged at their natural
 share with no replication, so each arm matches the **1x self-training arm exactly**. At N = 12230 the
 only difference from that arm is that the labels are correct rather than 98.15 % correct — label
 quality, isolated. Labels drawn from `adapt` only; sampling spreads round-robin over (trap, night)
