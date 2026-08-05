@@ -274,8 +274,10 @@ diagnostics run first because they decide which option is worth building.
 |---|---|---|
 | H0 | prototype singular spectrum | **DONE — option A is dead.** Rank 1035/1280 for 90 % energy; rank-512 truncation costs 0.35 pt but only halves the matrix, and anything aggressive destroys accuracy. **Prediction (300–600) wrong**: ArcFace pushes classes apart, so it *spends* dimensions. Also weakens option D. |
 | H1 | centroid retrieval vs the linear head | **ArcFace DONE: 0.9077 vs 0.9105, −0.29 pt** (predicted within 1 pt). Mean beats k-means and medoid. **Plain-head control not reportable** — its linear head scored 0.5589 against a known 0.9135, so the script is now instrumented (resolved checkpoint path, row norms, model-forward vs reimplementation agreement) and both are re-running. |
-| H2 | taxonomy-structured fixed codes (`code(species) = code(genus) + offset`) — zero prototype parameters, keeps ArcFace x z-score unchanged | not started; the most interesting untested idea |
-| H3 | low-rank factorisation `W = UV` | gated on H0's spectrum: if rank-512 retains accuracy it is nearly free |
+| **H2** | **sampled softmax: 4096 / 1024 / 256 negatives** — the question that decides whether a 1 M head is *trainable* | **running** (12364227/8/9). With the matrix CPU-resident and only sampled rows gathered (21 MB/step), C fixes memory *and* compute — the original note wrongly assumed the matrix must sit on the GPU. Transfers pessimistically: 1024/12,041 is 8.5 % coverage vs 0.1 % at 1 M. Predicted 4096 within 0.5 pt, 1024 within 1.5, 256 losing >3. |
+| ~~H2-old~~ | ~~taxonomy-structured fixed codes~~ **de-prioritised** — the spectrum says the trained directions have little exploitable structure (rank 1035/1280), which is the assumption fixed codes rest on |
+| ~~H3~~ | ~~low-rank factorisation~~ **DEAD** — rank-512 costs only 0.35 pt but halves nothing that matters at 1 M; rank 128 costs 3.14 pt |
+| H4 | proxy-free batch centroids + MoCo-style queue — no prototype matrix at all | **fallback only**, if H2 shows sampling fails. Bigger build, and the known failure mode (64 classes per batch = tiny negative set) is exactly what H2 is measuring |
 
 **Not priorities, with reasons:** hierarchical/two-stage softmax (conditioning already lost 2.9 pt
 here and is worst-of-four under shift); sampled softmax (fixes compute, not memory, and uniform
@@ -296,7 +298,7 @@ quality, isolated. Labels drawn from `adapt` only; sampling spreads round-robin 
 groups, because a user labelling 500 images would not label 500 frames of one night. Anchors:
 pseudo-labels at 1x scored probe **0.7354**, and at 2 % **0.7706**.
 
-**T2 — integration strategy** (not started; needs a small package addition). Full mixed training
+**T2 — integration strategy** (**unblocked 2026-08-05**: `train(..., init_from=, freeze_body=)` added, `dev/070` drives it). Full mixed training
 versus fine-tuning from the GBIF model versus fine-tuning with GBIF replay. `lepinet` has no
 `init_from` option, so fine-tuning needs one — a contained change to `train()`. Note the forgetting
 worry is **already answered**: B3 scored 0.9003 in-distribution against B1's 0.8999, so mixing target
@@ -333,7 +335,7 @@ Next, and now motivated by the curve rather than by the literature:
 | L5 | √-oversampling at 198 M | **DONE**: 0.9055 / **probe 0.7497** / 0.7641. Prediction correct in-distribution, beaten on probe. **Oversampling's robustness cost grows with scale** (−1.52 → −2.88), the one intervention the scale pattern does not absorb — it reshapes the data rather than constraining the objective. L5's probe is the project best. |
 
 | **L3** | **LDAM** (per-class margin ∝ n⁻¹ᐟ⁴) | A *fourth-root* softening — gentler than √-oversampling — so the monotone curve **predicts it should beat oversampling under shift**. An out-of-sample prediction to test, not a method to try. Needs per-class margin support in the loss. |
-| **L4** | **cRT / decoupled** | Rebalances only the classifier, leaving the representation trained on the natural distribution. If the damage is to the *representation*, cRT escapes the trade entirely. Cheap: stage 2 reuses a frozen backbone. |
+| **L4** | cRT / decoupled | **running** (12364231). L0's representation + classifier retrained with oversampling, backbone frozen, 2 epochs. Predicted in-dist 0.905–0.915 with probe holding near L0's 0.6445 instead of falling to 0.6293. |
 
 ## Group D — product (independent of A–C)
 

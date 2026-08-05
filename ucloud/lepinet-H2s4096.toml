@@ -1,0 +1,24 @@
+name = "lepinet-H2s4096"
+replicas = 1
+[application]
+name = "pytorch-te"
+version = "26.05"
+[product]
+id = "gpu-nvidia-b200-1-gpu"
+category = "gpu-nvidia-b200"
+provider = "ucloud"
+[time_allocation]
+hours = 10
+[sync]
+local = ".."
+remote = "/12347837/repos/lepinet"
+[setup]
+script = "setup-lepinet.sh"
+run = "python dev/069_sampled_softmax.py train configs/20260805_H2_sampled4096_effnetv2s.yaml --n-negatives 4096"
+[schedule]
+auto_extend = "3h"
+max_time = "40h"
+[[resources]]
+type = "file"
+path = "/12347837/datasets/global_lepi"
+read_only = true

@@ -204,3 +204,60 @@ the checkpoint is not the one that scored 0.9135. Re-running both models with th
 The ArcFace result above stands regardless — its linear head reproduced at 0.9105 against a known
 0.9035, so the pipeline is sound for that model. But the *comparison* between heads, which is the
 whole point of running both, waits for the control.
+
+
+---
+
+## Training is the unsolved half, and the spectrum narrowed it to one family (2026-08-05)
+
+Retrieval solves *inference*. Training still needs the matrix, and at 1 M classes that is **5.1 GB in
+fp32 plus 10.2 GB of Adam state = 15.4 GB** before a single activation. The spectrum killed the two
+options that would have shrunk it:
+
+| option | GPU memory | compute per step | status |
+|---|---|---|---|
+| E retrieval | inference only | inference only | **works** (0.9077 vs 0.9105) |
+| A low-rank | partial | no | **dead** — rank 1035/1280 |
+| D fixed codes | yes | no | weakened by the same spectrum |
+| **C sampled softmax + CPU-resident matrix** | **yes** | **yes** | **untested** |
+| **F proxy-free batch centroids** | **yes** | **yes** | untested, bigger build |
+
+### Why sampled softmax is more attractive than it looked
+
+The original note dismissed C as "fixes compute, not memory". That was wrong, because it assumed the
+matrix must live on the GPU. It does not: **keep it in CPU RAM and gather only the sampled rows.**
+At 4096 negatives that is 21 MB moved per step, against 15.4 GB resident. The optimiser state stays
+on CPU too, updated only for the touched rows — which is exactly what sparse embedding tables do in
+recommender systems, at far larger scale than 1 M.
+
+So C fixes both costs, needs no new architecture, and keeps ArcFace × z-score intact. Its one real
+risk is the one already flagged: **the margin's effect depends on the hardest negatives, and uniform
+sampling misses them.**
+
+### The experiment that decides it, and it can run now
+
+**Does the ArcFace margin survive when most negatives are absent from each step?** That is answerable
+at 12,041 classes today, and the answer transfers *pessimistically*: 1024 negatives here is 8.5 % of
+classes, while 1024 of 1 M is 0.1 %. **If sampling fails at 8.5 % coverage it certainly fails at
+0.1 %; if it survives, the 1 M case is plausible and worth building properly.**
+
+Four arms, one factor, B3's recipe at 20 M: full 12,041-way softmax (the control, = A1's 0.9035),
+then 4096, 1024 and 256 sampled negatives. Negatives are drawn uniformly *plus* the batch's own
+classes, so the in-batch hard negatives are always present — the cheap half of hard-negative mining,
+and the half that matters when a batch of 64 contains 64 different species.
+
+**Prediction (committed):** 4096 within 0.5 pt of the control; 1024 within 1.5 pt; 256 loses more
+than 3 pt. Reasoning: the margin needs to see the *confusable* classes, and confusability is
+concentrated within a genus — with 12,041 species over 4,333 genera, a uniform sample of 1024 has a
+~24 % chance of containing any given congener, so at 256 the margin is mostly acting against random
+far-away classes and doing little. **If 256 does *better* than that, the margin is less
+negative-dependent than believed and the 1 M case gets much easier.**
+
+**If it works**, the follow-up is hard-negative sampling using the ANN index that option E already
+justifies — sample negatives from the query's neighbourhood rather than uniformly, which restores
+exactly the signal uniform sampling loses.
+
+**Option F (proxy-free)** is the fallback if C fails: compute class centroids from the batch and a
+MoCo-style queue of recent embeddings, so no prototype matrix exists at all. Higher risk — with 64
+classes per batch the negative set is tiny, which is the known failure mode of contrastive losses at
+extreme class counts — and a much bigger build. Worth doing only if sampling is shown not to work.

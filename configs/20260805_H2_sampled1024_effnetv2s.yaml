@@ -1,0 +1,48 @@
+# H2 sampled softmax, 1024 negatives (8.5% of classes per step).
+#
+# Decides whether a 1 M-class head is trainable: the matrix can live in CPU RAM with only
+# the sampled rows gathered to GPU (21 MB/step at 4096), but only if accuracy survives
+# partial negatives -- and the ArcFace margin is the part at risk, since a margin acts
+# against the hardest negatives and uniform sampling misses them.
+#
+# The answer transfers pessimistically: 1024 of 12,041 is 8.5% coverage, 1024 of 1M is 0.1%.
+# Control is A1 (full softmax) at 0.9035; identical config otherwise.
+# Prediction (committed): 4096 within 0.5 pt of control, 1024 within 1.5 pt, 256 loses >3 pt.
+version: 1.0
+desc: lepinet-H2-sampled1024-effnetv2s-ucloud
+train:
+  parquet_path: /work/global_lepi/0032836-250426092105405_processing_metadata_postprocessed_quality_filtered.parquet
+  img_dir: /work/global_lepi/images
+  out_dir: /work/lepinet/data/ucloud_models
+  fold: '1'
+  min_img_per_spc: 50
+  num_workers: 256
+  model_name: lepinet-H2-sampled1024-effnetv2s-ucloud
+  model_arch_name: efficientnet_v2_s
+  head: arcface
+  nb_epochs: 5
+  base_lr: 0.001
+  batch_size: 64
+  aug_img_size: 460
+  img_size: 256
+  optimizer: muon
+  fp16: true
+  precision: bf16
+  schedule: one_cycle
+  warmup_epochs: 0.5
+  grad_clip: 5.0
+  oversample_power: 0.5
+  family_filter: []
+  aug_kwargs:
+    max_warp: 0.0
+    max_lighting: 0.0
+    p_lighting: 0.0
+    flip_vert: true
+    max_rotate: 15.0
+    max_zoom: 1.1
+  levels:
+  - speciesKey
+  arcface_zscore: true
+  arcface_scale: 30.0
+  arcface_margin:
+  - 0.3

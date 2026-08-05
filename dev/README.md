@@ -123,6 +123,8 @@ package instead of the old 028/030/034 chain.
 | `052_ood_score.py` | open-set scoring: max-logit → AUROC(known vs novel species) |
 | `053`–`059` | embedding geometry, open-set visualisation, margin probes, rank abstention, hierarchical OOD — see each file's docstring |
 | `050`(+) `MarginalArcFaceHead` | A4: marginal supervision × ArcFace margin. The margin must be applied *inside* forward (before the marginalisation), so unlike `ArcFaceHead` it needs the labels — supplied by `MarginContextCallback` through `train(..., extra_cbs=)`. Label-free again at inference, so export still works. |
+| `070_two_stage.py` | Two-stage training (cRT, target fine-tuning): start from a checkpoint via `train(init_from=)`, optionally with the backbone frozen. |
+| `069_sampled_softmax.py` | Restrict the softmax to N sampled negatives plus the batch's own classes, as a `Callback`. Masking is verified equivalent to a subset softmax; validation untouched so arms stay comparable. |
 | `068_centroid_retrieval.py` | Head-scaling option E + option 0 in one pass: class centroids (mean / medoid / k-means) versus the trained prototype matrix, plus the matrix's singular spectrum and rank-truncated accuracy. |
 | `067_label_budget.py` | Build REAL-labelled trap subsets for Group T, spread round-robin over (trap, night) groups so a budget covers many nights rather than many frames of one. Labels come from `adapt` only. |
 | `065_pseudolabel.py` | B3 stage 1: pseudo-label the trap `adapt` split with a strict confidence gate. Reports pseudo-label accuracy as a **diagnostic only** (the trap set is labelled; those labels never enter training) and rewrites paths with `../../` so one `img_dir` reaches both image trees. |

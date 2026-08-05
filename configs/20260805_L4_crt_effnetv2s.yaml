@@ -1,0 +1,46 @@
+# L4 / cRT: retrain ONLY the classifier, with oversampling, on L0's representation.
+#
+# L0 trained the representation on the natural (un-resampled) distribution and scored in-dist
+# 0.8949 / probe 0.6445. Oversampling would have bought +1.86 in-distribution and cost -1.52 on
+# probe. cRT asks where that damage lives: if oversampling harms the REPRESENTATION, freezing it and
+# rebalancing only the classifier should give the in-distribution gain WITHOUT the shifted cost.
+#
+# Stage 2 only: backbone frozen, 2 epochs, everything else L0's config.
+# Prediction (committed): in-dist 0.905-0.915 (recovering most of oversampling's +1.86) with probe
+# staying near L0's 0.6445 rather than falling to the 0.6293 the full-oversampling baseline gets.
+# If probe falls anyway, the damage is in the classifier and cRT does not help here -- which would
+# also mean the classifier, not the representation, is what oversampling distorts.
+version: 1.0
+desc: lepinet-L4-crt-effnetv2s-ucloud
+train:
+  parquet_path: /work/global_lepi/0032836-250426092105405_processing_metadata_postprocessed_quality_filtered.parquet
+  img_dir: /work/global_lepi/images
+  out_dir: /work/lepinet/data/ucloud_models
+  fold: '1'
+  min_img_per_spc: 50
+  num_workers: 256
+  model_name: lepinet-L4-crt-effnetv2s-ucloud
+  model_arch_name: efficientnet_v2_s
+  head: independent
+  nb_epochs: 2
+  base_lr: 0.001
+  batch_size: 64
+  aug_img_size: 460
+  img_size: 256
+  optimizer: muon
+  fp16: true
+  precision: fp16
+  schedule: one_cycle
+  warmup_epochs: 0.5
+  grad_clip: 5.0
+  oversample_power: 0.5
+  family_filter: []
+  aug_kwargs:
+    max_warp: 0.0
+    max_lighting: 0.0
+    p_lighting: 0.0
+    flip_vert: true
+    max_rotate: 15.0
+    max_zoom: 1.1
+  levels:
+  - speciesKey

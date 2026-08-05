@@ -21,7 +21,7 @@ from .metrics import default_metrics
 from .model import arch_body_features, arch_is_vit, build_learner, resolve_arch
 
 
-def train(cfg: TrainConfig, extra_cbs=None):
+def train(cfg: TrainConfig, extra_cbs=None, init_from=None, freeze_body=False):
     """Run one training job from a :class:`~lepinet.config.TrainConfig`. Writes ``<out_dir>/<model_name>.pt``."""
     data_mod.ensure_fork_start_method()
     levels = list(cfg.levels)
@@ -148,6 +148,28 @@ def train(cfg: TrainConfig, extra_cbs=None):
     learn = build_learner(dls, arch, custom_head, loss_func, default_metrics(levels),
                           out_dir / "models", cbs, optimizer=cfg.optimizer, vit=vit)
 
+    # Two-stage training (decoupled / cRT, fine-tuning on a new distribution): start from an
+    # existing checkpoint instead of ImageNet weights, optionally with the backbone frozen so only
+    # the head moves. `dev/` experiments only -- the CLI never passes these, so a published recipe
+    # cannot acquire them by accident.
+    if init_from is not None:
+        from .test import load_model, resolve_checkpoint_path
+
+        src = torch.load(resolve_checkpoint_path(init_from), map_location="cpu", weights_only=False)
+        prev, _ = load_model(src, img_size=cfg.img_size)
+        missing, unexpected = learn.model.load_state_dict(prev.state_dict(), strict=False)
+        print(f"Initialised from {init_from} ({len(missing)} missing, {len(unexpected)} unexpected keys)")
+        if missing or unexpected:
+            # Loud, because a silent partial load trains a half-initialised model to a plausible
+            # number -- the failure mode that is hardest to notice after the fact.
+            print(f"  WARNING missing={missing[:4]}{'...' if len(missing) > 4 else ''} "
+                  f"unexpected={unexpected[:4]}{'...' if len(unexpected) > 4 else ''}")
+    if freeze_body:
+        for p_ in learn.model[0].parameters():
+            p_.requires_grad_(False)
+        n_train = sum(p_.numel() for p_ in learn.model.parameters() if p_.requires_grad)
+        print(f"Backbone frozen: {n_train / 1e6:.2f} M trainable parameters (head only)")
+
     if cfg.fp16:
         # bf16 by default (fp32 exponent range -> no overflow-to-NaN); fp16 only if asked.
         learn = learn.to_bf16() if cfg.precision == "bf16" else learn.to_fp16()
@@ -217,11 +239,11 @@ def _save_checkpoint(learn, cfg: TrainConfig, levels, vocabs, df, out_dir: Path,
     return model_path
 
 
-def train_from_config(config_path: str, extra_cbs=None):
+def train_from_config(config_path: str, extra_cbs=None, init_from=None, freeze_body=False):
     """Load a YAML config, stamp a run dir, and train. Returns the run directory.
 
     ``extra_cbs`` is for ``dev/`` experiments only (see :func:`train`); the CLI never passes it.
     """
     cfg, run_dir = prepare_run_dir(config_path)
-    train(cfg, extra_cbs=extra_cbs)
+    train(cfg, extra_cbs=extra_cbs, init_from=init_from, freeze_body=freeze_body)
     return run_dir
