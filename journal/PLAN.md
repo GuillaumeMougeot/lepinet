@@ -77,6 +77,24 @@ this file claimed for weeks.
 targeted was mostly a scoring-rule artifact); chase in-distribution accuracy; the autoregressive head;
 balanced softmax at other τ (the 2×2 settled it on both axes).
 
+### Scale discipline (owner, 2026-08-06)
+
+**Validate at 20 M; promote to 198 M once, at the end.** In five days I ran six 198 M trainings
+(F1, B6, B7, B8, L5, L6 — 42 GPU-hours) and the "model to ship" changed three times in three days.
+Every ordering question those runs answered was answerable at 20 M for a quarter of the cost; the
+198 M runs were confirmation dressed up as exploration.
+
+The owner's phrasing is the rule: *stick to 20 M until you have confidence in scaling up.* Concretely:
+
+- A new mechanism is tested at **20 M only**, however promising it looks.
+- 198 M is for **one** confirmation run, after the recipe has stopped moving at 20 M.
+- Note this cuts against a real finding — three interventions behaved *differently* at 198 M
+  ([[2026-08-02-f1-flagship]]) — so scale-transfer is a question worth asking. But it is one question
+  to ask deliberately at the end, not a reason to re-run everything twice.
+
+L6 (cRT at 198 M) was launched this morning in exactly the pattern being criticised. It failed on its
+own and has been **left dead rather than fixed**.
+
 ### The check-in schedule, and its hard limit
 
 Scheduled in-session (2026-08-02): a **morning report at 06:22** the owner reads, plus queue-advance

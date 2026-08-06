@@ -33,6 +33,41 @@ from fastai.vision.all import Callback
 MASK = -1e4  # finite, so bf16 stays well-behaved; -inf can produce NaNs through the margin path
 
 
+class TaxonomyNegatives:
+    """Negative sampler that draws **congeners first**, then fills uniformly to the budget.
+
+    H2 measured that uniform sampling degrades smoothly with no plateau, and attributed it to the
+    margin acting mostly against classes the model would never confuse: with 12,041 species over
+    4,333 genera, a uniform draw of 1024 contains a given congener ~8.5 % of the time.
+
+    This tests that attribution directly and cheaply. If congener-first recovers most of the loss at
+    the same budget, the problem is *which* negatives, and hard-negative mining (over an ANN index at
+    1 M scale) is the design. If it does not, the problem is *how many*, and the whole sampling
+    family is dead -- which is worth knowing before building an index.
+
+    Built from the checkpoint's own taxonomy, so it needs no new data.
+    """
+
+    def __init__(self, parent_of: torch.Tensor, n_classes: int, seed: int = 0):
+        self.n_classes = int(n_classes)
+        self.parent_of = parent_of                        # [n_classes] -> parent index
+        order = torch.argsort(parent_of)                  # group siblings contiguously
+        self.sorted_children = order
+        self.sorted_parents = parent_of[order]
+        self.g = torch.Generator().manual_seed(seed)
+
+    def __call__(self, y0: torch.Tensor, budget: int) -> torch.Tensor:
+        """Indices to keep: every congener of the batch's classes, then a uniform fill."""
+        parents = torch.unique(self.parent_of[y0.cpu()])
+        sib_mask = torch.isin(self.sorted_parents, parents)
+        congeners = self.sorted_children[sib_mask]
+        if len(congeners) >= budget:                      # already over budget: subsample them
+            sel = torch.randperm(len(congeners), generator=self.g)[:budget]
+            return congeners[sel]
+        fill = torch.randint(self.n_classes, (budget - len(congeners),), generator=self.g)
+        return torch.cat([congeners, fill])
+
+
 class SampledSoftmax(Callback):
     """Restrict each step's softmax to ``n_negatives`` sampled classes plus the batch's own.
 
@@ -42,10 +77,11 @@ class SampledSoftmax(Callback):
 
     order = 70
 
-    def __init__(self, n_negatives: int, n_classes: int, seed: int = 0):
+    def __init__(self, n_negatives: int, n_classes: int, seed: int = 0, sampler=None):
         self.n_negatives = int(n_negatives)
         self.n_classes = int(n_classes)
         self.g = torch.Generator().manual_seed(seed)
+        self.sampler = sampler          # None -> uniform; else a TaxonomyNegatives
         self._logged = False
 
     def after_pred(self):
@@ -58,7 +94,8 @@ class SampledSoftmax(Callback):
         y0 = y0[:, 0] if y0.ndim > 1 else y0
 
         keep = torch.zeros(self.n_classes, dtype=torch.bool, device=pred[0].device)
-        idx = torch.randint(self.n_classes, (self.n_negatives,), generator=self.g)
+        idx = (self.sampler(y0, self.n_negatives) if self.sampler is not None
+               else torch.randint(self.n_classes, (self.n_negatives,), generator=self.g))
         keep[idx.to(keep.device)] = True
         keep[y0] = True                     # the batch's own classes are always in play
         if not self._logged:
@@ -89,9 +126,18 @@ def main(argv):
     df, _ = gen_df(cfg.parquet_path, Path(cfg.out_dir), cfg.min_img_per_spc, cfg.fold,
                    hierarchy, cfg.family_filter, levels=levels)
     n_classes = df[levels[0]].nunique()
+    sampler = None
+    if "--taxonomy-negatives" in argv:
+        import torch as _t
+
+        from lepinet.heads import build_class_spec
+        vocabs = {lv: sorted(df[lv].unique().tolist()) for lv in levels}
+        _c2i, masks = build_class_spec(df, vocabs, levels)
+        sampler = TaxonomyNegatives(_t.as_tensor(masks[0]), n_classes)
+        print("negatives: CONGENERS FIRST, then uniform fill")
     print(f"{n_classes} classes; sampling {n_neg} negatives per step "
           f"({100 * n_neg / n_classes:.1f}% coverage)")
-    train_from_config(cfg_path, extra_cbs=[SampledSoftmax(n_neg, n_classes)])
+    train_from_config(cfg_path, extra_cbs=[SampledSoftmax(n_neg, n_classes, sampler=sampler)])
 
 
 if __name__ == "__main__":

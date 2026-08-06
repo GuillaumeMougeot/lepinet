@@ -338,3 +338,80 @@ loop to training, so it is no longer the cheap option it appeared to be.
 Training is not. Low-rank is dead, fixed codes are weakened by the same spectrum, uniform sampling
 degrades too fast, and what remains is hard-negative sampling with a maintained index, or option F
 (proxy-free, no matrix at all). Both are real builds rather than experiments.
+
+
+---
+
+## The recommendation, consolidated (2026-08-06)
+
+Everything above is exploration. This is what I would actually build, and why the evidence points
+there rather than anywhere else.
+
+### The two problems are separable, and one is already solved
+
+| | status | cost at 1 M |
+|---|---|---|
+| **inference** | **solved** — centroids cost 0.29 pt, and are built from data | ANN index, no 5 GB matrix |
+| **training** | open | 5.1 GB matrix + 10.2 GB optimiser state |
+
+That separation is the useful part. A deployed model never needs the learned matrix, so whatever
+training does, it does not have to produce an artifact that ships.
+
+### What the measurements eliminated
+
+- **Low-rank factorisation** — rank 1035/1280. Dead.
+- **Fixed / taxonomy-structured codes** — rests on the class directions having exploitable
+  structure. The same spectrum says they largely do not.
+- **Uniform sampled softmax** — smooth degradation with no plateau; 0.1 % coverage at 1 M is far past
+  the worst point measured.
+- **Hierarchical two-stage prediction** — measured worst of four heads here, on both axes.
+
+The eliminations are worth as much as the survivors: four plausible directions closed by three cheap
+measurements, and each was closed for a *reason* that generalises rather than by a disappointing
+number.
+
+### The recommendation: EMA centroids as the classifier, with ANN-mined hard negatives
+
+One design, assembled from three measured results rather than from the literature:
+
+1. **No learned prototype matrix at all.** Maintain a centroid per class as an exponential moving
+   average of its embeddings, updated whenever a class appears in a batch. Zero learned parameters,
+   zero optimiser state, and the table lives on CPU. *Justified by:* centroids match trained
+   prototypes to 0.29 pt.
+2. **Score against a small active set each step** — the batch's own classes plus the *k* nearest
+   centroids to each query, retrieved from an ANN index over the centroid table. *Justified by:*
+   uniform negatives fail (H2) while the margin's effect depends on confusable classes; ANN
+   retrieval over these centroids is exactly what the inference result showed works.
+3. **Keep ArcFace × z-score unchanged.** It operates on unit directions, which is what centroids are.
+   Every open-set result carries over.
+
+Memory at 1 M classes: the centroid table is 5.1 GB of *data* on CPU with no gradient or optimiser
+state, against 15.4 GB of GPU-resident parameters — and the per-step GPU cost is `batch × (64 + k)`
+rather than `batch × 1M`.
+
+**The honest risks**, in order:
+
+- **Cold start.** Centroids are meaningless before the embedding is trained. Mitigation: warm-start
+  the backbone from an existing model — which this project has — and use random negatives for the
+  first epoch.
+- **Index staleness.** The centroids move while the index is fixed. Mitigation: rebuild periodically;
+  the retrieval only has to be approximately right, since it is choosing negatives, not predictions.
+- **Feedback loop.** Mining negatives from a model's own neighbourhood can reinforce its errors. This
+  is the same shape as the self-training failure mode, where the fix was a strict gate and an
+  evaluation the training could not reach.
+
+### What to run next, and it is small
+
+**The cheapest decisive test is at 20 M and needs no new infrastructure: taxonomy-aware negative
+sampling.** H2's failure was attributed to uniform draws missing the *confusable* classes, and
+confusability is concentrated within a genus. So sample negatives as *all congeners of the batch's
+classes* plus a uniform fill to the same budget, and compare to H2's uniform arm at matched budget.
+
+- If taxonomy-aware 1024 recovers most of the 3.25 pt that uniform 1024 lost, the hard-negative
+  hypothesis is confirmed and the full ANN design is worth building.
+- If it does not, the loss is not about *which* negatives but *how many*, and the whole sampling
+  family is dead — which would leave option F (proxy-free) as the only survivor and is worth knowing
+  before building an index.
+
+It uses the taxonomy already in every checkpoint, costs one 20 M run per arm, and settles the
+mechanism behind the design above.
