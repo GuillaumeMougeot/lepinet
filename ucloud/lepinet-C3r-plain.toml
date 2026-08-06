@@ -1,0 +1,27 @@
+# C3 re-scored with each head's OWN best rule. The original comparison used max-cosine for
+# both -- symmetric, but max is the plain head's worst rule by 27 pt and the margin head's
+# best, so it flattered the margin. This is the last non-citable open-set claim.
+name = "lepinet-C3r-plain"
+replicas = 1
+[application]
+name = "pytorch-te"
+version = "26.05"
+[product]
+id = "gpu-nvidia-b200-1-gpu"
+category = "gpu-nvidia-b200"
+provider = "ucloud"
+[time_allocation]
+hours = 4
+[sync]
+local = ".."
+remote = "/12347837/repos/lepinet"
+[setup]
+script = "setup-lepinet.sh"
+run = "python dev/059_hierarchical_ood.py --model '/work/lepinet/data/ucloud_models/*-lepinet-heads-global-independent-muon-5ep-oversample-effnetv2s-ucloud/*.pt' --parquet /work/global_lepi/0032836-250426092105405_processing_metadata_postprocessed.parquet --img-dir /work/global_lepi/images --out /work/lepinet/data/ucloud_preds/ood-strat-plain.json --per-stratum 8000 --num-workers 32 --rule entropy"
+[schedule]
+auto_extend = "1h"
+max_time = "8h"
+[[resources]]
+type = "file"
+path = "/12347837/datasets/global_lepi"
+read_only = true

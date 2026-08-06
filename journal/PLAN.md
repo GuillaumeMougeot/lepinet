@@ -53,25 +53,21 @@ is not available:
 
 ### Ordered backlog — take the top unblocked item
 
-Costs use the measured formula, **not** guesses: `images_per_epoch × epochs / 1100 img/s`, where the
-training fold is **5.04 M images/epoch**. A 5-epoch `effnetv2_s` run is **≈6.4 h**, not the "~1.5 h"
-this file claimed for weeks.
+Costs from the measured formula: `images_per_epoch × epochs / 1100 img/s`, 5.04 M images/epoch.
+A 5-epoch 20 M run is ≈6.4 h; a 2-epoch frozen-trunk stage is ≈30 min.
 
-| # | work | GPU | why it is here, and the gate |
+**Running now:** F2 (the capstone, below) and the C3 re-score.
+
+| # | work | GPU | why, and the gate |
 |---|---|---|---|
-| 1 | **collect F1 + D2**, journal, update `RESULTS.md`/`START-HERE` | — | Running now. F1 is the flagship; **falsified if shifted ≤ 0.717**. |
-| ~~2~~ | ~~D1 — finish `lepinet bundle`~~ **DONE 2026-08-02**: `--parquet` adds `names.json`, `--calibrate` fits per-level temperature + precision-targeted thresholds on validation and verifies on test. Ported from `dev/044`/`dev/047` into `lepinet.calibrate`, with the pure core unit-tested. | none | |
-| ~~3~~ | ~~B3 — self-training~~ **DONE 2026-08-04: probe +4.58 pt for +0.04 in-distribution, 56 % transferring to unseen species. The largest robustness lever found, and the only one that costs nothing.** Follow-ups now at the top of the list. | — |
-| ~~3~~ | **B6 = B3 at 198 M** (F1's config + the pseudo-labels) | **running** (12363259) → triple chained. Each lever leads the column the other trails: B3 wins probe (0.7370 vs 0.7209), F1 wins held-out species (0.7559 vs 0.7231). Predicted probe 0.750–0.775; **falsified as a composition if probe ≤ 0.7411** (B3 + one floor). |
-| ~~3b~~ | replication sweep | **DONE — moved the result.** probe by share: 0.39 % → 0.7354, **2 % → 0.7706**, 6 % → 0.7370, 10 % → 0.7159. Transfer to unseen species falls 121 % → 39 % with share. **Replication was never necessary**; the design argument for it was wrong. [[2026-08-04-replication-sweep]] |
-| B8 | everything that won, at the corrected share | **DONE**: 0.9060 / **probe 0.7798** / **held-out 0.7816**. Predicted 0.790–0.815 — **below range**, though the composition line (0.7747) was cleared. The 2 % dose is worth +3.36 pt at 20 M and **+0.02 at 198 M**: capacity absorbs the over-replication cost, but not its transfer cost (+1.04 held-out). **Best deployable model.** |
-| B7 | the two best shifted levers combined | **DONE**: 0.9050 / **probe 0.7796** / **0.7712**. Predicted 0.765–0.790, inside. **Best shifted model in the project.** vs B6 (same but with oversampling): +0.97 probe, +2.90 held-out — oversampling's cost is 3× larger on unseen taxa. |
-| 3c | **second self-training round** — pseudo-label with B3 rather than B4, whose trap accuracy is now 4.58 pt lower | ~7 h |
-| ~~old 3~~ | ~~B3 v1~~ | ~~~~ | **Split + leakage guards built** (`dev/064`); grouped by (trap, night), 27,230 adapt / 15,200 probe / 58 held-out species. **UNBLOCKED 2026-08-03** — probe baselines landed (A4 0.6749 / B1 0.6912 / **B4 0.7006**; held-out-species 0.6992 / 0.6974 / 0.7101). **Stage 1 running** (12362768): pseudo-label the 27,230 adapt images with B4, strict gate keeping the top 30 % (owner-approved). Stage 2 is a combined-parquet training run vs **B1's probe 0.6912** at 20 M — one factor, since B1 is the same recipe without trap data. | **The highest-value untested rung.** B1 established the name-a-nuisance ceiling at ~4 pt; B3 is the first rung that adapts to shifts nobody named. Needs grouped splits by capture event and held-out-*species* validation, or it will manufacture a phantom win. |
-| 4 | **L4 — cRT / decoupled** | ~2 h (stage 2 only) | The 2×2 showed tail-reweighting trades robustness for accuracy monotonically. cRT rebalances *only the classifier*, so it tests **where the damage lives**. Reuses L0's checkpoint; stage 2 must not use Muon (it re-partitions param groups and breaks freezing). |
-| 5 | **L3 — LDAM** | ~6.4 h + build | Its per-class margin ∝ n^(−1/4) is *gentler* than √-oversampling, so the monotone curve **predicts it beats oversampling under shift**. An out-of-sample prediction, which is the right reason to run something. |
-| 6 | **B2 — background suppression** (flatbug-style) | ~6.4 h + build | Removes a nameable *category* rather than a nuisance dimension. Bounded by imagination like B1, but bounded higher. |
-| 7 | **C3b — hold out *common* taxa** | ~6.4 h + build | The controlled version of C3, whose novel species were all rare and so possibly just harder. Needs a species-exclusion filter, which does not exist yet. |
+| 1 | **collect F2 + C3r**, journal, update `RESULTS.md`/`START-HERE`/paper | — | F2 is the paper's punchline; C3r closes the last non-citable open-set claim. |
+| 2 | **paper §4: fold in T2/T2b, L4/cRT, F2** | none | The three most practical findings of the week are **not in the paper at all**. This is now the biggest gap, and it needs no GPU. |
+| 3 | **second self-training round** on the frozen trunk | ~30 min | If adaptation is classifier re-fitting, re-labelling with T2 rather than B4 should be nearly free and may close the remaining 17 %. |
+| 4 | **the 198 M confirmation, once** | ~8 h | Only after F2 settles the recipe. Per the scale discipline: one run, at the end, not per mechanism. |
+| 5 | **P1 — BioCLIP-2 as a frozen trunk** | build + ~1 h | Owner-deferred but reviewer-inevitable; T2b is what makes it plausible. See Group P. |
+| 6 | **L3 — LDAM** | ~6.4 h + build | The monotone curve predicts a fourth-root margin beats √-oversampling under shift. Weakened by cRT: if the fix is "rebalance the classifier only", LDAM's placement in the loss is the wrong end. |
+| 7 | **B2 — background suppression** | ~6.4 h + build | Weakened by T2b for the same reason as `domain_aug`: another hand-authored representational fix, and adaptation appears to subsume that whole family. |
+| 8 | **C3b — hold out *common* taxa** | ~6.4 h + build | The controlled version of C3, whose novel species were all rare. |
 
 **Do not do** (each has a reason on record): re-tune the ArcFace margin (E1, cancelled — the loss it
 targeted was mostly a scoring-rule artifact); chase in-distribution accuracy; the autoregressive head;

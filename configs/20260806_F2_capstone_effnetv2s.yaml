@@ -1,0 +1,57 @@
+# F2: the capstone -- every correction of the past week assembled, and never yet run end to end.
+#
+# The recipe the results now imply is NOT the one any single run has used:
+#   representation  trained with NO oversampling (L5: it costs 2.9 pt under shift) and NO
+#                   domain_aug (T2b: redundant once the classifier is adapted, +0.57 vs +4.75)
+#   classifier 1    cRT rebalancing -> in-distribution accuracy back (L4: +1.19, robustness kept)
+#   classifier 2    adaptation on trap pseudo-labels -> shift (T2: +6.6 probe on a frozen trunk)
+#
+# Both classifier stages are 2 epochs on a frozen backbone, so the whole recipe is one clean
+# representation plus minutes of cheap head-fitting. F2 runs stage 2 on L4's checkpoint and asks the
+# only untested question: do the two classifier operations COMPOSE, or does adapting to the trap
+# domain undo the rebalancing?
+#
+# L0   (representation only)          in-dist 0.8949 / probe 0.6445
+# L4   (+ cRT)                        in-dist 0.9068 / probe 0.6539
+# F2   (+ adaptation)                 ?
+#
+# Prediction (committed): in-dist 0.900-0.910 (adaptation cost B3 nothing in-distribution, so cRT's
+# gain should survive) and probe 0.740-0.765 (T2 got 0.7572 from a stronger starting point of
+# 0.6912; F2 starts from 0.6539). Falsified if in-dist drops below 0.895 -- that would mean the two
+# classifier stages fight, and the recipe needs one joint stage rather than two sequential ones.
+#
+# 20 M, 2 epochs, frozen backbone.
+version: 1.0
+desc: lepinet-F2-capstone-effnetv2s-ucloud
+train:
+  parquet_path: /work/lepinet/data/flemming/splits/combined_b3_5x.parquet
+  img_dir: /work/global_lepi/images
+  out_dir: /work/lepinet/data/ucloud_models
+  fold: '1'
+  min_img_per_spc: 50
+  num_workers: 256
+  model_name: lepinet-F2-capstone-effnetv2s-ucloud
+  model_arch_name: efficientnet_v2_s
+  head: independent
+  nb_epochs: 2
+  base_lr: 0.001
+  batch_size: 64
+  aug_img_size: 460
+  img_size: 256
+  optimizer: muon
+  fp16: true
+  precision: fp16
+  schedule: one_cycle
+  warmup_epochs: 0.5
+  grad_clip: 5.0
+  oversample_power: 0.5
+  family_filter: []
+  aug_kwargs:
+    max_warp: 0.0
+    max_lighting: 0.0
+    p_lighting: 0.0
+    flip_vert: true
+    max_rotate: 15.0
+    max_zoom: 1.1
+  levels:
+  - speciesKey

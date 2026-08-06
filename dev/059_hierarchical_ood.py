@@ -59,6 +59,43 @@ def stratify(df: pd.DataFrame, vocabs: dict) -> pd.Series:
 
 
 @torch.no_grad()
+def novelty_scores(model, dls, df, device, num_workers=32, rule="max"):
+    """Novelty score under a named rule. **`max` is not neutral**: it is the plain cosine head's
+    worst rule by 27 points and the margin head's best, so a stratified comparison run with `max`
+    for both is symmetric but still flatters the margin
+    (journal/2026-08-06-the-arcface-open-set-claim-was-a-rule-comparison.md). Each head should be
+    read with its own best rule; this makes that possible."""
+    import torch.nn.functional as _F
+
+    from lepinet.test import dl_num_workers
+
+    nw = num_workers if num_workers is not None else dl_num_workers(dls.train)
+    dl = dls.test_dl(df, num_workers=nw)
+    print(f"  dataloader: num_workers={nw}, batches={len(dl)}, rule={rule}")
+    body, head = model[0], model[1].head
+    model.to(device).eval()
+    w = head.layers[0].weight.detach().to(device).float()   # as the model uses it
+    out = []
+    for batch in dl:
+        feats = body(batch[0].to(device))
+        pooled = _F.adaptive_avg_pool2d(feats, 1).flatten(1) if feats.ndim == 4 else feats
+        z = head.preclassification(pooled.float()) @ w.T
+        if rule == "max":
+            s = z.max(1).values
+        elif rule == "msp":
+            s = _F.softmax(z, dim=1).max(1).values
+        elif rule == "entropy":
+            s = (_F.softmax(z, 1) * _F.log_softmax(z, 1)).sum(1)      # negative entropy
+        elif rule == "margin":
+            tk = z.topk(2, dim=1).values
+            s = tk[:, 0] - tk[:, 1]
+        else:
+            raise ValueError(f"unknown rule {rule!r}")
+        out.append(s.cpu().numpy())                          # higher = more KNOWN, for all rules
+    return np.concatenate(out)
+
+
+@torch.no_grad()
 def max_cosine(model, dls, df, device, num_workers=32):
     from lepinet.test import dl_num_workers
 
@@ -115,8 +152,9 @@ def main(a):
                    int(a.img_size * 460 / 256), a.img_size, 128, a.num_workers,
                    lowmem=False, levels=LEVELS)
     model, _ = load_model(ckpt, img_size=a.img_size)
-    score = max_cosine(model, dls, loader_df, torch.device("cuda" if torch.cuda.is_available() else "cpu"),
-                       a.num_workers)
+    score = novelty_scores(model, dls, loader_df,
+                           torch.device("cuda" if torch.cuda.is_available() else "cpu"),
+                           a.num_workers, rule=a.rule)
 
     strat = df["_strat"].to_numpy()
     known = score[strat == "known"]
@@ -150,4 +188,6 @@ if __name__ == "__main__":
     ap.add_argument("--per-stratum", type=int, default=8000)
     ap.add_argument("--img-size", type=int, default=256)
     ap.add_argument("--num-workers", type=int, default=32)
+    ap.add_argument("--rule", default="max", choices=["max", "msp", "entropy", "margin"],
+                    help="Novelty score. Use each head's BEST rule -- `max` flatters the margin head.")
     main(ap.parse_args())
