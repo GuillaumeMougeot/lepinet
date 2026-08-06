@@ -1,0 +1,62 @@
+# T2: is domain adaptation a REPRESENTATION problem or a CLASSIFIER problem?
+#
+# The exact parallel to L4/cRT, which showed oversampling's damage lives in the representation.
+# Here: take B1's representation (trained WITHOUT any trap data), freeze it, and adapt only the
+# classifier on the same pseudo-labelled trap data B3rep5x used.
+#
+#   B1                        probe 0.6912  -- no target data at all
+#   B3rep5x (full training)   probe 0.7706  -- target data through the whole network
+#   T2 (classifier only)      ?             -- target data, representation frozen
+#
+# This also answers the owner's Group T question about integration strategy, with the cheap arm
+# first: if freezing the backbone captures most of the +7.94, adaptation is a re-fitting problem and
+# a deployed model can be adapted to a new trap in 2 epochs on a frozen trunk -- which is a far more
+# practical deployment story than retraining.
+#
+# Prediction (committed): probe 0.720-0.745, i.e. capturing roughly HALF the gain. Reasoning: the
+# self-training win was attributed to target-domain PIXELS teaching the representation a region of
+# input space it had never seen, and a frozen representation cannot learn that. What the classifier
+# can still do is re-fit boundaries to the shifted feature distribution. Falsified above 0.760
+# (adaptation is mostly classifier re-fitting, and the pixels story is wrong) or below 0.6981
+# (freezing costs everything, so adaptation is entirely representational).
+#
+# 20 M, 2 epochs, frozen backbone -- cheap.
+version: 1.0
+desc: lepinet-T2-clsonly-effnetv2s-ucloud
+train:
+  parquet_path: /work/lepinet/data/flemming/splits/combined_b3_5x.parquet
+  img_dir: /work/global_lepi/images
+  out_dir: /work/lepinet/data/ucloud_models
+  fold: '1'
+  min_img_per_spc: 50
+  num_workers: 256
+  model_name: lepinet-T2-clsonly-effnetv2s-ucloud
+  model_arch_name: efficientnet_v2_s
+  head: arcface
+  nb_epochs: 2
+  base_lr: 0.001
+  batch_size: 64
+  aug_img_size: 460
+  img_size: 256
+  optimizer: muon
+  fp16: true
+  precision: bf16
+  schedule: one_cycle
+  warmup_epochs: 0.5
+  grad_clip: 5.0
+  oversample_power: 0.5
+  family_filter: []
+  aug_kwargs:
+    max_warp: 0.0
+    max_lighting: 0.0
+    p_lighting: 0.0
+    flip_vert: true
+    max_rotate: 15.0
+    max_zoom: 1.1
+  levels:
+  - speciesKey
+  arcface_zscore: true
+  arcface_scale: 30.0
+  arcface_margin:
+  - 0.3
+  domain_aug: trap

@@ -83,7 +83,7 @@ def auroc(novel: np.ndarray, known: np.ndarray) -> float:
 
 
 @torch.no_grad()
-def all_scores(model, dls, df, device, num_workers=32):
+def all_scores(model, dls, df, device, num_workers=32, raw_scores=False):
     """One forward pass, every rule. Only the reductions are kept, never the [N, 12041] matrix."""
     from lepinet.test import dl_num_workers
 
@@ -91,12 +91,27 @@ def all_scores(model, dls, df, device, num_workers=32):
     dl = dls.test_dl(df, num_workers=nw)
     print(f"  dataloader: num_workers={nw}, batches={len(dl)}")
     model.to(device).eval()
+    body, head = model[0], model[1].head
+    W_raw = head.layers[0].weight.detach()
+
+    def emb_fn(x):
+        f = body(x)
+        pooled = (F.adaptive_avg_pool2d(f, 1).flatten(1) if f.ndim == 4 else f).float()
+        return head.preclassification(pooled) @ W_raw.T.float()
     out = {k: [] for k in SCORE_RULES}
     degenerate: set[str] = set()
     t0 = time.time()
     for batch in dl:
         logits = model(batch[0].to(device))
         z = (logits[0] if isinstance(logits, (list, tuple)) else logits).float()
+        if raw_scores:
+            # Pre-clamp scores: the head emits Z(clamp(cos)), and `cosine_to_zscore` pins everything
+            # outside [-1,1] to one value. On the plain head that is 67 % of all logits
+            # (journal/2026-08-06-the-cosine-head-is-not-unit-norm.md), which flattens the tail the
+            # shape-based rules read. This recomputes the score the head would have had without the
+            # clamp, to test whether the transform -- not the embedding -- is what destroys novelty
+            # detection there.
+            z = emb_fn(batch[0].to(device))
         if not degenerate:
             degenerate = degenerate_rules(z)
         for name, fn in SCORE_RULES.items():
@@ -150,7 +165,9 @@ def main(a):
                    vocabs, a.img_dir, int(a.img_size * 460 / 256), a.img_size, 128,
                    a.num_workers, lowmem=False, levels=levels)
     model, _ = load_model(ckpt, img_size=a.img_size)
-    scores, degenerate = all_scores(model, dls, df, device, a.num_workers)
+    scores, degenerate = all_scores(model, dls, df, device, a.num_workers, raw_scores=a.raw_scores)
+    if a.raw_scores:
+        print("SCORING ON PRE-CLAMP RAW SCORES (not the head's z-score output)")
 
     nv = is_novel.to_numpy()
     res = {"n_known": int((~nv).sum()), "n_novel": int(nv.sum()),
@@ -183,4 +200,6 @@ if __name__ == "__main__":
     ap.add_argument("--out", default="ood_scoring_rules.json")
     ap.add_argument("--img-size", type=int, default=256)
     ap.add_argument("--num-workers", type=int, default=32)
+    ap.add_argument("--raw-scores", action="store_true",
+                    help="Score on pre-clamp cos-like values instead of the head's clamped z-scores.")
     main(ap.parse_args())

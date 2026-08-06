@@ -331,7 +331,15 @@ quality, isolated. Labels drawn from `adapt` only; sampling spreads round-robin 
 groups, because a user labelling 500 images would not label 500 frames of one night. Anchors:
 pseudo-labels at 1x scored probe **0.7354**, and at 2 % **0.7706**.
 
-**T2 — integration strategy** (**unblocked 2026-08-05**: `train(..., init_from=, freeze_body=)` added, `dev/070` drives it). Full mixed training
+**T2 — integration strategy. RUNNING 2026-08-06** (12364671), framed as the exact parallel to L4/cRT:
+*is domain adaptation a representation problem or a classifier problem?* Take B1's representation
+(no target data), freeze it, adapt only the classifier on the same pseudo-labels B3rep5x used.
+B1 = 0.6912, B3rep5x = 0.7706; predicted 0.720–0.745, i.e. about half the gain, because the
+self-training win was attributed to target *pixels* teaching the representation a region it had never
+seen and a frozen trunk cannot learn that. **If it lands above 0.760 that attribution is wrong** —
+and adaptation on a frozen trunk in 2 epochs is a far better deployment story than retraining.
+
+*Original design:* Full mixed training
 versus fine-tuning from the GBIF model versus fine-tuning with GBIF replay. `lepinet` has no
 `init_from` option, so fine-tuning needs one — a contained change to `train()`. Note the forgetting
 worry is **already answered**: B3 scored 0.9003 in-distribution against B1's 0.8999, so mixing target
