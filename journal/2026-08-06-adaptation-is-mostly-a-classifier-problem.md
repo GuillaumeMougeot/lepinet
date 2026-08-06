@@ -64,11 +64,36 @@ problem, the representation is more robust and more inert than the classifier**,
 that act on the classifier are both cheaper and safer than those that act on the data the backbone
 sees.
 
+## T2b, the control: the features were already good (2026-08-06)
+
+Classifier-only adaptation from **A1's** trunk — trained with no `domain_aug`, so no exposure to the
+target domain even in imitation.
+
+| trunk | trunk's own probe | after classifier-only adaptation |
+|---|---|---|
+| A1 — no domain augmentation | 0.6437 | **0.7515** (+10.78) |
+| B1 — with `domain_aug: trap` | 0.6912 | **0.7572** (+6.60) |
+| difference after adaptation | | **0.57 pt** (1.4× floor) |
+
+**Predicted 0.700–0.730, leaning to reading (b) at ~60 %. Wrong, and the better answer won.** Reading
+(a) holds: **the features were already good enough**. A representation that never saw the target
+domain, real or imitated, adapts just as well through the classifier alone.
+
+**And it collapses domain augmentation into a substitute rather than a complement.** `domain_aug` is
+worth **+4.75 pt** without adaptation (0.6437 → 0.6912) and **+0.57 pt** with it. So hand-authored
+augmentation and classifier adaptation buy the *same thing*, and adaptation buys more of it while
+requiring nobody to guess what differs between the domains. If the classifier is going to be adapted,
+the augmentation is close to redundant — a real simplification of the recipe, and one that removes
+the most hand-tuned component in it.
+
+**Why this matters beyond this project.** If adaptation needs nothing from the representation, it
+does not need *our* representation. Any strong pretrained encoder — BioCLIP-2 and its kin — becomes a
+candidate trunk, adapted to a target domain by fitting a classifier on pseudo-labels for a couple of
+epochs. That is now on the backlog.
+
 ## Next
 
-1. **The control named above**: classifier-only adaptation from a trunk trained *without*
-   `domain_aug`. Separates "features were already good" from "augmentation did the representational
-   work". One 2-epoch run.
+1. ~~**The control named above**~~ **DONE — see T2b. The features were already good.**
 2. **Iterate on the frozen trunk.** If adaptation is classifier re-fitting, a second pseudo-labelling
    round using T2 rather than B4 should be nearly free and might close the remaining 17 %.
 3. **The 198 M confirmation, once**, when the recipe stops moving — per the scale discipline, not now.

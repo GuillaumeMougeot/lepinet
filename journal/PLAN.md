@@ -325,6 +325,20 @@ diagnostics run first because they decide which option is worth building.
 here and is worst-of-four under shift); sampled softmax (fixes compute, not memory, and uniform
 negatives undercut the margin).
 
+## Group P — pretrained encoders as trunks (owner-raised 2026-08-06, deferred)
+
+T2b showed classifier-only adaptation works from a trunk that never saw the target domain in any
+form. If adaptation needs nothing from the representation, **it does not need *our* representation.**
+
+| id | work | why |
+|---|---|---|
+| **P1** | **BioCLIP-2 (or another strong biological encoder) as a frozen trunk**, classifier fitted on our labels, then classifier-only adapted to the trap domain | The owner's point, and reviewers will ask it regardless. It tests whether the whole pipeline reduces to "take the best available encoder, fit a cheap classifier, adapt the classifier" — which would be a much stronger and more general claim than anything about our particular backbone. |
+| P2 | the same with the centroid classifier instead of a trained one | Composes with the head-scaling result: no trained head at all, just an encoder plus centroids plus 2 epochs of adaptation. |
+
+**Deferred by the owner ("we'll do that later")** — recorded here so it is not lost. Prerequisites are
+small: an encoder that runs in this environment, and a `--frozen-encoder` path, most of which
+`train(init_from=, freeze_body=)` already provides.
+
 ## Group T — what would target labels have bought? (new section, owner-requested 2026-08-04)
 
 The robustness result is label-free, so the reviewer question is *"how many real labels would that

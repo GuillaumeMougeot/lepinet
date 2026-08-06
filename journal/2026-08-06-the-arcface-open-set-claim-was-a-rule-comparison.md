@@ -59,14 +59,30 @@ because I wrote the opposite this morning with a confident mechanism attached.
 **Retracted:** "ArcFace × z-score turns novelty detection from chance into usable (0.601 → 0.9115)
 for −0.4 pt accuracy." The plain cosine head detects novelty at **0.8990**; it was never near chance.
 
-**Also affected, and not yet re-measured** — every open-set comparison that used `dev/052` for the
-plain head:
+**The shifted comparison, re-scored symmetrically (2026-08-06).** Both heads, all five rules, on the
+external benchmark — and deliberately *both*, because comparing the plain head's best against
+ArcFace's max-logit would repeat this very error in reverse:
 
-- **C3, stratified novelty** (near/mid/far): ArcFace 0.849/0.909/0.941 vs plain 0.561/0.618/0.666.
-  The plain numbers are max-logit.
-- **Flemming shifted open-set**: 0.727 vs 0.574. Same.
+| rule | plain | ArcFace × z-score |
+|---|---|---|
+| **msp** | **0.7533** | 0.7445 |
+| entropy | 0.7404 | **0.7467** |
+| margin | 0.7132 | 0.7340 |
+| max-logit | 0.5738 | 0.7272 |
+| energy | 0.5316 | 0.7208 |
+| **best** | **0.7533** | **0.7467** |
+| spread | 22.2 pt | **2.6 pt** |
 
-Both are re-scoring now. Until they land, neither comparison should be quoted.
+**Under shift the plain head is 0.66 pt ahead.** The original claim had ArcFace ahead by 15.3.
+
+So across both benchmarks, read correctly: ArcFace +0.78 in-distribution, −0.66 under shift. **The
+two heads are equivalent for open-set detection**, and the plain head costs 1 pt less closed-set
+accuracy.
+
+**Still not re-measured:** C3's stratified novelty (near/mid/far), which used `dev/059`'s max-cosine
+score for both heads. That one is at least *symmetric* — the same rule for both — so it is not
+invalid in the way this was, but it measures max-cosine specifically and the plain head's number is
+its worst rule. Not citable as a head comparison until re-scored.
 
 **What survives, and it is not nothing:**
 
@@ -74,11 +90,15 @@ Both are re-scoring now. Until they land, neither comparison should be quoted.
   finding: the margin puts the open-set signal into the *magnitude* of the top score, where a plain
   cosine head keeps it in the *shape* of the distribution. The margin does change the geometry — it
   changes where the information lives, not how much there is.
-- **ArcFace is more robust to the choice of rule**: its five rules span 0.8953–0.9068 (1.2 pt), the
-  plain head's span 0.6149–0.8990 (28.4 pt). For deployment that matters — a model whose open-set
-  score is insensitive to the readout is one you can ship without tuning the readout.
-- The stratified and shifted results may still favour ArcFace once re-scored. They are the harder
-  benchmarks and the margin may earn its place there.
+- **ArcFace is far more robust to the choice of rule**, and this replicates on both benchmarks:
+  in-distribution its five rules span **1.2 pt** against the plain head's **28.4**; under shift,
+  **2.6 pt** against **22.2**. For deployment that is the substantive advantage — an open-set score
+  that does not depend on picking the right readout is one you can ship without tuning it, and
+  without discovering later that the rule you chose was the wrong one. **This project made exactly
+  that mistake, which is evidence for the value of the property.**
+- ~~The stratified and shifted results may still favour ArcFace once re-scored.~~ **The shifted one
+  did not** — see the symmetric table above; the plain head is 0.66 pt ahead there. Only the
+  stratified comparison is still open.
 
 **What it costs the paper.** §4.3 is titled "ArcFace × z-score: the trade-off dissolves" and rests on
 +31 pt for −0.4. That framing is gone. What can honestly replace it is narrower and more interesting:
