@@ -1,0 +1,27 @@
+# Re-score the SHIFTED open-set comparison with all five rules on the plain head. The quoted
+# 0.574 came from dev/052, which computes max-logit only -- the plain head's worst rule by 27 pt
+# in-distribution. Until this lands, 0.727 vs 0.574 should not be quoted.
+name = "lepinet-rules-flem-plain"
+replicas = 1
+[application]
+name = "pytorch-te"
+version = "26.05"
+[product]
+id = "gpu-nvidia-b200-1-gpu"
+category = "gpu-nvidia-b200"
+provider = "ucloud"
+[time_allocation]
+hours = 6
+[sync]
+local = ".."
+remote = "/12347837/repos/lepinet"
+[setup]
+script = "setup-lepinet.sh"
+run = "python dev/061_ood_scoring_rules.py --model '/work/lepinet/data/ucloud_models/*-lepinet-heads-global-independent-muon-5ep-oversample-effnetv2s-ucloud/*.pt' --parquet /work/lepinet/data/flemming/flemming_names_labels.parquet --img-dir /work/flemming/images --out /work/lepinet/data/ucloud_preds/rules-flem-plain.json --img-size 256 --num-workers 32"
+[schedule]
+auto_extend = "1h"
+max_time = "12h"
+[[resources]]
+type = "file"
+path = "/12347837/datasets/flemming"
+read_only = true

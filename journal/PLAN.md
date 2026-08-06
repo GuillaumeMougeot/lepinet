@@ -286,6 +286,14 @@ than by citing a floor.** The auxiliary-coarse-heads follow-up this motivated is
 `lepi-cond-shift` also landed: the conditional head is **0.6213**, worst of all four under shift as
 well as in-distribution — the only head whose two rankings agree.
 
+## RETRACTION (2026-08-06): the headline open-set claim
+
+[[2026-08-06-the-arcface-open-set-claim-was-a-rule-comparison]]. "0.601 → 0.9115" compared ArcFace's
+best scoring rule against the plain head's worst; best-vs-best is **0.9068 vs 0.8990**. Two open-set
+comparisons still quote `dev/052` numbers for the plain head and **must not be cited until re-scored**:
+C3 stratified novelty and the flemming shifted comparison (the latter is running). `paper/DRAFT.md`
+§4.3 needs rewriting — its framing ("the trade-off dissolves") does not survive.
+
 ## OPEN INCIDENT (2026-08-06): the cosine head's rows are not unit-norm
 
 [[2026-08-06-the-cosine-head-is-not-unit-norm]]. Confirmed on two checkpoints, mechanism unknown.
@@ -307,6 +315,7 @@ diagnostics run first because they decide which option is worth building.
 |---|---|---|
 | H0 | prototype singular spectrum | **DONE — option A is dead.** Rank 1035/1280 for 90 % energy; rank-512 truncation costs 0.35 pt but only halves the matrix, and anything aggressive destroys accuracy. **Prediction (300–600) wrong**: ArcFace pushes classes apart, so it *spends* dimensions. Also weakens option D. |
 | H1 | centroid retrieval vs the linear head | **ArcFace DONE: 0.9077 vs 0.9105, −0.29 pt** (predicted within 1 pt). Mean beats k-means and medoid. **Plain-head control not reportable** — its linear head scored 0.5589 against a known 0.9135, so the script is now instrumented (resolved checkpoint path, row norms, model-forward vs reimplementation agreement) and both are re-running. |
+| H3 | taxonomy-aware negatives at 1024 — **DONE: 0.8796**, recovering only **26 %** of what uniform lost (predicted 0.890–0.900, below range). So the loss is mostly about *how many* negatives, not *which* — which weakens the ANN hard-negative design and leaves proxy-free (option F) as the main survivor. |
 | H2 | sampled softmax — **DONE: degrades too fast.** 0.8940 / 0.8710 / 0.8315 at 34 % / 8.5 % / 2.1 % coverage; smooth in log-coverage with **no plateau**, so 0.1 % at 1 M is far past anything measured. Predictions wrong by ~2× at two of three points. Uniform sampling is the wrong sampler; hard negatives from the ANN index (which option E justifies) is the only surviving version, and it is a build not an experiment. ~~4096 / 1024 / 256 negatives~~ — the question that decides whether a 1 M head is *trainable* | **running** (12364227/8/9). With the matrix CPU-resident and only sampled rows gathered (21 MB/step), C fixes memory *and* compute — the original note wrongly assumed the matrix must sit on the GPU. Transfers pessimistically: 1024/12,041 is 8.5 % coverage vs 0.1 % at 1 M. Predicted 4096 within 0.5 pt, 1024 within 1.5, 256 losing >3. |
 | ~~H2-old~~ | ~~taxonomy-structured fixed codes~~ **de-prioritised** — the spectrum says the trained directions have little exploitable structure (rank 1035/1280), which is the assumption fixed codes rest on |
 | ~~H3~~ | ~~low-rank factorisation~~ **DEAD** — rank-512 costs only 0.35 pt but halves nothing that matters at 1 M; rank 128 costs 3.14 pt |

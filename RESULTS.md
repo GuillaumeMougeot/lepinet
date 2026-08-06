@@ -64,6 +64,8 @@ teacher. Re-running those two on the new baseline is the highest-value pending w
 package runs on **UCloud B200** and its checkpoints/results are not in that ledger, so this table is
 maintained by hand and kept exhaustive.
 
+**Open-set numbers are only comparable with the rule named.** The plain cosine head scores **0.6258** with max-logit and **0.8990** with entropy — same model, same images. Numbers produced by `dev/052` (max-logit only) are not comparable with `dev/061` numbers; see [`journal/2026-08-06-the-arcface-open-set-claim-was-a-rule-comparison.md`](journal/2026-08-06-the-arcface-open-set-claim-was-a-rule-comparison.md).
+
 **Name the shifted benchmark, and never compare across benchmarks.** Measured noise floors: full set
 **0.0069**, `probe` **0.0041**, `probe-heldout-species` **0.0052**. Macro-F1 does not decompose over
 subsets — the full set weights 486 species, `probe` weights 368 — so a model can tie on one and win

@@ -297,32 +297,43 @@ A ~23-point drop on data from a different source. Distillation into a small stud
 ~0.88 **regardless of teacher quality** (0.8786 from a 0.911 teacher; 0.8756 from a 0.9316 teacher),
 i.e. student capacity, not teacher accuracy, is the binding constraint.
 
-### 4.3 ArcFace × z-score: the trade-off dissolves (C3)
+### 4.3 What the angular margin actually does for open-set detection
 
-| head | species macro-F1 | **open-set AUROC** | known $\max\cos$ | novel $\max\cos$ |
-|---|---|---|---|---|
-| cosine (z-score, no margin) | **0.9110** | 0.601 | −9.27 ± 7.44 | −11.46 ± 6.82 |
-| ArcFace ($s\cos$, $m{=}0.3$) | 0.8784 | 0.732 | 26.00 ± 13.03 | 23.47 ± 10.84 |
-| **ArcFace × z-score** ($m{=}0.3$) | 0.9069 | **0.9115** | 32.58 ± 7.83 | 18.17 ± 6.38 |
+> **This section was rewritten on 2026-08-06 and its earlier claim is retracted.** It previously
+> reported that composing the margin with the z-score transform takes open-set AUROC from 0.601 to
+> 0.9115 for 0.4 points of accuracy. That compared the margin head's *best* scoring rule against the
+> plain head's *worst*: the plain head's 0.601 came from a max-logit-only script, and max-logit is
+> its weakest rule by 27 points. The corrected comparison is below.
 
-The composition beats **both** components on the axis each was meant to own: +31 points of AUROC over
-the plain cosine head for −0.4 points of accuracy, and +18 AUROC *and* +2.9 accuracy over plain
-ArcFace. The trade-off reported for margins is therefore not intrinsic — it is an artefact of
-discarding the calibrated transform.
+Scoring both heads with five rules on the logits each actually emits (§4.9):
 
-**Mechanism.** Measured on held-out images against each model's own prototypes:
+| rule | plain cosine | ArcFace × z-score |
+|---|---|---|
+| entropy | **0.8990** | 0.9047 |
+| max-softmax-probability | 0.8819 | 0.8953 |
+| top-2 margin | 0.8423 | 0.8979 |
+| max-logit | 0.6258 | **0.9068** |
+| energy | 0.6149 | 0.9064 |
+| **best** | **0.8990** | **0.9068** |
+| closed-set macro-F1 | **0.9135** | 0.9035 |
 
-| head | intra ($\cos$ to own) | inter (max $\cos$ to wrong) | margin | silhouette |
-|---|---|---|---|---|
-| cosine | −0.154 | −0.336 | 0.182 | 0.617 |
-| ArcFace × z-score | **+0.667** | 0.056 | **0.610** | 0.641 |
+**A plain cosine head detects unseen species at 0.899.** It was never near chance; it was being read
+with the wrong rule. Given both heads their best readout, the margin is worth **0.78 points of AUROC
+and costs 1.00 point of accuracy** — which is not the trade the earlier version of this section
+claimed, and arguably not a trade worth making on this benchmark.
 
-Silhouette barely moves: *separability was never the problem* — closed-set accuracy is equal. What
-changes is **absolute** angular position (Fig. 3, `figures/fig3_embedding_tsne.png`; the score
-distributions that carry the result are Fig. 4, `figures/fig4_openset_scores.png`). A novelty score $\max_j \cos\theta_j$ is only meaningful if
-"close to a known class" has an absolute scale; the plain head places everything near-orthogonal to
-everything (intra −0.15), so novel and known look alike. This is why a 2-D projection (UMAP/t-SNE) is
-the wrong visualisation: it is invariant to exactly the property that carries the effect.
+**What the margin does do is relocate the signal.** The plain head's best rule is *entropy* and its
+worst is *max-logit*, a 28.4-point spread; the margin head's best is *max-logit* and its spread is
+1.2 points. So the margin moves open-set information out of the **shape** of the logit distribution
+and into the **magnitude** of the top score, and in doing so makes the choice of readout nearly
+irrelevant. For a deployed system that insensitivity has real value — a score that does not depend on
+picking the right rule is one that can be shipped without tuning it — but it is a different and
+smaller claim than "the trade-off dissolves".
+
+*(A related artefact, reported because it was predicted backwards: the plain head's logits are pinned
+to the transform's clamp on 67 % of entries, and we expected this to destroy the shape its best rule
+reads. Scoring on pre-clamp values instead **lowers** entropy AUROC from 0.899 to 0.599. The clamp
+removes noise from the tail rather than signal.)*
 
 ### 4.4 Novelty is graded by taxonomic distance
 
