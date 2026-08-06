@@ -1,0 +1,58 @@
+# T2b: the control T2 demands. Classifier-only adaptation from a trunk trained WITHOUT
+# domain_aug -- i.e. a representation with no exposure to the target domain, real or imitated.
+#
+# T2 froze B1's trunk (which WAS trained with domain_aug: trap, three hand-authored corruptions
+# imitating a trap frame) and captured 83% of full self-training's gain. That leaves two readings:
+#
+#   (a) the features were already good enough, and adaptation is pure classifier re-fitting;
+#   (b) hand-authored augmentation had already done the representational work, and self-training
+#       only re-fits on top of it.
+#
+# They differ for a NEW deployment domain: under (a) a frozen trunk adapts anywhere, under (b) it
+# adapts only where someone already guessed the nuisances correctly.
+#
+# Starts from A1 (same recipe as B1, no domain_aug). A1's probe is 0.6437 against B1's 0.6912.
+# Prediction (committed): probe 0.700-0.730. Reasoning: reading (a) predicts it lands near T2's
+# 0.7572 since the classifier does the work either way; reading (b) predicts it stalls near A1's
+# 0.6437 + a little. I lean (b) at ~60%, having just been wrong in the optimistic direction on T2 --
+# so this range is deliberately between the two rather than under either.
+#
+# 20 M, 2 epochs, frozen backbone.
+version: 1.0
+desc: lepinet-T2b-clsonly-noaug-effnetv2s-ucloud
+train:
+  parquet_path: /work/lepinet/data/flemming/splits/combined_b3_5x.parquet
+  img_dir: /work/global_lepi/images
+  out_dir: /work/lepinet/data/ucloud_models
+  fold: '1'
+  min_img_per_spc: 50
+  num_workers: 256
+  model_name: lepinet-T2b-clsonly-noaug-effnetv2s-ucloud
+  model_arch_name: efficientnet_v2_s
+  head: arcface
+  nb_epochs: 2
+  base_lr: 0.001
+  batch_size: 64
+  aug_img_size: 460
+  img_size: 256
+  optimizer: muon
+  fp16: true
+  precision: bf16
+  schedule: one_cycle
+  warmup_epochs: 0.5
+  grad_clip: 5.0
+  oversample_power: 0.5
+  family_filter: []
+  aug_kwargs:
+    max_warp: 0.0
+    max_lighting: 0.0
+    p_lighting: 0.0
+    flip_vert: true
+    max_rotate: 15.0
+    max_zoom: 1.1
+  levels:
+  - speciesKey
+  arcface_zscore: true
+  arcface_scale: 30.0
+  arcface_margin:
+  - 0.3

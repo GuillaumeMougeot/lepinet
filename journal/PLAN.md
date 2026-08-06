@@ -331,7 +331,7 @@ quality, isolated. Labels drawn from `adapt` only; sampling spreads round-robin 
 groups, because a user labelling 500 images would not label 500 frames of one night. Anchors:
 pseudo-labels at 1x scored probe **0.7354**, and at 2 % **0.7706**.
 
-**T2 — integration strategy. RUNNING 2026-08-06** (12364671), framed as the exact parallel to L4/cRT:
+**T2 — integration strategy. DONE 2026-08-06: probe 0.7572 / held-out 0.7621 = 83 % / 89 % of full self-training, on a frozen trunk in 2 epochs.** Predicted 0.720–0.745, so wrong and too pessimistic; it corrects the mechanism claimed for B3. [[2026-08-06-adaptation-is-mostly-a-classifier-problem]]. Original framing, framed as the exact parallel to L4/cRT:
 *is domain adaptation a representation problem or a classifier problem?* Take B1's representation
 (no target data), freeze it, adapt only the classifier on the same pseudo-labels B3rep5x used.
 B1 = 0.6912, B3rep5x = 0.7706; predicted 0.720–0.745, i.e. about half the gain, because the

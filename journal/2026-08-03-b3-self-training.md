@@ -38,7 +38,11 @@ The pseudo-labels are B4's own predictions, so they contain **no new label infor
 training on them moves the shifted score by 4.58 pt. Three things are being supplied that the labels
 are not:
 
-**Target-domain pixels.** The model had never seen a trap image during training — only GBIF
+**Target-domain pixels.** *(Amended 2026-08-06 — this is largely wrong as a mechanism. Freezing the
+representation and adapting only the classifier captures **83 %** of this gain, so most of it is the
+classifier re-fitting to a shifted feature distribution rather than the representation learning
+anything from real pixels: [[2026-08-06-adaptation-is-mostly-a-classifier-problem]].)*
+The model had never seen a trap image during training — only GBIF
 specimens plus three hand-authored corruptions meant to imitate one (B1's `domain_aug: trap`). Real
 trap frames carry the true nuisance distribution: actual sensor noise, actual backgrounds, actual
 poses. B1 established that *naming* nuisances is worth ~4 pt ([[2026-07-30-domain-shift]]); B3
