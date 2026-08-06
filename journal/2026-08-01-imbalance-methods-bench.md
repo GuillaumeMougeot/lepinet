@@ -353,3 +353,35 @@ taxa more than to new images of familiar ones.
 **B7 is the best shifted model in the project** — probe 0.7796, held-out 0.7712 — at the cost of
 1.75 pt in-distribution against B6. It is still trained at the 6 % share the sweep showed is wrong;
 **B8** (the same recipe at 2 %) is running and should be better again.
+
+---
+
+## L4: oversampling's damage is in the representation, and cRT recovers it (2026-08-06)
+
+The 2×2 established that tail-reweighting trades robustness for accuracy monotonically, but not
+*where* the damage sits. cRT (Kang et al.) separates the two: train the representation on the natural
+distribution, then freeze it and rebalance only the classifier.
+
+| | in-distribution | probe |
+|---|---|---|
+| L0 — no oversampling at all | 0.8949 | 0.6445 |
+| baseline — oversampling throughout | 0.9135 | 0.6293 |
+| **L4 — cRT: L0's representation, classifier rebalanced** | **0.9068** | **0.6539** |
+
+**Both predictions correct** (in-distribution 0.905–0.915, probe holding near L0's 0.6445).
+
+**The trade is not intrinsic — it was an artefact of where the rebalancing was applied.** cRT
+recovers **+1.19 pt** of oversampling's +1.86 in-distribution gain while scoring **+2.46 pt above**
+the fully-oversampled baseline on probe — and, notably, *above L0 itself* by +0.94. Rebalancing the
+classifier costs nothing under shift; rebalancing the *data the backbone sees* is what cost 1.52 pt.
+
+That is a mechanism, not just an ordering: oversampling distorts the representation by
+over-weighting rare classes whose features are the most tied to their particular photographs. Freeze
+the representation and that channel is closed, while the classifier — which only has to re-scale
+decision boundaries — gets the benefit for free.
+
+**This changes the recommendation from "leave oversampling off" to "apply it to the classifier
+only".** The earlier advice was right about the default being wrong and wrong about the remedy.
+
+**L6 is running**: the same two-stage recipe at 198 M, where oversampling costs 2.88 pt on probe
+rather than 1.52, so cRT has twice as much to recover. Falsified if probe falls below 0.7456.

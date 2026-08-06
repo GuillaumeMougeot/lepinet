@@ -164,6 +164,7 @@ Six phases, in order. The engineering lessons each one produced are consolidated
 
 | opened | what broke | status |
 |---|---|---|
+| [08-06](2026-08-06-the-cosine-head-is-not-unit-norm.md) | The cosine head's prototype rows are **not** unit-norm, though the design says they are | **OPEN** — confirmed on two checkpoints (mean 1.081 and 1.767); mechanism unknown. Accuracy numbers unaffected; the z-score calibration argument and the ArcFace round-trip may be |
 | [07-16](2026-07-16-gpu-hang.md) | The training box hard-hung overnight | RESOLVED as far as the evidence allows — hardware |
 | [07-16](2026-07-16-venv-uv-sync-incident.md) | `uv sync` pruned the venv and broke torch | RESOLVED — **never run `uv sync` here**; known-good version set recorded |
 | [07-18](2026-07-18-autoregressive-fp16-instability.md) | The autoregressive head trained broken | RESOLVED — fp16 backbone overflow; the bf16 default fixes it |

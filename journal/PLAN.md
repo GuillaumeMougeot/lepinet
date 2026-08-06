@@ -1,6 +1,6 @@
 # PLAN — where we are, and what runs next
 
-**Kind:** living · **Last updated:** 2026-08-05 · **Supersedes:**
+**Kind:** living · **Last updated:** 2026-08-06 · **Supersedes:**
 [[2026-07-28-landscape-and-plan]]
 
 This is the one file in `journal/` that is meant to be true *today*. Everything else is a record of
@@ -268,6 +268,14 @@ than by citing a floor.** The auxiliary-coarse-heads follow-up this motivated is
 `lepi-cond-shift` also landed: the conditional head is **0.6213**, worst of all four under shift as
 well as in-distribution — the only head whose two rankings agree.
 
+## OPEN INCIDENT (2026-08-06): the cosine head's rows are not unit-norm
+
+[[2026-08-06-the-cosine-head-is-not-unit-norm]]. Confirmed on two checkpoints, mechanism unknown.
+Accuracy numbers are unaffected (all measured through the model's own forward), but the paper's
+z-score calibration argument and the ArcFace margin round-trip both assume a true cosine input.
+**Do not change the head until the mechanism is known** — every published number was produced with
+this behaviour. Next step is cheap: measure the clamp rate.
+
 ## Group H — scaling the head to 1 M species (owner-raised 2026-08-05)
 
 A 1280 x 1M prototype matrix is 1.28 B parameters / 5 GB, larger than the backbone. Options and
@@ -278,7 +286,7 @@ diagnostics run first because they decide which option is worth building.
 |---|---|---|
 | H0 | prototype singular spectrum | **DONE — option A is dead.** Rank 1035/1280 for 90 % energy; rank-512 truncation costs 0.35 pt but only halves the matrix, and anything aggressive destroys accuracy. **Prediction (300–600) wrong**: ArcFace pushes classes apart, so it *spends* dimensions. Also weakens option D. |
 | H1 | centroid retrieval vs the linear head | **ArcFace DONE: 0.9077 vs 0.9105, −0.29 pt** (predicted within 1 pt). Mean beats k-means and medoid. **Plain-head control not reportable** — its linear head scored 0.5589 against a known 0.9135, so the script is now instrumented (resolved checkpoint path, row norms, model-forward vs reimplementation agreement) and both are re-running. |
-| **H2** | **sampled softmax: 4096 / 1024 / 256 negatives** — the question that decides whether a 1 M head is *trainable* | **running** (12364227/8/9). With the matrix CPU-resident and only sampled rows gathered (21 MB/step), C fixes memory *and* compute — the original note wrongly assumed the matrix must sit on the GPU. Transfers pessimistically: 1024/12,041 is 8.5 % coverage vs 0.1 % at 1 M. Predicted 4096 within 0.5 pt, 1024 within 1.5, 256 losing >3. |
+| H2 | sampled softmax — **DONE: degrades too fast.** 0.8940 / 0.8710 / 0.8315 at 34 % / 8.5 % / 2.1 % coverage; smooth in log-coverage with **no plateau**, so 0.1 % at 1 M is far past anything measured. Predictions wrong by ~2× at two of three points. Uniform sampling is the wrong sampler; hard negatives from the ANN index (which option E justifies) is the only surviving version, and it is a build not an experiment. ~~4096 / 1024 / 256 negatives~~ — the question that decides whether a 1 M head is *trainable* | **running** (12364227/8/9). With the matrix CPU-resident and only sampled rows gathered (21 MB/step), C fixes memory *and* compute — the original note wrongly assumed the matrix must sit on the GPU. Transfers pessimistically: 1024/12,041 is 8.5 % coverage vs 0.1 % at 1 M. Predicted 4096 within 0.5 pt, 1024 within 1.5, 256 losing >3. |
 | ~~H2-old~~ | ~~taxonomy-structured fixed codes~~ **de-prioritised** — the spectrum says the trained directions have little exploitable structure (rank 1035/1280), which is the assumption fixed codes rest on |
 | ~~H3~~ | ~~low-rank factorisation~~ **DEAD** — rank-512 costs only 0.35 pt but halves nothing that matters at 1 M; rank 128 costs 3.14 pt |
 | H4 | proxy-free batch centroids + MoCo-style queue — no prototype matrix at all | **fallback only**, if H2 shows sampling fails. Bigger build, and the known failure mode (64 classes per batch = tiny negative set) is exactly what H2 is measuring |
@@ -339,7 +347,7 @@ Next, and now motivated by the curve rather than by the literature:
 | L5 | √-oversampling at 198 M | **DONE**: 0.9055 / **probe 0.7497** / 0.7641. Prediction correct in-distribution, beaten on probe. **Oversampling's robustness cost grows with scale** (−1.52 → −2.88), the one intervention the scale pattern does not absorb — it reshapes the data rather than constraining the objective. L5's probe is the project best. |
 
 | **L3** | **LDAM** (per-class margin ∝ n⁻¹ᐟ⁴) | A *fourth-root* softening — gentler than √-oversampling — so the monotone curve **predicts it should beat oversampling under shift**. An out-of-sample prediction to test, not a method to try. Needs per-class margin support in the loss. |
-| **L4** | cRT / decoupled | **running** (12364231). L0's representation + classifier retrained with oversampling, backbone frozen, 2 epochs. Predicted in-dist 0.905–0.915 with probe holding near L0's 0.6445 instead of falling to 0.6293. |
+| L4 | cRT / decoupled | **DONE: it works.** in-dist **0.9068** (+1.19 over L0), probe **0.6539** — *above* L0's 0.6445 and **+2.46 over the full-oversampling baseline's 0.6293**. Both predictions correct. **So oversampling's damage is in the representation, not the classifier**: rebalance the classifier alone and the accuracy gain arrives without the robustness cost. ~~running~~ L0's representation + classifier retrained with oversampling, backbone frozen, 2 epochs. Predicted in-dist 0.905–0.915 with probe holding near L0's 0.6445 instead of falling to 0.6293. |
 
 ## Group D — product (independent of A–C)
 

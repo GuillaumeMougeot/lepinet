@@ -296,3 +296,45 @@ exactly the signal uniform sampling loses.
 MoCo-style queue of recent embeddings, so no prototype matrix exists at all. Higher risk — with 64
 classes per batch the negative set is tiny, which is the known failure mode of contrastive losses at
 extreme class counts — and a much bigger build. Worth doing only if sampling is shown not to work.
+
+---
+
+## H2: sampled softmax degrades smoothly and too fast (2026-08-06)
+
+| negatives | coverage | species macro-F1 | vs control |
+|---|---|---|---|
+| full (12,041) — A1 control | 100 % | 0.9035 | — |
+| 4096 | 34.0 % | 0.8940 | −0.95 |
+| 1024 | 8.5 % | 0.8710 | −3.25 |
+| 256 | 2.1 % | 0.8315 | −7.20 |
+
+**Predicted 4096 within 0.5 pt, 1024 within 1.5, 256 losing more than 3. Two of three wrong**, and
+wrong in the same direction: the cost is roughly **double** what I expected at every point. Only the
+256 arm was predicted correctly, and for the wrong reason — it was supposed to be the cliff, and
+instead the curve has no cliff at all.
+
+**The shape is the finding.** The loss is smooth and roughly linear in log-coverage: halving coverage
+costs a fairly constant amount (34 % → 8.5 % → 2.1 % gives −0.95, −3.25, −7.20). There is no plateau
+where sampling is free, which is what the "just sample negatives" approach needs.
+
+**This is bad news for the 1 M case, and the extrapolation is the point.** The answer transfers
+pessimistically by construction: 1024 negatives here is 8.5 % coverage and costs 3.25 pt, while 1024
+of 1 M is **0.1 %** — an order of magnitude below the worst point measured, which already costs 7.2.
+Nothing in this curve suggests it flattens.
+
+**Why, mechanically.** The margin's job is to push the true class away from its *confusable*
+neighbours, and confusability is concentrated within a genus. With 12,041 species over 4,333 genera,
+a uniform draw of 1024 contains a given congener with probability ~8.5 %, so most steps apply the
+margin against classes the model was never going to confuse. The in-batch classes are always
+included, but a batch of 64 supplies only 64 of them.
+
+**What survives.** Uniform sampling is the wrong sampler, not necessarily the wrong idea — the
+obvious fix is to draw negatives from the *query's neighbourhood* using the ANN index that the
+centroid result (option E) already justifies. That restores exactly the signal uniform sampling
+loses, and it is now the only version of option C worth building. But it adds an index-maintenance
+loop to training, so it is no longer the cheap option it appeared to be.
+
+**Status of the head-scaling direction after this:** inference is solved (centroids, −0.29 pt).
+Training is not. Low-rank is dead, fixed codes are weakened by the same spectrum, uniform sampling
+degrades too fast, and what remains is hard-negative sampling with a maintained index, or option F
+(proxy-free, no matrix at all). Both are real builds rather than experiments.
