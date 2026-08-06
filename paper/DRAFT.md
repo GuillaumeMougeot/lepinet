@@ -123,6 +123,14 @@ Its derivative at $\cos\theta = 0$ is $\sqrt{d-2}$, i.e. the transform *is* a sc
 principled, dimension-aware one rather than a tuned constant. Logits are $Z(\cos\theta_j) + b_j$
 with $b_j$ frozen at 0.
 
+*Implementation note, stated because the derivation assumes it.* $Z$ is defined on $[-1,1]$ and is
+implemented with a clamp. Our prototype rows are constrained to unit norm by construction, but in
+trained checkpoints they drift (mean norm 1.08 for the margin head, 1.77 without it), so a fraction
+of pre-activations fall outside $[-1,1]$ and saturate. We measured the consequence: **no image has
+two saturated logits**, so the prediction is never affected, and the top-1 saturates on **0.37 %** of
+images for the margin head and none for the plain one. The accuracy results are therefore exact; the
+calibration argument of this section carries that 0.37 % exception.
+
 ### 2.3 ArcFace × z-score
 
 ArcFace [Deng et al. 2019] sharpens class boundaries by rotating the *true* class by a margin $m$

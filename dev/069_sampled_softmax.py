@@ -128,13 +128,34 @@ def main(argv):
     n_classes = df[levels[0]].nunique()
     sampler = None
     if "--taxonomy-negatives" in argv:
+        import pandas as pd
         import torch as _t
 
-        from lepinet.heads import build_class_spec
-        vocabs = {lv: sorted(df[lv].unique().tolist()) for lv in levels}
-        _c2i, masks = build_class_spec(df, vocabs, levels)
-        sampler = TaxonomyNegatives(_t.as_tensor(masks[0]), n_classes)
-        print("negatives: CONGENERS FIRST, then uniform fill")
+        # The taxonomy is NOT in `cfg.levels` -- these configs are species-only, so
+        # `build_class_spec` returns no parent masks and `masks[0]` raises IndexError. Read the
+        # species->genus map straight from the parquet instead, and align it to the *model's*
+        # species vocabulary, which train.py builds as sorted(unique) over the same filtered frame.
+        vocab = sorted(df[levels[0]].unique().tolist())
+        idx = {str(v): i for i, v in enumerate(vocab)}
+        raw = pd.read_parquet(cfg.parquet_path, columns=["speciesKey", "genusKey"])
+        raw = raw.dropna().astype(str).drop_duplicates("speciesKey")
+        g_vocab = {g: i for i, g in enumerate(sorted(raw["genusKey"].unique()))}
+        parent = _t.full((len(vocab),), -1, dtype=_t.long)
+        for s, g in zip(raw["speciesKey"], raw["genusKey"]):
+            if s in idx:
+                parent[idx[s]] = g_vocab[g]
+        n_orphan = int((parent < 0).sum())
+        if n_orphan:
+            # Give orphans their own singleton genus rather than a shared -1, which would make them
+            # all congeners of each other and quietly change what is being tested.
+            nxt = len(g_vocab)
+            for i in _t.where(parent < 0)[0].tolist():
+                parent[i] = nxt
+                nxt += 1
+            print(f"  {n_orphan} species had no genus in the parquet; each given a singleton genus")
+        sampler = TaxonomyNegatives(parent, n_classes)
+        print(f"negatives: CONGENERS FIRST, then uniform fill "
+              f"({len(g_vocab)} genera over {len(vocab)} species)")
     print(f"{n_classes} classes; sampling {n_neg} negatives per step "
           f"({100 * n_neg / n_classes:.1f}% coverage)")
     train_from_config(cfg_path, extra_cbs=[SampledSoftmax(n_neg, n_classes, sampler=sampler)])

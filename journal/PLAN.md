@@ -291,8 +291,11 @@ well as in-distribution — the only head whose two rankings agree.
 [[2026-08-06-the-cosine-head-is-not-unit-norm]]. Confirmed on two checkpoints, mechanism unknown.
 Accuracy numbers are unaffected (all measured through the model's own forward), but the paper's
 z-score calibration argument and the ArcFace margin round-trip both assume a true cosine input.
-**Do not change the head until the mechanism is known** — every published number was produced with
-this behaviour. Next step is cheap: measure the clamp rate.
+**Downgraded 2026-08-06: documentation problem, not correctness.** Clamp rate measured — zero ties,
+top-1 saturates on 0.37 % of images (ArcFace) and 0 % (plain), so **no accuracy number is affected**.
+The paper carries a footnote. Two follow-ups, both cheap: score novelty on pre-clamp values (the
+plain head pins 67 % of its logits to one floor, which may be why its open-set AUROC is 0.601), then
+find the mechanism. Still: do not change the head.
 
 ## Group H — scaling the head to 1 M species (owner-raised 2026-08-05)
 

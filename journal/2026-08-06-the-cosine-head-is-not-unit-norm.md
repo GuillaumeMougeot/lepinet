@@ -1,6 +1,9 @@
 # The cosine head's prototypes are not unit-norm, and the docs say they are
 
-**Kind:** incident · **Status:** **OPEN (2026-08-06).** Observation confirmed on two independently
+**Kind:** incident · **Status:** **OPEN (2026-08-06) — but downgraded.** The clamp rate is now
+measured and it is a **documentation problem, not a correctness one**: no ties, top-1 essentially
+never saturates, so no reported accuracy is affected. The mechanism is still unknown. Original
+status: Observation confirmed on two independently
 trained checkpoints; **mechanism not yet identified.** Written now rather than after diagnosis
 because the observation contradicts a documented invariant and several claims rest on it.
 
@@ -64,17 +67,63 @@ the plain head's (1.767). If the margin term implicitly penalises magnitude grow
 mechanism — and it would also explain why the two heads' prototype spectra differed so sharply
 before the fix.
 
+## The clamp rate, measured (2026-08-06)
+
+| | ArcFace × z-score | plain cosine |
+|---|---|---|
+| all logits clamped | **0.00003 %** | **67.4 %** |
+| **top-1** clamped | 0.37 % | **0 %** |
+| two or more clamped (argmax decided by index order) | **0** | **0** |
+| top-1 raw score, mean / max | 0.766 / 1.107 | −0.678 / 0.353 |
+| prototype row norms, mean / max | 1.081 / 1.711 | 1.767 / 2.374 |
+
+**Accuracy is provably unaffected on both heads.** The tie rate is exactly zero, so the argmax is
+never decided by index order, and the top-1 essentially never saturates. Every macro-F1 in this
+project stands as measured.
+
+**The two heads clamp at opposite ends, for different reasons, and that is the interesting part.**
+
+*ArcFace* clamps only at the **top**, on 0.37 % of images: its row norms are close to 1 (mean 1.081),
+so scores exceed +1 only for the very best matches. The consequence is narrow — for those images the
+reported confidence is capped, so the calibration claim has a 0.37 % exception.
+
+*Plain cosine* clamps **67 % of all logits at the bottom**. Its rows are much larger (mean 1.767) and
+its top-1 raw score never reaches 0.36, so the score distribution sits low: two thirds of classes
+fall below −1 and are pinned to an identical floor. That does not move the argmax, but it flattens
+the entire tail of the softmax into one value.
+
+**A hypothesis worth one cheap test, stated as a hypothesis.** The plain head's open-set AUROC is
+0.601, near chance, and the rules that read the *shape* of the logit vector (MSP, entropy) were the
+ones that behaved oddly for it. A distribution with 67 % of its mass pinned to a single floor value
+has had its shape destroyed. This may be *why* the plain head cannot do novelty detection — not
+because its embedding is poor, but because the transform discards the information the score needs.
+That is testable by scoring novelty on the **raw** pre-clamp values, which costs one rerun of
+`dev/061` and no training.
+
+### What this settles
+
+- **Documentation fix, not a rewrite.** The paper's §2.2 needs a footnote — the transform assumes a
+  cosine input, the rows are not unit, and the practical consequence is bounded at 0.37 % of top-1
+  confidences for the head we actually ship.
+- **The ArcFace round-trip is safe** in 99.6 % of cases, which is the number I could not put on it
+  yesterday.
+- **The mechanism is still unknown** and is now the lower-priority half. It costs a 6.4 h
+  instrumented run and buys an explanation rather than a correction, so it waits behind work that
+  changes results.
+
 ## Next
 
-1. **Measure the clamp rate**: what fraction of logits hit ±1 at inference, per head. Cheap, and it
-   bounds how much of the calibration argument is affected. If it is a fraction of a percent, this is
-   a documentation fix; if it is large, §2.2 and §2.3 need rewriting.
-2. **Find the mechanism** by instrumenting a real training run — log `original0` mean and std every
-   epoch. One short run answers it.
-3. **Then decide**: enforce the invariant (assert row norms in `forward`, or renormalise), or accept
-   learned magnitudes and *document* the head as a scaled-cosine classifier, updating the derivations
-   accordingly. The second may be the better science — a learned per-class magnitude is a real
-   modelling choice, and one head has evidently been benefiting from it.
+1. ~~**Measure the clamp rate**~~ **DONE — see above. It is a documentation problem.**
+2. **Score novelty on the pre-clamp values**, testing whether the plain head's near-chance open-set
+   AUROC is caused by 67 % of its logits being pinned to one floor. One rerun of `dev/061`, no
+   training.
+3. **Then find the mechanism** — instrument a real run and log `original0` mean/std per epoch. This
+   is now the *lowest*-priority piece: it buys an explanation rather than a correction, and it costs
+   6.4 h.
+4. **Then decide**: enforce the invariant (assert unit rows in `forward`), or accept learned
+   magnitudes and *document* the head as a scaled-cosine classifier with the derivations updated. The
+   second may be the better science — a learned per-class magnitude is a real modelling choice, and
+   the evidence is that both heads have been using one.
 
-**Not being done yet:** changing the head. Every published number in this project was produced with
-whatever this behaviour is, and changing it before it is understood would invalidate the lot.
+**Not being done:** changing the head. Every published number was produced with this behaviour, and
+changing it before it is understood would invalidate the lot for no measured gain.
