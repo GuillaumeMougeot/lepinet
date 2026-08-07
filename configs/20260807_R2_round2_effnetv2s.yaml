@@ -1,0 +1,45 @@
+# R2: the second adaptation round. Same frozen-trunk stage as F2, but the pseudo-labels come from
+# F2 itself (probe 0.7541) rather than B4 (0.7101).
+#
+# Self-training is normally iterated; this project has only ever done one round. If adaptation is
+# classifier re-fitting -- which T2 established -- a better labeller should be nearly free and should
+# eat into the 1.65 pt gap between the staged recipe (0.7541) and end-to-end training (0.7706).
+#
+# Prediction (committed): probe 0.758-0.772. Reasoning: B4's gate produced 98.15% accurate labels, so
+# there is only ~1.85 pt of label error to recover, and F2 is 4.4 pt better on this domain. Falsified
+# below 0.7582 (F2 + one floor) -- that would mean round 1 already extracted everything the labels
+# have, and iteration is not worth the wall-clock.
+version: 1.0
+desc: lepinet-R2-effnetv2s-ucloud
+train:
+  parquet_path: /work/lepinet/data/flemming/splits/combined_round2.parquet
+  img_dir: /work/global_lepi/images
+  out_dir: /work/lepinet/data/ucloud_models
+  fold: '1'
+  min_img_per_spc: 50
+  num_workers: 256
+  model_name: lepinet-R2-effnetv2s-ucloud
+  model_arch_name: efficientnet_v2_s
+  head: independent
+  nb_epochs: 2
+  base_lr: 0.001
+  batch_size: 64
+  aug_img_size: 460
+  img_size: 256
+  optimizer: muon
+  fp16: true
+  precision: fp16
+  schedule: one_cycle
+  warmup_epochs: 0.5
+  grad_clip: 5.0
+  oversample_power: 0.5
+  family_filter: []
+  aug_kwargs:
+    max_warp: 0.0
+    max_lighting: 0.0
+    p_lighting: 0.0
+    flip_vert: true
+    max_rotate: 15.0
+    max_zoom: 1.1
+  levels:
+  - speciesKey

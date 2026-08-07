@@ -31,7 +31,9 @@ operational text and were effectively unfindable.)*
 
 | job | what | predicted |
 |---|---|---|
-| **G1 → G2** | the 198 M confirmation of the staged recipe, reusing L5's representation: cRT then adaptation, both frozen-trunk 2-epoch stages (~1 h each) | G1 in-dist 0.912–0.920; G2 probe 0.780–0.800 with in-dist above 0.910. Compared to B8's end-to-end 0.9060 / 0.7798. **Falsified if G1's in-dist gain is under +0.5 pt.** |
+| **G1 → G2** | the 198 M confirmation | **G1 DONE: 0.9112**, +0.57 over L5 — predicted 0.912–0.920, a near-miss below, and the +0.5 pt falsification line cleared by 0.07. cRT confirms at scale **at half its 20 M strength**. G2 (adaptation) running; predicted probe 0.780–0.800. |
+| **F3** | one **joint** classifier stage (rebalanced *and* adapted) against F2's two sequential ones | Predicted a wash: in-dist 0.902–0.910, probe 0.745–0.760. Falsified if either axis lands a floor below F2, which would mean sequencing does real work. |
+| **R2** | **second self-training round** — re-label with F2 (0.7541) rather than B4 (0.7101) | Predicted probe 0.758–0.772; falsified below 0.7582, which would mean round 1 already extracted everything the labels hold. |
 
 ## 3. Ordered backlog — take the top unblocked item
 
@@ -41,8 +43,8 @@ A 5-epoch 20 M run is ≈6.4 h; a 2-epoch frozen-trunk stage is ≈30 min at 20 
 | # | work | GPU | why, and the gate |
 |---|---|---|---|
 | 1 | **collect G1 + G2**, journal, update `RESULTS.md` / `START-HERE` / paper | — | The last number the paper needs. |
-| 2 | **second adaptation round** — re-label with F2 rather than B4, adapt again on the frozen trunk | ~30 min | Targets exactly the 1.65 pt gap between the staged recipe and end-to-end training. Cheapest remaining gain. |
-| 3 | **joint vs sequential classifier stages** — one stage that is rebalanced *and* adapted, against F2's two | ~30 min | F2 ran them sequentially and they composed; whether one joint stage does better is untested and cheap. |
+| ~~2~~ | ~~second adaptation round~~ | — | **running as R2.** |
+| ~~3~~ | ~~joint vs sequential classifier stages~~ | — | **running as F3.** |
 | 4 | **paper: figures** | none | Deferred by the owner until the storyline settled. It has. The results now demand: the replication-share curve with transfer overlaid, the three-benchmark comparison, and the scoring-rule table. |
 | 5 | **P1 — BioCLIP-2 as a frozen trunk** | build + ~1 h | Owner-deferred, reviewer-inevitable. T2b is what makes it plausible. See §5. |
 | 6 | **H — the head-scaling build** | large | Only if the 1 M-species direction is pursued. See §4. |

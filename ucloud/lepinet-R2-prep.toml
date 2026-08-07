@@ -1,0 +1,34 @@
+# Round 2 of self-training: re-label the adapt split with F2 (probe 0.7541) instead of B4 (0.7101).
+# If adaptation is classifier re-fitting, a better labeller should give cleaner pseudo-labels and
+# close part of the 1.65 pt gap between the staged recipe and end-to-end training. The script
+# reports pseudo-label accuracy, so the improvement in LABEL quality is measured directly --
+# B4's gate gave 98.15%, and that number is the thing to beat.
+name = "lepinet-R2-prep"
+replicas = 1
+[application]
+name = "pytorch-te"
+version = "26.05"
+[product]
+id = "gpu-nvidia-b200-1-gpu"
+category = "gpu-nvidia-b200"
+provider = "ucloud"
+[time_allocation]
+hours = 3
+[sync]
+local = ".."
+remote = "/12347837/repos/lepinet"
+[setup]
+script = "setup-lepinet.sh"
+run = "python dev/065_pseudolabel.py --model '/work/lepinet/data/ucloud_models/*-lepinet-F2-capstone-effnetv2s-ucloud/*.pt' --adapt-parquet /work/lepinet/data/flemming/splits/flemming_adapt.parquet --img-dir /work/flemming/images --out /work/lepinet/data/flemming/splits/pseudo_round2.parquet --keep-frac 0.30 --img-size 256 --num-workers 32 && python dev/066_combine_pseudo.py --global-parquet /work/global_lepi/0032836-250426092105405_processing_metadata_postprocessed_quality_filtered.parquet --pseudo-parquet /work/lepinet/data/flemming/splits/pseudo_round2.parquet --out /work/lepinet/data/flemming/splits/combined_round2.parquet --min-img-per-spc 50 --target-frac 0.02"
+[schedule]
+auto_extend = "1h"
+max_time = "6h"
+[[resources]]
+type = "file"
+path = "/12347837/datasets/flemming"
+read_only = true
+
+[[resources]]
+type = "file"
+path = "/12347837/datasets/global_lepi"
+read_only = true
