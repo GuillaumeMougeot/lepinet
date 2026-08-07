@@ -22,6 +22,19 @@ import sys
 from pathlib import Path
 
 
+def _register_dev_heads():
+    """dev/-registered heads are invisible to the package unless dev/050 is imported. A stage-2 run
+    whose *source checkpoint* used one (e.g. `marginal_arcface`, inherited by every config derived
+    from F1) otherwise dies in `build_head` with "Unknown head"."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "dev050_heads", Path(__file__).with_name("050_hierarchical_heads.py"))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
 def main(argv):
     if len(argv) < 2 or argv[0] != "train":
         raise SystemExit(__doc__)
@@ -31,10 +44,19 @@ def main(argv):
     init_from = argv[argv.index("--init-from") + 1]
     freeze = "--freeze-body" in argv
 
+    heads = _register_dev_heads()
+
+    from lepinet.config import load_config
     from lepinet.train import train_from_config
 
-    print(f"stage 2: init_from={init_from}, freeze_body={freeze}")
-    train_from_config(cfg_path, init_from=init_from, freeze_body=freeze)
+    cfg, _ = load_config(cfg_path)
+    # `marginal_arcface` applies its margin inside forward and needs the batch labels, supplied by
+    # MarginContextCallback. Without it the head silently degrades to a plain MarginalHead -- no
+    # crash, no warning, and a stage that quietly does not match its own config.
+    cbs = [heads.MarginContextCallback()] if cfg.head == "marginal_arcface" else None
+    print(f"stage 2: init_from={init_from}, freeze_body={freeze}, head={cfg.head}"
+          + (" (+MarginContextCallback)" if cbs else ""))
+    train_from_config(cfg_path, init_from=init_from, freeze_body=freeze, extra_cbs=cbs)
 
 
 if __name__ == "__main__":

@@ -167,6 +167,17 @@ checkpoint it was not: the rows had drifted, `argmax(g_c * cos_c)` is not `argma
 known-0.9135 model scored 0.5589. Use the weight as the model uses it, and assert the row norms if
 the code depends on them being 1.
 
+**A `dev/`-registered head is invisible unless its module is imported.** `HEAD_REGISTRY` is the
+extension seam, but the entries only exist once `dev/050` has been executed — so any script that
+loads a checkpoint trained with one dies in `build_head` with "Unknown head". It has now bitten
+three separate scripts (`dev/061`, `dev/059`'s caller, `dev/070`), always at the moment a *previously
+unrelated* config inherited such a head. If a script can load an arbitrary checkpoint, it must
+register the dev heads.
+
+The silent version is worse than the crash: `marginal_arcface` applies its margin inside `forward`
+using labels supplied by a callback, so a runner that registers the head but forgets the callback
+gets a working model that quietly is not the one the config describes.
+
 **A cloned job spec inherits the wrong mounts.** `[[resources]]` is easy to overlook when a TOML is
 copied from a neighbouring job: the B3 combine step was cloned from a flemming-only job and died on a
 missing `/work/global_lepi` after five hours of the chain behind it sitting `BLOCKED`. When copying a
