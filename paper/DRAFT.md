@@ -335,29 +335,30 @@ to the transform's clamp on 67 % of entries, and we expected this to destroy the
 reads. Scoring on pre-clamp values instead **lowers** entropy AUROC from 0.899 to 0.599. The clamp
 removes noise from the tail rather than signal.)*
 
-### 4.4 Novelty is graded by taxonomic distance
+### 4.4 Novelty is graded by taxonomic distance — for any head
 
-Treating open-set detection as binary hides the structure that matters. Splitting novel taxa by how
-much of their lineage the model has seen (unfiltered catalogue; species below the training floor are
-genuinely unseen, in-domain):
+Novelty is not binary in a taxonomy. We stratify unseen species by how much of their lineage the
+model has seen: **near** (unseen species, known genus), **mid** (unseen genus, known family), **far**
+(unseen family). Each head is scored with its own best rule (§4.3, §4.9).
 
-| stratum | n | cosine | **ArcFace × z-score** |
+| stratum | n | plain cosine (entropy) | ArcFace × z-score (max-logit) |
 |---|---|---|---|
-| **near** — unseen species, known genus | 8,000 | 0.5606 | **0.8493** |
-| **mid** — unseen genus, known family | 8,000 | 0.6177 | **0.9094** |
-| **far** — unseen family | 399 | 0.6656 | **0.9411** |
+| near | 8,000 | 0.8527 | **0.8680** |
+| mid | 8,000 | **0.9342** | 0.9165 |
+| far | 399 | **0.9641** | 0.9444 |
 
-Both heads are **monotone in taxonomic distance**: the further a novel taxon lies from the training
-set, the easier it is to flag. The embedding therefore places unfamiliar taxa at a distance that
-tracks the taxonomy rather than merely displacing them, which is what makes a single scalar novelty
-score meaningful across ranks.
+**Both heads are monotone in taxonomic distance.** That is the result: the embedding places
+unfamiliar taxa at a distance that *tracks the taxonomy* rather than merely displacing them, and it
+does so whether or not an angular margin was used. It is therefore a property of the learned
+representation and the taxonomy, not of the margin.
 
-It also disciplines the headline. `far` is rare (399 images) while `near` — a new species in a
-familiar genus — is both the most common and the operationally decisive case, so a pooled AUROC is
-flattered by the easy strata. Stated honestly: **0.94 for a novel family, 0.85 for a novel species in
-a known genus** — against a plain cosine head that is near-chance (0.56) on precisely that case.
-ArcFace's advantage is uniform across strata (+27.6 to +29.2 points), i.e. it improves the entire
-difficulty range rather than only the easy end.
+The operational reading is the ordering, not the average. The easy stratum (`far`, an unseen family)
+is rare — 399 images — while the hard one (`near`, a new species in a familiar genus) is both the
+most common field case and 11–12 points worse. A single pooled AUROC is flattered by the easy strata.
+
+*(An earlier version of this section reported the plain head at 0.561/0.618/0.667, a 29–31 point
+deficit. Those numbers used max-logit, which §4.3 shows is that head's worst rule by 27 points. The
+corrected comparison above has the two heads within 2 points and trading places by stratum.)*
 
 ### 4.5 Open-set under domain shift
 

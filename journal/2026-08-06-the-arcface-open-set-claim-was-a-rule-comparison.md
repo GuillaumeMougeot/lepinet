@@ -79,10 +79,34 @@ So across both benchmarks, read correctly: ArcFace +0.78 in-distribution, −0.6
 two heads are equivalent for open-set detection**, and the plain head costs 1 pt less closed-set
 accuracy.
 
-**Still not re-measured:** C3's stratified novelty (near/mid/far), which used `dev/059`'s max-cosine
-score for both heads. That one is at least *symmetric* — the same rule for both — so it is not
-invalid in the way this was, but it measures max-cosine specifically and the plain head's number is
-its worst rule. Not citable as a head comparison until re-scored.
+**C3 stratified, re-scored (2026-08-07).** Each head with its own best rule, on the model's actual
+output:
+
+| stratum | plain (entropy) | ArcFace (max) | gap | *original claim* |
+|---|---|---|---|---|
+| near | 0.8527 | **0.8680** | +1.53 | *0.561 vs 0.849* |
+| mid | **0.9342** | 0.9165 | −1.77 | *0.618 vs 0.909* |
+| far | **0.9641** | 0.9444 | −1.97 | *0.667 vs 0.941* |
+| all novel | 0.8952 | 0.8935 | −0.17 | — |
+
+The original had ArcFace ahead by **29–31 points at every stratum**. Corrected, they are within 2
+points and **trade places** — ArcFace wins the hard `near` case, the plain head wins `mid` and `far`.
+
+**The actual C3 finding survives and is strengthened.** Both heads are monotone in taxonomic
+distance (plain 0.853 → 0.934 → 0.964; ArcFace 0.868 → 0.917 → 0.944). That was C3's contribution,
+and it is now shown to be a property of the *embedding and the taxonomy* rather than of the margin —
+a better result than the head comparison it was reported alongside.
+
+**This was the last non-citable open-set claim.** All three benchmarks — in-distribution, shifted,
+stratified — now tell the same story: the margin's apparent open-set advantage was a scoring-rule
+artefact on every one of them.
+
+**A second bug caught in the re-score itself.** The first attempt returned plain-head entropy at
+0.5667, which exactly matched the *pre-clamp* figure measured the day before. `dev/059` was computing
+`preclassification @ W.T` rather than the model's forward — monotone-equivalent for `max`, which is
+why the original numbers were fine, but not for `entropy` or `msp`. Fixed to call `model(x)`. The
+tell was the coincidence with a number from a different script; without that, a wrong result would
+have been published as a correction.
 
 **What survives, and it is not nothing:**
 
