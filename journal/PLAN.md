@@ -1,417 +1,163 @@
 # PLAN — where we are, and what runs next
 
-**Kind:** living · **Last updated:** 2026-08-06 · **Supersedes:**
-[[2026-07-28-landscape-and-plan]]
+**Kind:** living · **Last updated:** 2026-08-07 · **Supersedes:** [[2026-07-28-landscape-and-plan]]
 
-This is the one file in `journal/` that is meant to be true *today*. Everything else is a record of
-a moment. Keep the status board current; when a run lands, move its result into `RESULTS.md` and its
-reasoning into a dated entry.
+The one file in `journal/` meant to be true *today*. Everything else is a record of a moment.
+
+**Structure:** experiment groups first, because that is what people look for. Operating rules for the
+owner's absence are at the bottom. Completed groups keep one line and a link — the reasoning lives in
+the journal entry, not here. *(Restructured 2026-08-07: the groups had ended up below 220 lines of
+operational text and were effectively unfindable.)*
 
 ---
 
-## OWNER AWAY 2026-08-02 → ~2026-08-23
+## 1. Group index — the whole experiment programme at a glance
 
-The owner delegated the project for three weeks. Two things follow, and the second is the one that
-gets forgotten.
+| group | question | state |
+|---|---|---|
+| **A** | consolidate the architecture (single head × ArcFace × distillation) | **closed** |
+| **B** | robustness: augmentation, self-training, capacity | **closed** — B3 is the project's biggest lever |
+| **C** | open-set: abstention, stratified novelty, AUROC | **closed**, with two claims retracted |
+| **D** | product: bundle, calibration, small student | **closed** |
+| **E** | is open-set the binding constraint? | **closed — no**, the premise was a scoring-rule artefact |
+| **F** | the assembled recipe | **closed** — F2 composes |
+| **G** | the 198 M confirmation | **running** |
+| **H** | scaling the head to ~1 M species | **open** — inference solved, training not |
+| **L** | imbalanced learning | **closed** — cRT is the answer |
+| **P** | pretrained encoders (BioCLIP-2) as frozen trunks | **deferred** (owner) |
+| **T** | what target labels would have bought | **closed** |
 
-**The queue now survives unattended.** A cron entry ticks `ucloud q` every 5 minutes
-(`crontab -l`). Before this, the tick ran only inside a shell session, so `auto_extend` was inert and
-`--after` jobs never launched the moment the session ended — that failure already cost a 12-epoch run
-([[2026-07-30-ucloud-queue-daemon]]). **If jobs appear stuck, check the cron entry first.**
+## 2. Running now
 
-**An agent session is not a monitor.** Work advances only when a session is invoked. So the queue is
-loaded with runs that finish and self-evaluate (`--after` chains), and the backlog below is ordered
-so any future session can pick the top item without asking. Do not design work that needs a human
-mid-flight.
+| job | what | predicted |
+|---|---|---|
+| **G1 → G2** | the 198 M confirmation of the staged recipe, reusing L5's representation: cRT then adaptation, both frozen-trunk 2-epoch stages (~1 h each) | G1 in-dist 0.912–0.920; G2 probe 0.780–0.800 with in-dist above 0.910. Compared to B8's end-to-end 0.9060 / 0.7798. **Falsified if G1's in-dist gain is under +0.5 pt.** |
 
-**Never leave a single serial chain as the only queued work.** On 2026-08-03 the head of the B3
-chain failed at 14:00 and everything behind it went `BLOCKED`; the next scheduled pass was 19:13, so
-the GPU sat idle for five hours. The cron tick was working perfectly — a blocked dependency is
-*supposed* to stop the chain, and nothing was going to unblock it but a session.
-
-The fix is scheduling discipline, not more supervision, because more supervision is the thing that
-is not available:
-
-- **Always keep at least one independent job queued** alongside any chain, so a blocked chain costs
-  progress on one line of work rather than all of it.
-- **Run the whole arm of a sweep at once, not one at a time.** The cluster takes concurrent jobs and
-  the owner has said to use it freely, so a four-point replication sweep is four simultaneous jobs
-  and one wait, not four waits. Serialising independent work was costing days: on 2026-08-04 the
-  queue held a single running job while four independent ones were sitting in the backlog.
-- **Put the untested step at the head of its own chain**, or verify it before chaining hours behind
-  it. A one-off script that has never run is the most likely thing in the queue to fail.
-- **Prefer several short chains to one long one.** The blast radius of a failure is everything
-  downstream of it.
-- **Check `ucloud jobs list` before trusting `ucloud q logs`.** Logs are keyed by job *name*, so a
-  resubmitted job serves its predecessor's output until the new one produces any — which means a
-  re-run can appear to confirm the number it was launched to correct. `IN_QUEUE` in
-  `ucloud jobs list` means every readable log is stale.
-- **After relaunching a failed job, remove and re-submit its dependents.** `BLOCKED` is sticky
-  against the job *name*, so a fresh run under the same name leaves them frozen and they never
-  fire. `ucloud q ls | grep BLOCKED` should be empty; anything there is a chain that will complete
-  into silence. Caught on B6 after five hours ([[2026-07-30-ucloud-queue-daemon]]).
-
-### Ordered backlog — take the top unblocked item
+## 3. Ordered backlog — take the top unblocked item
 
 Costs from the measured formula: `images_per_epoch × epochs / 1100 img/s`, 5.04 M images/epoch.
-A 5-epoch 20 M run is ≈6.4 h; a 2-epoch frozen-trunk stage is ≈30 min.
-
-**Running now:** G1 → G2, the 198 M staged confirmation (chained, ~1 h per stage).
+A 5-epoch 20 M run is ≈6.4 h; a 2-epoch frozen-trunk stage is ≈30 min at 20 M, ≈1 h at 198 M.
 
 | # | work | GPU | why, and the gate |
 |---|---|---|---|
-| ~~1~~ | ~~collect F2~~ **DONE 2026-08-07: in-dist 0.9081 / probe 0.7541, both predictions correct, the two classifier stages compose.** [[2026-08-06-f2-capstone]]. C3r relaunched after a scale bug. | — | |
-| 2 | **paper §4: fold in T2/T2b, L4/cRT, F2** | none | The three most practical findings of the week are **not in the paper at all**. This is now the biggest gap, and it needs no GPU. |
-| 3 | **second self-training round** on the frozen trunk | ~30 min | If adaptation is classifier re-fitting, re-labelling with T2 rather than B4 should be nearly free and may close the remaining 17 %. |
-| ~~4~~ | **the 198 M confirmation** | **running** (G1 12365099 → G2) | Reuses L5's representation rather than training a new one, because the claim under test is the *classifier stages*: two frozen-trunk 2-epoch stages, ~1 h each, against a fresh 8 h run. Compared to B8's end-to-end 0.9060 / 0.7798. Predicted G1 in-dist 0.912–0.920, G2 probe 0.780–0.800. |
-| 5 | **P1 — BioCLIP-2 as a frozen trunk** | build + ~1 h | Owner-deferred but reviewer-inevitable; T2b is what makes it plausible. See Group P. |
-| ~~6~~ | ~~L3 — LDAM~~ **DE-PRIORITISED** — a representational fix in a project that has just shown the classifier is where these belong. cRT puts rebalancing in the right place already. |
-| ~~7~~ | ~~B2 — background suppression~~ **DE-PRIORITISED** — hand-authored representational fix; T2b showed adaptation subsumes that family (`domain_aug` fell +4.75 → +0.57). |
-| 8 | **C3b — hold out *common* taxa** | ~6.4 h + build | The controlled version of C3, whose novel species were all rare. |
+| 1 | **collect G1 + G2**, journal, update `RESULTS.md` / `START-HERE` / paper | — | The last number the paper needs. |
+| 2 | **second adaptation round** — re-label with F2 rather than B4, adapt again on the frozen trunk | ~30 min | Targets exactly the 1.65 pt gap between the staged recipe and end-to-end training. Cheapest remaining gain. |
+| 3 | **joint vs sequential classifier stages** — one stage that is rebalanced *and* adapted, against F2's two | ~30 min | F2 ran them sequentially and they composed; whether one joint stage does better is untested and cheap. |
+| 4 | **paper: figures** | none | Deferred by the owner until the storyline settled. It has. The results now demand: the replication-share curve with transfer overlaid, the three-benchmark comparison, and the scoring-rule table. |
+| 5 | **P1 — BioCLIP-2 as a frozen trunk** | build + ~1 h | Owner-deferred, reviewer-inevitable. T2b is what makes it plausible. See §5. |
+| 6 | **H — the head-scaling build** | large | Only if the 1 M-species direction is pursued. See §4. |
+| 7 | **C3b — hold out *common* taxa** | ~6.4 h + build | The controlled version of C3, whose novel species were all rare. |
 
-**Do not do** (each has a reason on record): re-tune the ArcFace margin (E1, cancelled — the loss it
-targeted was mostly a scoring-rule artifact); chase in-distribution accuracy; the autoregressive head;
-balanced softmax at other τ (the 2×2 settled it on both axes).
+**Do not do** — each closed for a reason, not for lack of time:
+
+- **LDAM, background suppression** — hand-authored *representational* fixes. T2b showed adaptation
+  subsumes that family (`domain_aug` fell +4.75 → +0.57 once the classifier was adapted).
+- **Re-tuning the ArcFace margin** — two cheap proxies failed for principled reasons, and the margin's
+  measured benefit is now ~0.8 pt.
+- **The autoregressive head** — lost by 20 pt.
+- **More in-distribution accuracy** — saturated; the shifted axis is where the headroom is.
+- **Uniform sampled softmax at scale** — H2/H3 measured no plateau, and taxonomy-aware negatives
+  recovered only 26 % of the loss.
+
+## 4. Group H — scaling the head to ~1 M species (open)
+
+A 1280 × 1M prototype matrix is 5.1 GB plus 10.2 GB of optimiser state. Options and costings in
+[[2026-08-05-scaling-the-head]].
+
+| | status |
+|---|---|
+| **inference** | **solved** — class centroids replace the trained matrix for **0.29 pt**; mean beats k-means and medoid |
+| low-rank factorisation | **dead** — rank 1035/1280; the margin *spends* dimensions |
+| fixed / taxonomy codes | weakened by the same spectrum |
+| uniform sampled softmax | **dead** — smooth, no plateau; 1024/1M is 0.1 % coverage |
+| hard-negative sampling | weakened — taxonomy-aware negatives recovered only 26 % (H3) |
+| **training** | **open.** Remaining candidate: proxy-free (EMA centroids as the classifier, no matrix at all) |
+
+## 5. Group P — pretrained encoders as trunks (deferred by the owner, 2026-08-06)
+
+T2b showed classifier-only adaptation works from a trunk that never saw the target domain in any
+form. If adaptation needs nothing from the representation, **it does not need *ours*.**
+
+| id | work | why |
+|---|---|---|
+| **P1** | BioCLIP-2 or another strong biological encoder as a frozen trunk, classifier fitted then adapted | Reviewers will ask. It tests whether the pipeline reduces to "take the best encoder, fit a cheap classifier, adapt it" — a stronger claim than anything about our backbone. |
+| P2 | the same with centroids instead of a trained classifier | No trained head at all: encoder + centroids + 2 epochs. |
+
+Prerequisites are small — an encoder that runs here, and `train(init_from=, freeze_body=)`, which
+exists.
+
+## 6. Closed groups — one line each
+
+Reasoning lives in the linked entries; numbers in [`../RESULTS.md`](../RESULTS.md).
+
+| group | outcome |
+|---|---|
+| **A** | Single head + ArcFace do **not** compose (−0.59 species, −1.0 coarse); A2 is the best in-distribution model at 0.9216; distillation's credit halved once A6 supplied the missing control. [[2026-07-30-does-arcface-compose-with-marginalisation]] |
+| **B** | Augmentation buys +4 pt under shift but closes only 17 % of the gap; **self-training is the largest lever** (+7.94 at the right dose) and costs nothing in-distribution. [[2026-08-03-b3-self-training]], [[2026-08-04-replication-sweep]] |
+| **C** | Rank abstention needs *conditional* thresholds (genus 0.487 on the hard subset vs 0.970 overall); novelty is monotone in taxonomic distance **for both heads**. Two claims retracted — see below. |
+| **D** | `lepinet bundle` emits names + calibration + thresholds; fastvit_sa12 is the shipped student at 0.8967. |
+| **E** | Premise dissolved: "every intervention that buys accuracy costs open-set" was an artefact of reading every model with `max-logit`. [[2026-08-01-the-scoring-rule-was-the-bug]] |
+| **F** | The staged recipe **composes**: one clean representation + 2 × 2 frozen-trunk epochs gives in-dist 0.9081 / probe 0.7541. [[2026-08-06-f2-capstone]] |
+| **L** | Tail-reweighting trades robustness for accuracy monotonically — **but cRT fixes it**: rebalance the classifier, not the data. [[2026-08-01-imbalance-methods-bench]] |
+| **T** | Self-training at its best dose beats **12,230 real labels**; adaptation is 83 % a classifier problem. [[2026-08-05-label-budget]], [[2026-08-06-adaptation-is-mostly-a-classifier-problem]] |
+
+### Retractions and open incidents
+
+- **The 31-pt open-set claim is retracted.** It compared ArcFace's best rule against the plain head's
+  worst; best-vs-best is 0.9068 vs 0.8990, and the plain head is 1 pt better on accuracy.
+  [[2026-08-06-the-arcface-open-set-claim-was-a-rule-comparison]]
+- **"Consistent by construction" is false** — `max` and `Σ` do not commute over a partition.
+  [[2026-08-01-marginalisation-is-not-argmax-consistent]]
+- **The cosine head's rows are not unit-norm** (mean 1.08 / 1.77). Downgraded to a documentation
+  problem: zero ties, top-1 saturates on 0.37 % of images, **no accuracy number is affected**.
+  Mechanism unknown; **do not change the head**. [[2026-08-06-the-cosine-head-is-not-unit-norm]]
+
+---
+
+## 7. Operating rules while the owner is away (2026-08-02 → ~2026-08-23)
+
+**The queue survives unattended.** A crontab entry ticks `ucloud q` every 5 minutes. Before that, the
+tick ran only inside a shell session, so `auto_extend` was inert and `--after` jobs never launched —
+which already cost a 12-epoch run ([[2026-07-30-ucloud-queue-daemon]]). **If jobs look stuck, check
+the cron entry first.**
+
+**An agent session is not a monitor.** Work advances only when a session is invoked, so the queue is
+loaded with runs that self-evaluate and the backlog above is ordered for pickup without asking.
+
+### Queue discipline, each rule learned by breaking it
+
+- **Keep an independent job queued alongside any chain.** A blocked chain should cost one line of
+  work, not all of it. (2026-08-03: five idle hours.)
+- **Run a whole sweep at once**, not one arm at a time. Four arms is four jobs and one wait.
+- **Put the untested step at the head of its own chain.** A script that has never run is the likeliest
+  thing in the queue to fail.
+- **After relaunching a failed job, remove and re-submit its dependents.** `BLOCKED` is sticky against
+  the job *name*, so a fresh run under the same name leaves them frozen for ever.
+- **Check `ucloud jobs list` before trusting `ucloud q logs`.** Logs are keyed by name, so a
+  resubmitted job serves its predecessor's output — a re-run can appear to confirm the number it was
+  launched to correct.
+- **A `dev/`-registered head is invisible unless `dev/050` is imported.** Three scripts have died on
+  this; the silent version (registering the head but not its callback) is worse than the crash.
 
 ### Scale discipline (owner, 2026-08-06)
 
-**Validate at 20 M; promote to 198 M once, at the end.** In five days I ran six 198 M trainings
-(F1, B6, B7, B8, L5, L6 — 42 GPU-hours) and the "model to ship" changed three times in three days.
-Every ordering question those runs answered was answerable at 20 M for a quarter of the cost; the
-198 M runs were confirmation dressed up as exploration.
-
-The owner's phrasing is the rule: *stick to 20 M until you have confidence in scaling up.* Concretely:
-
-- A new mechanism is tested at **20 M only**, however promising it looks.
-- 198 M is for **one** confirmation run, after the recipe has stopped moving at 20 M.
-- Note this cuts against a real finding — three interventions behaved *differently* at 198 M
-  ([[2026-08-02-f1-flagship]]) — so scale-transfer is a question worth asking. But it is one question
-  to ask deliberately at the end, not a reason to re-run everything twice.
-
-L6 (cRT at 198 M) was launched this morning in exactly the pattern being criticised. It failed on its
-own and has been **left dead rather than fixed**.
-
-### The check-in schedule, and its hard limit
-
-Scheduled in-session (2026-08-02): a **morning report at 06:22** the owner reads, plus queue-advance
-passes at **12:47** and **19:13** that stay silent unless something failed or a result contradicts a
-current claim. Three passes a day suits a 6.4 h run length — nothing waits more than one cycle.
-
-**These schedules are session-only and expire after 7 days.** They do *not* span the owner's absence,
-and no scheduling tool available here does. What actually persists is:
-
-- the **crontab** entry ticking `ucloud q` every 5 minutes — real cron, survives everything, and is
-  what keeps queued jobs launching and running jobs extending for the full three weeks;
-- **this file**, which is why the backlog above is ordered and gated. Any future session, started for
-  any reason, can read it and take the top item without asking.
-
-So the design is: *jobs* are durable, *supervision* is best-effort. Queue long chains rather than
-relying on being woken to launch the next thing.
+**Validate at 20 M; promote to 198 M once, at the end.** Six 198 M runs in five days (42 GPU-hours)
+while the "model to ship" changed three times — confirmation dressed as exploration. A new mechanism
+is tested at 20 M however promising; 198 M is one run after the recipe stops moving. The caveat is
+real — three interventions behaved *differently* at 198 M — but that is one question to ask
+deliberately at the end, not a licence to run everything twice.
 
 ### The paper
 
-Owner's direction (2026-08-04): **let the story unroll** — the 23rd is not a deadline for deciding
-the headline. Keep §4 current as runs land; do not freeze the spine early.
-
-- **Related work: drafted 2026-08-04** with every citation marked `[VERIFY]`. Written from memory, so
-  author lists, years and venues are unreliable — the owner will fact-check. What is *not* from
-  memory, and is the actual contribution of that section, is where each line says our result differs
-  from the cited literature.
-- **Figures: deliberately last.** Three exist unused in `paper/figures/` from the open-set work.
-  Building more before the storyline settles would mean drawing the wrong plots twice; the owner
-  agreed to defer. When the spine is fixed, the figures the results now demand are: the
-  replication-share curve with its transfer overlay, the three-benchmark comparison, and the
-  scale-boundary table as a plot.
-- **Keep §4 in step.** The drift 2026-08-01 → 08-04 (four results missing) happened because the
-  journal was treated as primary and the paper as downstream. Both are primary.
-
-### The 23 August final report
-
-The owner asked for a full account on their return. Recipe, so any session can produce it:
-
-1. Read every journal entry dated after 2026-08-02, plus this file and `RESULTS.md`.
-2. Cover, in this order: **what ran and what it scored**; **every committed prediction and whether it
-   held** (the journal convention makes this mechanical — each entry has one); **every claim
-   corrected or retracted**; **what the project now asserts that it did not on 2 August**; what is
-   still running; and the ordered backlog with its reasons.
-3. Include the dead ends and the failures. The owner asked to follow the *adventures and decisions*,
-   and a report of only the wins would misrepresent how the fortnight actually went — three of the
-   most useful results in the preceding week were corrections to earlier claims.
-4. Write it to `journal/2026-08-23-three-week-report.md`, commit, and give a condensed version in
-   chat.
-
-### What to tell the owner on their return
-
-The three findings that changed what the project claims, in order: **(1)** tail-reweighting trades
-robustness for accuracy monotonically, and the long-tail literature cannot see this because its
-benchmarks ship no shifted test set; **(2)** the open-set scoring rule does not transfer across model
-scale or head convention, which invalidated a headline and cancelled ~80 GPU-hours; **(3)** coarse
-*supervision* helps and coarse *parameters* hurt, so the original head question has two opposite
-answers and the standard protocol sees only one.
-
-Also flag, because they are corrections rather than results: "consistent by construction" was false
-and is retracted; the shared-τ explanation for logit adjustment's failure was a rationalisation and
-is retracted; runtime estimates in this file were 4× low until 2026-08-02.
-
----
-## Status board (keep this current)
-
-Updated 2026-08-01. `→` = chained eval. Every finished run must land in `RESULTS.md`.
-
-| id | run | state | result |
-|---|---|---|---|
-| A1 | effnetv2_s, single head + ArcFace × z-score | **DONE (triple)** | in-dist **0.9035** / shifted **0.6437** / **AUROC 0.9068**. Prediction falsified — the effects do *not* compose — but **A1 stands**: open-set survives the single head (0.9068 vs 0.9115 multi-head, vs ~0.601 plain). Interference is −0.59 species / −1.0 coarse, i.e. the margin damages the *marginalisation*. [[2026-07-30-does-arcface-compose-with-marginalisation]] |
-| **F1** | flagship: DINOv3-cnx-L + ArcFace × z-score + marginal supervision + trap aug | **DONE (triple)** | 0.9219 / **0.7103** / 0.8800. **Prediction falsified at its own line.** Identical to B4 on species+shift; marginal supervision's robustness gain is capacity-dependent and vanishes at 198 M, while its coarse gain grows (+0.40 genus / +0.74 family). [[2026-08-02-f1-flagship]] |
-| D2 | distil A2 → fastvit_sa12 | **DONE** | **0.8967** (predicted 0.895–0.905, correct), shifted 0.6301. Best small model in the project, +1.34 over b0. |
-| A2 | DINOv3-cnx-L, single head + ArcFace × z-score | **DONE (triple)** | in-dist **0.9216** / shifted 0.6616 / **AUROC 0.8298**. Best in-distribution — and **worst deployable**: loses to B1 (10× smaller) under shift and to A1 on novelty by 7.7 pt. **No longer the final-model candidate.** [[2026-07-31-best-model-is-not-the-best-model]] |
-| A3 | distil A2 → small single-head student | **DONE** | **0.8833** — best student yet (+0.47 over previous). Prediction (~0.88, <0.89) correct: **the ceiling claim survives**. A *worse* teacher (A2 0.9216) beat a better one (CnxV2-L 0.9316) by 0.77 pt, so teacher accuracy is near-irrelevant — target *shape* is what matters. |
-| A6 | single-head b0 from scratch — A3's missing control | **DONE** | **0.8789** (predicted 0.870–0.878, just above). Splits A3's win: **head +0.97 pt, distillation +0.44** — the architecture is worth more than the teacher at b0 scale, and distillation's credit halves |
-
-| A4 | **A1 + marginal supervision** (`marginal_arcface`) | **DONE** — open-set rescore rerunning | in-dist 0.8998 / **shifted 0.6616** / genus **0.9555** family **0.9725**. Shifted prediction **confirmed** (0.655–0.670); recovers **56 % genus / 87 % family** of the margin's damage, confirming the calibration mechanism. **Best shifted score of any effnetv2_s model, above the multi-head.** New recommended architecture. Marginal supervision is worth **+1.41 pt under shift** (2× the floor), recovering the single head's robustness deficit; every model in the table was trained without it, so every shifted number is a floor. Needs a head composing `marginal` with the ArcFace margin (needs a head that composes `marginal` with the ArcFace margin; the margin is applied loss-side today, but marginals are computed in the forward, so it needs a label path) | Two same-day results identified one mechanism from opposite sides: marginal supervision improves the summed posterior's calibration (+0.27/+0.39 coarse), the ArcFace margin degrades it (−1.15/−1.11 coarse). Composing them is the direct test. |
-| A5 | repeat of the current baseline | **DONE** | Species **0.9135 → 0.9135 (spread 0.0000)**; genus 0.0005; **family 0.0024**. Noise scales inversely with class count. Downgrades marginal supervision's family claim; everything else clears its floor by 4×+. [[2026-08-01-how-noisy-are-our-numbers]] |
-| A5b | shifted-metric spread | **DONE** | **0.0069** (0.6258 vs 0.6327, two trainings). ~10× the in-distribution floor, as the class-count argument predicts. Repeating the *eval* gives 0.0000, so all variance is from training. Every shifted claim ≥1.4 pt survives; nothing below ~0.7 pt is reportable. |
-| — | **coarse supervision vs coarse parameters** (marginal head, shifted) | **DONE** | Plain single head is **−2.10 pt** under shift vs the multi-head (while +0.25 in-distribution); marginal supervision recovers **+1.41** of it with no coarse parameters. **Coarse supervision buys shift robustness; coarse parameters do not.** [[2026-07-30-marginal-supervision]] | The project has never measured its seed-to-seed spread, yet routinely interprets 0.2–0.4 pt deltas. 1.5 h, and it retroactively sets the believability threshold for every sub-half-point row in `RESULTS.md`. |
-| B0 | more capacity / longer schedule | **deferred, deliberately.** The owner's 12-epoch DINOv3-cnx-L (job 12361261) expired mid-run — no queue daemon was ticking, see [[2026-07-30-ucloud-queue-daemon]]. Not restarted as-is: it trained the *old multi-head* architecture, so its number would land on a superseded baseline. Re-ask as **12 epochs of A2's config** once A2 lands, which isolates schedule length as the single factor. | — |
-| B1 | domain-mimicking augmentation (`domain_aug: trap`) | **DONE (triple)** | in-dist 0.8999 / shifted **0.6836** / AUROC 0.9010. **+3.99 pt under shift for −0.36 in-dist — an 11:1 trade, the best in the project.** But closes only **17 % of the gap**: H1 confirmed, the shift is only partly nuisance. [[2026-07-30-domain-shift]] |
-| B4 | A2 backbone + B1 augmentation | **DONE (triple)** | in-dist **0.9216** / shifted **0.7101** (project best) / AUROC 0.8132. Shifted prediction correct; **AUROC prediction wrong in the direction that confirms the mechanism**. Augmentation tax vanishes at scale; its shifted gain grows. [[2026-08-01-capacity-x-augmentation]] |
-| B2 | background suppression (flatbug-style) | not started | — |
-| B3 | self-training on unlabelled OOD images | not started — **now the highest-value untested rung** | B1 established the name-it-yourself ceiling at ~4 pt. B3 is the first rung that adapts to shifts nobody named. |
-| C1 | rank-abstention curves (no GPU) | **DONE** | 99.18% answered at 95.04% precision; **coarse ranks must be calibrated conditionally** — genus is 0.487 on the hard subset vs 0.970 overall |
-| C2 | OOD AUROC for A1/A2 | **DONE** | A1 **0.9068**, A2 **0.8298**. Open-set survives the single head — but **degrades with scale**, which no one predicted. |
-| C3 | hierarchical OOD (near/mid/far), unfiltered parquet | **DONE** | Monotone in taxonomic distance for both heads. ArcFace×z-score: near 0.849 / mid 0.909 / far 0.941; plain 0.561 / 0.618 / 0.666. The hard, common case (`near`) is where the plain head is ~chance. |
-| D1 | calibration + thresholds + names in `lepinet bundle` | not started | — |
-| D2 | distil into fastvit_sa12 instead of b0 | not started | — |
-| — | marginal supervision (owner's true hierarchical idea) | **DONE** | Species **unchanged** (0.9135 → 0.9135, H2 confirmed), but genus **+0.27** / family **+0.39** pp — free coarse accuracy, no parameters. Follow-up is `dev/058` on these predictions: does it help the *hard* subset, where conditional genus precision was 0.487? |
-
-Done and folded in: H4 (backbone × shift, 3.0× spread), margin tuning (abandoned, two principled
-failures), flemming OOD under shift (0.727 vs 0.574).
-
-## H4, answered first: backbone choice matters 3× more under shift
-
-| backbone | in-distribution | flemming (shifted) | gap |
-|---|---|---|---|
-| effnetv2_s (20 M) | 0.9110 | 0.6503 | 26.1 pt |
-| ConvNeXtV2-L (198 M) | **0.9316** | **0.7122** | 21.9 pt |
-| DINOv3-ConvNeXt-L (198 M) | 0.9311 | 0.7098 | 22.1 pt |
-| **spread** | **2.1 pt** | **6.2 pt** | **3.0×** |
-
-**H4 confirmed:** the in-distribution spread across backbones is 2.1 pt; under domain shift it is
-6.2 pt. Ranking backbones on the in-distribution benchmark therefore *understates* what the choice is
-worth by 3×, and every backbone comparison this project has run so far used the understating metric.
-
-**But the mechanism is scale, not self-supervision.** DINOv3-ConvNeXt (0.7098) and ConvNeXtV2-L
-(0.7122) are indistinguishable under shift despite completely different pretraining; the gain is
-20 M → 198 M. That is a useful narrowing: it predicts a *bigger* model helps robustness again, and
-that swapping pretraining at fixed size does not. It also means the cheapest robustness lever we
-have is simply **more capacity in the teacher**, which we already know how to run.
-
-**Consequence for evaluation policy:** from now on **every** model comparison reports the shifted
-score alongside the in-distribution one. It is a 12-minute eval and it changes conclusions.
-
-## The hygiene problem this plan fixes
-
-ArcFace, distillation and the backbone sweep were all run on the **old multi-head** baseline, which
-has since been superseded by single-head + marginalisation (0.9135 > 0.9110 at every level). So:
-
-- the **recommended architecture — single head + ArcFace × z-score + marginalisation — has never
-  been trained**; every claim about it is an inference from two separate experiments;
-- the distillation results used a multi-head teacher *and* a multi-head student;
-- nothing has been measured on the shifted benchmark except by accident.
-
-Group A below closes that gap. Nothing in Group B or C should be believed until A lands, because
-A changes what "the model" means.
-
----
-
-## Group A — consolidate the architecture (blocking; run first)
-
-| id | run | why | cost |
-|---|---|---|---|
-| **A1** | effnetv2_s, **single head + ArcFace × z-score**, m=0.3 | The recommended architecture, never trained. Tests whether the +0.25 pt from single-head and the +31 pt AUROC from ArcFace **compose**, or interfere. | ~1.5 h |
-| **A2** | DINOv3-ConvNeXt-L, single head + ArcFace × z-score, 6 ep @320 | The **candidate final model**: best backbone × best head. Also the teacher for A3. | ~18 h |
-| **A3** | distil A2 → small single-head student (T=1) | Re-runs distillation with both ends on the new architecture. | ~2 h |
-
-Each is evaluated three ways: in-distribution macro-F1 (all levels via marginals), **flemming**, and
-**open-set AUROC**. That triple is the new standard report.
-
-**Predictions.** A1 ≈ 0.906–0.915 F1 with AUROC ≥ 0.90 (the two effects are mechanistically
-independent — one changes which heads exist, the other the logit geometry — so they should compose).
-A2 ≈ 0.93 in-distribution, ~0.71 shifted, AUROC ≥ 0.90. A3 ≈ 0.88, i.e. still student-capacity-bound
-— **if A3 exceeds 0.89 my "the student is the ceiling" claim is wrong** and the whole distillation
-section needs revisiting.
-
-## Group B — robustness (the frontier; after A)
-
-| id | run | why |
-|---|---|---|
-| **B0** | ConvNeXtV2-**H** (660 M) or a longer ConvNeXtV2-L | H4 says scale buys robustness. Cheapest test of whether the 6.2 pt spread keeps growing. |
-| **B1** | domain-mimicking augmentation on A1 | Diagnostic: if it recovers most of 23 pt the gap is nuisance; if little, it is semantic. |
-| **B2** | background suppression (flatbug-style) | Removes a whole nameable *category*, not one nuisance dimension. Also a user-facing knob. |
-| **B3** | self-training on unlabelled flemming images | First genuinely general rung; uses OOD images, **no OOD labels**. Needs the grouped split. |
-
-Protocol for all of B (from [[2026-07-30-domain-shift]]): grouped splits by capture event, validation on
-**held-out species**, and the in-dist/shifted/AUROC triple every time.
-
-## Group C — finish the open-set story (paper-blocking)
-
-| id | work | why |
-|---|---|---|
-| **C1** | rank-abstention curves: per-rank thresholds → coverage/precision | The paper's §4.5 is empty and this is the *product* metric ("at 95 % species precision we cover X %, the rest resolve to genus"). Pure post-processing on saved predictions — no GPU. |
-| **C2** | OOD AUROC for A1/A2 | Confirms open-set survives the architecture change. |
-| **C3** | a larger novel set under shift | Today's flemming OOD has only 234 novel images (±0.03). Use the un-reconciled flemming_helsing OOD species, or hold out species from the trap data. |
-
-## Group E — open-set is now the binding constraint (Aug 1)
-
-Across the capacity × augmentation factorial, **every** intervention that bought accuracy cost
-open-set AUROC (0.9068 → 0.8132) and none traded the other way. Accuracy is no longer scarce;
-novelty detection is. These attack that axis directly.
-
-| id | work | why | cost |
-|---|---|---|---|
-| ~~E1~~ | ~~re-tune the ArcFace margin at 198 M~~ **CANCELLED** — E2 showed two thirds of the loss it targeted was a scoring-rule artifact, found in 5 minutes instead of the ~36 GPU-hours estimated (really closer to 80, see the runtime note above) | `m = 0.3` was chosen on a 20 M model; larger embeddings concentrate cosines differently, so the margin may simply be too small at scale. Cheapest hypothesis for the 8.8 pt. **Note this reverses the earlier decision to abandon margin tuning** — that was taken when the margin only had to justify itself in-distribution. | ~18 h ×2 |
-| **E2** | **DONE — `msp` beats `max-logit` by +6.1/+7.6 pt at 198 M.** Compare five OOD scoring rules (max / energy / msp / entropy / top-2 margin) on one forward pass — `dev/061` | Asks whether the 8.8 pt loss is in the *embedding* or in the *rule*. **Must run before E1**: if another rule reads the same embedding better, there is nothing to retune. *(The originally planned temperature scaling was dropped as vacuous — AUROC is a rank statistic and `max_logit/T` is monotone in `max_logit`, so T cannot change it. Verified in the script's self-test.)* | 4 × ~5 min, **running** |
-| **E3** | B3 (self-training) | Still the highest-value robustness rung. Note the framing has changed: with the rule fixed, open-set is **not** the binding constraint after all — the shifted axis is, where B4 leads at 0.7101 against an in-distribution 0.9216. | large |
-| **E4** | measure the **AUROC noise floor** | The capacity penalty is now 1.64 pt and no one knows the spread on this axis. Score the two baseline copies (A5 + original) with `dev/061`. | 2 × 5 min |
-
-## Closed: the multi-head's 0.69 pt shifted lead was not real
-
-M2 (a second marginal-supervision training) scored **0.6485** against draw 1's 0.6434 — mean 0.6460,
-own spread 0.0051, and the multi-head sits 0.0043 away. **Indistinguishable, by measurement rather
-than by citing a floor.** The auxiliary-coarse-heads follow-up this motivated is dropped.
-
-`lepi-cond-shift` also landed: the conditional head is **0.6213**, worst of all four under shift as
-well as in-distribution — the only head whose two rankings agree.
-
-## RETRACTION (2026-08-06): the headline open-set claim
-
-[[2026-08-06-the-arcface-open-set-claim-was-a-rule-comparison]]. "0.601 → 0.9115" compared ArcFace's
-best scoring rule against the plain head's worst; best-vs-best is **0.9068 vs 0.8990**. Two open-set
-comparisons still quote `dev/052` numbers for the plain head and **must not be cited until re-scored**:
-C3 stratified novelty and the flemming shifted comparison (the latter is running). `paper/DRAFT.md`
-§4.3 needs rewriting — its framing ("the trade-off dissolves") does not survive.
-
-## OPEN INCIDENT (2026-08-06): the cosine head's rows are not unit-norm
-
-[[2026-08-06-the-cosine-head-is-not-unit-norm]]. Confirmed on two checkpoints, mechanism unknown.
-Accuracy numbers are unaffected (all measured through the model's own forward), but the paper's
-z-score calibration argument and the ArcFace margin round-trip both assume a true cosine input.
-**Downgraded 2026-08-06: documentation problem, not correctness.** Clamp rate measured — zero ties,
-top-1 saturates on 0.37 % of images (ArcFace) and 0 % (plain), so **no accuracy number is affected**.
-The paper carries a footnote. Two follow-ups, both cheap: score novelty on pre-clamp values (the
-plain head pins 67 % of its logits to one floor, which may be why its open-set AUROC is 0.601), then
-find the mechanism. Still: do not change the head.
-
-## Group H — scaling the head to 1 M species (owner-raised 2026-08-05)
-
-A 1280 x 1M prototype matrix is 1.28 B parameters / 5 GB, larger than the backbone. Options and
-their costs are in [[2026-08-05-scaling-the-head]]. Nothing is committed yet — the two cheapest
-diagnostics run first because they decide which option is worth building.
-
-| id | work | state |
-|---|---|---|
-| H0 | prototype singular spectrum | **DONE — option A is dead.** Rank 1035/1280 for 90 % energy; rank-512 truncation costs 0.35 pt but only halves the matrix, and anything aggressive destroys accuracy. **Prediction (300–600) wrong**: ArcFace pushes classes apart, so it *spends* dimensions. Also weakens option D. |
-| H1 | centroid retrieval vs the linear head | **ArcFace DONE: 0.9077 vs 0.9105, −0.29 pt** (predicted within 1 pt). Mean beats k-means and medoid. **Plain-head control not reportable** — its linear head scored 0.5589 against a known 0.9135, so the script is now instrumented (resolved checkpoint path, row norms, model-forward vs reimplementation agreement) and both are re-running. |
-| H3 | taxonomy-aware negatives at 1024 — **DONE: 0.8796**, recovering only **26 %** of what uniform lost (predicted 0.890–0.900, below range). So the loss is mostly about *how many* negatives, not *which* — which weakens the ANN hard-negative design and leaves proxy-free (option F) as the main survivor. |
-| H2 | sampled softmax — **DONE: degrades too fast.** 0.8940 / 0.8710 / 0.8315 at 34 % / 8.5 % / 2.1 % coverage; smooth in log-coverage with **no plateau**, so 0.1 % at 1 M is far past anything measured. Predictions wrong by ~2× at two of three points. Uniform sampling is the wrong sampler; hard negatives from the ANN index (which option E justifies) is the only surviving version, and it is a build not an experiment. ~~4096 / 1024 / 256 negatives~~ — the question that decides whether a 1 M head is *trainable* | **running** (12364227/8/9). With the matrix CPU-resident and only sampled rows gathered (21 MB/step), C fixes memory *and* compute — the original note wrongly assumed the matrix must sit on the GPU. Transfers pessimistically: 1024/12,041 is 8.5 % coverage vs 0.1 % at 1 M. Predicted 4096 within 0.5 pt, 1024 within 1.5, 256 losing >3. |
-| ~~H2-old~~ | ~~taxonomy-structured fixed codes~~ **de-prioritised** — the spectrum says the trained directions have little exploitable structure (rank 1035/1280), which is the assumption fixed codes rest on |
-| ~~H3~~ | ~~low-rank factorisation~~ **DEAD** — rank-512 costs only 0.35 pt but halves nothing that matters at 1 M; rank 128 costs 3.14 pt |
-| H4 | proxy-free batch centroids + MoCo-style queue — no prototype matrix at all | **fallback only**, if H2 shows sampling fails. Bigger build, and the known failure mode (64 classes per batch = tiny negative set) is exactly what H2 is measuring |
-
-**Not priorities, with reasons:** hierarchical/two-stage softmax (conditioning already lost 2.9 pt
-here and is worst-of-four under shift); sampled softmax (fixes compute, not memory, and uniform
-negatives undercut the margin).
-
-## Group P — pretrained encoders as trunks (owner-raised 2026-08-06, deferred)
-
-T2b showed classifier-only adaptation works from a trunk that never saw the target domain in any
-form. If adaptation needs nothing from the representation, **it does not need *our* representation.**
-
-| id | work | why |
-|---|---|---|
-| **P1** | **BioCLIP-2 (or another strong biological encoder) as a frozen trunk**, classifier fitted on our labels, then classifier-only adapted to the trap domain | The owner's point, and reviewers will ask it regardless. It tests whether the whole pipeline reduces to "take the best available encoder, fit a cheap classifier, adapt the classifier" — which would be a much stronger and more general claim than anything about our particular backbone. |
-| P2 | the same with the centroid classifier instead of a trained one | Composes with the head-scaling result: no trained head at all, just an encoder plus centroids plus 2 epochs of adaptation. |
-
-**Deferred by the owner ("we'll do that later")** — recorded here so it is not lost. Prerequisites are
-small: an encoder that runs in this environment, and a `--frozen-encoder` path, most of which
-`train(init_from=, freeze_body=)` already provides.
-
-## Group T — what would target labels have bought? (new section, owner-requested 2026-08-04)
-
-The robustness result is label-free, so the reviewer question is *"how many real labels would that
-have taken, and what would they have cost?"* — better answered than deflected. Three axes; the first
-is running.
-
-**T1 — the label budget curve. DONE 2026-08-05:** real labels 0.7060 / 0.7196 / 0.7568 at N = 500 / 2500 / 12230. Real beats machine by +2.14 pt at matched size; **self-training at 2 % beats 12,230 real labels** (0.7706). The held-out column is uninterpretable for these arms (the 75 held-out species are absent from `adapt`, so every budget has zero labels for them). [[2026-08-05-label-budget]]
-
-*Original design:* Real trap labels at N = 500 / 2500 / 12230, merged at their natural
-share with no replication, so each arm matches the **1x self-training arm exactly**. At N = 12230 the
-only difference from that arm is that the labels are correct rather than 98.15 % correct — label
-quality, isolated. Labels drawn from `adapt` only; sampling spreads round-robin over (trap, night)
-groups, because a user labelling 500 images would not label 500 frames of one night. Anchors:
-pseudo-labels at 1x scored probe **0.7354**, and at 2 % **0.7706**.
-
-**T2 — integration strategy. DONE 2026-08-06: probe 0.7572 / held-out 0.7621 = 83 % / 89 % of full self-training, on a frozen trunk in 2 epochs.** Predicted 0.720–0.745, so wrong and too pessimistic; it corrects the mechanism claimed for B3. [[2026-08-06-adaptation-is-mostly-a-classifier-problem]]. Original framing, framed as the exact parallel to L4/cRT:
-*is domain adaptation a representation problem or a classifier problem?* Take B1's representation
-(no target data), freeze it, adapt only the classifier on the same pseudo-labels B3rep5x used.
-B1 = 0.6912, B3rep5x = 0.7706; predicted 0.720–0.745, i.e. about half the gain, because the
-self-training win was attributed to target *pixels* teaching the representation a region it had never
-seen and a frozen trunk cannot learn that. **If it lands above 0.760 that attribution is wrong** —
-and adaptation on a frozen trunk in 2 epochs is a far better deployment story than retraining.
-
-*Original design:* Full mixed training
-versus fine-tuning from the GBIF model versus fine-tuning with GBIF replay. `lepinet` has no
-`init_from` option, so fine-tuning needs one — a contained change to `train()`. Note the forgetting
-worry is **already answered**: B3 scored 0.9003 in-distribution against B1's 0.8999, so mixing target
-data at these shares costs nothing on the source task.
-
-**T3 — the cost side.** Labelling effort is the axis a reviewer will actually weigh, and it is not a
-GPU experiment: an estimate of seconds-per-image from the flemming annotation process, multiplied by
-the budget the curve says is needed, next to the zero-cost self-training result.
-
-## Group L — imbalanced learning, benchmarked on the triple (Aug 1)
-
-A 2×2 of resampling × loss reweighting, from [[2026-08-01-imbalance-methods-bench]]. The framing
-that makes it worth running: **balanced softmax is logit adjustment at τ=1**, which this project
-already rejected — but it lost because one shared τ spanned three level distributions, and the
-single-head architecture supervises only one. Separately, τ-normalisation is *already in the model*
-(the cosine head's unit-norm prototypes), so only frequency-reweighting methods have room to act.
-
-| id | run | state |
-|---|---|---|
-| **L0** | no oversampling, no balanced softmax — the control nobody ran | **DONE**: 0.8949 in-dist / **0.6445 shifted**. Oversampling is **+1.86 in-dist and −1.52 shifted** — an accuracy/robustness trade, the 4th inversion |
-| **L1** | balanced softmax instead of oversampling | **DONE**: 0.8970 in-dist / **0.5726 shifted**. **Prediction falsified** — the shared-τ explanation for logit adjustment's original failure is retracted |
-| **L2** | both | **DONE**: 0.8689 / **0.5492** — worse than every other cell. They double-count, as predicted |
-| — | √-oversampling alone | **have it: 0.9135** |
-
-**Result: shifted accuracy is monotone in tail-reweighting aggressiveness** — 0.6445 (none) >
-0.6293 (√-oversampling) > 0.5726 (balanced softmax) > 0.5492 (both), a **9.5 pt spread** against a
-0.69 pt floor, while the in-distribution column does not order at all. The predicted ordering was
-committed before the runs and came back exactly.
-
-Next, and now motivated by the curve rather than by the literature:
-
-| id | run | why |
-|---|---|---|
-| L5 | √-oversampling at 198 M | **DONE**: 0.9055 / **probe 0.7497** / 0.7641. Prediction correct in-distribution, beaten on probe. **Oversampling's robustness cost grows with scale** (−1.52 → −2.88), the one intervention the scale pattern does not absorb — it reshapes the data rather than constraining the objective. L5's probe is the project best. |
-
-| **L3** | **LDAM** (per-class margin ∝ n⁻¹ᐟ⁴) | A *fourth-root* softening — gentler than √-oversampling — so the monotone curve **predicts it should beat oversampling under shift**. An out-of-sample prediction to test, not a method to try. Needs per-class margin support in the loss. |
-| L4 | cRT / decoupled | **DONE: it works.** in-dist **0.9068** (+1.19 over L0), probe **0.6539** — *above* L0's 0.6445 and **+2.46 over the full-oversampling baseline's 0.6293**. Both predictions correct. **So oversampling's damage is in the representation, not the classifier**: rebalance the classifier alone and the accuracy gain arrives without the robustness cost. ~~running~~ L0's representation + classifier retrained with oversampling, backbone frozen, 2 epochs. Predicted in-dist 0.905–0.915 with probe holding near L0's 0.6445 instead of falling to 0.6293. |
-
-## Group D — product (independent of A–C)
-
-| id | work |
-|---|---|
-| **D1** | calibration + thresholds + names into `lepinet bundle`, so a release is complete |
-| **D2** | distil into **fastvit_sa12** (10.6 M, 0.892 in the old sweep) rather than b0 (0.876) — b0 is the binding constraint on the shipped model |
-
-## What is *not* worth doing
-
-- **Tuning ArcFace `m`.** Two attempts at a cheap proxy failed for principled reasons; m=0.3 already
-  gives 0.9115, so this is a refinement needing full runs. Revisit only if A1/A2 disappoint.
-- **The autoregressive head.** Lost by 20 pt; nothing has changed that would rescue it.
-- **More in-distribution accuracy chasing.** Saturated at ~0.93 while the shifted number is ~0.71.
-
-## Running order
-
-A1 + A2 + A3 in parallel now → C1 while they run (no GPU) → B0/B1 → B2/B3 → D. Group A is the gate:
-until it lands, "the model" is ambiguous and every downstream number inherits that ambiguity.
+Owner's direction: **let the story unroll**; the 23rd is not a deadline for the headline. Related work
+is drafted with every citation marked `[VERIFY]` (written from memory — the owner fact-checks).
+Figures were deferred until the storyline settled; it now has, so they are backlog item 4. **Keep §4
+in step with the journal** — it drifted twice by treating the journal as primary.
+
+### The 23 August report
+
+Read every journal entry after 2026-08-02 plus this file and `RESULTS.md`. Cover: what ran and what
+it scored; **every committed prediction and whether it held**; **every claim corrected or retracted**;
+what the project now asserts that it did not on 2 August; what is still running; and the backlog with
+reasons. **Include the dead ends** — four of the most useful results this fortnight were corrections.
+Write to `journal/2026-08-23-three-week-report.md` and give a condensed version in chat.

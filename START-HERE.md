@@ -21,7 +21,7 @@ a moth or butterfly, over ~12,000 species with a heavy long tail.
 | **Know why a setting is what it is** *(before you change it)* | [`docs/design-decisions.md`](docs/design-decisions.md) | The ladder from 0.8297 to 0.9152, each recipe choice with what it was worth, and the things that didn't pay |
 | **See what has been tried and what it scored** | [`RESULTS.md`](RESULTS.md) | Every run, its delta vs baseline, and its test score (+ a hand-kept table of the UCloud runs) |
 | **Understand *why* decisions were made** | [`journal/README.md`](journal/README.md) | The master doc for *why*: how the project evolved in six phases, plus an index of every entry by kind |
-| **Know what is running right now** | [`journal/PLAN.md`](journal/PLAN.md) | The status board of every run in flight and the ordered backlog — the one file meant to be true *today* |
+| **Know what is running right now** | [`journal/PLAN.md`](journal/PLAN.md) | The status board: **§1 indexes every experiment group A–T with its state**, §2 what is running, §3 the ordered backlog, §6 one line per closed group. The one file meant to be true *today* |
 | **Run experiments** | [`dev/README.md`](dev/README.md) *(if present)* / the numbered `dev/0NN_*.py` scripts | One script per experiment, importing the `lepinet` package |
 | **Run on the GPU cluster** | [`ucloud/`](ucloud/) | One TOML per job (train / eval / benchmark), plus the shared `setup-lepinet.sh` |
 | **See the phone app** | the companion repo `lepinet-app` + [`journal/2026-07-20-lepi-app-compression.md`](journal/2026-07-20-lepi-app-compression.md) | The browser PWA that consumes an exported bundle |
@@ -153,7 +153,7 @@ START-HERE.md          <- you are here: the map
 ├── paper/DRAFT.md     <- the scientific claims, stated formally
 ├── journal/           <- WHY, as it happened: one entry per question, dated, negative results kept
 │   ├── README.md      <- the master doc: how the project evolved + an index by kind
-│   ├── PLAN.md        <- LIVING: what is running right now, and what runs next
+│   ├── PLAN.md        <- LIVING: the experiment-group index (A-T), what is running, the backlog
 │   └── DIRECTIONS.md  <- LIVING: the research strategy
 ├── RESULTS.md         <- WHAT it scored (the numbers)
 └── tests/             <- what must keep working (runs on CPU, no dataset needed)
