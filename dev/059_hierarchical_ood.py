@@ -72,14 +72,17 @@ def novelty_scores(model, dls, df, device, num_workers=32, rule="max"):
     nw = num_workers if num_workers is not None else dl_num_workers(dls.train)
     dl = dls.test_dl(df, num_workers=nw)
     print(f"  dataloader: num_workers={nw}, batches={len(dl)}, rule={rule}")
-    body, head = model[0], model[1].head
     model.to(device).eval()
-    w = head.layers[0].weight.detach().to(device).float()   # as the model uses it
     out = []
     for batch in dl:
-        feats = body(batch[0].to(device))
-        pooled = _F.adaptive_avg_pool2d(feats, 1).flatten(1) if feats.ndim == 4 else feats
-        z = head.preclassification(pooled.float()) @ w.T
+        # The model's OWN forward, not a reimplementation of it. `preclassification @ W.T` gives the
+        # raw pre-clamp score; the head emits `cosine_to_zscore(that)`, which is monotone -- so `max`
+        # is unaffected but `entropy`/`msp`/`margin` are NOT, and the clamp inside that transform is
+        # worth +30 pt to entropy on the plain head
+        # (journal/2026-08-06-the-arcface-open-set-claim-was-a-rule-comparison.md). Scoring the raw
+        # values silently answers a different question.
+        logits = model(batch[0].to(device))
+        z = (logits[0] if isinstance(logits, (list, tuple)) else logits).float()
         if rule == "max":
             s = z.max(1).values
         elif rule == "msp":

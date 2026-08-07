@@ -56,17 +56,18 @@ is not available:
 Costs from the measured formula: `images_per_epoch × epochs / 1100 img/s`, 5.04 M images/epoch.
 A 5-epoch 20 M run is ≈6.4 h; a 2-epoch frozen-trunk stage is ≈30 min.
 
-**Running now:** F2 (the capstone, below) and the C3 re-score.
+**Running now:** the C3 re-score (relaunched — the first attempt scored pre-clamp values, which is
+the wrong scale for every rule but `max`).
 
 | # | work | GPU | why, and the gate |
 |---|---|---|---|
-| 1 | **collect F2 + C3r**, journal, update `RESULTS.md`/`START-HERE`/paper | — | F2 is the paper's punchline; C3r closes the last non-citable open-set claim. |
+| ~~1~~ | ~~collect F2~~ **DONE 2026-08-07: in-dist 0.9081 / probe 0.7541, both predictions correct, the two classifier stages compose.** [[2026-08-06-f2-capstone]]. C3r relaunched after a scale bug. | — | |
 | 2 | **paper §4: fold in T2/T2b, L4/cRT, F2** | none | The three most practical findings of the week are **not in the paper at all**. This is now the biggest gap, and it needs no GPU. |
 | 3 | **second self-training round** on the frozen trunk | ~30 min | If adaptation is classifier re-fitting, re-labelling with T2 rather than B4 should be nearly free and may close the remaining 17 %. |
-| 4 | **the 198 M confirmation, once** | ~8 h | Only after F2 settles the recipe. Per the scale discipline: one run, at the end, not per mechanism. |
+| 4 | **the 198 M confirmation, once** | ~8 h | **Now unblocked** — F2 settled the recipe, which was the condition. This is the run the scale discipline reserved. |
 | 5 | **P1 — BioCLIP-2 as a frozen trunk** | build + ~1 h | Owner-deferred but reviewer-inevitable; T2b is what makes it plausible. See Group P. |
-| 6 | **L3 — LDAM** | ~6.4 h + build | The monotone curve predicts a fourth-root margin beats √-oversampling under shift. Weakened by cRT: if the fix is "rebalance the classifier only", LDAM's placement in the loss is the wrong end. |
-| 7 | **B2 — background suppression** | ~6.4 h + build | Weakened by T2b for the same reason as `domain_aug`: another hand-authored representational fix, and adaptation appears to subsume that whole family. |
+| ~~6~~ | ~~L3 — LDAM~~ **DE-PRIORITISED** — a representational fix in a project that has just shown the classifier is where these belong. cRT puts rebalancing in the right place already. |
+| ~~7~~ | ~~B2 — background suppression~~ **DE-PRIORITISED** — hand-authored representational fix; T2b showed adaptation subsumes that family (`domain_aug` fell +4.75 → +0.57). |
 | 8 | **C3b — hold out *common* taxa** | ~6.4 h + build | The controlled version of C3, whose novel species were all rare. |
 
 **Do not do** (each has a reason on record): re-tune the ArcFace margin (E1, cancelled — the loss it

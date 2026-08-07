@@ -604,16 +604,85 @@ angular margin *pushes classes apart*, so it spends dimensions rather than econo
 margin and low-rank compression want opposite things** — a trade-off worth stating for anyone
 combining metric learning with extreme classification.
 
+### 4.13 Almost everything that matters is a classifier-stage concern
+
+The results of §4.1, §4.x (resampling), §4.11 and §4.12 were obtained separately and answer different
+questions. Placed together they say the same thing, and it is the strongest through-line we have.
+
+**Coarse supervision.** Per-level classifier *parameters* hurt (§4.1); the per-level *losses* help,
+and only visibly off the training distribution.
+
+**Long-tail resampling.** Applied to the data the backbone sees, square-root oversampling buys 1.9
+points in-distribution and costs 2.9 under source shift. Applied only to a classifier retrained on a
+frozen representation (cRT; Kang et al. [VERIFY]), it recovers **+1.19** of the in-distribution gain
+while scoring **+2.46 above** the fully-resampled model externally. The accuracy/robustness trade of
+§4.x is therefore not intrinsic — it is an artefact of where the rebalancing is applied.
+
+**Domain adaptation.** Freezing the representation and adapting only the classifier for 2 epochs on
+pseudo-labelled target images captures **83 %** of what full self-training gives on held-out capture
+groups, and **89 %** of its transfer to unseen species. From a representation trained *without* any
+domain-mimicking augmentation the figure is the same (0.7515 vs 0.7572), so the features were already
+adequate: hand-authored augmentation and classifier adaptation are **substitutes**, not complements —
+the augmentation is worth +4.75 points alone and +0.57 once the classifier is adapted.
+
+**The classifier itself.** Its learned prototype matrix can be replaced at inference by class
+centroids for 0.29 points (§4.12).
+
+**Assembled, the recipe simplifies rather than accumulating:**
+
+| stage | cost | in-distribution | external (probe) |
+|---|---|---|---|
+| representation: no resampling, no domain augmentation | 5 epochs | 0.8949 | 0.6445 |
+| + classifier rebalanced (frozen trunk) | 2 epochs | 0.9068 | 0.6539 |
+| + classifier adapted on pseudo-labels (frozen trunk) | 2 epochs | **0.9081** | **0.7541** |
+| *end-to-end training with the same pseudo-labels, for comparison* | *5 epochs* | *0.9003* | *0.7706* |
+
+The staged recipe is **0.78 points better in-distribution** and 1.65 worse externally than training
+end to end, at a fraction of the cost — and, more usefully, its two adaptation stages are *repeatable
+per deployment*. A new camera does not require a new model; it requires a new classifier, which is
+minutes on a frozen trunk and needs no labels.
+
+We report this as an empirical regularity on one problem rather than a law. But four independent
+questions resolving the same way, with the constructive assembly then behaving as predicted, is a
+stronger form of evidence than any one of them alone — and it suggests that for fine-grained
+recognition under shift, **the representation is the robust, expensive, inert component and the
+classifier is the cheap, swappable one where interventions belong.**
+
 ## 5. Discussion
 
-- Encoding a taxonomy in the *architecture* buys nothing here; using it for *inference-time
-  reasoning* (marginalisation, abstention) buys consistency for free and better coarse accuracy.
-- Metric-learning margins are usually sold for retrieval and face verification. Their real value in
-  a classification pipeline may be **calibration of the open-set score**, provided the logit scale is
-  dimension-aware.
-- The field's benchmark culture rewards closed-set accuracy on the training distribution; our numbers
-  suggest that is close to exhausted while the deployment-relevant quantities (domain shift, novelty)
-  are not.
+**What we set out to test, and what we found instead.** The project began as a comparison of
+hierarchical prediction heads. That comparison is a null result, and the interesting structure turned
+out to lie one level down: not *how the taxonomy enters the architecture*, but *which component of
+the model each intervention should act on*. Four independent questions — coarse supervision,
+long-tail resampling, domain adaptation, and the classifier matrix itself — all resolved toward the
+classifier (§4.13).
+
+**The methodological finding may outlast the empirical ones.** Three times, a conclusion this project
+held was overturned not by a better model but by a better measurement:
+
+1. An open-set scoring rule chosen on a 20 M model does not transfer to a 198 M one; reading every
+   model with one rule understated the large ones by 6–7.6 points and inverted a ranking (§4.9).
+2. That same oversight, applied to our own headline, produced a claimed 31-point advantage for an
+   angular margin that is **0.78 points** when each head is read with its best rule (§4.3).
+3. Macro-F1 does not decompose over subsets, so two benchmarks over the *same images* can rank two
+   models oppositely with both results correct (§4.x).
+
+Each was a comparison made with a default nobody had recorded as a decision. We report them because
+the corrected numbers are the paper's numbers, and because the failure mode is not specific to us:
+**a baseline that everyone quotes is the one least likely to be re-measured.**
+
+**What we would tell a practitioner.** Train one representation, cleanly, without resampling and
+without hand-authored domain augmentation. Then do the cheap work: rebalance the classifier if the
+in-distribution metric matters, adapt the classifier on unlabelled target images if deployment does,
+and read novelty with a rule chosen on *your* model rather than inherited. Report accuracy, external
+accuracy, and open-set detection separately, because they disagree — and never compare two of them
+across different evaluation sets.
+
+**What we do not claim.** That the classifier/representation split generalises beyond fine-grained
+recognition under source shift; that self-training's advantage over labels survives at much larger
+label budgets (it is still rising at 12,230); or that the angular margin is not worth its cost — we
+show only that its cost and benefit are both about one point, and that its real advantage is
+insensitivity to the readout rather than a better score.
 
 ## 6. Limitations
 
