@@ -17,7 +17,7 @@ operational text and were effectively unfindable.)*
 |---|---|---|
 | **A** | consolidate the architecture (single head × ArcFace × distillation) | **closed** |
 | **B** | robustness: augmentation, self-training, capacity | **closed** — B3 is the project's biggest lever |
-| **C** | open-set: abstention, stratified novelty, AUROC | **closed**, with two claims retracted |
+| **C** | open-set: abstention, stratified novelty, AUROC | **reopened** — C3b tests whether C3's monotonicity was rarity |
 | **D** | product: bundle, calibration, small student | **closed** |
 | **E** | is open-set the binding constraint? | **closed — no**, the premise was a scoring-rule artefact |
 | **F** | the assembled recipe | **closed** — F2 composes |
@@ -35,6 +35,7 @@ operational text and were effectively unfindable.)*
 | ~~F3~~ | **DONE. 0.9061 / probe 0.7479 / held-out 0.7703.** Both predicted ranges hit, but the probe falsification line (0.7500) tripped by 0.21. Near-wash that splits: sequencing +0.62 probe, joint **+1.09 held-out** at half the cost. **Joint is the better default.** |
 | ~~R2~~ | **DONE — badly falsified. probe 0.7161, −3.80 pt.** Labels more accurate (99.84 %) but 156 species vs 346: a better labeller separates its confidences and the quantile gate keeps a narrower set. |
 | ~~R3~~ | **DONE — predicted range hit. probe 0.7585 / held-out 0.7682.** Per-species gate instead of quantile, *nothing else changed*: −24.6 pt label accuracy, +740 species, **+4.24 pt**. Iteration now marginally positive (+0.44 over round 1). [[2026-08-08-self-training-does-not-iterate]] |
+| **C3b** | **is novelty monotone, or was C3 measuring rarity?** Identical C3 recipe, retrained with **common** taxa held out at three ranks (2 families, 40 genera, 120 species; 2.62 % of rows). Predicted monotonicity survives with `near` 0.78-0.85 -- harder than C3's 0.853, because a common held-out species has hundreds of good photographs. [[2026-08-08-is-novelty-monotone-or-just-rare]] |
 | **R4** | **no gate at all** — R3's own diagnostic shows the ungated set is 86.43 % accurate over every predicted species, beating R3's kept set (75.22 %, 896 species) on **both** axes. Predicted probe **0.760–0.780**, falsified below 0.7544. Retires a design decision that has never been measured. |
 
 ## 3. Ordered backlog — take the top unblocked item
@@ -44,13 +45,13 @@ A 5-epoch 20 M run is ≈6.4 h; a 2-epoch frozen-trunk stage is ≈30 min at 20 
 
 | # | work | GPU | why, and the gate |
 |---|---|---|---|
-| 1 | **coverage-preserving gate** — top-*k* per predicted species instead of a global confidence quantile, then re-run round 2 | ~40 min | R2 failed by losing coverage, not accuracy. Predicted probe **0.755–0.775** at matched coverage (346 species); if it still loses, iteration genuinely does not work here. |
+| ~~1~~ | ~~coverage-preserving gate~~ | — | **DONE as R3 — worked, +4.24 pt.** Its diagnostic opened R4 (no gate at all), now running. |
 | ~~2~~ | ~~second adaptation round~~ | — | **running as R2.** |
 | ~~3~~ | ~~joint vs sequential classifier stages~~ | — | **running as F3.** |
 | 4 | **paper: figures** | none | Deferred by the owner until the storyline settled. It has. The results now demand: the replication-share curve with transfer overlaid, the three-benchmark comparison, and the scoring-rule table. |
 | 5 | **P1 — BioCLIP-2 as a frozen trunk** | build + ~1 h | Owner-deferred, reviewer-inevitable. T2b is what makes it plausible. See §5. |
 | 6 | **H — the head-scaling build** | large | Only if the 1 M-species direction is pursued. See §4. |
-| 7 | **C3b — hold out *common* taxa** | ~6.4 h + build | The controlled version of C3, whose novel species were all rare. |
+| ~~7~~ | ~~C3b — hold out *common* taxa~~ | — | **running.** |
 
 **Do not do** — each closed for a reason, not for lack of time:
 

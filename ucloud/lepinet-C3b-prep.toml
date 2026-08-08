@@ -1,0 +1,26 @@
+# C3b step 1: build the held-out-common split. Validated locally on the same parquet:
+# far 28 species / 2376 test images, mid 83 / 2969, near 120 / 10391, 2.62 % of rows removed.
+name = "lepinet-C3b-prep"
+replicas = 1
+[application]
+name = "pytorch-te"
+version = "26.05"
+[product]
+id = "gpu-nvidia-b200-1-gpu"
+category = "gpu-nvidia-b200"
+provider = "ucloud"
+[time_allocation]
+hours = 1
+[sync]
+local = ".."
+remote = "/12347837/repos/lepinet"
+[setup]
+script = "setup-lepinet.sh"
+run = "mkdir -p /work/lepinet/data/splits && python dev/072_holdout_common.py --parquet /work/global_lepi/0032836-250426092105405_processing_metadata_postprocessed_quality_filtered.parquet --out /work/lepinet/data/splits/c3b_train.parquet --manifest /work/lepinet/data/splits/c3b_holdout.json --n-far 2 --max-images-far 45000 --min-species-far 20 --n-mid 40 --min-species-mid 3 --n-near 120"
+[schedule]
+auto_extend = "1h"
+max_time = "3h"
+[[resources]]
+type = "file"
+path = "/12347837/datasets/global_lepi"
+read_only = true

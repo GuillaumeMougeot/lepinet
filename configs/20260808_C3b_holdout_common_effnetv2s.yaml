@@ -1,0 +1,55 @@
+# C3b: the controlled version of C3.
+#
+# C3 found novelty detection monotone in taxonomic distance (near 0.853 < mid 0.934 < far 0.964 for
+# this very model, plain head, entropy rule). But its novel taxa were every species BELOW the
+# 50-image training floor -- so "novel" was confounded with "rare, and probably photographed worse".
+#
+# This is the identical recipe trained on a parquet with COMMON taxa (>= 200 training images)
+# deliberately held out at three ranks: 2 whole families, 40 whole genera, 120 single species.
+# 2.62 % of rows removed. Everything else is byte-identical to the C3 model, so the one factor that
+# changed is which taxa the model was allowed to see.
+#
+# Prediction (committed): monotonicity SURVIVES -- near < mid < far, with near above 0.80. If it is
+# a property of the embedding geometry and the taxonomy, rarity was never doing the work. But
+# expect every stratum to be HARDER than C3's (near 0.853): a common species has hundreds of
+# well-photographed examples in the test fold and looks much more like a confident known class than
+# a 12-image rarity does. A near AUROC in the 0.78-0.85 band would say "monotone, and C3 overstated
+# the absolute numbers", which is the outcome I think most likely.
+#
+# Falsified if the ordering breaks (any stratum out of order by more than one noise floor), which
+# would mean C3's monotonicity was an artefact of the rare-taxa population and the paper's
+# "novelty has degrees" claim needs withdrawing.
+version: 1.0
+desc: lepinet-C3b-holdout-common-independent-effnetv2s-ucloud
+train:
+  parquet_path: /work/lepinet/data/splits/c3b_train.parquet
+  img_dir: /work/global_lepi/images
+  out_dir: /work/lepinet/data/ucloud_models
+  fold: '1'
+  min_img_per_spc: 50
+  # /work is a network mount (~90 ms/file); many readers park on I/O, so 256 on 48 vCPU is not
+  # real oversubscription. Measured ~950 img/s, ~1:24/epoch on gpu-nvidia-b200-1-gpu.
+  num_workers: 256
+  model_name: lepinet-C3b-holdout-common-independent-effnetv2s-ucloud
+  model_arch_name: efficientnet_v2_s
+  head: independent
+  nb_epochs: 5
+  base_lr: 0.001
+  batch_size: 64
+  aug_img_size: 460
+  img_size: 256
+  optimizer: muon
+  fp16: true
+  precision: fp16
+  schedule: one_cycle
+  warmup_epochs: 0.5
+  grad_clip: 5.0
+  oversample_power: 0.5
+  family_filter: []
+  aug_kwargs:
+    max_warp: 0.0
+    max_lighting: 0.0
+    p_lighting: 0.0
+    flip_vert: true
+    max_rotate: 15.0
+    max_zoom: 1.1

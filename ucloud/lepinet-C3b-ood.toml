@@ -1,0 +1,28 @@
+# C3b step 3: the stratified AUROC. `--rule entropy` is the plain head's best rule and the one
+# C3's re-score used, so the comparison is like for like. Note the parquet is the QUALITY-FILTERED
+# one, not C3's unfiltered catalogue: the novel taxa here are held out by construction, so the
+# unfiltered tail is not needed and would smuggle the rare species back in.
+name = "lepinet-C3b-ood"
+replicas = 1
+[application]
+name = "pytorch-te"
+version = "26.05"
+[product]
+id = "gpu-nvidia-b200-1-gpu"
+category = "gpu-nvidia-b200"
+provider = "ucloud"
+[time_allocation]
+hours = 4
+[sync]
+local = ".."
+remote = "/12347837/repos/lepinet"
+[setup]
+script = "setup-lepinet.sh"
+run = "python dev/059_hierarchical_ood.py --model '/work/lepinet/data/ucloud_models/*-lepinet-C3b-holdout-common-independent-effnetv2s-ucloud/*.pt' --parquet /work/global_lepi/0032836-250426092105405_processing_metadata_postprocessed_quality_filtered.parquet --img-dir /work/global_lepi/images --holdout-manifest /work/lepinet/data/splits/c3b_holdout.json --out /work/lepinet/data/ucloud_preds/ood-strat-C3b.json --per-stratum 8000 --num-workers 32 --rule entropy"
+[schedule]
+auto_extend = "1h"
+max_time = "8h"
+[[resources]]
+type = "file"
+path = "/12347837/datasets/global_lepi"
+read_only = true

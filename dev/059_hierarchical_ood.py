@@ -129,6 +129,28 @@ def main(a):
     df["image_path"] = df[LEVELS[0]] + "/" + df["filename"]
     df["_strat"] = stratify(df, vocabs)
 
+    if a.holdout_manifest:
+        # C3b. The checkpoint was trained on a parquet with whole taxa removed, so `stratify` already
+        # labels them near/mid/far off the vocab. What the manifest adds is the *scoreable* subset:
+        # a whole-family hold-out necessarily drags in that family's own rare species, and scoring
+        # them would put the long tail back into a benchmark built to remove it
+        # ([[dev/072_holdout_common.py]]).
+        man = json.load(open(a.holdout_manifest))
+        score_sp = {k: set(v) for k, v in man["score_species"].items()}
+        allowed = set().union(*score_sp.values())
+        novel = df["_strat"] != "known"
+        # Assert the hold-out actually happened. If the checkpoint was trained on the full parquet,
+        # these species are in its vocab, `stratify` calls them known, and every AUROC below would
+        # be computed against an empty novel set -- silently, as nan.
+        missing = allowed - set(df.loc[novel, "speciesKey"])
+        if len(missing) > len(allowed) * 0.5:
+            raise SystemExit(f"{len(missing)}/{len(allowed)} scoreable species are not novel for "
+                             "this checkpoint -- wrong model, or it was trained on the full parquet")
+        before = int(novel.sum())
+        df = df[~novel | df["speciesKey"].isin(allowed)]
+        print(f"holdout manifest: novel rows {before} -> {int((df['_strat'] != 'known').sum())} "
+              f"(kept {len(allowed)} common species, >= {man['min_count']} train images each)")
+
     # The unfiltered catalogue lists images the mirror may not have.
     from pathlib import Path
     keep = _paths_exist(Path(a.img_dir), df["image_path"])
@@ -189,6 +211,9 @@ if __name__ == "__main__":
     ap.add_argument("--out", default="ood_stratified.json")
     ap.add_argument("--test-set", default="0")
     ap.add_argument("--per-stratum", type=int, default=8000)
+    ap.add_argument("--holdout-manifest", default=None,
+                    help="C3b: dev/072's manifest. Restricts novel rows to the deliberately "
+                         "held-out COMMON species, so novelty is not confounded with rarity.")
     ap.add_argument("--img-size", type=int, default=256)
     ap.add_argument("--num-workers", type=int, default=32)
     ap.add_argument("--rule", default="max", choices=["max", "msp", "entropy", "margin"],
