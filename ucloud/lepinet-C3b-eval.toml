@@ -1,6 +1,7 @@
 # C3b step 4: closed-set F1, to confirm removing 2.62 % of the data did not make this a
 # materially worse model. If it did, C3b measures 'a weaker model' rather than 'a fair hold-out'.
-# Reference: the C3 model scored 0.9148. Note the reduced parquet -- its test fold excludes the
+# `--min-img-per-spc 0` is mandatory: filtering the test fold drops the tail out of a MACRO average
+# and inflates the number by ~3 pt (CLAUDE.md invariant). Reference: the C3 model scored 0.9148. Note the reduced parquet -- its test fold excludes the
 # held-out taxa, which the model cannot predict at all.
 name = "lepinet-C3b-eval"
 replicas = 1
@@ -18,7 +19,7 @@ local = ".."
 remote = "/12347837/repos/lepinet"
 [setup]
 script = "setup-lepinet.sh"
-run = "python -m lepinet test --model '/work/lepinet/data/ucloud_models/*-lepinet-C3b-holdout-common-independent-effnetv2s-ucloud/*.pt' --parquet /work/lepinet/data/splits/c3b_train.parquet --img-dir /work/global_lepi/images --out /work/lepinet/data/ucloud_preds/C3b-eval"
+run = "lepinet test --model '/work/lepinet/data/ucloud_models/*-lepinet-C3b-holdout-common-independent-effnetv2s-ucloud/*.pt' --parquet /work/lepinet/data/splits/c3b_train.parquet --img-dir /work/global_lepi/images --out-dir /work/lepinet/data/ucloud_preds/C3b-eval --test-set 0 --min-img-per-spc 0 --img-size 256 --aug-img-size 460 --batch-size 128 --num-workers 32 --eval-levels speciesKey,genusKey,familyKey"
 [schedule]
 auto_extend = "1h"
 max_time = "8h"

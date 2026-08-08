@@ -21,6 +21,7 @@ import argparse
 import json
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 
@@ -93,7 +94,30 @@ def main(a):
         reps = max(1, round(a.target_frac * len(real) / ((1 - a.target_frac) * len(pseudo))))
         print(f"replicating pseudo rows {reps}x to reach ~{a.target_frac:.0%} of training "
               f"({len(pseudo)} -> {len(pseudo) * reps})")
-    pseudo_rep = pd.concat([pseudo[keep_cols]] * reps, ignore_index=True) if reps > 1 else pseudo[keep_cols]
+
+    if a.balance:
+        # R5. R3 and R4 differ in coverage AND in the shape of the pseudo class distribution, and
+        # they split the benchmarks: R4 (natural, long-tailed) wins probe by 0.89 pt, R3 (capped at
+        # 35/species) wins held-out species by 2.24. R3's cap kept *all* images for most species --
+        # its mean is 8.7 -- so R3 is simply R4 with the head of the trap distribution truncated.
+        # That makes the difference a class-balance effect, not a coverage one.
+        #
+        # `--balance` is the third point on that axis: every species contributes the SAME number of
+        # rows, so unique coverage is R4's and the distribution is flatter than R3's. Rare species
+        # are replicated more, common ones less -- the same sqrt-free logic as oversampling, applied
+        # to the pseudo rows only, leaving the real distribution untouched.
+        total = len(pseudo) * reps
+        per = max(1, total // pseudo[level].nunique())
+        parts = []
+        for _, g in pseudo.groupby(level, sort=False):
+            r = int(np.ceil(per / len(g)))
+            parts.append(pd.concat([g[keep_cols]] * r, ignore_index=True).head(per))
+        pseudo_rep = pd.concat(parts, ignore_index=True)
+        print(f"balanced replication: {per} rows per species x {pseudo[level].nunique()} species "
+              f"-> {len(pseudo_rep)} rows from {len(pseudo)} unique images")
+    else:
+        pseudo_rep = (pd.concat([pseudo[keep_cols]] * reps, ignore_index=True) if reps > 1
+                      else pseudo[keep_cols])
     combined = pd.concat([real[keep_cols], pseudo_rep], ignore_index=True)
     combined.to_parquet(a.out)
 
@@ -102,7 +126,8 @@ def main(a):
                "pseudo_frac": round(len(pseudo_rep) / len(combined), 4),
                "species_real": int(real[level].nunique()),
                "species_combined": int(combined[level].nunique()),
-               "min_img_per_spc_applied_to_real_only": a.min_img_per_spc}
+               "min_img_per_spc_applied_to_real_only": a.min_img_per_spc,
+               "balanced": bool(a.balance)}
     Path(str(a.out) + ".summary.json").write_text(json.dumps(summary, indent=2))
     print(json.dumps(summary, indent=2))
     # The species count must not grow: if it did, the pseudo rows changed the label set.
@@ -122,6 +147,9 @@ if __name__ == "__main__":
                     help="Comma-separated levels the training config needs, fine->coarse. A head "
                          "such as marginal_arcface needs all three or prepare_df raises KeyError.")
     ap.add_argument("--min-img-per-spc", type=int, default=50)
+    ap.add_argument("--balance", action="store_true",
+                    help="R5: give every pseudo species the same number of rows at the target "
+                         "dose, instead of the natural (long-tailed) trap distribution.")
     ap.add_argument("--target-frac", type=float, default=0.02,
                     help="Replicate pseudo rows to this fraction of training. 0.02 is the measured optimum; "
                          "above ~0.05 the gain falls and transfer to unseen species halves. 0 disables.")

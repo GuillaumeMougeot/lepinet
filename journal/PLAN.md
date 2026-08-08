@@ -36,7 +36,9 @@ operational text and were effectively unfindable.)*
 | ~~R2~~ | **DONE — badly falsified. probe 0.7161, −3.80 pt.** Labels more accurate (99.84 %) but 156 species vs 346: a better labeller separates its confidences and the quantile gate keeps a narrower set. |
 | ~~R3~~ | **DONE — predicted range hit. probe 0.7585 / held-out 0.7682.** Per-species gate instead of quantile, *nothing else changed*: −24.6 pt label accuracy, +740 species, **+4.24 pt**. Iteration now marginally positive (+0.44 over round 1). [[2026-08-08-self-training-does-not-iterate]] |
 | **C3b** | **is novelty monotone, or was C3 measuring rarity?** Identical C3 recipe, retrained with **common** taxa held out at three ranks (2 families, 40 genera, 120 species; 2.62 % of rows). Predicted monotonicity survives with `near` 0.78-0.85 -- harder than C3's 0.853, because a common held-out species has hundreds of good photographs. [[2026-08-08-is-novelty-monotone-or-just-rare]] |
-| **R4** | **no gate at all** — R3's own diagnostic shows the ungated set is 86.43 % accurate over every predicted species, beating R3's kept set (75.22 %, 896 species) on **both** axes. Predicted probe **0.760–0.780**, falsified below 0.7544. Retires a design decision that has never been measured. |
+| ~~R4~~ | **DONE — predicted range hit, and it split the benchmarks. probe 0.7674 (+0.89 over R3), held-out 0.7458 (−2.24).** R3's k=35 cap was doing **class balancing**, not confidence filtering: R3 is R4 with the head of the trap distribution truncated. [[2026-08-08-self-training-does-not-iterate]] |
+| **R5** | **ungated + balanced replication** — R4's 27,230 unique images, every species contributing equally. Predicted probe **0.762–0.780** *and* held-out **0.765–0.785**; falsified if held-out < 0.7550. If it lands, the recipe loses its confidence gate entirely. |
+| **C3b** | relaunched 19:46 after a `python -m lepinet` typo (the entrypoint is `lepinet train -c`). Prep had already succeeded, so the split was reused. |
 
 ## 3. Ordered backlog — take the top unblocked item
 
@@ -141,6 +143,11 @@ loaded with runs that self-evaluate and the backlog above is ordered for pickup 
 - **Check `ucloud jobs list` before trusting `ucloud q logs`.** Logs are keyed by name, so a
   resubmitted job serves its predecessor's output — a re-run can appear to confirm the number it was
   launched to correct.
+- **Clone a working job TOML; never hand-write the `run =` line.** C3b died instantly on
+  `python -m lepinet train` -- the entrypoint is `lepinet train -c`. The same hand-written file also
+  had `lepinet test --out` (it is `--out-dir`) and omitted `--min-img-per-spc 0`, which would have
+  filtered the test fold and inflated a macro average by ~3 pt. Three errors in one file, all from
+  not copying a file that already ran.
 - **A `dev/`-registered head is invisible unless `dev/050` is imported.** Three scripts have died on
   this; the silent version (registering the head but not its callback) is worse than the crash.
 

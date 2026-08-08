@@ -15,7 +15,7 @@ local = ".."
 remote = "/12347837/repos/lepinet"
 [setup]
 script = "setup-lepinet.sh"
-run = "python -m lepinet train configs/20260808_C3b_holdout_common_effnetv2s.yaml"
+run = "lepinet train -c configs/20260808_C3b_holdout_common_effnetv2s.yaml"
 [schedule]
 auto_extend = "1h"
 max_time = "16h"

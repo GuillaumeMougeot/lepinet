@@ -1,0 +1,51 @@
+# R5: ungated pseudo-labels, BALANCED replication.
+#
+# R3 vs R4 split the two shifted benchmarks and are confounded -- they differ in unique coverage AND
+# in the shape of the pseudo class distribution:
+#
+#   R3  capped at 35/species   7,801 unique  17.5x  probe 0.7585  held-out 0.7682
+#   R4  natural (long-tailed) 27,230 unique   5.0x  probe 0.7674  held-out 0.7458
+#
+# R3's cap kept ALL images for most species (its mean is 8.7), so R3 is just R4 with the head of the
+# trap distribution truncated -- which makes the difference a class-balance effect, not a coverage
+# one. R5 holds coverage at R4's 27,230 unique images and flattens the distribution completely.
+#
+# Prediction (committed): probe 0.762-0.780 and held-out 0.765-0.785 -- i.e. R4's probe AND R3's
+# held-out, because the two effects are separable and balance is what held-out species need.
+# Falsified if held-out lands below 0.7550 (R4 + one floor), which would mean the held-out loss
+# tracks unique coverage or label noise rather than distribution shape, and the balance reading of
+# R3-vs-R4 is wrong.
+version: 1.0
+desc: lepinet-R5-balanced-effnetv2s-ucloud
+train:
+  parquet_path: /work/lepinet/data/flemming/splits/combined_balanced.parquet
+  img_dir: /work/global_lepi/images
+  out_dir: /work/lepinet/data/ucloud_models
+  fold: '1'
+  min_img_per_spc: 50
+  num_workers: 256
+  model_name: lepinet-R5-balanced-effnetv2s-ucloud
+  model_arch_name: efficientnet_v2_s
+  head: independent
+  nb_epochs: 2
+  base_lr: 0.001
+  batch_size: 64
+  aug_img_size: 460
+  img_size: 256
+  optimizer: muon
+  fp16: true
+  precision: fp16
+  schedule: one_cycle
+  warmup_epochs: 0.5
+  grad_clip: 5.0
+  oversample_power: 0.5
+  family_filter: []
+  aug_kwargs:
+    max_warp: 0.0
+    max_lighting: 0.0
+    p_lighting: 0.0
+    flip_vert: true
+    max_rotate: 15.0
+    max_zoom: 1.1
+  levels:
+  - speciesKey

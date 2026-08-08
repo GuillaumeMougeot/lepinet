@@ -156,3 +156,79 @@ sweep ([[2026-08-04-replication-sweep]]) already characterised the dose axis on 
 gain saturating well below 2 %, which is why I am willing to read R4 as a coverage result. But if R4
 lands high, "less replication" is a live alternative explanation and the matched-unique-count control
 (R4 subsampled to 7,801 unique at 17.5×) is the run that separates them.
+
+---
+
+## R4: the gate is unnecessary on one benchmark and load-bearing on the other (2026-08-08)
+
+**Predicted probe 0.760–0.780, falsified below 0.7544. Landed 0.7674 — inside the range.** And then
+the held-out number arrived and made the prediction beside the point.
+
+| | gate | unique | repl. | label acc | species | probe | **held-out** |
+|---|---|---|---|---|---|---|---|
+| F2 | quantile (round 1) | 12,230 | — | 98.15 % | 346 | 0.7541 | 0.7594 |
+| R2 | quantile 30 % | 8,169 | 16.7× | 99.84 % | 156 | 0.7161 | 0.7257 |
+| R3 | per-species k = 35 | 7,801 | 17.5× | 75.22 % | 896 | 0.7585 | **0.7682** |
+| **R4** | **none** | **27,230** | **5.0×** | 86.43 % | 896 | **0.7674** | 0.7458 |
+
+**The two shifted benchmarks now rank the arms differently.** R4 beats R3 on probe by +0.0089
+(2.2× floor) and *loses* to it on held-out species by **−0.0224 (4.3× floor)** — R4 is worse on
+held-out than doing nothing beyond round 1 (F2, 0.7594). Both gaps are well clear of noise, so this
+is a real split rather than two draws.
+
+## Why, and it is not the reason I queued the run for
+
+R3's cap is `top 35 of each predicted species`, and its kept set averages **8.7 images per species**.
+So for the large majority of species the cap never binds — R3 keeps *everything* the model predicted
+for them. The 19,429 images that R3 discards and R4 keeps are, almost exactly, **the excess above 35
+in the frequent species**.
+
+That means R3 is not a higher-quality subset of R4, and it is not a narrower one either. **R3 is R4
+with the head of the trap distribution truncated.** The difference between them is the *shape of the
+pseudo class distribution*, and the coverage framing I used to justify R4 does not distinguish them
+at all — they have identical species coverage, 896.
+
+Read that way the split is exactly what you would expect. The trap data is long-tailed like
+everything else here. Adding its head:
+
+- **helps probe**, which is scored over species that are in the label set and where the frequent
+  trap species carry weight (micro-accuracy 0.8430);
+- **hurts held-out species**, 58 taxa the model was never trained on, because an over-represented
+  known class is a stronger attractor and novel images get absorbed into it.
+
+**So R3's gate was never doing confidence filtering — it was doing class balancing**, and that is why
+it looked like a coverage device. The `k` in "top *k* per species" is a cap, and a cap on a
+long-tailed distribution is oversampling's twin.
+
+## What this corrects
+
+**The coverage claim as stated is too strong.** [[2026-08-04-replication-sweep]] and R2/R3 supported:
+
+> Anything that trades coverage for label quality is trading the wrong way.
+
+R4 keeps that intact — it has R3's coverage and better labels and wins the benchmark those results
+were about. What R4 adds is that **coverage is not the only property of the pseudo set that matters;
+its class distribution matters too, and the two benchmarks disagree about which way.** START-HERE
+finding 7 has been amended rather than withdrawn: the coverage-over-label-quality trade holds, and
+the sentence claiming it is the *whole* story does not.
+
+It also lands squarely on the project's through-line. Long-tail rebalancing has already been shown to
+belong in the classifier ([[2026-08-01-imbalance-methods-bench]], cRT) rather than in the data the
+backbone sees. This is the same lesson arriving from a third direction: **the pseudo-label set is
+training data, so its class distribution is a design parameter, not a property of the trap.**
+
+## R5, queued
+
+Same 27,230 ungated images, replicated so **every species contributes the same number of rows** —
+R4's coverage, a distribution flatter than R3's. `dev/066 --balance`, verified on a synthetic
+long-tailed set (50:1 → 1:1, coverage preserved).
+
+**Prediction (committed): probe 0.762–0.780 and held-out 0.765–0.785** — R4's probe *and* R3's
+held-out, because the two effects are separable and balance is what held-out species need.
+**Falsified if held-out lands below 0.7550** (R4 + one floor), which would mean the held-out loss
+tracks unique coverage or label noise rather than distribution shape, and the balance reading above
+is wrong.
+
+If R5 lands as predicted, the recommended recipe becomes: **no confidence gate, balanced
+replication** — one fewer hyperparameter than the pipeline started with, and the surviving one is a
+rebalancing knob the project already understands.
