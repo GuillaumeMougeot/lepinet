@@ -1,10 +1,10 @@
-# Round 2 of self-training loses 3.8 points, because a better labeller keeps a narrower set
+# Self-training iterates only if the gate preserves coverage — and the gate may not be needed at all
 
-**Kind:** research · **Status:** **RESOLVED (2026-08-08). Badly falsified, and the mechanism is not
-the one everybody warns about.** Re-labelling with F2 (probe 0.7541) instead of B4 (0.7101) produced
-**more accurate labels covering less than half the species**, and cost **3.80 points**. The failure is
-not confirmation bias — it is that a fixed confidence *quantile* selects a narrower set as the model
-improves.
+**Kind:** research · **Status:** **RESOLVED for R2/R3 (2026-08-08); R4 open.** Re-labelling with F2
+instead of B4 produced **more accurate labels covering less than half the species** and cost **3.80
+points** (R2). Swapping the confidence-quantile gate for a per-species one — *nothing else changed* —
+recovered **+4.24** (R3), while label accuracy fell 24.6 points. But the diagnostic shows the
+**ungated** set beats R3's on accuracy *and* coverage, so R4 tests removing the gate entirely.
 
 ## Result
 
@@ -77,3 +77,66 @@ took a diagnostic to find.
 **And it is a warning worth generalising.** A confidence-quantile gate is standard in self-training,
 and its interaction with the labeller's calibration is the kind of thing that silently degrades an
 iterated pipeline while every intermediate metric — label accuracy most of all — looks better.
+
+---
+
+## R3: the coverage-preserving gate works, and it is worth 4.24 points (2026-08-08)
+
+Same labeller (F2), same 2 % dose, **only the gate changed**: top *k* = 35 images of every species the
+model predicts, instead of the global top-30 % by confidence.
+
+| | R2 — quantile 30 % | R3 — per-species k = 35 | Δ |
+|---|---|---|---|
+| pseudo-label accuracy | **99.84 %** | 75.22 % | **−24.62 pt** |
+| species covered | 156 | **896** | **+740** |
+| images kept | 8,169 | 7,801 | −368 |
+| **probe** | 0.7161 | **0.7585** | **+0.0424** |
+| **probe held-out** | 0.7257 | **0.7682** | **+0.0425** |
+
+**Predicted probe 0.755–0.775, falsified below 0.7500. Landed 0.7585 — inside the range**, and the
+first prediction in this thread to hold. Against round 1 (F2 labels, probe 0.7541) it is +0.0044 probe
+(1.1× floor) and +0.0088 held-out (1.7× floor), so iteration is now marginally positive rather than
+badly negative.
+
+**The controlled comparison is the result.** Two runs identical except the selection rule, at nearly
+identical dataset size: a **24.6-point drop in label accuracy bought 4.24 points of probe**. That is
+about as clean a statement of the coverage-over-accuracy principle as this project is going to get,
+and it was obtained for 40 minutes of GPU.
+
+## But the diagnostic says my gate is worse than no gate
+
+The gate log is the interesting part:
+
+```
+per-species gate: top 35 of each predicted species -> 7801 images over 896 species (min conf 0.0007)
+pseudo-label accuracy: 0.8643 over all 27230, 0.7522 over the 7801 kept (gate bought -0.1121)
+```
+
+The **ungated** set — every adaptation image, no selection at all — is **86.43 %** accurate and covers
+every species the model predicts. R3's kept set is 75.22 % accurate over 896 species. So the ungated
+set **dominates R3 on both axes at once**: more accurate *and* broader.
+
+My gate did not merely fail to help. It cost 11.2 points of label accuracy, because taking the top 35
+of *every* predicted species forces it to scrape the bottom of spuriously-predicted classes — the
+minimum kept confidence is 0.0007. Guaranteeing coverage per species means buying garbage for the
+species that should not have been predicted at all.
+
+**The gate has been in this pipeline since day one and has never been justified by a measurement.** It
+was introduced against a circularity risk ([[2026-08-03-b3-self-training]]) that R2 then showed did not
+materialise — label accuracy went *up* under the gate. Two runs have now varied the gate and the one
+with worse labels won. The obvious arm was never run.
+
+## R4: no gate at all
+
+Queued. All 27,230 pseudo-labelled adaptation images, 86.43 % accurate, full predicted-species
+coverage, same 2 % dose.
+
+**Prediction (committed): probe 0.760–0.780** — at least matching R3, probably beating it, since the
+ungated set dominates R3's selection on both of the axes this thread has identified as mattering.
+**Falsified below 0.7544** (R3 minus one floor). If it *is* falsified, the coverage/accuracy framing is
+incomplete in a specific and interesting way: it would mean confidently-wrong labels concentrated in a
+few classes are less harmful than noise spread across many, which is not what either framing predicts
+and would be worth a separate entry.
+
+**Either result retires an unexamined design decision**, which is the thing I should have done before
+building two rounds on top of it.

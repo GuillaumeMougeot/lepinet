@@ -33,7 +33,9 @@ operational text and were effectively unfindable.)*
 |---|---|---|
 | ~~G1 → G2~~ | **DONE. in-dist 0.9150 / probe 0.7648** — best in-distribution model in the project. Probe missed its 0.780–0.800 range, but **the staged-vs-end-to-end trade replicates across 10× scale**: +0.78/−1.65 at 20 M, +0.90/−1.50 at 198 M. |
 | ~~F3~~ | **DONE. 0.9061 / probe 0.7479 / held-out 0.7703.** Both predicted ranges hit, but the probe falsification line (0.7500) tripped by 0.21. Near-wash that splits: sequencing +0.62 probe, joint **+1.09 held-out** at half the cost. **Joint is the better default.** |
-| ~~R2~~ | **DONE — badly falsified. probe 0.7161, −3.80 pt.** Labels more accurate (99.84 %) but 156 species vs 346: a better labeller separates its confidences and the quantile gate keeps a narrower set. **Self-training does not iterate with a confidence-quantile gate.** [[2026-08-08-self-training-does-not-iterate]] |
+| ~~R2~~ | **DONE — badly falsified. probe 0.7161, −3.80 pt.** Labels more accurate (99.84 %) but 156 species vs 346: a better labeller separates its confidences and the quantile gate keeps a narrower set. |
+| ~~R3~~ | **DONE — predicted range hit. probe 0.7585 / held-out 0.7682.** Per-species gate instead of quantile, *nothing else changed*: −24.6 pt label accuracy, +740 species, **+4.24 pt**. Iteration now marginally positive (+0.44 over round 1). [[2026-08-08-self-training-does-not-iterate]] |
+| **R4** | **no gate at all** — R3's own diagnostic shows the ungated set is 86.43 % accurate over every predicted species, beating R3's kept set (75.22 %, 896 species) on **both** axes. Predicted probe **0.760–0.780**, falsified below 0.7544. Retires a design decision that has never been measured. |
 
 ## 3. Ordered backlog — take the top unblocked item
 

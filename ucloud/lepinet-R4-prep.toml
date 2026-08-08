@@ -1,0 +1,34 @@
+# R4: NO GATE AT ALL. The gate was the first design decision of this whole direction, and the
+# owner approved 'strict' on my recommendation that circularity was the risk. R2 and R3 have now
+# shown label accuracy barely matters and coverage dominates -- and the ungated set is 86.43%
+# accurate over every predicted species, which beats R3's gated set on BOTH axes (75.22%, 896
+# species). If coverage is really what matters, the gate is not just unnecessary but harmful.
+name = "lepinet-R4-prep"
+replicas = 1
+[application]
+name = "pytorch-te"
+version = "26.05"
+[product]
+id = "gpu-nvidia-b200-1-gpu"
+category = "gpu-nvidia-b200"
+provider = "ucloud"
+[time_allocation]
+hours = 3
+[sync]
+local = ".."
+remote = "/12347837/repos/lepinet"
+[setup]
+script = "setup-lepinet.sh"
+run = "python dev/065_pseudolabel.py --model '/work/lepinet/data/ucloud_models/*-lepinet-F2-capstone-effnetv2s-ucloud/*.pt' --adapt-parquet /work/lepinet/data/flemming/splits/flemming_adapt.parquet --img-dir /work/flemming/images --out /work/lepinet/data/flemming/splits/pseudo_nogate.parquet --keep-frac 1.0 --img-size 256 --num-workers 32 && python dev/066_combine_pseudo.py --global-parquet /work/global_lepi/0032836-250426092105405_processing_metadata_postprocessed_quality_filtered.parquet --pseudo-parquet /work/lepinet/data/flemming/splits/pseudo_nogate.parquet --out /work/lepinet/data/flemming/splits/combined_nogate.parquet --min-img-per-spc 50 --target-frac 0.02"
+[schedule]
+auto_extend = "1h"
+max_time = "6h"
+[[resources]]
+type = "file"
+path = "/12347837/datasets/flemming"
+read_only = true
+
+[[resources]]
+type = "file"
+path = "/12347837/datasets/global_lepi"
+read_only = true
