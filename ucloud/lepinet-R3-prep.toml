@@ -1,0 +1,33 @@
+# R3: round 2 again, with the coverage-preserving gate that R2's failure identified.
+# R2 lost 3.80 pt because a better labeller separates its confidences, so a fixed 30% quantile
+# kept 156 species instead of round 1's 346 -- despite labels being 1.69 pt MORE accurate.
+# k=35 is chosen to match round 1's coverage: 12,230 images over 346 species is ~35 per species.
+name = "lepinet-R3-prep"
+replicas = 1
+[application]
+name = "pytorch-te"
+version = "26.05"
+[product]
+id = "gpu-nvidia-b200-1-gpu"
+category = "gpu-nvidia-b200"
+provider = "ucloud"
+[time_allocation]
+hours = 3
+[sync]
+local = ".."
+remote = "/12347837/repos/lepinet"
+[setup]
+script = "setup-lepinet.sh"
+run = "python dev/065_pseudolabel.py --model '/work/lepinet/data/ucloud_models/*-lepinet-F2-capstone-effnetv2s-ucloud/*.pt' --adapt-parquet /work/lepinet/data/flemming/splits/flemming_adapt.parquet --img-dir /work/flemming/images --out /work/lepinet/data/flemming/splits/pseudo_round3.parquet --per-species-k 35 --img-size 256 --num-workers 32 && python dev/066_combine_pseudo.py --global-parquet /work/global_lepi/0032836-250426092105405_processing_metadata_postprocessed_quality_filtered.parquet --pseudo-parquet /work/lepinet/data/flemming/splits/pseudo_round3.parquet --out /work/lepinet/data/flemming/splits/combined_round3.parquet --min-img-per-spc 50 --target-frac 0.02"
+[schedule]
+auto_extend = "1h"
+max_time = "6h"
+[[resources]]
+type = "file"
+path = "/12347837/datasets/flemming"
+read_only = true
+
+[[resources]]
+type = "file"
+path = "/12347837/datasets/global_lepi"
+read_only = true

@@ -75,10 +75,22 @@ def main(a):
     df["pseudo_speciesKey"] = [sp_vocab[i] for i in pred_i]
     df["confidence"] = conf
 
-    # Strict gate: keep the most confident `keep_frac`. A quantile rather than a fixed probability,
-    # because the absolute scale of a softmax over 12,041 classes is not comparable across models.
-    cut = float(np.quantile(conf, 1.0 - a.keep_frac))
-    kept = df[df["confidence"] >= cut].copy()
+    # Two gates. The global quantile was the original, and it FAILS ON ITERATION: a better labeller
+    # separates its confidences, so the same quantile selects a narrower, easier slice -- round 2 kept
+    # 156 species against round 1's 346 and lost 3.80 pt despite *more* accurate labels
+    # (journal/2026-08-08-self-training-does-not-iterate.md). Coverage is what target data supplies,
+    # so the per-species gate makes coverage structural instead of accidental.
+    if a.per_species_k:
+        kept = (df.sort_values("confidence", ascending=False)
+                  .groupby("pseudo_speciesKey", sort=False)
+                  .head(a.per_species_k))
+        cut = float(kept["confidence"].min())
+        print(f"per-species gate: top {a.per_species_k} of each predicted species -> {len(kept)} "
+              f"images over {kept['pseudo_speciesKey'].nunique()} species (min conf {cut:.4f})")
+    else:
+        cut = float(np.quantile(conf, 1.0 - a.keep_frac))
+        kept = df[df["confidence"] >= cut].copy()
+    kept = kept.copy()
 
     # DIAGNOSTIC ONLY -- never written to the training parquet. The trap set is labelled; knowing
     # how clean the retained pseudo-labels are is what makes the downstream number interpretable.
@@ -122,7 +134,11 @@ if __name__ == "__main__":
     ap.add_argument("--img-dir", required=True, help="Trap image root (for inference).")
     ap.add_argument("--out", required=True)
     ap.add_argument("--hierarchy", default=None, help="hierarchy.csv, to fill genus/family.")
-    ap.add_argument("--keep-frac", type=float, default=0.30, help="Strict gate: fraction retained.")
+    ap.add_argument("--keep-frac", type=float, default=0.30,
+                    help="Global-quantile gate: fraction retained. Fails on iteration -- see --per-species-k.")
+    ap.add_argument("--per-species-k", type=int, default=0,
+                    help="Coverage-preserving gate: keep the top K images of EVERY predicted species. "
+                         "Confidence then only orders within a class, so coverage cannot collapse.")
     ap.add_argument("--path-prefix", default="../../flemming/images/",
                     help="Prepended so one img_dir reaches both image trees.")
     ap.add_argument("--img-size", type=int, default=320)

@@ -1,6 +1,6 @@
 # PLAN — where we are, and what runs next
 
-**Kind:** living · **Last updated:** 2026-08-07 · **Supersedes:** [[2026-07-28-landscape-and-plan]]
+**Kind:** living · **Last updated:** 2026-08-08 · **Supersedes:** [[2026-07-28-landscape-and-plan]]
 
 The one file in `journal/` meant to be true *today*. Everything else is a record of a moment.
 
@@ -31,9 +31,9 @@ operational text and were effectively unfindable.)*
 
 | job | what | predicted |
 |---|---|---|
-| **G1 → G2** | the 198 M confirmation | **G1 DONE: 0.9112**, +0.57 over L5 — predicted 0.912–0.920, a near-miss below, and the +0.5 pt falsification line cleared by 0.07. cRT confirms at scale **at half its 20 M strength**. G2 (adaptation) running; predicted probe 0.780–0.800. |
-| **F3** | one **joint** classifier stage (rebalanced *and* adapted) against F2's two sequential ones | Predicted a wash: in-dist 0.902–0.910, probe 0.745–0.760. Falsified if either axis lands a floor below F2, which would mean sequencing does real work. |
-| **R2** | **second self-training round** — re-label with F2 (0.7541) rather than B4 (0.7101) | Predicted probe 0.758–0.772; falsified below 0.7582, which would mean round 1 already extracted everything the labels hold. |
+| ~~G1 → G2~~ | **DONE. in-dist 0.9150 / probe 0.7648** — best in-distribution model in the project. Probe missed its 0.780–0.800 range, but **the staged-vs-end-to-end trade replicates across 10× scale**: +0.78/−1.65 at 20 M, +0.90/−1.50 at 198 M. |
+| ~~F3~~ | **DONE. 0.9061 / probe 0.7479 / held-out 0.7703.** Both predicted ranges hit, but the probe falsification line (0.7500) tripped by 0.21. Near-wash that splits: sequencing +0.62 probe, joint **+1.09 held-out** at half the cost. **Joint is the better default.** |
+| ~~R2~~ | **DONE — badly falsified. probe 0.7161, −3.80 pt.** Labels more accurate (99.84 %) but 156 species vs 346: a better labeller separates its confidences and the quantile gate keeps a narrower set. **Self-training does not iterate with a confidence-quantile gate.** [[2026-08-08-self-training-does-not-iterate]] |
 
 ## 3. Ordered backlog — take the top unblocked item
 
@@ -42,7 +42,7 @@ A 5-epoch 20 M run is ≈6.4 h; a 2-epoch frozen-trunk stage is ≈30 min at 20 
 
 | # | work | GPU | why, and the gate |
 |---|---|---|---|
-| 1 | **collect G1 + G2**, journal, update `RESULTS.md` / `START-HERE` / paper | — | The last number the paper needs. |
+| 1 | **coverage-preserving gate** — top-*k* per predicted species instead of a global confidence quantile, then re-run round 2 | ~40 min | R2 failed by losing coverage, not accuracy. Predicted probe **0.755–0.775** at matched coverage (346 species); if it still loses, iteration genuinely does not work here. |
 | ~~2~~ | ~~second adaptation round~~ | — | **running as R2.** |
 | ~~3~~ | ~~joint vs sequential classifier stages~~ | — | **running as F3.** |
 | 4 | **paper: figures** | none | Deferred by the owner until the storyline settled. It has. The results now demand: the replication-share curve with transfer overlaid, the three-benchmark comparison, and the scoring-rule table. |

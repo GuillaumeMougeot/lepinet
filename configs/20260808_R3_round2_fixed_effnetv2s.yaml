@@ -1,0 +1,48 @@
+# R3: the second self-training round, redone with a coverage-preserving gate.
+#
+# R2 tested "does iterating help" and answered no -- but the diagnostic showed the cause was not
+# circularity. Its labels were MORE accurate (99.84% vs 98.15%) and it still lost 3.80 pt, because a
+# better labeller separates its confidences and a fixed 30% quantile therefore keeps a narrower set:
+# 156 species against round 1's 346. Coverage, not label quality, is what target data supplies.
+#
+# R3 keeps the top 35 images of EVERY predicted species, so coverage is structural rather than an
+# accident of the confidence distribution's shape. k=35 matches round 1's ~35 images per species.
+#
+# Prediction (committed): probe 0.755-0.775 -- at least matching round 1's 0.7541, plausibly beating
+# it since the labels really are 1.69 pt cleaner. Falsified below 0.7500 (one floor under round 1),
+# which would mean iteration fails for a reason beyond coverage and the circularity worry was right
+# after all.
+version: 1.0
+desc: lepinet-R3-effnetv2s-ucloud
+train:
+  parquet_path: /work/lepinet/data/flemming/splits/combined_round3.parquet
+  img_dir: /work/global_lepi/images
+  out_dir: /work/lepinet/data/ucloud_models
+  fold: '1'
+  min_img_per_spc: 50
+  num_workers: 256
+  model_name: lepinet-R3-effnetv2s-ucloud
+  model_arch_name: efficientnet_v2_s
+  head: independent
+  nb_epochs: 2
+  base_lr: 0.001
+  batch_size: 64
+  aug_img_size: 460
+  img_size: 256
+  optimizer: muon
+  fp16: true
+  precision: fp16
+  schedule: one_cycle
+  warmup_epochs: 0.5
+  grad_clip: 5.0
+  oversample_power: 0.5
+  family_filter: []
+  aug_kwargs:
+    max_warp: 0.0
+    max_lighting: 0.0
+    p_lighting: 0.0
+    flip_vert: true
+    max_rotate: 15.0
+    max_zoom: 1.1
+  levels:
+  - speciesKey
