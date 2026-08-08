@@ -140,3 +140,19 @@ and would be worth a separate entry.
 
 **Either result retires an unexamined design decision**, which is the thing I should have done before
 building two rounds on top of it.
+
+**The caveat, recorded before the number arrives.** All three arms are held at the same 2 % dose, and
+`dev/066` reaches that dose by replicating the pseudo rows. So the replication factor is not free:
+
+| | unique images | replication | pseudo rows |
+|---|---|---|---|
+| R2 | 8,169 | 16.7× | 136 k |
+| R3 | 7,801 | 17.5× | 136 k |
+| R4 | **27,230** | **5.0×** | 136 k |
+
+At a fixed dose you cannot vary unique coverage without varying replication — they are the same knob
+seen from two ends. R2 vs R3 was clean because both sit at ~17×; R4 changes both. The replication
+sweep ([[2026-08-04-replication-sweep]]) already characterised the dose axis on its own and found the
+gain saturating well below 2 %, which is why I am willing to read R4 as a coverage result. But if R4
+lands high, "less replication" is a live alternative explanation and the matched-unique-count control
+(R4 subsampled to 7,801 unique at 17.5×) is the run that separates them.
