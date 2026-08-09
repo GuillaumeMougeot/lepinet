@@ -1,7 +1,9 @@
 # C3b: is novelty detection monotone in taxonomic distance, or was C3 measuring rarity?
 
-**Kind:** research · **Status:** **OPEN** (launched 2026-08-08). Retrains the exact C3 model on a
-parquet with **common** taxa deliberately held out, to separate "unseen" from "rare".
+**Kind:** research · **Status:** **RESOLVED (2026-08-09). Monotone, and it was never rarity.** With
+**common** taxa (>= 200 training images) deliberately held out, the ordering is unchanged and every
+stratum is *slightly better* than C3's, not worse: near **0.8717**, mid **0.9463**, far **0.9726**.
+The ordering prediction was right; the direction of the magnitudes was wrong.
 
 ## The confound
 
@@ -85,3 +87,59 @@ robustness check to something already claimed, and it is the only one still gate
 retraining — 6.4 h, which is why it kept losing to experiments that reuse an existing checkpoint.
 It runs alongside [[2026-08-08-self-training-does-not-iterate]]'s R4, which is a short chain; the
 queue rule is to keep an independent job beside any chain, and C3b is that job.
+
+---
+
+## Result: the confound was not driving anything (2026-08-09)
+
+231 deliberately held-out **common** species, 15,736 novel images against 8,000 known, plain head,
+entropy rule — the same rule C3's re-score used.
+
+| stratum | C3 (rare taxa, free) | **C3b (common taxa, held out)** | Δ |
+|---|---|---|---|
+| near — unseen species, known genus | 0.8527 | **0.8717** | +1.90 |
+| mid — unseen genus, known family | 0.9342 | **0.9463** | +1.21 |
+| far — unseen family | 0.9641 | **0.9726** | +0.85 |
+
+**Prediction scored: the ordering held (correct), `near` cleared 0.80 (correct), but I predicted
+`near` in 0.78–0.85 — *below* C3's 0.8527 — and it landed at 0.8717, above both.** So the
+qualitative call was right and the directional one was wrong: holding out common taxa makes novelty
+detection marginally *easier*, not harder.
+
+The reasoning behind the wrong half was that a common held-out species has hundreds of
+well-photographed test images and should therefore look more like a confident known class. That is
+evidently outweighed by something else, and the mean max-cosine column suggests what: known images
+sit at −0.471 and `near` at −2.297, a wide separation. A rare species in C3 is represented by a
+handful of images that may be atypical *of that species* but not necessarily far from the known
+manifold — whereas a well-sampled absent species occupies its own region of the embedding cleanly.
+Rarity was adding noise to the novel population, not making it easier to detect.
+
+**The claim is confirmed and strengthened.** Novelty detection being monotone in taxonomic distance
+is a property of the embedding and the taxonomy, not an artefact of the rare-taxa population that
+C3 got for free. It now rests on two populations chosen by opposite criteria — everything below the
+50-image floor, and 231 species with at least 200 images each — which is a much better position than
+the single free benchmark it had yesterday.
+
+**The gaps also narrow slightly** (11.5 pt near→far here vs 11.1 in C3; near→mid 7.5 vs 8.2). Nothing
+to read into: the two runs use different known sets and different novel populations, so only the
+ordering transfers cleanly. The magnitudes should be reported as "comparable", not compared.
+
+## The closed-set check, and why it is not yet interpretable
+
+C3b scores **0.9110** species macro-F1 on its own test fold, against the C3 model's 0.9148 on the
+full one. That looks like a −0.38 pt cost for removing 2.62 % of the data, and it is tempting to
+call it acceptable and move on.
+
+**It is not a valid comparison.** C3b's fold has 11,745 species; the full fold has 12,041. Macro-F1
+does not decompose over subsets — this project has a finding about exactly this
+([[2026-08-03-macro-f1-does-not-decompose]], START-HERE 4a), where the same model differed by 2.03 pt
+between a set and a subset of the same images purely through the denominator. A 0.38 pt gap across a
+296-species difference in denominator is well inside what that effect can manufacture.
+
+`lepi-C3ref-eval` is running the only comparison that means anything: the **original C3 model** on
+**C3b's fold**. Genus 0.9594 and family 0.9691 are reported above for completeness and carry the
+same caveat.
+
+Until that lands, the correct statement is: **the stratified AUROCs stand on their own** — they are
+computed within one model and one benchmark, so the denominator problem does not touch them — and
+the claim that C3b is a comparably-good model is unverified.

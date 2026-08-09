@@ -356,6 +356,25 @@ The operational reading is the ordering, not the average. The easy stratum (`far
 is rare — 399 images — while the hard one (`near`, a new species in a familiar genus) is both the
 most common field case and 11–12 points worse. A single pooled AUROC is flattered by the easy strata.
 
+**The ordering is not an artefact of rarity.** The novel taxa above are obtained for free, as every
+species below the 50-image training floor — so "unseen" is perfectly confounded with "rare, and
+plausibly photographed differently", and the confound runs *with* the effect, since far taxa are
+rarer than near ones. We therefore retrain the identical model on a corpus with **common** taxa
+deliberately withheld at all three ranks (231 species, each with >= 200 training images: 2 whole
+families, 40 whole genera, 120 single species; 2.62 % of rows removed) and repeat the measurement.
+
+| stratum | novel population = rare (free) | novel population = **common (withheld)** |
+|---|---|---|
+| near | 0.8527 | **0.8717** |
+| mid | 0.9342 | **0.9463** |
+| far | 0.9641 | **0.9726** |
+
+The ordering is unchanged and every stratum is marginally *better*, so rarity was if anything adding
+noise to the novel population rather than manufacturing the gradient. The claim now rests on two
+novel populations selected by opposite criteria — everything below a 50-image floor, and 231 species
+above a 200-image one. Absolute values across the two columns are not strictly comparable (different
+known sets and different novel populations); the ordering is what transfers.
+
 *(An earlier version of this section reported the plain head at 0.561/0.618/0.667, a 29–31 point
 deficit. Those numbers used max-logit, which §4.3 shows is that head's worst rule by 27 points. The
 corrected comparison above has the two heads within 2 points and trading places by stratum.)*
@@ -642,6 +661,16 @@ The staged recipe is **0.78 points better in-distribution** and 1.65 worse exter
 end to end, at a fraction of the cost — and, more usefully, its two adaptation stages are *repeatable
 per deployment*. A new camera does not require a new model; it requires a new classifier, which is
 minutes on a frozen trunk and needs no labels.
+
+> **[PENDING — do not publish this paragraph's 1.65 as a property of the method.]** Both arms above
+> use a pseudo-label set that inherits the *natural, long-tailed* class distribution of the target
+> camera. Rebalancing it (§4.x, in preparation) lifts the staged recipe to probe **0.7692** and
+> held-out species **0.7781**, which closes the external gap to **0.14 points** — a third of the
+> noise floor — and puts the staged recipe *ahead* on unseen species. The 1.65 pt trade replicated
+> at 198 M, but both replications used the same unbalanced pseudo-labels, so they are one confound
+> measured twice rather than independent confirmation. The end-to-end arm has not yet had the same
+> fix; that run (B9) is in flight and decides whether this section reports a trade-off or a
+> cost-saving with no trade at all.
 
 We report this as an empirical regularity on one problem rather than a law. But four independent
 questions resolving the same way, with the constructive assembly then behaving as predicted, is a

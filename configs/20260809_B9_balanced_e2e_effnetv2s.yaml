@@ -1,0 +1,60 @@
+# B9: end-to-end training with BALANCED pseudo-labels. The control R5 needs.
+#
+# R5 (staged, frozen trunk, balanced) scores probe 0.7692 / held-out 0.7781 against B3rep5x
+# (end-to-end, 5 epochs) at 0.7706 / 0.7704 -- so the 1.65 pt shifted deficit that F2 measured and
+# G2 replicated at 198 M has essentially vanished. But B3rep5x used the UNBALANCED pseudo-parquet
+# (combined_b3_5x), so that comparison now flatters the staged recipe: only one side got the fix.
+#
+# B9 is B3rep5x with exactly one thing changed -- combined_balanced.parquet instead of
+# combined_b3_5x.parquet. Same arcface head, same oversample_power 0.5, same domain_aug: trap, same
+# 5 epochs end-to-end.
+#
+# Prediction (committed): probe 0.775-0.790 and held-out 0.775-0.790. Balance should help end-to-end
+# at least as much as it helped the staged recipe (+1.07 probe, +3.23 held-out over the unbalanced
+# arm), so I expect end-to-end to reclaim a real lead on probe -- roughly the 1.5 pt that F2 and G2
+# both measured. Falsified if probe lands below 0.7706 (B3rep5x itself), which would mean balanced
+# replication is specifically a frozen-trunk device and does nothing when the backbone can move.
+#
+# The outcome decides what the paper claims. If B9 reclaims the gap, F2/G2's "staged trades ~1.5 pt
+# of shift for ~0.9 pt in-distribution" survives with both arms upgraded. If it does not, the trade
+# was never a property of the method -- it was the pseudo-label class distribution, and the staged
+# recipe matches end-to-end at a fraction of the cost.
+version: 1.0
+desc: lepinet-B9-balanced-e2e-effnetv2s-ucloud
+train:
+  parquet_path: /work/lepinet/data/flemming/splits/combined_balanced.parquet
+  img_dir: /work/global_lepi/images
+  out_dir: /work/lepinet/data/ucloud_models
+  fold: '1'
+  min_img_per_spc: 50
+  num_workers: 256
+  model_name: lepinet-B9-balanced-e2e-effnetv2s-ucloud
+  model_arch_name: efficientnet_v2_s
+  head: arcface
+  nb_epochs: 5
+  base_lr: 0.001
+  batch_size: 64
+  aug_img_size: 460
+  img_size: 256
+  optimizer: muon
+  fp16: true
+  precision: bf16
+  schedule: one_cycle
+  warmup_epochs: 0.5
+  grad_clip: 5.0
+  oversample_power: 0.5
+  family_filter: []
+  aug_kwargs:
+    max_warp: 0.0
+    max_lighting: 0.0
+    p_lighting: 0.0
+    flip_vert: true
+    max_rotate: 15.0
+    max_zoom: 1.1
+  levels:
+  - speciesKey
+  arcface_zscore: true
+  arcface_scale: 30.0
+  arcface_margin:
+  - 0.3
+  domain_aug: trap

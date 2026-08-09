@@ -232,3 +232,59 @@ is wrong.
 If R5 lands as predicted, the recommended recipe becomes: **no confidence gate, balanced
 replication** — one fewer hyperparameter than the pipeline started with, and the surviving one is a
 rebalancing knob the project already understands.
+
+---
+
+## R5: both predictions correct, and it is the best model on both shifted axes (2026-08-09)
+
+**Predicted probe 0.762–0.780 and held-out 0.765–0.785. Landed 0.7692 and 0.7781 — both inside.**
+The falsification line (held-out below 0.7550) was cleared by 2.3 points.
+
+| | gate | unique | distribution | probe | held-out |
+|---|---|---|---|---|---|
+| F2 | quantile (round 1) | 12,230 | natural | 0.7541 | 0.7594 |
+| R2 | quantile 30 % | 8,169 | natural | 0.7161 | 0.7257 |
+| R3 | per-species k = 35 | 7,801 | **capped** | 0.7585 | 0.7682 |
+| R4 | none | 27,230 | natural | 0.7674 | 0.7458 |
+| **R5** | **none** | **27,230** | **balanced** | **0.7692** | **0.7781** |
+
+R5 beats R4 on held-out by **+0.0323** (6.2× floor) and R3 on probe by **+0.0107** (2.6× floor). The
+two effects are separable and they compose: **unique coverage buys probe, class balance buys
+held-out species, and taking both loses nothing.** The confidence gate is gone entirely.
+
+## What this does to the staged-vs-end-to-end trade
+
+This is the part that matters beyond self-training, and it contradicts a claim the project made twice.
+
+| | probe | held-out |
+|---|---|---|
+| B3rep5x — end-to-end, 5 epochs, whole network | 0.7706 | 0.7704 |
+| **R5 — staged, frozen trunk, 2 + 2 epochs** | **0.7692** | **0.7781** |
+| Δ | **−0.0014** (0.3× floor) | **+0.0077** (1.5× floor) |
+
+[[2026-08-06-f2-capstone]] measured the staged recipe giving up **1.65 pt** of probe to end-to-end,
+G2 replicated it at 198 M at **1.50 pt**, and the entry concluded:
+
+> that exchange rate is a property of the method rather than of the model size.
+
+**On this evidence it is not.** With balanced pseudo-labels the probe gap is 0.14 pt — a third of a
+noise floor, indistinguishable from zero — and the staged recipe is *ahead* on held-out species. Two
+independent scales agreeing did not make the finding robust; both were measured with the same
+unbalanced pseudo-parquet, so they were the same confound twice, not a replication.
+
+**But the comparison is not yet fair, in the other direction.** B3rep5x used
+`combined_b3_5x.parquet` — unbalanced. Only the staged arm has had the fix. **B9** is running now:
+B3rep5x with exactly one change, `combined_balanced.parquet`, 5 epochs end-to-end at 20 M, 6.5 h.
+Predicted probe 0.775–0.790 and held-out 0.775–0.790, on the reasoning that balance should help
+end-to-end at least as much as it helped the staged recipe (+1.07 probe, +3.23 held-out). Falsified
+if probe lands below B3rep5x's own 0.7706, which would make balanced replication specifically a
+frozen-trunk device.
+
+**B9 decides what the paper claims.** If it reclaims the gap, F2/G2's trade survives with both arms
+upgraded and the story is unchanged apart from better numbers. If it does not, the trade was never a
+property of the method and the staged recipe matches end-to-end training at a fraction of its cost —
+a much stronger claim, and one that would need the 198 M pair re-run before it could be published.
+
+**One number still missing:** R5's closed-set accuracy. F2's entire case was in-distribution 0.9081
+against B3rep5x's 0.9003, and R5 is only comparable if it did not buy its shifted gains there. That
+eval is running.

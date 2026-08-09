@@ -1,0 +1,29 @@
+# The matched control C3b needs. C3b scored 0.9110 over the 11,745 species left in its reduced
+# test fold; the C3 model's 0.9148 is over 12,041 species in the full one. Macro-F1 DOES NOT
+# DECOMPOSE over subsets (START-HERE finding 4a), so those two numbers are not comparable and
+# the -0.38 pt gap may be entirely an artefact of the denominator. This scores the ORIGINAL C3
+# model on C3b's fold, which is the only comparison that means anything.
+name = "lepinet-C3ref-eval"
+replicas = 1
+[application]
+name = "pytorch-te"
+version = "26.05"
+[product]
+id = "gpu-nvidia-b200-1-gpu"
+category = "gpu-nvidia-b200"
+provider = "ucloud"
+[time_allocation]
+hours = 4
+[sync]
+local = ".."
+remote = "/12347837/repos/lepinet"
+[setup]
+script = "setup-lepinet.sh"
+run = "lepinet test --model '/work/lepinet/data/ucloud_models/*-lepinet-heads-global-independent-muon-5ep-oversample-effnetv2s-ucloud/*.pt' --parquet /work/lepinet/data/splits/c3b_train.parquet --img-dir /work/global_lepi/images --out-dir /work/lepinet/data/ucloud_preds/C3ref-eval --test-set 0 --min-img-per-spc 0 --img-size 256 --aug-img-size 460 --batch-size 128 --num-workers 32 --eval-levels speciesKey,genusKey,familyKey"
+[schedule]
+auto_extend = "1h"
+max_time = "8h"
+[[resources]]
+type = "file"
+path = "/12347837/datasets/global_lepi"
+read_only = true
