@@ -1,6 +1,6 @@
 # PLAN — where we are, and what runs next
 
-**Kind:** living · **Last updated:** 2026-08-08 · **Supersedes:** [[2026-07-28-landscape-and-plan]]
+**Kind:** living · **Last updated:** 2026-08-09 · **Supersedes:** [[2026-07-28-landscape-and-plan]]
 
 The one file in `journal/` meant to be true *today*. Everything else is a record of a moment.
 
@@ -22,7 +22,7 @@ operational text and were effectively unfindable.)*
 | **E** | is open-set the binding constraint? | **closed — no**, the premise was a scoring-rule artefact |
 | **F** | the assembled recipe | **closed** — F2 composes |
 | **G** | the 198 M confirmation | **re-running as G3 + B10** (owner-approved, gated on B9) |
-| **H** | scaling the head to ~1 M species | **open** — inference solved, training not |
+| **H** | scaling the head to ~1 M species | **running** — H4 tests the last training candidate |
 | **L** | imbalanced learning | **closed** — cRT is the answer |
 | **P** | pretrained encoders (BioCLIP-2) as frozen trunks | **deferred** (owner) |
 | **T** | what target labels would have bought | **closed** |
@@ -42,7 +42,8 @@ operational text and were effectively unfindable.)*
 | **B9** | **end-to-end with balanced pseudo-labels** — B3rep5x + one change, 6.5 h. The control R5 needs: only the staged arm has had the balance fix. Predicted probe **0.775–0.790**, held-out **0.775–0.790**; falsified below 0.7706. **Decides whether F2/G2's staged-vs-end-to-end trade survives.** |
 | ~~R5-eval~~ | **DONE. in-dist 0.9074.** −0.07 vs F2 for +1.51 probe / +1.87 held-out: balance is **free** at the classifier stage. vs end-to-end B3rep5x: **+0.71 in-dist, −0.14 probe, +0.77 held-out**. |
 | ~~C3ref-eval~~ | **DONE. 0.9114 vs C3b's 0.9110 — the hold-out cost 0.04 pt, i.e. nothing.** The apparent −0.38 was entirely the denominator. Fourth time the "do both numbers mean the same thing" rule has paid. |
-| **bal3lvl-prep** | builds the **3-level** balanced parquet the 198 M configs need — `combined_balanced.parquet` is species-only and would have raised KeyError hours in. Submitted ahead of the pair on purpose. |
+| ~~bal3lvl-prep~~ | **DONE.** 3-level balanced parquet built: 135,296 rows, 151 per species x 896, no species growth. G3/B10 are unblocked on data. |
+| **H4** | **proxy-free head** — species prototypes are an EMA buffer, no trained matrix, no optimiser state. **15.36 GB -> 5.12 GB at 1 M classes.** Predicted 0.900-0.912 vs the baseline's 0.9148; falsified below 0.885. [[2026-08-09-can-centroids-be-trained-against]] |
 
 ## 3. Ordered backlog — take the top unblocked item
 
@@ -57,7 +58,7 @@ A 5-epoch 20 M run is ≈6.4 h; a 2-epoch frozen-trunk stage is ≈30 min at 20 
 | 1 | **G3 + B10 — the 198 M pair, balanced** | ~1 h + ~7-10 h | **Owner-approved 2026-08-09, gated on B9 closing the gap.** Both G2 and B8 used unbalanced pseudo-labels, so re-running one arm would repeat at 198 M the unfairness B9 removes at 20 M. Configs, job files and the 3-level prep are built and waiting. G3 predicted probe 0.775-0.795 (falsified below 0.7689); B10 predicted 0.785-0.800 (falsified below 0.7798). |
 | 3 | **paper: figures** | none | Deferred by the owner until the storyline settled. It has. The results now demand: the replication-share curve with transfer overlaid, the three-benchmark comparison, and the scoring-rule table. |
 | 5 | **P1 — BioCLIP-2 as a frozen trunk** | build + ~1 h | Owner-deferred, reviewer-inevitable. T2b is what makes it plausible. See §5. |
-| 6 | **H — the head-scaling build** | large | Only if the 1 M-species direction is pursued. See §4. |
+| ~~6~~ | ~~H — the head-scaling build~~ | — | **running as H4.** |
 | ~~7~~ | ~~C3b — hold out *common* taxa~~ | — | **running.** |
 
 **Do not do** — each closed for a reason, not for lack of time:
@@ -83,7 +84,8 @@ A 1280 × 1M prototype matrix is 5.1 GB plus 10.2 GB of optimiser state. Options
 | fixed / taxonomy codes | weakened by the same spectrum |
 | uniform sampled softmax | **dead** — smooth, no plateau; 1024/1M is 0.1 % coverage |
 | hard-negative sampling | weakened — taxonomy-aware negatives recovered only 26 % (H3) |
-| **training** | **open.** Remaining candidate: proxy-free (EMA centroids as the classifier, no matrix at all) |
+| **training** | **running as H4** — proxy-free: EMA centroids in a buffer, no matrix, no optimiser state. Removes 10.24 GB of the 15.36 GB. [[2026-08-09-can-centroids-be-trained-against]] |
+| *constraint found* | a proxy-free head has **no trainable parameter on the species path** unless the bottleneck is kept, so it cannot serve a frozen-trunk stage (cRT, adaptation) without one |
 
 ## 5. Group P — pretrained encoders as trunks (deferred by the owner, 2026-08-06)
 

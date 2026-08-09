@@ -1,0 +1,58 @@
+# H4: the classifier with no prototype matrix. Group H's last open training candidate.
+#
+# Identical to the 0.9148 baseline in every respect except `head: proxy_free` -- the species
+# prototypes are a BUFFER holding an EMA of each class's own embeddings, not trained parameters.
+# Genus and family keep their ordinary trained layers (4,333 and 102 classes are not the memory
+# problem, and changing them would confound the measurement).
+#
+# Why it matters: at ~1 M species (Tree of Life scale) a 1280-wide trained matrix is 5.12 GB of
+# parameters PLUS 10.24 GB of Adam state = 15.36 GB. Proxy-free is 5.12 GB of buffer and nothing
+# else -- a 3x reduction, and it removes precisely the component that does not fit. Every other
+# route has already been measured and rejected (low-rank: rank 1035/1280; sampled softmax: no
+# plateau; taxonomy-aware negatives: 26 % recovery). Inference is already solved -- centroids
+# replace a trained matrix for 0.29 pt (H1) -- so this asks whether they can be trained AGAINST.
+#
+# Prediction (committed): species macro-F1 0.900-0.912 against the baseline's 0.9148. Centroids
+# cannot separate beyond where the data already sits, so I expect a real but modest loss -- larger
+# than H1's 0.29 pt inference cost, because there the matrix had already done the separating.
+# Falsified below 0.885, which would put the cost above a point per GB saved and close Group H's
+# training half for good.
+#
+# KNOWN CONSTRAINT, found by the selftest and not by a run: with `hidden: false` the species path
+# has no trainable parameter at all, so a proxy-free head CANNOT be used for a frozen-trunk stage
+# (cRT, adaptation) unless the bottleneck is kept. Both of this project's cheap classifier stages
+# freeze the body, so this bounds where H4 could ever be deployed.
+version: 1.0
+desc: lepinet-H4-proxyfree-effnetv2s-ucloud
+train:
+  parquet_path: /work/global_lepi/0032836-250426092105405_processing_metadata_postprocessed_quality_filtered.parquet
+  img_dir: /work/global_lepi/images
+  out_dir: /work/lepinet/data/ucloud_models
+  fold: '1'
+  min_img_per_spc: 50
+  # /work is a network mount (~90 ms/file); many readers park on I/O, so 256 on 48 vCPU is not
+  # real oversubscription. Measured ~950 img/s, ~1:24/epoch on gpu-nvidia-b200-1-gpu.
+  num_workers: 256
+  model_name: lepinet-H4-proxyfree-effnetv2s-ucloud
+  model_arch_name: efficientnet_v2_s
+  head: proxy_free
+  nb_epochs: 5
+  base_lr: 0.001
+  batch_size: 64
+  aug_img_size: 460
+  img_size: 256
+  optimizer: muon
+  fp16: true
+  precision: fp16
+  schedule: one_cycle
+  warmup_epochs: 0.5
+  grad_clip: 5.0
+  oversample_power: 0.5
+  family_filter: []
+  aug_kwargs:
+    max_warp: 0.0
+    max_lighting: 0.0
+    p_lighting: 0.0
+    flip_vert: true
+    max_rotate: 15.0
+    max_zoom: 1.1
