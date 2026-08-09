@@ -1,0 +1,33 @@
+# The 198 M configs (G2, B8) use marginal/3-level heads, so they need genus and family columns
+# on the pseudo rows -- combined_balanced.parquet is species-only (dev/066 defaults to
+# --levels speciesKey) and would raise KeyError in prepare_df hours into the run. Submitted
+# ahead of the pair so the untested step fails cheaply if it is going to.
+name = "lepinet-bal3lvl-prep"
+replicas = 1
+[application]
+name = "pytorch-te"
+version = "26.05"
+[product]
+id = "gpu-nvidia-b200-1-gpu"
+category = "gpu-nvidia-b200"
+provider = "ucloud"
+[time_allocation]
+hours = 3
+[sync]
+local = ".."
+remote = "/12347837/repos/lepinet"
+[setup]
+script = "setup-lepinet.sh"
+run = "python dev/066_combine_pseudo.py --global-parquet /work/global_lepi/0032836-250426092105405_processing_metadata_postprocessed_quality_filtered.parquet --pseudo-parquet /work/lepinet/data/flemming/splits/pseudo_nogate.parquet --out /work/lepinet/data/flemming/splits/combined_balanced_3lvl.parquet --min-img-per-spc 50 --target-frac 0.02 --balance --levels speciesKey,genusKey,familyKey"
+[schedule]
+auto_extend = "1h"
+max_time = "6h"
+[[resources]]
+type = "file"
+path = "/12347837/datasets/flemming"
+read_only = true
+
+[[resources]]
+type = "file"
+path = "/12347837/datasets/global_lepi"
+read_only = true

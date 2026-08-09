@@ -143,3 +143,20 @@ same caveat.
 Until that lands, the correct statement is: **the stratified AUROCs stand on their own** — they are
 computed within one model and one benchmark, so the denominator problem does not touch them — and
 the claim that C3b is a comparably-good model is unverified.
+
+**Resolved (2026-08-09).** The C3 model on C3b's fold scores **0.9114**. C3b scores **0.9110**.
+
+| | species | genus | family |
+|---|---|---|---|
+| C3 model, C3b's fold | 0.9114 | 0.9587 | 0.9698 |
+| **C3b model, C3b's fold** | **0.9110** | **0.9594** | **0.9691** |
+| Δ | **−0.04** | +0.07 | −0.07 |
+
+**Removing 2.62 % of the training data and 243 taxa cost 0.04 pt** — nothing, at any level. The
+apparent −0.38 pt against the full-fold 0.9148 was **entirely the denominator**, as suspected: 296
+fewer species in the macro average, not a worse model.
+
+So C3b is a fair hold-out and its AUROCs are interpretable. And this is the **fourth** time the
+"check that both numbers mean the same thing" rule has paid in this project. It cost one 30-minute
+eval to convert an unusable comparison into a clean one; the alternative was reporting a 0.38 pt
+training-data cost that does not exist.

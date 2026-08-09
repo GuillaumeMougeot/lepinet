@@ -21,7 +21,7 @@ operational text and were effectively unfindable.)*
 | **D** | product: bundle, calibration, small student | **closed** |
 | **E** | is open-set the binding constraint? | **closed — no**, the premise was a scoring-rule artefact |
 | **F** | the assembled recipe | **closed** — F2 composes |
-| **G** | the 198 M confirmation | **may need re-running** — G2 used unbalanced pseudo-labels |
+| **G** | the 198 M confirmation | **re-running as G3 + B10** (owner-approved, gated on B9) |
 | **H** | scaling the head to ~1 M species | **open** — inference solved, training not |
 | **L** | imbalanced learning | **closed** — cRT is the answer |
 | **P** | pretrained encoders (BioCLIP-2) as frozen trunks | **deferred** (owner) |
@@ -40,8 +40,9 @@ operational text and were effectively unfindable.)*
 | ~~R5~~ | **DONE — both predictions inside range. probe 0.7692 / held-out 0.7781.** Best model in the project on both shifted axes. Coverage and balance are separable and compose. **The confidence gate is gone.** [[2026-08-08-self-training-does-not-iterate]] |
 | ~~C3b~~ | **DONE — monotonicity confirmed, prediction half right. near 0.8717 / mid 0.9463 / far 0.9726.** Ordering held; magnitudes went *up*, not down as predicted. Novelty-has-degrees now rests on two populations chosen by opposite criteria. [[2026-08-08-is-novelty-monotone-or-just-rare]] |
 | **B9** | **end-to-end with balanced pseudo-labels** — B3rep5x + one change, 6.5 h. The control R5 needs: only the staged arm has had the balance fix. Predicted probe **0.775–0.790**, held-out **0.775–0.790**; falsified below 0.7706. **Decides whether F2/G2's staged-vs-end-to-end trade survives.** |
-| **R5-eval** | R5's closed-set number, still unknown. F2's case was in-dist 0.9081 > 0.9003. |
-| **C3ref-eval** | the C3 model on C3b's reduced fold. C3b's 0.9110 vs 0.9148 is **not** a valid comparison — different denominators, and macro-F1 does not decompose. |
+| ~~R5-eval~~ | **DONE. in-dist 0.9074.** −0.07 vs F2 for +1.51 probe / +1.87 held-out: balance is **free** at the classifier stage. vs end-to-end B3rep5x: **+0.71 in-dist, −0.14 probe, +0.77 held-out**. |
+| ~~C3ref-eval~~ | **DONE. 0.9114 vs C3b's 0.9110 — the hold-out cost 0.04 pt, i.e. nothing.** The apparent −0.38 was entirely the denominator. Fourth time the "do both numbers mean the same thing" rule has paid. |
+| **bal3lvl-prep** | builds the **3-level** balanced parquet the 198 M configs need — `combined_balanced.parquet` is species-only and would have raised KeyError hours in. Submitted ahead of the pair on purpose. |
 
 ## 3. Ordered backlog — take the top unblocked item
 
@@ -53,6 +54,7 @@ A 5-epoch 20 M run is ≈6.4 h; a 2-epoch frozen-trunk stage is ≈30 min at 20 
 | ~~1~~ | ~~coverage-preserving gate~~ | — | **DONE as R3 — worked, +4.24 pt.** Its diagnostic opened R4 (no gate at all), now running. |
 | ~~2~~ | ~~second adaptation round~~ | — | **running as R2.** |
 | ~~3~~ | ~~joint vs sequential classifier stages~~ | — | **running as F3.** |
+| 1 | **G3 + B10 — the 198 M pair, balanced** | ~1 h + ~7-10 h | **Owner-approved 2026-08-09, gated on B9 closing the gap.** Both G2 and B8 used unbalanced pseudo-labels, so re-running one arm would repeat at 198 M the unfairness B9 removes at 20 M. Configs, job files and the 3-level prep are built and waiting. G3 predicted probe 0.775-0.795 (falsified below 0.7689); B10 predicted 0.785-0.800 (falsified below 0.7798). |
 | 3 | **paper: figures** | none | Deferred by the owner until the storyline settled. It has. The results now demand: the replication-share curve with transfer overlaid, the three-benchmark comparison, and the scoring-rule table. |
 | 5 | **P1 — BioCLIP-2 as a frozen trunk** | build + ~1 h | Owner-deferred, reviewer-inevitable. T2b is what makes it plausible. See §5. |
 | 6 | **H — the head-scaling build** | large | Only if the 1 M-species direction is pursued. See §4. |

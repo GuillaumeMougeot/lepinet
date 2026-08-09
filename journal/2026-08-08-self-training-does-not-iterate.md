@@ -285,6 +285,21 @@ upgraded and the story is unchanged apart from better numbers. If it does not, t
 property of the method and the staged recipe matches end-to-end training at a fraction of its cost —
 a much stronger claim, and one that would need the 198 M pair re-run before it could be published.
 
-**One number still missing:** R5's closed-set accuracy. F2's entire case was in-distribution 0.9081
-against B3rep5x's 0.9003, and R5 is only comparable if it did not buy its shifted gains there. That
-eval is running.
+**The closed-set number, and it is the one that completes the argument (2026-08-09).** R5 scores
+**0.9074** in-distribution.
+
+| | in-distribution | probe | held-out |
+|---|---|---|---|
+| B3rep5x — end-to-end, 5 ep, unbalanced | 0.9003 | 0.7706 | 0.7704 |
+| F2 — staged, unbalanced | **0.9081** | 0.7541 | 0.7594 |
+| **R5 — staged, balanced** | 0.9074 | **0.7692** | **0.7781** |
+
+**R5 gives up 0.07 pt in-distribution against F2 — nothing — and gains +1.51 probe and +1.87
+held-out.** Balanced replication is not a trade at all at this stage; it is free. And against
+end-to-end training R5 is **+0.71 in-distribution, −0.14 probe, +0.77 held-out**: better or tied on
+every axis, with the one deficit at a third of a noise floor.
+
+That is a materially different claim from the one F2 made. F2 said the staged recipe buys
+in-distribution accuracy and cheapness at the price of ~1.65 pt under shift. On these numbers there
+is no price. **Pending B9** — only the staged arm has had the balance fix, and if end-to-end gains as
+much from it, the trade returns with both arms shifted upward.
