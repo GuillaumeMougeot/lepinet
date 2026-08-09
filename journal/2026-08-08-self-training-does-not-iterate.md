@@ -303,3 +303,75 @@ That is a materially different claim from the one F2 made. F2 said the staged re
 in-distribution accuracy and cheapness at the price of ~1.65 pt under shift. On these numbers there
 is no price. **Pending B9** — only the staged arm has had the balance fix, and if end-to-end gains as
 much from it, the trade returns with both arms shifted upward.
+
+---
+
+## B9: balanced replication is a frozen-trunk device, and it *hurts* end-to-end (2026-08-09)
+
+**Predicted probe 0.775–0.790, falsified below B3rep5x's own 0.7706. Landed 0.7635 — falsified.**
+Held-out landed at 0.7342 against a predicted 0.775–0.790, missing by 4.1 points.
+
+The same single change, applied to the two training regimes, moves them in **opposite directions**:
+
+| | probe | held-out |
+|---|---|---|
+| F2 — staged, unbalanced | 0.7541 | 0.7594 |
+| **R5 — staged, balanced** | **0.7692 (+1.51)** | **0.7781 (+1.87)** |
+| B3rep5x — end-to-end, unbalanced | 0.7706 | 0.7704 |
+| **B9 — end-to-end, balanced** | **0.7635 (−0.71)** | **0.7342 (−3.62)** |
+
+Held-out moves +1.87 for the frozen trunk and **−3.62** for the trainable one, 7× the floor in the
+wrong direction. This is the falsification clause I wrote verbatim — "balanced replication is
+specifically a frozen-trunk device" — except that it does not merely fail to help end-to-end, it
+does real damage.
+
+## The mechanism, and it was already half-written in `dev/066`
+
+Balancing gives every species 151 rows. A frequent trap species has hundreds of unique images to
+draw them from; a rare one may have **two**, which then appear ~75 times each. So balanced
+replication does not spread effort evenly — it **concentrates replication precisely on the classes
+with the fewest unique images**, which are also the classes whose pseudo-labels are least reliable
+(the ungated set is 86.43 % accurate overall, and the errors are not uniformly distributed).
+
+Whether that is harmful depends entirely on what can absorb it:
+
+- **Frozen trunk** — only a prototype can move. A noisy, over-replicated class shifts one row of the
+  classifier, and the representation is untouched. The rebalancing benefit dominates.
+- **Trainable backbone** — the representation itself memorises the over-replicated images. This is
+  exactly what [[2026-08-04-replication-sweep]] found at high dose: *"above [2 %], replication
+  converts adaptation into memorisation of the pseudo-labelled images."* Balancing does not raise the
+  dose, but it redistributes it onto the least-supported classes, which is the same failure aimed at
+  a worse target.
+
+So the two results are one result. **Replication is safe only where it cannot reach the
+representation.**
+
+## What it does to the staged-vs-end-to-end claim
+
+Each arm at its own best configuration:
+
+| | in-distribution | probe | held-out | training |
+|---|---|---|---|---|
+| **end-to-end, best (B3rep5x, unbalanced)** | 0.9003 | **0.7706** | 0.7704 | 5 ep, whole network |
+| **staged, best (R5, balanced)** | **0.9074** | 0.7692 | **0.7781** | 5 ep repr. + 2 x 2 ep frozen |
+| Δ (staged − end-to-end) | **+0.71** | **−0.14** | **+0.77** | |
+
+**The 1.65 pt trade does not survive — but not for the reason I gave this morning.** It is not that
+balance lifts both arms; it is that F2 and G2 measured both arms in the configuration that is
+optimal for end-to-end and suboptimal for staged. Given each regime its own best pseudo-label
+distribution, the probe gap is 0.14 pt (0.3× floor) and the staged recipe leads on the other two axes.
+
+**And this is the same methodological error the project has already retracted once.** The 31-point
+ArcFace open-set claim was a *rule* comparison dressed as a *head* comparison
+([[2026-08-06-the-arcface-open-set-claim-was-a-rule-comparison]]); the fix was "give each head its
+own best rule". This is that lesson again in a new place: **give each training regime its own best
+pseudo-label distribution, or you are comparing configurations rather than methods.** Twice now the
+project has found a headline difference that shrank to noise once both arms were tuned. That
+generalisation is worth more than either individual result.
+
+## Scope correction
+
+This morning I wrote finding 7 as though balanced replication were simply better. It is not — it is
+better **for a frozen trunk** and worse otherwise. START-HERE has been narrowed accordingly. The
+recommended recipe is unchanged (staged + balanced), because that is the pairing that wins, but the
+knob does not transfer to the regime it was not measured in.

@@ -7,9 +7,20 @@
 # sweep: G2 and B8 both used the UNBALANCED pseudo-parquet, so re-running only one arm would repeat
 # at 198 M exactly the unfairness B9 exists to remove at 20 M.
 #
-# Prediction (committed): probe 0.785-0.800, held-out 0.785-0.800. Balance should help end-to-end
-# roughly as much as it helps the staged recipe; if it does, G3 vs B10 reproduces a real gap at
-# 198 M and F2/G2's trade survives with both arms upgraded. Falsified below B8's own 0.7798.
+# Prediction REWRITTEN 2026-08-09 after B9, before this run started. The original text predicted
+# probe 0.785-0.800 on the reasoning that balance would help end-to-end as much as it helps the
+# staged recipe. B9 falsified exactly that at 20 M: balanced end-to-end scored probe 0.7635 and
+# held-out 0.7342, i.e. -0.71 and -3.62 against its own unbalanced arm.
+#
+# Prediction (committed): probe 0.770-0.785, i.e. BELOW B8's 0.7798, and held-out 0.755-0.775, below
+# B8's 0.7816. B10 is expected to LOSE. It is being run anyway because the whole point of the 198 M
+# pair is to avoid asserting a 20 M interaction at scale without checking -- and this project has
+# already watched five interventions change magnitude, and three change usable sign, between 20 M
+# and 198 M. Falsified if probe exceeds 0.7798, which would mean the balance-hurts-end-to-end
+# interaction is a small-model effect and B8 is not end-to-end's best 198 M configuration after all.
+#
+# If B10 loses as predicted, B8 remains the end-to-end arm of the headline comparison and G3 vs B8
+# is the fair 198 M pair.
 version: 1.0
 desc: lepinet-B10-balanced-e2e-dinov3cnxl-ucloud
 train:

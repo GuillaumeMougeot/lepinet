@@ -662,15 +662,30 @@ end to end, at a fraction of the cost — and, more usefully, its two adaptation
 per deployment*. A new camera does not require a new model; it requires a new classifier, which is
 minutes on a frozen trunk and needs no labels.
 
-> **[PENDING — do not publish this paragraph's 1.65 as a property of the method.]** Both arms above
-> use a pseudo-label set that inherits the *natural, long-tailed* class distribution of the target
-> camera. Rebalancing it (§4.x, in preparation) lifts the staged recipe to probe **0.7692** and
-> held-out species **0.7781**, which closes the external gap to **0.14 points** — a third of the
-> noise floor — and puts the staged recipe *ahead* on unseen species. The 1.65 pt trade replicated
-> at 198 M, but both replications used the same unbalanced pseudo-labels, so they are one confound
-> measured twice rather than independent confirmation. The end-to-end arm has not yet had the same
-> fix; that run (B9) is in flight and decides whether this section reports a trade-off or a
-> cost-saving with no trade at all.
+**Both arms must be tuned, or this is a configuration comparison.** The table above gives both arms
+the same pseudo-label set, which inherits the *natural, long-tailed* class distribution of the target
+camera. Rebalancing that set so every species contributes equally moves the two regimes in opposite
+directions:
+
+| | in-distribution | probe | held-out species |
+|---|---|---|---|
+| staged, natural pseudo-labels | 0.9081 | 0.7541 | 0.7594 |
+| **staged, balanced** | 0.9074 | **0.7692** | **0.7781** |
+| **end-to-end, natural** | 0.9003 | **0.7706** | 0.7704 |
+| end-to-end, balanced | — | 0.7635 | 0.7342 |
+
+Balancing is worth **+1.51 probe / +1.87 held-out** to a frozen trunk and **−0.71 / −3.62** to a
+trainable one. The mechanism is that balancing concentrates replication on the classes with fewest
+unique images — which are also those with the least reliable pseudo-labels — and only a frozen trunk
+prevents the representation from memorising them.
+
+Comparing each regime at *its own* best configuration, the staged recipe is **+0.71 in-distribution,
+−0.14 external (a third of the noise floor), and +0.77 on held-out species**. The 1.65-point external
+deficit reported in earlier drafts was an artefact of scoring both arms in the configuration that
+suits end-to-end training; it is not a property of staging. We flag this explicitly because it is the
+second time in this work that a headline gap collapsed once both arms were tuned — the first being
+the open-set head comparison of §4.3, where a 31-point margin advantage became 0.78 once each head
+was read with its own best scoring rule.
 
 We report this as an empirical regularity on one problem rather than a law. But four independent
 questions resolving the same way, with the constructive assembly then behaving as predicted, is a
