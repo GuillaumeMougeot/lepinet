@@ -1,6 +1,6 @@
 # PLAN — where we are, and what runs next
 
-**Kind:** living · **Last updated:** 2026-08-09 · **Supersedes:** [[2026-07-28-landscape-and-plan]]
+**Kind:** living · **Last updated:** 2026-08-10 · **Supersedes:** [[2026-07-28-landscape-and-plan]]
 
 The one file in `journal/` meant to be true *today*. Everything else is a record of a moment.
 
@@ -21,7 +21,7 @@ operational text and were effectively unfindable.)*
 | **D** | product: bundle, calibration, small student | **closed** |
 | **E** | is open-set the binding constraint? | **closed — no**, the premise was a scoring-rule artefact |
 | **F** | the assembled recipe | **closed** — F2 composes |
-| **G** | the 198 M confirmation | **re-running as G3 + B10** (owner-approved, gated on B9) |
+| **G** | the 198 M confirmation | **G3 done — the staged/end-to-end verdict is capacity-dependent**; B10 running |
 | **H** | scaling the head to ~1 M species | **running** — H4 tests the last training candidate |
 | **L** | imbalanced learning | **closed** — cRT is the answer |
 | **P** | pretrained encoders (BioCLIP-2) as frozen trunks | **deferred** (owner) |
@@ -40,12 +40,12 @@ operational text and were effectively unfindable.)*
 | ~~R5~~ | **DONE — both predictions inside range. probe 0.7692 / held-out 0.7781.** Best model in the project on both shifted axes. Coverage and balance are separable and compose. **The confidence gate is gone.** [[2026-08-08-self-training-does-not-iterate]] |
 | ~~C3b~~ | **DONE — monotonicity confirmed, prediction half right. near 0.8717 / mid 0.9463 / far 0.9726.** Ordering held; magnitudes went *up*, not down as predicted. Novelty-has-degrees now rests on two populations chosen by opposite criteria. [[2026-08-08-is-novelty-monotone-or-just-rare]] |
 | ~~B9~~ | **DONE — FALSIFIED, and it inverts. probe 0.7635 / held-out 0.7342.** Balance is worth +1.51/+1.87 to a frozen trunk and **−0.71/−3.62** to end-to-end. Best-vs-best, the staged recipe is **+0.71 in-dist, −0.14 probe, +0.77 held-out** — F2/G2's 1.65 pt trade was a configuration comparison. [[2026-08-08-self-training-does-not-iterate]] |
-| **G3** | staged at 198 M, balanced. Predicted probe 0.775-0.795; falsified below 0.7689. |
-| **B10** | end-to-end at 198 M, balanced. **Prediction rewritten after B9, before launch: expected to LOSE** (probe 0.770-0.785 vs B8's 0.7798). Run anyway because three interventions have changed usable sign between 20 M and 198 M. |
+| ~~G3~~ | **DONE. in-dist 0.9138 / probe 0.7740 / held-out 0.7518.** Probe missed its range by 0.10 (cleared falsification); held-out missed by 1.8. **Balance is a TRADE at 198 M** (+0.92/−0.82), where it was free at 20 M. **End-to-end (B8) leads both shifted axes at 198 M** — yesterday's "the trade does not survive" holds only at 20 M. [[2026-08-10-balance-is-oversampling-and-it-does-not-scale]] |
+| **B10** | RUNNING. end-to-end at 198 M, balanced. *Note: the 198 M verdict no longer depends on it — B10 can only raise end-to-end's best, not help staged.* **Prediction rewritten after B9, before launch: expected to LOSE** (probe 0.770-0.785 vs B8's 0.7798). Run anyway because three interventions have changed usable sign between 20 M and 198 M. |
 | ~~R5-eval~~ | **DONE. in-dist 0.9074.** −0.07 vs F2 for +1.51 probe / +1.87 held-out: balance is **free** at the classifier stage. vs end-to-end B3rep5x: **+0.71 in-dist, −0.14 probe, +0.77 held-out**. |
 | ~~C3ref-eval~~ | **DONE. 0.9114 vs C3b's 0.9110 — the hold-out cost 0.04 pt, i.e. nothing.** The apparent −0.38 was entirely the denominator. Fourth time the "do both numbers mean the same thing" rule has paid. |
 | ~~bal3lvl-prep~~ | **DONE.** 3-level balanced parquet built: 135,296 rows, 151 per species x 896, no species growth. G3/B10 are unblocked on data. |
-| **H4** | **proxy-free head** — species prototypes are an EMA buffer, no trained matrix, no optimiser state. **15.36 GB -> 5.12 GB at 1 M classes.** Predicted 0.900-0.912 vs the baseline's 0.9148; falsified below 0.885. [[2026-08-09-can-centroids-be-trained-against]] |
+| ~~H4~~ | **trained cleanly, 5 ep, valid f1_species 0.8689; test eval re-running after a job-file bug.** **proxy-free head** — species prototypes are an EMA buffer, no trained matrix, no optimiser state. **15.36 GB -> 5.12 GB at 1 M classes.** Predicted 0.900-0.912 vs the baseline's 0.9148; falsified below 0.885. [[2026-08-09-can-centroids-be-trained-against]] |
 
 ## 3. Ordered backlog — take the top unblocked item
 

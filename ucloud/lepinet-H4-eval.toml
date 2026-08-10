@@ -1,3 +1,7 @@
+# NOTE: must go through dev/073, not `lepinet test`. The proxy_free head lives in the dev
+# module, so the package CLI cannot rebuild the checkpoint: "Unknown head 'proxy_free'".
+# This file was generated with the substitution accidentally disabled by a stray `if False`
+# and failed exactly that way -- the fourth script in this project to die on head registration.
 name = "lepinet-H4-eval"
 replicas = 1
 [application]
@@ -14,7 +18,7 @@ local = ".."
 remote = "/12347837/repos/lepinet"
 [setup]
 script = "setup-lepinet.sh"
-run = "lepinet test --model '/work/lepinet/data/ucloud_models/*-lepinet-H4-proxyfree-effnetv2s-ucloud/*.pt' --parquet /work/global_lepi/0032836-250426092105405_processing_metadata_postprocessed_quality_filtered.parquet --img-dir /work/global_lepi/images --out-dir /work/lepinet/data/ucloud_preds/H4-eval --test-set 0 --min-img-per-spc 0 --img-size 256 --aug-img-size 460 --batch-size 128 --num-workers 32 --eval-levels speciesKey,genusKey,familyKey"
+run = "python dev/073_proxy_free.py test --model '/work/lepinet/data/ucloud_models/*-lepinet-H4-proxyfree-effnetv2s-ucloud/*.pt' --parquet /work/global_lepi/0032836-250426092105405_processing_metadata_postprocessed_quality_filtered.parquet --img-dir /work/global_lepi/images --out-dir /work/lepinet/data/ucloud_preds/H4-eval --test-set 0 --min-img-per-spc 0 --img-size 256 --aug-img-size 460 --batch-size 128 --num-workers 32 --eval-levels speciesKey,genusKey,familyKey"
 [schedule]
 auto_extend = "1h"
 max_time = "10h"

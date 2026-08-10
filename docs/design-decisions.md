@@ -145,6 +145,18 @@ smaller, probabilistically coherent (the coarse posterior *is* the sum of the sp
 
 ---
 
+### Measure at two capacities before claiming a method property
+
+*Change one factor per run* is not sufficient. Five interventions here have changed magnitude across
+the 10x scale step and two have changed sign, so a single-scale measurement establishes a fact about
+a configuration, not a property of a method. Two conclusions moved on consecutive days in 2026-08 for
+exactly this reason: B9 (20 M) dissolved the staged-vs-end-to-end trade, and G3 (198 M) restored it.
+
+The cheap version of the rule: interventions that **reshape the data** (resampling, balanced
+replication of pseudo-labels) get *worse* with capacity; interventions that **constrain the
+optimisation** (auxiliary losses, classifier rebalancing) merely weaken. Classify the intervention
+before predicting its sign, and say which bucket it is in when writing the hypothesis.
+
 ## 4. Lessons about measurement (the most transferable part)
 
 These cost the most and generalise the furthest. Each one produced a wrong belief that survived for

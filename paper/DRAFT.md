@@ -662,30 +662,37 @@ end to end, at a fraction of the cost — and, more usefully, its two adaptation
 per deployment*. A new camera does not require a new model; it requires a new classifier, which is
 minutes on a frozen trunk and needs no labels.
 
-**Both arms must be tuned, or this is a configuration comparison.** The table above gives both arms
-the same pseudo-label set, which inherits the *natural, long-tailed* class distribution of the target
-camera. Rebalancing that set so every species contributes equally moves the two regimes in opposite
-directions:
+**Both arms must be tuned, and the answer depends on capacity.** The table above gives both arms the
+same pseudo-label set, which inherits the *natural, long-tailed* class distribution of the target
+camera. Rebalancing that set so every species contributes equally is not a neutral choice:
 
-| | in-distribution | probe | held-out species |
-|---|---|---|---|
-| staged, natural pseudo-labels | 0.9081 | 0.7541 | 0.7594 |
-| **staged, balanced** | 0.9074 | **0.7692** | **0.7781** |
-| **end-to-end, natural** | 0.9003 | **0.7706** | 0.7704 |
-| end-to-end, balanced | — | 0.7635 | 0.7342 |
+| | | in-distribution | probe | held-out species |
+|---|---|---|---|---|
+| 20 M | staged, natural | 0.9081 | 0.7541 | 0.7594 |
+| 20 M | **staged, balanced** | 0.9074 | **0.7692** | **0.7781** |
+| 20 M | **end-to-end, natural** | 0.9003 | **0.7706** | 0.7704 |
+| 20 M | end-to-end, balanced | — | 0.7635 | 0.7342 |
+| 198 M | staged, natural | **0.9150** | 0.7648 | 0.7600 |
+| 198 M | **staged, balanced** | 0.9138 | **0.7740** | 0.7518 |
+| 198 M | **end-to-end, natural** | 0.9060 | **0.7798** | **0.7816** |
 
-Balancing is worth **+1.51 probe / +1.87 held-out** to a frozen trunk and **−0.71 / −3.62** to a
-trainable one. The mechanism is that balancing concentrates replication on the classes with fewest
-unique images — which are also those with the least reliable pseudo-labels — and only a frozen trunk
-prevents the representation from memorising them.
+Two interactions. **Balancing helps a frozen trunk and harms a trainable one** (+1.51/+1.87 vs
+−0.71/−3.62 at 20 M): it concentrates replication on the classes with fewest unique images, which are
+also those with least reliable pseudo-labels, and only a frozen trunk keeps the representation from
+memorising them. **And balancing's benefit does not survive scale** — at 198 M it becomes a trade
+(+0.92 probe, −0.82 held-out), which is the same capacity behaviour we measure for square-root
+resampling (−1.52 at 20 M, −2.88 at 198 M). Balanced replication is resampling applied to the
+pseudo-label subset, and it inherits resampling's scale profile.
 
-Comparing each regime at *its own* best configuration, the staged recipe is **+0.71 in-distribution,
-−0.14 external (a third of the noise floor), and +0.77 on held-out species**. The 1.65-point external
-deficit reported in earlier drafts was an artefact of scoring both arms in the configuration that
-suits end-to-end training; it is not a property of staging. We flag this explicitly because it is the
-second time in this work that a headline gap collapsed once both arms were tuned — the first being
-the open-set head comparison of §4.3, where a 31-point margin advantage became 0.78 once each head
-was read with its own best scoring rule.
+Comparing each regime at *its own* best configuration, the staged recipe is **+0.71 in-distribution /
+−0.14 probe / +0.77 held-out at 20 M**, and **+0.78 / −0.58 / −2.98 at 198 M**. The in-distribution
+advantage is stable across the 10x change; the external parity is not. We therefore report the staged
+recipe as a **cost and redeployability result with a capacity-dependent external trade**, not as a
+free lunch: at 20 M it matches end-to-end training under shift, and at 198 M it does not.
+
+We flag the tuning point explicitly because it is the second time in this work that a headline gap
+moved once both arms were tuned — the first being the open-set head comparison of §4.3, where a
+31-point margin advantage became 0.78 once each head was read with its own best scoring rule.
 
 We report this as an empirical regularity on one problem rather than a law. But four independent
 questions resolving the same way, with the constructive assembly then behaving as predicted, is a
