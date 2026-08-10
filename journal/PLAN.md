@@ -51,6 +51,9 @@ operational text and were effectively unfindable.)*
 
 Costs from the measured formula: `images_per_epoch × epochs / 1100 img/s`, 5.04 M images/epoch.
 A 5-epoch 20 M run is ≈6.4 h; a 2-epoch frozen-trunk stage is ≈30 min at 20 M, ≈1 h at 198 M.
+**Throughput is ≈1100 img/s at 20 M but ≈480 img/s at 198 M** (measured on B10: 6 epochs x 5.18 M
+images in 18 h). Using the 20 M figure for a 198 M run underestimates by 2.3x — it turned a
+costed "7-10 h" into 18 h on 2026-08-09.
 
 | # | work | GPU | why, and the gate |
 |---|---|---|---|
@@ -58,7 +61,7 @@ A 5-epoch 20 M run is ≈6.4 h; a 2-epoch frozen-trunk stage is ≈30 min at 20 
 | ~~2~~ | ~~second adaptation round~~ | — | **running as R2.** |
 | ~~3~~ | ~~joint vs sequential classifier stages~~ | — | **running as F3.** |
 | 1 | **G3 + B10 — the 198 M pair, balanced** | ~1 h + ~7-10 h | **Owner-approved 2026-08-09, gated on B9 closing the gap.** Both G2 and B8 used unbalanced pseudo-labels, so re-running one arm would repeat at 198 M the unfairness B9 removes at 20 M. Configs, job files and the 3-level prep are built and waiting. G3 predicted probe 0.775-0.795 (falsified below 0.7689); B10 predicted 0.785-0.800 (falsified below 0.7798). |
-| 3 | **paper: figures** | none | Deferred by the owner until the storyline settled. It has. The results now demand: the replication-share curve with transfer overlaid, the three-benchmark comparison, and the scoring-rule table. |
+| ~~3~~ | ~~paper: figures~~ | — | **DONE — `dev/074_figures.py`, four figures in `paper/figures/`.** capacity-dependence (the headline), replication-share with transfer, scoring-rule inversion, stratified novelty on two populations. Numbers transcribed from journal entries with the source line cited; nothing recomputed. |
 | 5 | **P1 — BioCLIP-2 as a frozen trunk** | build + ~1 h | Owner-deferred, reviewer-inevitable. T2b is what makes it plausible. See §5. |
 | ~~6~~ | ~~H — the head-scaling build~~ | — | **running as H4.** |
 | ~~7~~ | ~~C3b — hold out *common* taxa~~ | — | **running.** |
