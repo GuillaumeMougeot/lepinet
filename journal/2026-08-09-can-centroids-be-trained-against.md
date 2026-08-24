@@ -1,8 +1,9 @@
 # H4: can a classifier be trained against centroids instead of a prototype matrix?
 
-**Kind:** research · **Status:** **OPEN** (launched 2026-08-09). Group H's last open training
-candidate: replace the species prototype matrix with a buffer of EMA class centroids, removing the
-optimiser state that is the actual barrier at 1 M species.
+**Kind:** research · **Status:** **RESOLVED (2026-08-24). FALSIFIED, decisively.** Species macro-F1
+**0.8685** against the baseline's 0.9148 — a **4.63 pt** loss, where the falsification line was 0.885.
+Centroids are good enough to *predict* with (0.29 pt, H1) and not good enough to *train against*.
+**Group H's training half is closed: shard the matrix.**
 
 ## The problem, and why every other route is closed
 
@@ -90,3 +91,69 @@ head scaling is "shard the matrix" and the project should stop looking for a cle
   nothing, which sits oddly beside the margin result (ArcFace *spends* 1035 dimensions doing
   something). Would need a second run before being believed.
 - **Below 0.885** — closed. Sharding is the answer and the paper says so in one sentence.
+
+
+---
+
+## Result: falsified by 1.65 points below the line (2026-08-24)
+
+| level | H4 (proxy-free species) | baseline (`20260716-154156`) |
+|---|---|---|
+| **species** | **0.8685** | **0.9148** |
+| genus (ordinary trained layer) | 0.9574 | matched control running |
+| family (ordinary trained layer) | 0.9701 | matched control running |
+
+**Predicted 0.900–0.912, falsified below 0.885. Landed 0.8685** — 3.15 pt below the predicted range
+and 1.65 pt below the line I set for closing the direction. This is the clearest falsification of the
+project and it needs no interpretation: **4.63 pt is far above the "one point per GB saved" threshold
+I committed to in advance.**
+
+## Why the prediction was wrong
+
+I reasoned that centroids "cannot separate beyond where the data already sits" and expected a modest
+loss — larger than H1's 0.29 pt inference cost, because there the trained matrix had already done the
+separating. That reasoning was right in direction and badly wrong in size. The gap between
+*approximating* a solved arrangement and *finding* one is not a small correction; it is most of the
+value of training the matrix at all.
+
+The mechanism is visible in H1 with hindsight. H1 showed centroids reproduce a **trained** matrix's
+decisions to within 0.29 pt — that is a statement about how close the trained prototypes end up to
+their class means, *given that the margin spent 1035 of 1280 dimensions pushing them apart*. Remove
+the training and there is nothing to do the pushing: the centroids sit wherever the encoder happens
+to put the data, and the encoder alone is not asked to separate 12,041 classes.
+
+## The internal control, and why it is worth a separate run
+
+H4's genus and family levels keep **ordinary trained layers**, and they land at 0.9574 / 0.9701 —
+unremarkable for this project. Only the species level is proxy-free, and only the species level
+collapses. That is strong evidence the loss is caused by the centroid mechanism rather than by the
+model training worse overall.
+
+**But "unremarkable" is an eyeball comparison against numbers from other folds**, and this project has
+made the macro-F1-denominator mistake three times ([[2026-08-03-macro-f1-does-not-decompose]]). So the
+baseline is being re-scored on the **same fold** with `--eval-levels`. If its genus/family match H4's,
+the attribution is airtight; if they do not, the story is "this model trained worse" and the centroid
+claim is weaker than it looks.
+
+## What closes, and what it means for 1 M species
+
+**Group H's training half is closed with a negative answer.** All five candidates are now measured:
+
+| route | verdict |
+|---|---|
+| low-rank factorisation | dead — rank 1035/1280 |
+| fixed / taxonomy codes | weakened by the same spectrum |
+| uniform sampled softmax | dead — no plateau (H2) |
+| hard-negative sampling | weakened — 26 % recovery (H3) |
+| **proxy-free EMA centroids** | **dead — 4.63 pt (H4)** |
+| inference by centroids | **solved** — 0.29 pt (H1) |
+
+**The honest answer to head scaling is: shard the prototype matrix across devices, and use centroids
+at inference.** That is an engineering answer rather than a research one, and the paper should say so
+in one sentence rather than presenting a clever alternative. Five measured failures is a stronger
+basis for that sentence than not having looked.
+
+**The deployment constraint found in the selftest still stands** and is now moot for accuracy but not
+for design: a proxy-free head has no trainable parameter on the species path unless the bottleneck is
+kept, so it could never have served a frozen-trunk stage — which is where this project's cheap
+classifier work lives.

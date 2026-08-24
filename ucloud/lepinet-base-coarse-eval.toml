@@ -1,0 +1,30 @@
+# The matched control H4 needs. H4 scores species 0.8685 (proxy-free centroids) with genus
+# 0.9574 / family 0.9701 (ordinary TRAINED layers). If the coarse levels match the baseline on
+# the SAME fold, the 4.63 pt loss is localised to the proxy-free level and is caused by the
+# centroids rather than by the model training worse overall. Without this, the attribution is
+# an eyeball comparison against 'typical' numbers from other folds -- which is exactly the
+# denominator mistake this project has made three times.
+name = "lepinet-base-coarse-eval"
+replicas = 1
+[application]
+name = "pytorch-te"
+version = "26.05"
+[product]
+id = "gpu-nvidia-b200-1-gpu"
+category = "gpu-nvidia-b200"
+provider = "ucloud"
+[time_allocation]
+hours = 4
+[sync]
+local = ".."
+remote = "/12347837/repos/lepinet"
+[setup]
+script = "setup-lepinet.sh"
+run = "lepinet test --model '/work/lepinet/data/ucloud_models/*-lepinet-heads-global-independent-muon-5ep-oversample-effnetv2s-ucloud/*.pt' --parquet /work/global_lepi/0032836-250426092105405_processing_metadata_postprocessed_quality_filtered.parquet --img-dir /work/global_lepi/images --out-dir /work/lepinet/data/ucloud_preds/base-coarse-eval --test-set 0 --min-img-per-spc 0 --img-size 256 --aug-img-size 460 --batch-size 128 --num-workers 32 --eval-levels speciesKey,genusKey,familyKey"
+[schedule]
+auto_extend = "1h"
+max_time = "8h"
+[[resources]]
+type = "file"
+path = "/12347837/datasets/global_lepi"
+read_only = true

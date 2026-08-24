@@ -21,27 +21,26 @@ operational text and were effectively unfindable.)*
 | **D** | product: bundle, calibration, small student | **closed** |
 | **E** | is open-set the binding constraint? | **closed — no**, the premise was a scoring-rule artefact |
 | **F** | the assembled recipe | **closed** — F2 composes |
-| **G** | the 198 M confirmation | **G3 done — the staged/end-to-end verdict is capacity-dependent**; B10 complete, unread |
-| **H** | scaling the head to ~1 M species | **H4 trained, unread** — needs `ucloud login` |
+| **G** | the 198 M confirmation | **closed** — the staged/end-to-end verdict is capacity-dependent; B10 confirms the comparison is fair |
+| **H** | scaling the head to ~1 M species | **closed** — all five training routes measured and dead; shard the matrix, use centroids at inference |
 | **L** | imbalanced learning | **closed** — cRT is the answer |
 | **P** | pretrained encoders (BioCLIP-2) as frozen trunks | **deferred** (owner) |
 | **T** | what target labels would have bought | **closed** |
 
 ## 2. State on return (2026-08-24)
 
-**Nothing is running.** I worked autonomously 2-10 August and then stopped; 10-24 August is idle.
-The full account is [[2026-08-24-three-week-report]].
+**Nothing is running** except one control eval. I worked autonomously 2-10 August, stopped, and the
+owner reconnected UCloud on the 24th. Full account: [[2026-08-24-three-week-report]].
 
-**Blocked on one thing:** the UCloud refresh token expired during the idle fortnight. `ucloud q ls`
-still reads the local queue DB (everything shows DONE) but `ucloud q logs` raises `AuthError`. Run
-`ucloud login` and **two completed runs become readable for the first time**:
+**The two runs that were unread are now read**, and both resolve their questions:
 
-| run | what | predicted |
-|---|---|---|
-| **H4** | proxy-free head, no prototype matrix (Group H's last training candidate). Trained 5 epochs cleanly; valid f1_species 0.8689 -- *validation fold, not a score* | species **0.900-0.912**, falsified below 0.885 |
-| **B10** | 198 M end-to-end, balanced pseudo-labels | probe **0.770-0.785**, *expected to lose* to B8's 0.7798 -- prediction rewritten on B9's evidence before the run started |
+| run | predicted | landed | verdict |
+|---|---|---|---|
+| **H4** — proxy-free head | species 0.900-0.912, falsified below 0.885 | **0.8685** | **FALSIFIED by 1.65 pt.** −4.63 vs baseline. **Group H's training half closes: shard the matrix.** [[2026-08-09-can-centroids-be-trained-against]] |
+| **B10** — 198 M end-to-end, balanced | probe 0.770-0.785, expected to lose | **0.7800** | tie with B8 (+0.05x floor). Confirms B8 represents end-to-end's best, so the 198 M comparison is fair. [[2026-08-10-balance-is-oversampling-and-it-does-not-scale]] |
 
-Neither changes the conclusions in section 6; both are paid-for numbers sitting unread.
+**Running:** `lepi-base-coarse` — the baseline re-scored on H4's fold with `--eval-levels`, to confirm
+H4's 4.63 pt loss is localised to the proxy-free species level rather than a worse model overall.
 
 ## 3. Ordered backlog — take the top unblocked item
 
@@ -53,7 +52,7 @@ costed "7-10 h" into 18 h on 2026-08-09.
 
 | # | work | GPU | why, and the gate |
 |---|---|---|---|
-| 1 | **`ucloud login`, then read H4 and B10** | none | two completed runs have never been scored against their predictions |
+| ~~1~~ | ~~read H4 and B10~~ | — | **DONE 2026-08-24.** H4 falsified, B10 a tie. |
 | 2 | **decide the staged-vs-end-to-end question** | none | see section 7. It has flipped twice; recommendation is to freeze it |
 | 3 | **seed-repeat of G3** | ~1 h at 198 M | the held-out drop at 198 M is n = 1, and two conclusions have already moved on single measurements |
 | 4 | **P1 — BioCLIP-2 as a frozen trunk** | build + ~1 h | owner-deferred, reviewer-inevitable. T2b is what makes it plausible. See section 5 |
@@ -86,7 +85,7 @@ A 1280 × 1M prototype matrix is 5.1 GB plus 10.2 GB of optimiser state. Options
 | fixed / taxonomy codes | weakened by the same spectrum |
 | uniform sampled softmax | **dead** — smooth, no plateau; 1024/1M is 0.1 % coverage |
 | hard-negative sampling | weakened — taxonomy-aware negatives recovered only 26 % (H3) |
-| **training** | **H4 trained; test score unread** — proxy-free: EMA centroids in a buffer, no matrix, no optimiser state. Removes 10.24 GB of the 15.36 GB. [[2026-08-09-can-centroids-be-trained-against]] |
+| **training** | **CLOSED — H4 falsified at 0.8685 (−4.63 pt)** — proxy-free: EMA centroids in a buffer, no matrix, no optimiser state. Removes 10.24 GB of the 15.36 GB. [[2026-08-09-can-centroids-be-trained-against]] |
 | *constraint found* | a proxy-free head has **no trainable parameter on the species path** unless the bottleneck is kept, so it cannot serve a frozen-trunk stage (cRT, adaptation) without one |
 
 ## 5. Group P — pretrained encoders as trunks (deferred by the owner, 2026-08-06)

@@ -674,15 +674,16 @@ camera. Rebalancing that set so every species contributes equally is not a neutr
 | 20 M | end-to-end, balanced | — | 0.7635 | 0.7342 |
 | 198 M | staged, natural | **0.9150** | 0.7648 | 0.7600 |
 | 198 M | **staged, balanced** | 0.9138 | **0.7740** | 0.7518 |
-| 198 M | **end-to-end, natural** | 0.9060 | **0.7798** | **0.7816** |
+| 198 M | **end-to-end, natural** | 0.9060 | 0.7798 | **0.7816** |
+| 198 M | end-to-end, balanced | 0.9058 | **0.7800** | 0.7741 |
 
 Two interactions. **Balancing helps a frozen trunk and harms a trainable one** (+1.51/+1.87 vs
 −0.71/−3.62 at 20 M): it concentrates replication on the classes with fewest unique images, which are
 also those with least reliable pseudo-labels, and only a frozen trunk keeps the representation from
-memorising them. **And balancing's benefit does not survive scale** — at 198 M it becomes a trade
-(+0.92 probe, −0.82 held-out), which is the same capacity behaviour we measure for square-root
-resampling (−1.52 at 20 M, −2.88 at 198 M). Balanced replication is resampling applied to the
-pseudo-label subset, and it inherits resampling's scale profile.
+memorising them. **And the whole effect attenuates with capacity** — at 198 M the four measurements
+(staged/end-to-end x probe/held-out) span +0.92 to −0.82, against ±3.6 at 20 M. The pseudo-label
+class distribution is therefore a small-model lever: worth tuning at 20 M, within noise at
+deployment scale.
 
 Comparing each regime at *its own* best configuration, the staged recipe is **+0.71 in-distribution /
 −0.14 probe / +0.77 held-out at 20 M**, and **+0.78 / −0.58 / −2.98 at 198 M**. The in-distribution

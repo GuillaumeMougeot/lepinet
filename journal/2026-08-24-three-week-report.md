@@ -5,14 +5,14 @@ before leaving. Covers everything run, every committed prediction and whether it
 corrected, and what is left.
 
 **Scope note.** The owner was away 2–24 August. I ran autonomously 2–10 August and then stopped; the
-last 14 days are idle, not silent-failing. Two runs completed after I stopped and **their numbers
-have not been read yet** — see §6.
+last 14 days are idle, not silent-failing. Two runs completed after I stopped and could not be read
+until UCloud auth was restored on the 24th; **both are now scored** — see §6.
 
 ---
 
 ## 1. What the project asserts now that it did not on 2 August
 
-Six things, in rough order of how much they change what we would write.
+Seven things, in rough order of how much they change what we would write.
 
 1. **Domain adaptation is a classifier problem, not a representation problem.** Two epochs on a
    frozen trunk recover **83 % of the probe gain and 89 % of the held-out gain** of full
@@ -34,11 +34,12 @@ Six things, in rough order of how much they change what we would write.
    function is **class balancing**, not filtering. The recommended setting is now **no gate at all,
    with balanced replication**. [[2026-08-08-self-training-does-not-iterate]]
 
-4. **Balanced replication is resampling, and it inherits resampling's scale profile.** Free at 20 M
-   (+1.51 probe / +1.87 held-out), a trade at 198 M (+0.92 / −0.82), and actively harmful to
-   end-to-end training at any scale (−0.71 / −3.62). Only a frozen trunk is protected, because
-   balancing concentrates replication on the classes with fewest unique images — which are also
-   those with least reliable pseudo-labels.
+4. **The pseudo-label class distribution is a small-model lever.** At 20 M, balancing swings results
+   by up to **3.6 pt in either direction** — it helps a frozen trunk (+1.51 probe / +1.87 held-out)
+   and hurts end-to-end training (−0.71 / −3.62), because it concentrates replication on the classes
+   with fewest unique images, which are also those with least reliable pseudo-labels, and only a
+   frozen trunk stops the representation memorising them. At 198 M all four effects attenuate to
+   under 1 pt. Tune it at 20 M, ignore it at deployment scale.
    [[2026-08-10-balance-is-oversampling-and-it-does-not-scale]]
 
 5. **Novelty detection is monotone in taxonomic distance, and it is not a rarity artefact.** The
@@ -48,7 +49,14 @@ Six things, in rough order of how much they change what we would write.
    Two novel populations chosen by opposite criteria, same ordering.
    [[2026-08-08-is-novelty-monotone-or-just-rare]]
 
-6. **An open-set scoring rule does not transfer across scale.** `max-logit` is best at 20 M and among
+6. **Five routes to a 1 M-species head are measured and all are dead.** Centroids can *replace* a
+   trained prototype matrix at inference (0.29 pt) but cannot *substitute* for training one
+   (**4.63 pt**, H4). With low-rank, taxonomy codes, sampled softmax and hard negatives already
+   closed, the honest answer to head scaling is **shard the matrix and use centroids at inference** —
+   an engineering answer, backed by five measured failures.
+   [[2026-08-09-can-centroids-be-trained-against]]
+
+7. **An open-set scoring rule does not transfer across scale.** `max-logit` is best at 20 M and among
    the worst at 198 M, where MSP beats it by 6.1–7.6 points. This one invalidated an earlier
    conclusion of our own rather than adding to it.
    [[2026-08-01-the-scoring-rule-was-the-bug]]
@@ -75,18 +83,18 @@ the practice worth keeping, and it only means anything if the misses are counted
 | B9 | probe 0.775–0.790 | **0.7635** | **falsified** |
 | C3b | monotone, near 0.78–0.85 | 0.8717 / 0.9463 / 0.9726 | ordering **right**, magnitude direction **wrong** |
 | G3 | probe 0.775–0.795, held-out 0.770–0.790 | 0.7740 / 0.7518 | near-miss (0.10 below) / **miss** (1.8 below) |
-| H4 | species 0.900–0.912 | **not yet read** | pending (§6) |
-| B10 | probe 0.770–0.785, expected to lose | **not yet read** | pending (§6) |
+| H4 | species 0.900–0.912 | **0.8685** | **falsified by 1.65 pt** |
+| B10 | probe 0.770–0.785, expected to lose | 0.7800 | tie with B8 (0.05× floor) |
 
-**Five clean hits, three near-misses, four clear misses, two falsifications, two pending.** The two
-falsifications (R2, B9) were the most useful runs of the fortnight, which is the argument for
+**Five clean hits, four near-misses (B10 among them), four clear misses, three falsifications.** The
+three falsifications (R2, B9, H4) were the most useful runs of the period, which is the argument for
 writing the prediction down.
 
 ---
 
 ## 3. Claims corrected or retracted
 
-Eight, and they are the real output of the period.
+Nine, and they are the real output of the period.
 
 1. **The 31-point ArcFace open-set advantage → 0.78 points.** It compared ArcFace's best scoring rule
    against the plain head's worst. Best-vs-best is 0.9068 vs 0.8990, and the plain head is 1 pt
@@ -105,7 +113,10 @@ Eight, and they are the real output of the period.
 7. **The staged-vs-end-to-end trade is capacity-dependent, not a property of the method** — and I got
    this wrong in *both* directions on consecutive days. On 9 August B9 made me write that the trade
    dissolves; on 10 August G3 showed it dissolves only at 20 M and holds at 198 M.
-8. **START-HERE finding 7 was narrowed three times in three days** as coverage → coverage + balance →
+8. **"Balanced replication inherits oversampling's scale profile" was generalised from one cell.**
+   With all four measured (2026-08-24), every effect *attenuates* with capacity; only one crosses
+   zero. Corrected in the B10 addendum.
+9. **START-HERE finding 7 was narrowed three times in three days** as coverage → coverage + balance →
    balance only on a frozen trunk → and only at small scale.
 
 The pattern across 5, 6 and 7 is one thing: **a claim measured in one configuration, or at one
@@ -157,32 +168,23 @@ your fact-check), §3.1 the baseline recipe, and rewrites of §4.3, §4.4 and §
 
 ---
 
-## 6. What is blocked, and it needs you
+## 6. Resolved on reconnection (2026-08-24)
 
-**The UCloud refresh token expired during the 14 idle days.** `ucloud q ls` still reports from the
-local queue database — all jobs show DONE — but `ucloud q logs` fails with:
+The UCloud token expired during the idle fortnight, so two completed runs had never been read. With
+auth restored:
 
-```
-AuthError: UCloud rejected the refresh token (expired or invalid).
-Log in again in the browser and run `ucloud login` with a fresh token.
-```
+- **H4 — falsified.** Species 0.8685 against the baseline's 0.9148: **−4.63 pt**, where the
+  falsification line was 0.885. **Group H's training half closes with a negative answer** — all five
+  routes to a 1 M-species head are now measured and dead, and the honest answer is to shard the
+  matrix and use centroids at inference (which costs 0.29 pt). A control eval is running to confirm
+  the loss is localised to the proxy-free level.
+- **B10 — a tie.** Probe 0.7800 against B8's 0.7798, 5 % of a noise floor. It confirms B8 represents
+  end-to-end's best at 198 M, so the staged arm's deficit there is not an artefact of comparing a
+  tuned arm against an untuned one.
 
-So **two completed runs have never been read**:
-
-- **H4** (proxy-free head — Group H's last training candidate). Trained cleanly for 5 epochs;
-  validation f1_species was 0.8689, but that is the *validation* fold and the 0.9148 baseline is the
-  *test* fold, so it is not a score. Predicted 0.900–0.912, falsified below 0.885.
-- **B10** (198 M end-to-end, balanced). Predicted to **lose** to B8's 0.7798 — the prediction was
-  rewritten on evidence from B9 *before* the run started, and the reason is in the config header.
-
-Neither changes §4's conclusions — B10 can only raise end-to-end's best, and H4 is a memory result,
-not an accuracy one — but both are paid-for numbers sitting unread.
-
-**Also:** the cron entry that ticks `ucloud q` every 5 minutes is still installed and did keep the
-queue advancing after I stopped. No daemon process is running, which is expected — the cron is the
-mechanism.
-
----
+B10 also corrected my 10 August framing. With all four cells measured, balancing's effect
+**attenuates** with capacity in every cell (max 3.62 pt at 20 M, max 0.92 at 198 M) rather than
+amplifying; I had generalised "gets worse with scale" from the single cell that crossed zero.
 
 ## 7. Backlog, ordered
 

@@ -1,7 +1,13 @@
-# G3: balanced replication is oversampling by another name, and it inherits oversampling's scale behaviour
+# G3 + B10: the pseudo-label class distribution is a small-model lever
 
-**Kind:** research · **Status:** **RESOLVED (2026-08-10). Prediction narrowly missed, and it
-reverses yesterday's conclusion.** At 198 M, balancing the pseudo-label set buys **+0.92 probe** and
+**Kind:** research · **Status:** **RESOLVED (2026-08-24, all four cells measured).** At 20 M,
+balancing swings results by up to 3.6 pt in either direction depending on whether the trunk is
+frozen; at 198 M every one of the four effects attenuates to under 1 pt. **End-to-end keeps a real
+lead at 198 M that it does not have at 20 M.** *(The 2026-08-10 framing — "it inherits oversampling's
+scale profile" — was generalised from one cell and is corrected in the B10 addendum.)*
+
+**Original status (2026-08-10). Prediction narrowly missed, and it
+reverses the previous day's conclusion.** At 198 M, balancing the pseudo-label set buys **+0.92 probe** and
 costs **−0.82 held-out species** — a trade, where at 20 M it was free (+1.51 / +1.87). And with both
 arms at their best configuration, **end-to-end training keeps a real lead at 198 M** that it does not
 have at 20 M.
@@ -66,7 +72,8 @@ in-distribution advantage. The trade does not dissolve at scale; it dissolves at
 
 **This conclusion is robust to the run still in flight.** B10 (balanced end-to-end at 198 M) can only
 raise end-to-end's best or leave it at B8's 0.7798 — it cannot help the staged arm. So the 198 M
-verdict stands whichever way B10 lands.
+verdict stands whichever way B10 lands. *(Confirmed 2026-08-24: it landed at 0.7800, a tie. See the
+addendum.)*
 
 **And the in-distribution advantage is the stable part.** +0.71 at 20 M, +0.78 at 198 M, +0.90 for
 G2 — the staged recipe reliably buys closed-set accuracy at a fraction of the training cost. What is
@@ -93,3 +100,62 @@ generally**. The rule this project already has — *change one factor per run* �
 **a claim about a method is not established until it has been measured at more than one capacity**,
 because five interventions here have now changed magnitude across 10× and two have changed sign.
 Added to `docs/design-decisions.md`.
+
+
+---
+
+## B10: the verdict holds, and the scale story needs one correction (2026-08-24)
+
+Balanced end-to-end at 198 M, read 14 days late because the UCloud token expired.
+
+| | in-distribution | probe | held-out |
+|---|---|---|---|
+| B8 — end-to-end, natural | 0.9060 | 0.7798 | **0.7816** |
+| **B10 — end-to-end, balanced** | 0.9058 | **0.7800** | 0.7741 |
+| Δ | −0.02 (0.4× floor) | **+0.02 (0.05× floor)** | **−0.75** (1.4×) |
+
+**Predicted probe 0.770–0.785 and expected to lose. Landed 0.7800** — above the range by 0.15 pt, and
+0.0002 above B8, which nominally trips the falsification line I set at "exceeds 0.7798". Tripping a
+line by **5 % of a noise floor** is a tie, not a refutation, and I am recording it as one rather than
+claiming either a hit or a clean falsification.
+
+**The 198 M verdict is unchanged and now rests on a fair comparison.** Best-vs-best:
+
+| | staged (G2/G3) | end-to-end (B8/B10) | Δ |
+|---|---|---|---|
+| in-distribution | **0.9150** | 0.9060 | **+0.90** |
+| probe | 0.7740 | **0.7800** | −0.60 (1.5× floor) |
+| held-out species | 0.7600 | **0.7816** | −2.16 (4.2× floor) |
+
+B10 did its job: it confirmed B8 is representative of end-to-end's best at 198 M, so the staged arm's
+deficit is not an artefact of comparing a tuned arm against an untuned one.
+
+## The correction: attenuation, not amplification
+
+On 10 August I wrote that balanced replication "inherits oversampling's scale profile", meaning it
+gets *worse* with capacity. With all four cells measured, that is too simple:
+
+| | 20 M | 198 M |
+|---|---|---|
+| balance on **staged**, probe | +1.51 | +0.92 |
+| balance on **staged**, held-out | +1.87 | **−0.82** |
+| balance on **end-to-end**, probe | −0.71 | **+0.02** |
+| balance on **end-to-end**, held-out | −3.62 | **−0.75** |
+
+**Every one of the four attenuates with capacity.** The largest effect at 20 M is 3.62 pt; at 198 M it
+is 0.92. One of them (staged held-out) crosses zero on the way down, which is what I generalised from
+— and generalising a sign flip from a single cell was the error.
+
+The defensible statement is: **the pseudo-label class distribution is a small-model lever.** At 20 M it
+swings results by up to 3.6 pt in either direction depending on whether the trunk is frozen; at 198 M
+it barely matters at all. That is the ordinary "constraints weaken with capacity" pattern this project
+has now seen six times, not the oversampling exception I filed it under.
+
+The oversampling comparison still holds for the *staged held-out* cell specifically, and the mechanism
+argument (balancing concentrates replication on the classes with fewest unique images) still explains
+why the frozen and trainable trunks differ in **sign**. What it does not explain, and what I asserted
+without evidence, is a claim about magnitude across scale.
+
+**Practical consequence:** at 198 M, do not bother balancing. The setting is worth tuning at 20 M and
+is within noise at deployment scale — which also means the recommended recipe can drop a
+hyperparameter rather than carry one that must be set per capacity.
