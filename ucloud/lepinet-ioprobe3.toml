@@ -3,6 +3,12 @@
 # dataloader actually produces, unlike ioprobe1/2 which read files adjacent in a glob and so
 # benefited from warm metadata. This is the number to compare against the pipeline's historical
 # ~1100 img/s at 20 M.
+#
+# TIME-BOUNDED (2026-08-24): the first version read a fixed 200 files and simply never
+# returned when storage was slow, which is the least useful failure mode for a go/no-go
+# check. It now reads for at most 120 s and always prints a files/s figure and a
+# GO/NO-GO verdict. The directory shuffle is seeded from the clock so repeat runs do not
+# read the same files and measure a warm cache.
 name = "lepinet-ioprobe3"
 replicas = 1
 [application]
@@ -19,7 +25,7 @@ local = ".."
 remote = "/12347837/repos/lepinet"
 [setup]
 script = "setup-lepinet.sh"
-run = "python -c \"import os,random,time;d='/work/global_lepi/images';t=time.time();subs=[e.path for e in os.scandir(d) if e.is_dir()];print('scandir',len(subs),round(time.time()-t,2),'s',flush=True);random.seed(1);random.shuffle(subs);t=time.time();fs=[];[fs.append(os.path.join(s,os.listdir(s)[0])) for s in subs[:200] if os.listdir(s)];print('pick 200 random dirs',round(time.time()-t,2),'s',flush=True);t=time.time();n=sum(len(open(f,'rb').read()) for f in fs);dt=time.time()-t;print('COLD RANDOM READ',len(fs),'files',n//1024,'KB in',round(dt,2),'s =',round(len(fs)/dt,1),'files/s',flush=True)\""
+run = "python -c \"import os,random,time;d='/work/global_lepi/images';t=time.time();subs=[e.path for e in os.scandir(d) if e.is_dir()];print('scandir',len(subs),round(time.time()-t,2),'s',flush=True);random.seed(int(time.time()));random.shuffle(subs);fs=[];[fs.append(os.path.join(s,os.listdir(s)[0])) for s in subs[:400] if os.listdir(s)];t=time.time();n=0;b=0;[ (n:=n+1, b:=b+len(open(f,'rb').read())) for f in fs if time.time()-t<120 ];dt=time.time()-t;print('COLD RANDOM READ',n,'files',b//1024,'KB in',round(dt,1),'s =',round(n/dt,1),'files/s',flush=True);print('VERDICT','GO' if n/dt>=100 else 'NO-GO','(need >=100 files/s; pipeline historically ~1000)',flush=True)\""
 [schedule]
 auto_extend = "1h"
 max_time = "2h"

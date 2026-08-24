@@ -31,11 +31,17 @@ operational text and were effectively unfindable.)*
 
 **The cluster is idle and should stay that way until `/work` storage recovers.**
 [[2026-08-24-work-storage-degraded]] — per-file read latency has gone from milliseconds to seconds.
-Measured throughput **41 img/s against a historical ~1100**; a single-threaded probe could not read
+Measured **0.03 files/s at 17:00** (8 files in 259 s) after 41 img/s in-job earlier, against a
+historical ~1100 img/s; a single-threaded probe could not read
 200 random files in 18 minutes with nothing else running. Metadata is fine (`scandir` over 50,948
 directories in 0.28 s), so the mount is up — the data path is not.
 
-**Before resuming anything**, run `ucloud/lepinet-ioprobe3.toml` (~1 min). Its
+**It degraded further across two idle hours** (0.59 -> <0.18 -> 0.03 files/s), so waiting is not
+a strategy and our own load was not the cause. Individual reads block for minutes; metadata stays
+fast. **Raise with UCloud.**
+
+**Before resuming anything**, run `ucloud/lepinet-ioprobe3.toml` (~1 min, time-bounded, prints a
+GO/NO-GO verdict). Its
 `COLD RANDOM READ ... files/s` line is the go/no-go: the pipeline needs order **1000 files/s**;
 under ~100 means training will not finish in reasonable time.
 

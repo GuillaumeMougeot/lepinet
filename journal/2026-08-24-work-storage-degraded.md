@@ -42,6 +42,26 @@ from **random** directories, which is what a shuffled dataloader actually does.
 64 parallel workers manages 41 img/s. That ratio says each read costs on the order of a second and
 concurrency is the only thing recovering any throughput at all.
 
+## It is still degrading with the cluster idle (17:00 update)
+
+Re-probed on the owner's instruction, two hours after everything was terminated:
+
+| time | cluster state | cold random read |
+|---|---|---|
+| ~14:00 | 3 jobs running | **0.59 files/s** |
+| ~14:53 | idle | **<0.18 files/s** (200 files unfinished in 18 min) |
+| **17:00** | **idle 2 h** | **0.03 files/s** — 8 files in 258.9 s |
+
+**It is getting worse while nothing runs.** That removes the last version of the story in which our
+load is the cause: three concurrent jobs made it worse, but the trend continued down through two
+hours of complete idleness.
+
+The 17:00 probe also shows the failure is not a uniform slowdown but **stalls on individual reads**:
+the loop was capped at 120 s and ran 258.9 s, because one `open().read()` of a 72 KB file blocked for
+over two minutes. Metadata stayed fast throughout (`scandir` of 50,948 directories in 0.43 s).
+
+**VERDICT: NO-GO.** Jobs were not restarted.
+
 ## What I got wrong, and what was genuinely a mistake
 
 **The mistake:** I launched **three concurrent jobs** with `num_workers` 128 + 256 + 32 against one
@@ -81,7 +101,8 @@ This looks like a UCloud storage-side problem — a degraded or rehydrating back
 `/work/global_lepi`. It is not fixable from the job side: at 41 img/s a single 3-epoch P1a run would
 take **over 100 hours** and hold a GPU for all of it.
 
-**Recommendation: keep the cluster idle until the storage recovers**, rather than paying for GPUs to
+**Recommendation: raise it with UCloud.** The 17:00 re-probe rules out waiting as a
+strategy -- it degraded further across two idle hours. Keep the cluster idle until it recovers, rather than paying for GPUs to
 wait on IO. Re-run `ucloud/lepinet-ioprobe3.toml` to check — it is a one-minute job and its
 `COLD RANDOM READ ... files/s` line is the single number that says whether it is safe to resume.
 Historical throughput implies the pipeline needs on the order of **1000 files/s**; anything under
