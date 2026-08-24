@@ -1,0 +1,24 @@
+name = "lepinet-P1a-eval"
+replicas = 1
+[application]
+name = "pytorch-te"
+version = "26.05"
+[product]
+id = "gpu-nvidia-b200-1-gpu"
+category = "gpu-nvidia-b200"
+provider = "ucloud"
+[time_allocation]
+hours = 6
+[sync]
+local = ".."
+remote = "/12347837/repos/lepinet"
+[setup]
+script = "setup-lepinet.sh"
+run = "uv pip install --no-deps open_clip_torch ftfy regex wcwidth && python dev/075_pretrained_trunk.py test --model '/work/lepinet/data/ucloud_models/*-lepinet-P1a-bioclip2-fit-ucloud/*.pt' --parquet /work/global_lepi/0032836-250426092105405_processing_metadata_postprocessed_quality_filtered.parquet --img-dir /work/global_lepi/images --out-dir /work/lepinet/data/ucloud_preds/P1a-eval --test-set 0 --min-img-per-spc 0 --img-size 224 --aug-img-size 256 --batch-size 128 --num-workers 32"
+[schedule]
+auto_extend = "1h"
+max_time = "12h"
+[[resources]]
+type = "file"
+path = "/12347837/datasets/global_lepi"
+read_only = true

@@ -1,0 +1,54 @@
+# G3b: an independent repeat of G3. Same config, byte for byte, except the model name.
+#
+# Nothing in src/lepinet seeds the training path (no manual_seed, no set_seed), so a re-run is a
+# genuine independent draw: different shuffling, different cuDNN nondeterminism.
+#
+# Why it is worth an hour: G3's held-out species number (0.7518) is the single measurement that
+# turned "balance is free" into "balance is a trade at 198 M", and it is n = 1. Two conclusions have
+# already moved on single measurements in this project (B9 on 9 Aug, G3 on 10 Aug). The noise floor
+# for held-out species is 0.0052 and G3's drop from G2 was 0.0082 -- only 1.6x the floor, which is
+# the weakest evidence any current claim rests on.
+#
+# Prediction (committed): held-out 0.745-0.760, i.e. reproducing G3's 0.7518 rather than G2's
+# 0.7600, and probe 0.770-0.780. Falsified if held-out lands above 0.7652 (G2 + one floor), which
+# would mean G3's drop was noise and balancing is NOT a trade at 198 M -- in which case the
+# small-model-lever framing needs revisiting and START-HERE finding 7 loses its 198 M clause.
+version: 1.0
+desc: lepinet-G3b-repeat-dinov3cnxl-ucloud
+train:
+  parquet_path: /work/lepinet/data/flemming/splits/combined_balanced_3lvl.parquet
+  img_dir: /work/global_lepi/images
+  out_dir: /work/lepinet/data/ucloud_models
+  fold: '1'
+  min_img_per_spc: 50
+  num_workers: 128
+  model_name: lepinet-G3b-repeat-dinov3cnxl-ucloud
+  model_arch_name: convnext_large.dinov3_lvd1689m
+  head: marginal_arcface
+  nb_epochs: 2
+  base_lr: 0.0008
+  batch_size: 96
+  aug_img_size: 384
+  img_size: 320
+  optimizer: muon
+  fp16: true
+  precision: bf16
+  schedule: one_cycle
+  warmup_epochs: 0.5
+  grad_clip: 5.0
+  oversample_power: 0.5
+  domain_aug: trap
+  family_filter: []
+  aug_kwargs:
+    max_warp: 0.1
+    max_lighting: 0.2
+    p_lighting: 0.5
+    flip_vert: true
+    max_rotate: 20.0
+    max_zoom: 1.2
+  levels:
+  - speciesKey
+  - genusKey
+  - familyKey
+  arcface_scale: 30.0
+  arcface_margin: 0.3

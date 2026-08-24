@@ -1,0 +1,38 @@
+# P1 step 0. The BioCLIP-2 download and open_clip install are the only genuinely untested
+# steps, so they get their own short job -- 'put the untested step at the head of its own
+# chain'. Verifies: the encoder loads, proj-stripping yields 1024 (not 768), the ImageNet ->
+# CLIP renormalisation is exact, and the four-symbol patch makes `bioclip2` a valid arch.
+# `uv pip install` ADDS to the job's throwaway /tmp/venv; it is not `uv sync` and never runs
+# against the hand-managed training venv.
+#
+# --no-deps IS LOAD-BEARING. The first attempt (plain `uv pip install open_clip_torch`)
+# started pulling a 508 MB PyPI torch, which would have replaced the image's pinned
+# 2.12.1+cu130 build and silently changed the CUDA stack under the run. open_clip's real
+# needs -- torch, torchvision, timm, huggingface_hub, tqdm -- are already in the image;
+# only ftfy, regex and wcwidth (ftfy's own dep -- --no-deps means we must name it too) are
+# missing. The first --no-deps attempt died on exactly that.
+# The torch version is printed before the selftest so a regression is visible in the log.
+name = "lepinet-P1-preflight"
+replicas = 1
+[application]
+name = "pytorch-te"
+version = "26.05"
+[product]
+id = "gpu-nvidia-b200-1-gpu"
+category = "gpu-nvidia-b200"
+provider = "ucloud"
+[time_allocation]
+hours = 2
+[sync]
+local = ".."
+remote = "/12347837/repos/lepinet"
+[setup]
+script = "setup-lepinet.sh"
+run = "uv pip install --no-deps open_clip_torch ftfy regex wcwidth && python -c 'import torch;print(\"torch\",torch.__version__,\"cuda\",torch.cuda.is_available())' && python dev/075_pretrained_trunk.py selftest"
+[schedule]
+auto_extend = "1h"
+max_time = "3h"
+[[resources]]
+type = "file"
+path = "/12347837/datasets/global_lepi"
+read_only = true

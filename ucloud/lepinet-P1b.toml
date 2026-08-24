@@ -1,0 +1,25 @@
+# P1b: P1a's classifier adapted on target-domain pseudo-labels. Trunk still frozen.
+name = "lepinet-P1b"
+replicas = 1
+[application]
+name = "pytorch-te"
+version = "26.05"
+[product]
+id = "gpu-nvidia-b200-1-gpu"
+category = "gpu-nvidia-b200"
+provider = "ucloud"
+[time_allocation]
+hours = 10
+[sync]
+local = ".."
+remote = "/12347837/repos/lepinet"
+[setup]
+script = "setup-lepinet.sh"
+run = "uv pip install --no-deps open_clip_torch ftfy regex wcwidth && python dev/075_pretrained_trunk.py train configs/20260824_P1b_bioclip2_adapt.yaml --init-from '/work/lepinet/data/ucloud_models/*-lepinet-P1a-bioclip2-fit-ucloud/*.pt' --freeze-body"
+[schedule]
+auto_extend = "1h"
+max_time = "24h"
+[[resources]]
+type = "file"
+path = "/12347837/datasets/global_lepi"
+read_only = true

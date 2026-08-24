@@ -1,0 +1,60 @@
+# P1a: BioCLIP-2 frozen trunk, classifier fitted from scratch on the global data.
+# This step has no T2b analogue -- a foreign trunk arrives without a classifier -- so it is also
+# the measurement of how much of our label set a 200 M-image organism encoder already supports.
+#
+# Prediction (committed): in-distribution species macro-F1 0.86-0.91 vs our baseline's 0.9148.
+# Falsified below 0.80 -- a frozen foreign encoder would not be a viable starting point and P1b
+# would not be worth running.
+#
+# Derived from T2b's config so the ONLY factor changed is the trunk: same `arcface` head, same
+# species-only levels, same oversample_power, same pseudo-label parquet in P1b. T2b froze A1's trunk
+# (trained end-to-end on our labels) and adapted the classifier to probe 0.7515; P1 does the same
+# from an encoder that has never seen our label set.
+#
+# img_size 224 / aug_img_size 256 are BioCLIP-2's native resolution. The trunk is frozen throughout.
+# `dev/075_pretrained_trunk.py` swaps `ViTBody` for the BioCLIP-2 vision tower, undoes the
+# dataloader's ImageNet normalisation and applies CLIP's (verified exact to 2.4e-07 in the
+# preflight), and strips the text-alignment projection so the head sees the pooled 1024-d feature
+# rather than the 768-d CLIP embedding.
+#
+# COST IS UNMEASURED: a frozen ViT-L/14 at 224 on a B200 is not a throughput this project has
+# measured. Read it from epoch 1 rather than extrapolating -- extrapolating from the wrong figure is
+# what made B10's costing wrong by 2.3x.
+version: 1.0
+desc: lepinet-P1a-bioclip2-fit-ucloud
+train:
+  parquet_path: /work/global_lepi/0032836-250426092105405_processing_metadata_postprocessed_quality_filtered.parquet
+  img_dir: /work/global_lepi/images
+  out_dir: /work/lepinet/data/ucloud_models
+  fold: '1'
+  min_img_per_spc: 50
+  num_workers: 256
+  model_name: lepinet-P1a-bioclip2-fit-ucloud
+  model_arch_name: bioclip2
+  head: arcface
+  nb_epochs: 3
+  base_lr: 0.001
+  batch_size: 64
+  aug_img_size: 256
+  img_size: 224
+  optimizer: muon
+  fp16: true
+  precision: bf16
+  schedule: one_cycle
+  warmup_epochs: 0.5
+  grad_clip: 5.0
+  oversample_power: 0.5
+  family_filter: []
+  aug_kwargs:
+    max_warp: 0.0
+    max_lighting: 0.0
+    p_lighting: 0.0
+    flip_vert: true
+    max_rotate: 15.0
+    max_zoom: 1.1
+  levels:
+  - speciesKey
+  arcface_zscore: true
+  arcface_scale: 30.0
+  arcface_margin:
+  - 0.3
