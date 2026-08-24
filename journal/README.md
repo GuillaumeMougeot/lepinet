@@ -128,6 +128,7 @@ Six phases, in order. The engineering lessons each one produced are consolidated
 | [07-30](2026-07-30-marginal-supervision.md) | Does supervising the marginals *during training* help? | RESOLVED — species **unchanged** (0.9135 → 0.9135), but genus +0.27 / family +0.39 pp. Free coarse accuracy via calibration of the sum |
 | [07-30](2026-07-30-does-arcface-compose-with-marginalisation.md) | Do single-head marginalisation and ArcFace × z-score compose? | RESOLVED — **they do not**, but A1 stands: open-set survives (AUROC 0.9068). The interference replicates at 10× scale, so it is a calibration effect, not noise |
 | [08-05](2026-08-05-scaling-the-head.md) | How to reach 1 M species without a 5 GB prototype matrix? | OPEN — options costed (low-rank, hierarchical softmax, sampled softmax, **taxonomy-structured fixed codes**, **retrieval**). Nothing run yet; the two cheapest tests are launched |
+| [08-24](2026-08-24-does-the-recipe-need-our-backbone.md) | Does the staged recipe need *our* backbone, or any strong encoder? | **OPEN** — BioCLIP-2 (ViT-L/14, TreeOfLife-200M) as a frozen trunk. Predicted P1a in-dist 0.86-0.91, P1b probe 0.72-0.78 vs T2b's 0.7515 |
 | [08-24](2026-08-24-three-week-report.md) | What happened while the owner was away? | **RESOLVED — the three-week report.** Prediction scorecard, eight corrections, the current recipe, and the one open decision. **Start here on return** |
 | [08-10](2026-08-10-balance-is-oversampling-and-it-does-not-scale.md) | Does balanced replication survive the 10x scale change? | **RESOLVED — no.** Free at 20 M (+1.51/+1.87), a trade at 198 M (+0.92/−0.82). It is resampling on the pseudo-labels and inherits its scale profile. **End-to-end keeps a real lead at 198 M** that it lacks at 20 M |
 | [08-09](2026-08-09-can-centroids-be-trained-against.md) | Can the prototype matrix be replaced by EMA centroids during *training*, not just inference? | **OPEN** — removes 10.24 GB of optimiser state at 1 M classes. Predicted 0.900-0.912 vs 0.9148; falsified below 0.885 |
@@ -165,6 +166,7 @@ Six phases, in order. The engineering lessons each one produced are consolidated
 
 | opened | question | status |
 |---|---|---|
+| [08-24](2026-08-24-work-storage-degraded.md) | Why did both training jobs stall with no error? | **OPEN** — `/work` per-file read latency collapsed to seconds. 41 img/s vs ~1100 historical; metadata fine, data path not. Not a hang: starvation |
 | [07-17](2026-07-17-ucloud-benchmark-oom.md) | Why does the UCloud benchmark keep OOM-ing? | RESOLVED — image-pipeline anon × workers, not the dataframe; 128 workers safe |
 | [07-18](2026-07-18-ucloud-throughput.md) | How to make the B200 fast (it is CPU-decode-bound)? | staging = the memory lever; GPU decode built but model-bound for effnetv2s |
 

@@ -9,6 +9,8 @@
 # for held-out species is 0.0052 and G3's drop from G2 was 0.0082 -- only 1.6x the floor, which is
 # the weakest evidence any current claim rests on.
 #
+# num_workers lowered 128 -> 64 on 2026-08-24; see the P1a configs and the incident entry.
+#
 # Prediction (committed): held-out 0.745-0.760, i.e. reproducing G3's 0.7518 rather than G2's
 # 0.7600, and probe 0.770-0.780. Falsified if held-out lands above 0.7652 (G2 + one floor), which
 # would mean G3's drop was noise and balancing is NOT a trade at 198 M -- in which case the
@@ -21,7 +23,7 @@ train:
   out_dir: /work/lepinet/data/ucloud_models
   fold: '1'
   min_img_per_spc: 50
-  num_workers: 128
+  num_workers: 64
   model_name: lepinet-G3b-repeat-dinov3cnxl-ucloud
   model_arch_name: convnext_large.dinov3_lvd1689m
   head: marginal_arcface

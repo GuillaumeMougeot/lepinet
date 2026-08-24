@@ -1,0 +1,29 @@
+# Isolates the storage from any training job: NOTHING else is running when this executes.
+# Reads 200 files from 200 RANDOM species directories -- the access pattern a shuffled
+# dataloader actually produces, unlike ioprobe1/2 which read files adjacent in a glob and so
+# benefited from warm metadata. This is the number to compare against the pipeline's historical
+# ~1100 img/s at 20 M.
+name = "lepinet-ioprobe3"
+replicas = 1
+[application]
+name = "pytorch-te"
+version = "26.05"
+[product]
+id = "gpu-nvidia-b200-1-gpu"
+category = "gpu-nvidia-b200"
+provider = "ucloud"
+[time_allocation]
+hours = 1
+[sync]
+local = ".."
+remote = "/12347837/repos/lepinet"
+[setup]
+script = "setup-lepinet.sh"
+run = "python -c \"import os,random,time;d='/work/global_lepi/images';t=time.time();subs=[e.path for e in os.scandir(d) if e.is_dir()];print('scandir',len(subs),round(time.time()-t,2),'s',flush=True);random.seed(1);random.shuffle(subs);t=time.time();fs=[];[fs.append(os.path.join(s,os.listdir(s)[0])) for s in subs[:200] if os.listdir(s)];print('pick 200 random dirs',round(time.time()-t,2),'s',flush=True);t=time.time();n=sum(len(open(f,'rb').read()) for f in fs);dt=time.time()-t;print('COLD RANDOM READ',len(fs),'files',n//1024,'KB in',round(dt,2),'s =',round(len(fs)/dt,1),'files/s',flush=True)\""
+[schedule]
+auto_extend = "1h"
+max_time = "2h"
+[[resources]]
+type = "file"
+path = "/12347837/datasets/global_lepi"
+read_only = true

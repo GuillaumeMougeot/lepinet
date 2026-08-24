@@ -1,0 +1,28 @@
+# Diagnostic: is the shared /work storage stalled, or have the two training jobs deadlocked?
+# Times a listdir, a glob and 200 file reads against the same image tree both stuck jobs are
+# reading. Fast completion => storage is fine and the stall is inside the jobs (worker
+# exhaustion); a hang => the mount is the cause and no amount of relaunching helps.
+name = "lepinet-ioprobe"
+replicas = 1
+[application]
+name = "pytorch-te"
+version = "26.05"
+[product]
+id = "gpu-nvidia-b200-1-gpu"
+category = "gpu-nvidia-b200"
+provider = "ucloud"
+[time_allocation]
+hours = 1
+[sync]
+local = ".."
+remote = "/12347837/repos/lepinet"
+[setup]
+script = "setup-lepinet.sh"
+run = "python -c \"import time,os,glob;d='/work/global_lepi/images';t=time.time();ls=os.listdir(d)[:50];print('listdir',len(ls),round(time.time()-t,2),'s');t=time.time();fs=glob.glob(d+'/*/*.jpg')[:200];print('glob',len(fs),round(time.time()-t,2),'s');t=time.time();n=sum(len(open(f,'rb').read()) for f in fs[:200]);print('read 200 files',n//1024,'KB',round(time.time()-t,2),'s')\""
+[schedule]
+auto_extend = "1h"
+max_time = "2h"
+[[resources]]
+type = "file"
+path = "/12347837/datasets/global_lepi"
+read_only = true

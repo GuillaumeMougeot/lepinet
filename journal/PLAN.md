@@ -29,18 +29,27 @@ operational text and were effectively unfindable.)*
 
 ## 2. State on return (2026-08-24)
 
-**Nothing is running** except one control eval. I worked autonomously 2-10 August, stopped, and the
-owner reconnected UCloud on the 24th. Full account: [[2026-08-24-three-week-report]].
+**The cluster is idle and should stay that way until `/work` storage recovers.**
+[[2026-08-24-work-storage-degraded]] — per-file read latency has gone from milliseconds to seconds.
+Measured throughput **41 img/s against a historical ~1100**; a single-threaded probe could not read
+200 random files in 18 minutes with nothing else running. Metadata is fine (`scandir` over 50,948
+directories in 0.28 s), so the mount is up — the data path is not.
 
-**The two runs that were unread are now read**, and both resolve their questions:
+**Before resuming anything**, run `ucloud/lepinet-ioprobe3.toml` (~1 min). Its
+`COLD RANDOM READ ... files/s` line is the go/no-go: the pipeline needs order **1000 files/s**;
+under ~100 means training will not finish in reasonable time.
 
-| run | predicted | landed | verdict |
-|---|---|---|---|
-| **H4** — proxy-free head | species 0.900-0.912, falsified below 0.885 | **0.8685** | **FALSIFIED by 1.65 pt.** −4.63 vs baseline. **Group H's training half closes: shard the matrix.** [[2026-08-09-can-centroids-be-trained-against]] |
-| **B10** — 198 M end-to-end, balanced | probe 0.770-0.785, expected to lose | **0.7800** | tie with B8 (+0.05x floor). Confirms B8 represents end-to-end's best, so the 198 M comparison is fair. [[2026-08-10-balance-is-oversampling-and-it-does-not-scale]] |
+**Terminated mid-flight, to be relaunched when storage is healthy:**
 
-**Running:** `lepi-base-coarse` — the baseline re-scored on H4's fold with `--eval-levels`, to confirm
-H4's 4.63 pt loss is localised to the proxy-free species level rather than a worse model overall.
+| run | state | note |
+|---|---|---|
+| **G3b** | terminated at 58 % of epoch 1/2 | independent repeat of G3; predicted held-out 0.745-0.760, falsified above 0.7652 |
+| **P1a / P1b** | terminated at 86 % of epoch 2/3 | BioCLIP-2 frozen trunk; predicted P1a in-dist 0.86-0.91, P1b probe 0.72-0.78 |
+
+Both had `num_workers` lowered to 64 before the last relaunch; keep that.
+
+**Landed today:** H4 falsified (-4.25 pt on a matched fold), B10 a tie, and the H4 control — see
+section 6 and [[2026-08-24-three-week-report]].
 
 ## 3. Ordered backlog — take the top unblocked item
 
@@ -140,6 +149,16 @@ the cron entry first.**
 loaded with runs that self-evaluate and the backlog above is ordered for pickup without asking.
 
 ### Queue discipline, each rule learned by breaking it
+
+- **Run ONE image-heavy job at a time.** The pipeline is IO/CPU-decode bound. Three concurrent jobs
+  with `num_workers` 128 + 256 + 32 collapsed `/work` read throughput on 2026-08-24 and cost two
+  runs. [[2026-08-24-work-storage-degraded]]
+- **Read the `[mem]` startup lines.** They printed `WARNING: 256 workers x ~1.2 GB anon is close to
+  the 288 GB limit` before the run that then thrashed page cache for three hours. A startup warning
+  is a result, not noise.
+- **A frozen progress bar is usually starvation, not a hang.** Check GPU memory: 2-4 GB and
+  fluctuating means the job is waiting on data. `ucloud/lepinet-ioprobe3.toml` measures cold random
+  read throughput in about a minute and is the fastest way to tell.
 
 - **Keep an independent job queued alongside any chain.** A blocked chain should cost one line of
   work, not all of it. (2026-08-03: five idle hours.)

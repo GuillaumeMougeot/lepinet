@@ -17,6 +17,12 @@
 # preflight), and strips the text-alignment projection so the head sees the pooled 1024-d feature
 # rather than the 768-d CLIP embedding.
 #
+# num_workers lowered 256 -> 64 on 2026-08-24 after both jobs stalled. At 256 the package's own
+# memory helper printed "WARNING: 256 workers x ~1.2 GB anon is close to the 288 GB limit" at
+# startup, and the run then sat at anon 87 GB + page cache 204 GB against a 288 GB cgroup --
+# permanent reclaim, page cache evicted, every image re-read from network storage. Symptom was
+# a progress bar that advanced in bursts and then froze for minutes at a time.
+#
 # COST IS UNMEASURED: a frozen ViT-L/14 at 224 on a B200 is not a throughput this project has
 # measured. Read it from epoch 1 rather than extrapolating -- extrapolating from the wrong figure is
 # what made B10's costing wrong by 2.3x.
@@ -28,7 +34,7 @@ train:
   out_dir: /work/lepinet/data/ucloud_models
   fold: '1'
   min_img_per_spc: 50
-  num_workers: 256
+  num_workers: 64
   model_name: lepinet-P1a-bioclip2-fit-ucloud
   model_arch_name: bioclip2
   head: arcface
