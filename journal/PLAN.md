@@ -1,6 +1,6 @@
 # PLAN — where we are, and what runs next
 
-**Kind:** living · **Last updated:** 2026-08-10 · **Supersedes:** [[2026-07-28-landscape-and-plan]]
+**Kind:** living · **Last updated:** 2026-08-24 · **Supersedes:** [[2026-07-28-landscape-and-plan]]
 
 The one file in `journal/` meant to be true *today*. Everything else is a record of a moment.
 
@@ -21,31 +21,27 @@ operational text and were effectively unfindable.)*
 | **D** | product: bundle, calibration, small student | **closed** |
 | **E** | is open-set the binding constraint? | **closed — no**, the premise was a scoring-rule artefact |
 | **F** | the assembled recipe | **closed** — F2 composes |
-| **G** | the 198 M confirmation | **G3 done — the staged/end-to-end verdict is capacity-dependent**; B10 running |
-| **H** | scaling the head to ~1 M species | **running** — H4 tests the last training candidate |
+| **G** | the 198 M confirmation | **G3 done — the staged/end-to-end verdict is capacity-dependent**; B10 complete, unread |
+| **H** | scaling the head to ~1 M species | **H4 trained, unread** — needs `ucloud login` |
 | **L** | imbalanced learning | **closed** — cRT is the answer |
 | **P** | pretrained encoders (BioCLIP-2) as frozen trunks | **deferred** (owner) |
 | **T** | what target labels would have bought | **closed** |
 
-## 2. Running now
+## 2. State on return (2026-08-24)
 
-| job | what | predicted |
+**Nothing is running.** I worked autonomously 2-10 August and then stopped; 10-24 August is idle.
+The full account is [[2026-08-24-three-week-report]].
+
+**Blocked on one thing:** the UCloud refresh token expired during the idle fortnight. `ucloud q ls`
+still reads the local queue DB (everything shows DONE) but `ucloud q logs` raises `AuthError`. Run
+`ucloud login` and **two completed runs become readable for the first time**:
+
+| run | what | predicted |
 |---|---|---|
-| ~~G1 → G2~~ | **DONE. in-dist 0.9150 / probe 0.7648** — best in-distribution model in the project. Probe missed its 0.780–0.800 range, but **the staged-vs-end-to-end trade replicates across 10× scale**: +0.78/−1.65 at 20 M, +0.90/−1.50 at 198 M. |
-| ~~F3~~ | **DONE. 0.9061 / probe 0.7479 / held-out 0.7703.** Both predicted ranges hit, but the probe falsification line (0.7500) tripped by 0.21. Near-wash that splits: sequencing +0.62 probe, joint **+1.09 held-out** at half the cost. **Joint is the better default.** |
-| ~~R2~~ | **DONE — badly falsified. probe 0.7161, −3.80 pt.** Labels more accurate (99.84 %) but 156 species vs 346: a better labeller separates its confidences and the quantile gate keeps a narrower set. |
-| ~~R3~~ | **DONE — predicted range hit. probe 0.7585 / held-out 0.7682.** Per-species gate instead of quantile, *nothing else changed*: −24.6 pt label accuracy, +740 species, **+4.24 pt**. Iteration now marginally positive (+0.44 over round 1). [[2026-08-08-self-training-does-not-iterate]] |
-| **C3b** | **is novelty monotone, or was C3 measuring rarity?** Identical C3 recipe, retrained with **common** taxa held out at three ranks (2 families, 40 genera, 120 species; 2.62 % of rows). Predicted monotonicity survives with `near` 0.78-0.85 -- harder than C3's 0.853, because a common held-out species has hundreds of good photographs. [[2026-08-08-is-novelty-monotone-or-just-rare]] |
-| ~~R4~~ | **DONE — predicted range hit, and it split the benchmarks. probe 0.7674 (+0.89 over R3), held-out 0.7458 (−2.24).** R3's k=35 cap was doing **class balancing**, not confidence filtering: R3 is R4 with the head of the trap distribution truncated. [[2026-08-08-self-training-does-not-iterate]] |
-| ~~R5~~ | **DONE — both predictions inside range. probe 0.7692 / held-out 0.7781.** Best model in the project on both shifted axes. Coverage and balance are separable and compose. **The confidence gate is gone.** [[2026-08-08-self-training-does-not-iterate]] |
-| ~~C3b~~ | **DONE — monotonicity confirmed, prediction half right. near 0.8717 / mid 0.9463 / far 0.9726.** Ordering held; magnitudes went *up*, not down as predicted. Novelty-has-degrees now rests on two populations chosen by opposite criteria. [[2026-08-08-is-novelty-monotone-or-just-rare]] |
-| ~~B9~~ | **DONE — FALSIFIED, and it inverts. probe 0.7635 / held-out 0.7342.** Balance is worth +1.51/+1.87 to a frozen trunk and **−0.71/−3.62** to end-to-end. Best-vs-best, the staged recipe is **+0.71 in-dist, −0.14 probe, +0.77 held-out** — F2/G2's 1.65 pt trade was a configuration comparison. [[2026-08-08-self-training-does-not-iterate]] |
-| ~~G3~~ | **DONE. in-dist 0.9138 / probe 0.7740 / held-out 0.7518.** Probe missed its range by 0.10 (cleared falsification); held-out missed by 1.8. **Balance is a TRADE at 198 M** (+0.92/−0.82), where it was free at 20 M. **End-to-end (B8) leads both shifted axes at 198 M** — yesterday's "the trade does not survive" holds only at 20 M. [[2026-08-10-balance-is-oversampling-and-it-does-not-scale]] |
-| **B10** | RUNNING. end-to-end at 198 M, balanced. *Note: the 198 M verdict no longer depends on it — B10 can only raise end-to-end's best, not help staged.* **Prediction rewritten after B9, before launch: expected to LOSE** (probe 0.770-0.785 vs B8's 0.7798). Run anyway because three interventions have changed usable sign between 20 M and 198 M. |
-| ~~R5-eval~~ | **DONE. in-dist 0.9074.** −0.07 vs F2 for +1.51 probe / +1.87 held-out: balance is **free** at the classifier stage. vs end-to-end B3rep5x: **+0.71 in-dist, −0.14 probe, +0.77 held-out**. |
-| ~~C3ref-eval~~ | **DONE. 0.9114 vs C3b's 0.9110 — the hold-out cost 0.04 pt, i.e. nothing.** The apparent −0.38 was entirely the denominator. Fourth time the "do both numbers mean the same thing" rule has paid. |
-| ~~bal3lvl-prep~~ | **DONE.** 3-level balanced parquet built: 135,296 rows, 151 per species x 896, no species growth. G3/B10 are unblocked on data. |
-| ~~H4~~ | **trained cleanly, 5 ep, valid f1_species 0.8689; test eval re-running after a job-file bug.** **proxy-free head** — species prototypes are an EMA buffer, no trained matrix, no optimiser state. **15.36 GB -> 5.12 GB at 1 M classes.** Predicted 0.900-0.912 vs the baseline's 0.9148; falsified below 0.885. [[2026-08-09-can-centroids-be-trained-against]] |
+| **H4** | proxy-free head, no prototype matrix (Group H's last training candidate). Trained 5 epochs cleanly; valid f1_species 0.8689 -- *validation fold, not a score* | species **0.900-0.912**, falsified below 0.885 |
+| **B10** | 198 M end-to-end, balanced pseudo-labels | probe **0.770-0.785**, *expected to lose* to B8's 0.7798 -- prediction rewritten on B9's evidence before the run started |
+
+Neither changes the conclusions in section 6; both are paid-for numbers sitting unread.
 
 ## 3. Ordered backlog — take the top unblocked item
 
@@ -57,14 +53,15 @@ costed "7-10 h" into 18 h on 2026-08-09.
 
 | # | work | GPU | why, and the gate |
 |---|---|---|---|
-| ~~1~~ | ~~coverage-preserving gate~~ | — | **DONE as R3 — worked, +4.24 pt.** Its diagnostic opened R4 (no gate at all), now running. |
-| ~~2~~ | ~~second adaptation round~~ | — | **running as R2.** |
-| ~~3~~ | ~~joint vs sequential classifier stages~~ | — | **running as F3.** |
-| 1 | **G3 + B10 — the 198 M pair, balanced** | ~1 h + ~7-10 h | **Owner-approved 2026-08-09, gated on B9 closing the gap.** Both G2 and B8 used unbalanced pseudo-labels, so re-running one arm would repeat at 198 M the unfairness B9 removes at 20 M. Configs, job files and the 3-level prep are built and waiting. G3 predicted probe 0.775-0.795 (falsified below 0.7689); B10 predicted 0.785-0.800 (falsified below 0.7798). |
-| ~~3~~ | ~~paper: figures~~ | — | **DONE — `dev/074_figures.py`, four figures in `paper/figures/`.** capacity-dependence (the headline), replication-share with transfer, scoring-rule inversion, stratified novelty on two populations. Numbers transcribed from journal entries with the source line cited; nothing recomputed. |
-| 5 | **P1 — BioCLIP-2 as a frozen trunk** | build + ~1 h | Owner-deferred, reviewer-inevitable. T2b is what makes it plausible. See §5. |
-| ~~6~~ | ~~H — the head-scaling build~~ | — | **running as H4.** |
-| ~~7~~ | ~~C3b — hold out *common* taxa~~ | — | **running.** |
+| 1 | **`ucloud login`, then read H4 and B10** | none | two completed runs have never been scored against their predictions |
+| 2 | **decide the staged-vs-end-to-end question** | none | see section 7. It has flipped twice; recommendation is to freeze it |
+| 3 | **seed-repeat of G3** | ~1 h at 198 M | the held-out drop at 198 M is n = 1, and two conclusions have already moved on single measurements |
+| 4 | **P1 — BioCLIP-2 as a frozen trunk** | build + ~1 h | owner-deferred, reviewer-inevitable. T2b is what makes it plausible. See section 5 |
+| 5 | **paper: fold in the four figures, fact-check `[VERIFY]` citations** | none | citations were written from memory and are not reliable |
+| 6 | **C3b at 198 M** | ~6 h | the novelty-is-not-rarity result is currently 20 M only |
+
+**Completed 2-10 August** — R2/R3/R4/R5 (the gate), B9, C3b + C3ref, G3, H4, B10, the figures.
+Scores and predictions in [[2026-08-24-three-week-report]].
 
 **Do not do** — each closed for a reason, not for lack of time:
 
@@ -89,7 +86,7 @@ A 1280 × 1M prototype matrix is 5.1 GB plus 10.2 GB of optimiser state. Options
 | fixed / taxonomy codes | weakened by the same spectrum |
 | uniform sampled softmax | **dead** — smooth, no plateau; 1024/1M is 0.1 % coverage |
 | hard-negative sampling | weakened — taxonomy-aware negatives recovered only 26 % (H3) |
-| **training** | **running as H4** — proxy-free: EMA centroids in a buffer, no matrix, no optimiser state. Removes 10.24 GB of the 15.36 GB. [[2026-08-09-can-centroids-be-trained-against]] |
+| **training** | **H4 trained; test score unread** — proxy-free: EMA centroids in a buffer, no matrix, no optimiser state. Removes 10.24 GB of the 15.36 GB. [[2026-08-09-can-centroids-be-trained-against]] |
 | *constraint found* | a proxy-free head has **no trainable parameter on the species path** unless the bottleneck is kept, so it cannot serve a frozen-trunk stage (cRT, adaptation) without one |
 
 ## 5. Group P — pretrained encoders as trunks (deferred by the owner, 2026-08-06)
