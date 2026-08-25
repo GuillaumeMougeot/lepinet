@@ -1,6 +1,6 @@
 # Incident: /work storage read latency collapsed; two training jobs starved, not hung
 
-**Kind:** incident · **Status:** **OPEN — needs UCloud-side attention.** Both jobs launched on
+**Kind:** incident · **Status:** **OPEN — escalated to UCloud 2026-08-24; still degrading.** Both jobs launched on
 2026-08-24 stalled. They were not deadlocked and had not crashed: **per-file read latency on `/work`
 has gone from milliseconds to seconds**, and the pipeline is IO-bound. Throughput is ~41 img/s
 against a historical ~1100.
@@ -51,6 +51,12 @@ Re-probed on the owner's instruction, two hours after everything was terminated:
 | ~14:00 | 3 jobs running | **0.59 files/s** |
 | ~14:53 | idle | **<0.18 files/s** (200 files unfinished in 18 min) |
 | **17:00** | **idle 2 h** | **0.03 files/s** — 8 files in 258.9 s |
+| **25 Aug 11:00** | **idle ~20 h** | **0.0028 files/s** — 2 files in 719 s |
+
+**It is still getting worse after twenty hours of complete idleness**, and roughly by an order of
+magnitude per observation: 0.59 -> 0.18 -> 0.03 -> 0.0028 files/s. That is about **six minutes per
+72 KB file**; a single pass over the 3 M-image dataset would take **34 years**. Metadata is
+unaffected throughout (`scandir` over 50,948 directories in 0.45 s on the 25 Aug probe).
 
 **It is getting worse while nothing runs.** That removes the last version of the story in which our
 load is the cause: three concurrent jobs made it worse, but the trend continued down through two

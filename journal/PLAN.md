@@ -31,12 +31,14 @@ operational text and were effectively unfindable.)*
 
 **The cluster is idle and should stay that way until `/work` storage recovers.**
 [[2026-08-24-work-storage-degraded]] — per-file read latency has gone from milliseconds to seconds.
-Measured **0.03 files/s at 17:00** (8 files in 259 s) after 41 img/s in-job earlier, against a
+Measured **0.0028 files/s on 25 Aug** (2 files in 719 s, after ~20 h idle), down from 0.03 the
+evening before after 41 img/s in-job earlier, against a
 historical ~1100 img/s; a single-threaded probe could not read
 200 random files in 18 minutes with nothing else running. Metadata is fine (`scandir` over 50,948
 directories in 0.28 s), so the mount is up — the data path is not.
 
-**It degraded further across two idle hours** (0.59 -> <0.18 -> 0.03 files/s), so waiting is not
+**It degrades by roughly an order of magnitude per observation while completely idle**
+(0.59 -> <0.18 -> 0.03 -> 0.0028 files/s over ~21 h), so waiting is not
 a strategy and our own load was not the cause. Individual reads block for minutes; metadata stays
 fast. **Raise with UCloud.**
 
