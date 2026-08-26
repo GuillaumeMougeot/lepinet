@@ -1,0 +1,27 @@
+# Arm 1 of the decontaminated comparison: OUR baseline on the clean fold. Required because
+# macro-F1 does not decompose -- a clean-subset score cannot be compared against 0.9148 on the
+# full fold, so both arms must be re-scored on the same 219,048 images / 11,998 species.
+name = "lepinet-baseline-cleanfold"
+replicas = 1
+[application]
+name = "pytorch-te"
+version = "26.05"
+[product]
+id = "gpu-nvidia-b200-1-gpu"
+category = "gpu-nvidia-b200"
+provider = "ucloud"
+[time_allocation]
+hours = 6
+[sync]
+local = ".."
+remote = "/12347837/repos/lepinet"
+[setup]
+script = "setup-lepinet.sh"
+run = "lepinet test --model '/work/lepinet/data/ucloud_models/*-lepinet-heads-global-independent-muon-5ep-oversample-effnetv2s-ucloud/*.pt' --parquet /work/lepinet/data/tol_overlap/global_clean_of_tol.parquet --img-dir /work/global_lepi/images --out-dir /work/lepinet/data/ucloud_preds/baseline-cleanfold --test-set 0 --min-img-per-spc 0 --img-size 256 --aug-img-size 460 --batch-size 128 --num-workers 32 --eval-levels speciesKey,genusKey,familyKey"
+[schedule]
+auto_extend = "1h"
+max_time = "12h"
+[[resources]]
+type = "file"
+path = "/12347837/datasets/global_lepi"
+read_only = true
