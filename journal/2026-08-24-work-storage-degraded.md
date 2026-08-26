@@ -1,6 +1,8 @@
 # Incident: /work storage read latency collapsed; two training jobs starved, not hung
 
-**Kind:** incident · **Status:** **OPEN — escalated to UCloud 2026-08-24; still degrading.** Both jobs launched on
+**Kind:** incident · **Status:** **RESOLVED (2026-08-26). UCloud fixed the storage.** Parallel
+read throughput back to **992 files/s**; G3b now trains at **509 img/s**, better than the 358 it
+managed before the outage. All runs restarted, fully serialised. Both jobs launched on
 2026-08-24 stalled. They were not deadlocked and had not crashed: **per-file read latency on `/work`
 has gone from milliseconds to seconds**, and the pipeline is IO-bound. Throughput is ~41 img/s
 against a historical ~1100.
@@ -120,3 +122,40 @@ Historical throughput implies the pipeline needs on the order of **1000 files/s*
 project already knew the pipeline is IO/CPU-decode bound ([[2026-07-18-ucloud-throughput]]); what was
 missing was a rule against stacking jobs, and the habit of treating a startup warning as a result
 rather than as noise. Both are now in `journal/PLAN.md`'s queue discipline.
+
+
+---
+
+## Resolved: UCloud fixed it (2026-08-26)
+
+They confirmed a storage-side fix. Verified before restarting anything:
+
+| probe | 25 Aug (worst) | 26 Aug (after fix) |
+|---|---|---|
+| single-threaded random read | 0.0028 files/s | **13.2 files/s** |
+| **64-thread random read** | not measured | **992.5 files/s** (3,000 files, 224 MB, 3.0 s) |
+| G3b in-job throughput | — | **509 img/s** (was 358 before the outage) |
+
+**My go/no-go threshold was mis-calibrated, and the single-threaded probe nearly cost a day.** It
+reported 13.2 files/s against a 100 files/s bar and returned **NO-GO** — but that bar was borrowed
+from the pipeline's ~1000 *img/s*, which is achieved by 64–256 dataloader workers reading
+concurrently. Comparing a single-threaded probe against a parallel figure is the same
+denominator error this project keeps making, in a new place. The parallel probe
+(`ucloud/lepinet-ioprobe-par.toml`, 64 threads) is the one that gates a restart; ioprobe3 only
+answers the cruder question "is the storage broken at all".
+
+**What the outage cost:** two runs terminated mid-flight (G3b at 58 % of epoch 1, P1a at 86 % of
+epoch 2) and roughly two days of wall-clock. No results were lost or corrupted — everything already
+scored was on disk and committed.
+
+**What it bought:** the `num_workers` 256 → 64 change, which was a real latent problem (the package's
+own startup warning had been firing unread), and three queue-discipline rules that were missing.
+
+## Restart
+
+Fully serialised — one image-heavy job at a time, each `--after` the previous:
+
+`G3b -> G3b-probe -> G3b-probeho -> G3b-eval -> P1a -> P1a-eval -> P1b -> P1b-probe -> P1b-probeho -> P1b-eval`
+
+Compute is not the constraint here and the parallel-job experiment cost two days, so the chain is
+serial by choice rather than by necessity.

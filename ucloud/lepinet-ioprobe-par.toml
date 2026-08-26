@@ -1,0 +1,30 @@
+# Parallel read probe. The single-threaded ioprobe3 answers 'is the storage broken', but its
+# files/s cannot be compared against the pipeline's ~1000 img/s, which is achieved with 64-256
+# dataloader workers reading concurrently. On 2026-08-24 a single-threaded probe measured
+# <0.2 files/s while a 64-worker job sustained 41 img/s -- a ~200x parallel factor. This probe
+# reads 3000 random files with 64 threads, which is what the dataloader actually does, and is the
+# number that should gate a restart.
+name = "lepinet-ioprobe-par"
+replicas = 1
+[application]
+name = "pytorch-te"
+version = "26.05"
+[product]
+id = "gpu-nvidia-b200-1-gpu"
+category = "gpu-nvidia-b200"
+provider = "ucloud"
+[time_allocation]
+hours = 1
+[sync]
+local = ".."
+remote = "/12347837/repos/lepinet"
+[setup]
+script = "setup-lepinet.sh"
+run = "python -c \"import os,random,time;from concurrent.futures import ThreadPoolExecutor;d='/work/global_lepi/images';subs=[e.path for e in os.scandir(d) if e.is_dir()];random.seed(int(time.time()));random.shuffle(subs);fs=[];[fs.extend(os.path.join(s,f) for f in os.listdir(s)[:8]) for s in subs[:600]];random.shuffle(fs);fs=fs[:3000];print('candidates',len(fs),flush=True);rd=lambda f: len(open(f,'rb').read());t=time.time();ex=ThreadPoolExecutor(64);b=sum(ex.map(rd,fs));dt=time.time()-t;print('PARALLEL READ',len(fs),'files',b//1024//1024,'MB in',round(dt,1),'s =',round(len(fs)/dt,1),'files/s',flush=True);print('VERDICT','GO' if len(fs)/dt>=400 else 'NO-GO','(64 threads; pipeline needs ~1000 img/s, historically achieved with 64-256 workers)',flush=True)\""
+[schedule]
+auto_extend = "1h"
+max_time = "2h"
+[[resources]]
+type = "file"
+path = "/12347837/datasets/global_lepi"
+read_only = true

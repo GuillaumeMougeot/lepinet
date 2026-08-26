@@ -27,37 +27,27 @@ operational text and were effectively unfindable.)*
 | **P** | pretrained encoders (BioCLIP-2) as frozen trunks | **deferred** (owner) |
 | **T** | what target labels would have bought | **closed** |
 
-## 2. State on return (2026-08-24)
+## 2. State (2026-08-26)
 
-**The cluster is idle and should stay that way until `/work` storage recovers.**
-[[2026-08-24-work-storage-degraded]] — per-file read latency has gone from milliseconds to seconds.
-Measured **0.0028 files/s on 25 Aug** (2 files in 719 s, after ~20 h idle), down from 0.03 the
-evening before after 41 img/s in-job earlier, against a
-historical ~1100 img/s; a single-threaded probe could not read
-200 random files in 18 minutes with nothing else running. Metadata is fine (`scandir` over 50,948
-directories in 0.28 s), so the mount is up — the data path is not.
+**Storage fixed by UCloud; everything is running again.** Parallel read throughput is back to
+**992 files/s** and G3b trains at **509 img/s**, better than before the outage.
+[[2026-08-24-work-storage-degraded]] is RESOLVED.
 
-**It degrades by roughly an order of magnitude per observation while completely idle**
-(0.59 -> <0.18 -> 0.03 -> 0.0028 files/s over ~21 h), so waiting is not
-a strategy and our own load was not the cause. Individual reads block for minutes; metadata stays
-fast. **Raise with UCloud.**
+**Gate any future restart on `ucloud/lepinet-ioprobe-par.toml`** (64 threads, ~2 min), not on the
+single-threaded `ioprobe3`. The single-threaded probe returned NO-GO at 13.2 files/s while the real
+parallel throughput was 992 -- its threshold was borrowed from a parallel figure and is not
+comparable. `ioprobe3` answers only "is the storage broken at all".
 
-**Before resuming anything**, run `ucloud/lepinet-ioprobe3.toml` (~1 min, time-bounded, prints a
-GO/NO-GO verdict). Its
-`COLD RANDOM READ ... files/s` line is the go/no-go: the pipeline needs order **1000 files/s**;
-under ~100 means training will not finish in reasonable time.
+**Running, fully serialised** (one image-heavy job at a time, each `--after` the previous):
 
-**Terminated mid-flight, to be relaunched when storage is healthy:**
-
-| run | state | note |
+| run | predicted | falsified if |
 |---|---|---|
-| **G3b** | terminated at 58 % of epoch 1/2 | independent repeat of G3; predicted held-out 0.745-0.760, falsified above 0.7652 |
-| **P1a / P1b** | terminated at 86 % of epoch 2/3 | BioCLIP-2 frozen trunk; predicted P1a in-dist 0.86-0.91, P1b probe 0.72-0.78 |
+| **G3b** | held-out 0.745-0.760 | above 0.7652 — G3's drop would be noise, and finding 7 loses its 198 M clause |
+| **P1a** | in-dist 0.86-0.91 | below 0.80 |
+| **P1b** | probe 0.72-0.78 vs T2b's 0.7515 | below 0.70 — the recipe would depend on our representation after all |
 
-Both had `num_workers` lowered to 64 before the last relaunch; keep that.
-
-**Landed today:** H4 falsified (-4.25 pt on a matched fold), B10 a tie, and the H4 control — see
-section 6 and [[2026-08-24-three-week-report]].
+**Landed 24 Aug:** H4 falsified (-4.25 pt on a matched fold), B10 a tie. See
+[[2026-08-24-three-week-report]].
 
 ## 3. Ordered backlog — take the top unblocked item
 
