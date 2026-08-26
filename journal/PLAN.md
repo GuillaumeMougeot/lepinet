@@ -49,6 +49,20 @@ comparable. `ioprobe3` answers only "is the storage broken at all".
 **Landed 24 Aug:** H4 falsified (-4.25 pt on a matched fold), B10 a tie. See
 [[2026-08-24-three-week-report]].
 
+## 2b. ToL-200M direction (opened 2026-08-26)
+
+| | status |
+|---|---|
+| **contamination** | **BioCLIP-2 has seen 93.3 % of our species and 65.4 % of our images**, including 413,865 test-fold images, by exact GBIF occurrence id. In-distribution comparisons are contaminated; the shifted ones are not. [[2026-08-26-bioclip2-has-seen-two-thirds-of-our-test-fold]] |
+| **768-d cache usable?** | **Yes.** Projected 768 matches pooled 1024 on centroid top-1 across three samples; the projection compresses the cosine scale but preserves ranking. No re-embedding needed. [[2026-08-26-the-clip-projection-does-not-hurt-us]] |
+| **zero-shot vs probe** | fitted probe beats zero-shot by ~9 pt at matched class count; prompt template worth 0.3 pt. Zero-shot is the wrong instrument for representation quality. |
+| **next** | open-set at scale on the cached embeddings: near/mid/far strata sampled across the whole tree, and AUROC as a function of how many taxa are enrolled. Embedding-only, one GPU. |
+| **do not** | pretrain a backbone on ToL-200M. It scales the *source* domain 43x, which our own factorial says does not buy shift robustness -- and BioCLIP-2 is a 200 M-image replication of exactly that. |
+
+**Caveat to carry:** absolute cosines differ between the two spaces, so every threshold (abstention,
+novelty, calibration temperature) must be refitted if the space changes. Ranking transfers, numbers
+do not.
+
 ## 3. Ordered backlog — take the top unblocked item
 
 Costs from the measured formula: `images_per_epoch × epochs / 1100 img/s`, 5.04 M images/epoch.
