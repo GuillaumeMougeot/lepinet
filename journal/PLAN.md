@@ -1,6 +1,6 @@
 # PLAN — where we are, and what runs next
 
-**Kind:** living · **Last updated:** 2026-08-24 · **Supersedes:** [[2026-07-28-landscape-and-plan]]
+**Kind:** living · **Last updated:** 2026-08-26 · **Supersedes:** [[2026-07-28-landscape-and-plan]]
 
 The one file in `journal/` meant to be true *today*. Everything else is a record of a moment.
 
@@ -40,11 +40,11 @@ comparable. `ioprobe3` answers only "is the storage broken at all".
 
 **Running, fully serialised** (one image-heavy job at a time, each `--after` the previous):
 
-| run | predicted | falsified if |
-|---|---|---|
-| **G3b** | held-out 0.745-0.760 | above 0.7652 — G3's drop would be noise, and finding 7 loses its 198 M clause |
-| **P1a** | in-dist 0.86-0.91 | below 0.80 |
-| **P1b** | probe 0.72-0.78 vs T2b's 0.7515 | below 0.70 — the recipe would depend on our representation after all |
+| run | predicted | falsified if | note |
+|---|---|---|---|
+| **G3b** | held-out 0.745-0.760 | above 0.7652 | G3's drop would be noise, and finding 7 loses its 198 M clause |
+| **P1a** | in-dist 0.86-0.91 | below 0.80 | **PREDICTION COMPROMISED** — 65.4 % of the test fold is in BioCLIP-2's training set. Still interpretable as "what this trunk can do"; cannot support "within N pt of our backbone". Needs both arms re-scored on the decontaminated fold. [[2026-08-26-bioclip2-has-seen-two-thirds-of-our-test-fold]] |
+| **P1b** | probe 0.72-0.78 vs T2b's 0.7515 | below 0.70 | **UNCONTAMINATED and now the decisive run.** The trap imagery is not in ToL at all, so the shifted comparison is clean on both sides. |
 
 **Landed 24 Aug:** H4 falsified (-4.25 pt on a matched fold), B10 a tie. See
 [[2026-08-24-three-week-report]].
