@@ -22,7 +22,7 @@ operational text and were effectively unfindable.)*
 | **E** | is open-set the binding constraint? | **closed — no**, the premise was a scoring-rule artefact |
 | **F** | the assembled recipe | **closed** — F2 composes |
 | **G** | the 198 M confirmation | **closed** — the staged/end-to-end verdict is capacity-dependent; B10 confirms the comparison is fair |
-| **H** | scaling the head to ~1 M species | **closed** — all five training routes measured and dead; shard the matrix, use centroids at inference |
+| **H** | scaling the head to ~1 M species | **closed, and reframed** — five routes dead, but a min-50 floor turns 884 K species into 204 K and the matrix then fits (3.13 GB with Adam). The answer is a data policy, not an architecture |
 | **L** | imbalanced learning | **closed** — cRT is the answer |
 | **P** | pretrained encoders (BioCLIP-2) as frozen trunks | **deferred** (owner) |
 | **T** | what target labels would have bought | **closed** |
@@ -63,6 +63,7 @@ same problem may apply there; the margins are mostly larger, but R5-vs-R3 probe 
 | **zero-shot vs probe** | fitted probe beats zero-shot by ~9 pt at matched class count; prompt template worth 0.3 pt. Zero-shot is the wrong instrument for representation quality. |
 | **P3 (running)** | our recipe, their backbone, UNFROZEN, 3 LR arms. Decides whether BioCLIP-2's representation is genuinely limited or merely badly read while frozen — the confound both P1 arms share. |
 | **next** | open-set at scale on the cached embeddings: near/mid/far strata sampled across the whole tree, and AUROC as a function of how many taxa are enrolled. Embedding-only, one GPU. |
+| **ToL at our policy** | **88.1 M images, 203,878 species** (min 50, cap 2,000): 15.5x our images, 16.1x our species. 22.2 h/epoch, 2.2 TB at 256 px, ~84 M images to download. **The 1280 x 204 K matrix is 3.13 GB with Adam and FITS** — a min-image floor solves what Group H could not solve by architecture. Upper ranks need a validity audit before "7 levels" is claimed. [[2026-08-27-tol-at-our-policy-and-the-head-scaling-problem]] |
 | **head concentration** | **ToL's surplus is ~90 % head.** At our 2,000 cap it offers **+1.26 M images (1.2x)**, not 3.1x. Top 10 species = 1.63 M images; uncapped they would take 7.8 % of every epoch against 11.6 % for the 65,453 rarest combined. The ToL-data direction is much weaker than it looked. [[2026-08-27-tol-extra-data-is-almost-all-head]] |
 | **L7 (running)** | **where is the optimal cap?** (reframed from "was cutting the head a mistake") Our construction capped at ~2,000 imgs/species for balance and never tested it. ToL did not: 19.1 M vs our 6.2 M for the same 12,494 species, with near-identical medians -- the difference is entirely the head, and only 1.76 M ToL images are in species we lack. Sweep caps 250/500/1000 to measure the slope with local data. A slope measured over 250-2,000 says nothing about caps of 10^5, so it can justify acquiring up to ~3,000-5,000/species, not restoring the full head. |
 | **tail data** | the owner has the full Lepidoptera set on UCloud already — our 6.3 M is what survived the `min_img_per_spc` floor, so the extra ~17 M *is* the tail we deliberately removed. No download needed if we revisit it. |
