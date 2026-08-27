@@ -49,7 +49,7 @@ same problem may apply there; the margins are mostly larger, but R5-vs-R3 probe 
 |---|---|
 | **G3b** | probe 0.7870 / held-out 0.7892 / in-dist 0.9148. **FALSIFIED** its 0.745-0.760 prediction |
 | **P1a** | full fold 0.8629, **clean fold 0.8444 vs baseline 0.9021 — a 5.77 pt gap**. Contamination was worth only ~0.58 pt; most of the drop is the harder denominator [[2026-08-24-does-the-recipe-need-our-backbone]] |
-| **P1b** | **relaunched** — failed on a missing `flemming` mount (the pseudo-label parquet reaches trap images via `../../flemming/images/`). Third time this class of bug has hit; note added to all three P1b TOMLs |
+| ~~P1b~~ | **DONE — FALSIFIED by 11 pt. probe 0.5901 / held-out 0.5599 vs T2b's 0.7515.** The recipe is **not** trunk-agnostic; the backbone stays in the contribution list. [[2026-08-24-does-the-recipe-need-our-backbone]]. Originally failed — failed on a missing `flemming` mount (the pseudo-label parquet reaches trap images via `../../flemming/images/`). Third time this class of bug has hit; note added to all three P1b TOMLs |
 
 ## 2b. ToL-200M direction (opened 2026-08-26)
 
@@ -58,7 +58,9 @@ same problem may apply there; the margins are mostly larger, but R5-vs-R3 probe 
 | **contamination** | **BioCLIP-2 has seen 93.3 % of our species and 65.4 % of our images**, including 413,865 test-fold images, by exact GBIF occurrence id. In-distribution comparisons are contaminated; the shifted ones are not. [[2026-08-26-bioclip2-has-seen-two-thirds-of-our-test-fold]] |
 | **768-d cache usable?** | **Yes.** Projected 768 matches pooled 1024 on centroid top-1 across three samples; the projection compresses the cosine scale but preserves ranking. No re-embedding needed. [[2026-08-26-the-clip-projection-does-not-hurt-us]] |
 | **zero-shot vs probe** | fitted probe beats zero-shot by ~9 pt at matched class count; prompt template worth 0.3 pt. Zero-shot is the wrong instrument for representation quality. |
+| **P3 (running)** | our recipe, their backbone, UNFROZEN, 3 LR arms. Decides whether BioCLIP-2's representation is genuinely limited or merely badly read while frozen — the confound both P1 arms share. |
 | **next** | open-set at scale on the cached embeddings: near/mid/far strata sampled across the whole tree, and AUROC as a function of how many taxa are enrolled. Embedding-only, one GPU. |
+| **tail data** | the owner has the full ~20 M-image Lepidoptera set on UCloud already — our 6.3 M is what survived the `min_img_per_spc` floor, so the extra ~17 M *is* the tail we deliberately removed. No download needed if we revisit it. |
 | **do not** | pretrain a backbone on ToL-200M. It scales the *source* domain 43x, which our own factorial says does not buy shift robustness -- and BioCLIP-2 is a 200 M-image replication of exactly that. |
 
 **Caveat to carry:** absolute cosines differ between the two spaces, so every threshold (abstention,

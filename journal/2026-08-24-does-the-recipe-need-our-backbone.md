@@ -1,6 +1,11 @@
 # P1: does the recipe need *our* backbone, or any strong encoder?
 
-**Kind:** research · **Status:** **P1a RESOLVED (2026-08-27); P1b running.** On a decontaminated
+**Kind:** research · **Status:** **RESOLVED (2026-08-27). The recipe is NOT trunk-agnostic — the
+backbone stays in the contribution list.** P1b was falsified by 11 points: BioCLIP-2 frozen and
+adapted reaches probe **0.5901** against T2b's **0.7515** on the identical procedure, a **16.14 pt**
+deficit. The gap that is 5.77 pt in-distribution **triples under domain shift**.
+
+*(earlier status)* On a decontaminated
 fold, a frozen BioCLIP-2 trunk with a fitted classifier scores **0.8444 against our baseline's
 0.9021 — a 5.77 pt gap**. BioCLIP-2 as a frozen
 trunk with our two classifier stages on top. If it works, the contribution is the *procedure*, not
@@ -138,3 +143,60 @@ Coarse levels tell the same story: genus 0.9125 vs 0.9525, family 0.9511 vs 0.96
 The question is whether our classifier stages close that gap on the **shifted** benchmark, where the
 comparison is uncontaminated and where the project's subject actually lives. That is P1b, running now
 after a mount fix.
+
+
+---
+
+## P1b: falsified by 11 points, and it answers the question (2026-08-27)
+
+**Predicted probe 0.72–0.78, falsified below 0.70. Landed 0.5901.**
+
+| | trunk | procedure | probe | held-out |
+|---|---|---|---|---|
+| **T2b** | ours (A1, 20 M, no domain aug) | frozen, classifier adapted | **0.7515** | — |
+| **P1b** | BioCLIP-2 (ViT-L/14, 303 M, 200 M images) | frozen, classifier adapted | **0.5901** | 0.5599 |
+| Δ | | | **−16.14** | |
+
+Same stage, same pseudo-labels, same head, same 2 epochs, same frozen-trunk protocol. **One factor
+changed: the representation.** And the trunk trained on 6.3 M images of our own task beats the trunk
+trained on 200 M organism images by sixteen points.
+
+## The shape of the result is the interesting part
+
+| axis | BioCLIP-2 frozen vs ours |
+|---|---|
+| in-distribution (P1a vs baseline, decontaminated fold) | **−5.77** |
+| under domain shift (P1b vs T2b, probe) | **−16.14** |
+
+**The deficit triples when the camera changes.** In-distribution, BioCLIP-2's features are merely
+behind; under shift they fall apart. That is not a small-data-vs-big-data story — BioCLIP-2 has 33x
+more images and had seen 93 % of our species and 65 % of our exact photographs.
+
+## What it retracts, and what it establishes
+
+**T2b's extrapolation was wrong, and it was mine.** That entry concluded:
+
+> If adaptation needs nothing from the representation, **it does not need *ours*.**
+
+The first clause is still true — adaptation recovers 83 % of the gain from a frozen trunk. The
+inference to "any trunk" does not follow, and P1b is the counterexample. T2b showed adaptation works
+from *a trunk trained on this task without domain augmentation*; it never showed adaptation works
+from *an arbitrary trunk*. I generalised one step too far and it took a run to catch.
+
+**The backbone earns its place in the contribution list.** The paper cannot claim "take the best
+available encoder, fit a cheap classifier, adapt it". The correct claim is narrower and better
+supported: *given a representation trained on the task, the remaining work is cheap and lives in the
+classifier.*
+
+**And it protects the paper from a reviewer running this experiment for us**, which was one of the
+two reasons for doing it.
+
+## What it does NOT establish
+
+**Whether BioCLIP-2's representation is bad, or merely badly read while frozen.** P1b freezes the
+trunk. A fine-tuned BioCLIP-2 may recover most or all of the gap, in which case the honest statement
+becomes "their representation is fine but must be adapted, not probed". **P3** (three LR arms,
+running) tests exactly this, and until it lands the interpretation of P1b is limited to frozen use.
+
+This is the same confound that limited P1a, and it is worth stating that both P1 arms share it: the
+whole of P1 measures *frozen* BioCLIP-2, which is a deployment mode, not a verdict on the encoder.
