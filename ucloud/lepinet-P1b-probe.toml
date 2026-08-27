@@ -1,3 +1,8 @@
+# NOTE: the flemming mount below is load-bearing. The pseudo-label parquet references trap
+# images as ../../flemming/images/..., which resolves correctly from /work/global_lepi/images
+# ONLY if that tree is also mounted. Without it the path resolves and the file does not exist,
+# and the run dies mid-epoch on FileNotFoundError -- which is exactly how P1b failed on
+# 2026-08-26, and how B9 nearly failed before it. Clone a TOML that already ran.
 name = "lepinet-P1b-probe"
 replicas = 1
 [application]
@@ -22,3 +27,7 @@ max_time = "12h"
 type = "file"
 path = "/12347837/datasets/global_lepi"
 read_only = true
+
+[[resources]]
+type = "file"
+path = "/12347837/datasets/flemming"

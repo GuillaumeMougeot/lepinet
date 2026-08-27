@@ -1,6 +1,8 @@
 # P1: does the recipe need *our* backbone, or any strong encoder?
 
-**Kind:** research · **Status:** **OPEN** (launched 2026-08-24, owner-approved). BioCLIP-2 as a frozen
+**Kind:** research · **Status:** **P1a RESOLVED (2026-08-27); P1b running.** On a decontaminated
+fold, a frozen BioCLIP-2 trunk with a fitted classifier scores **0.8444 against our baseline's
+0.9021 — a 5.77 pt gap**. BioCLIP-2 as a frozen
 trunk with our two classifier stages on top. If it works, the contribution is the *procedure*, not
 the backbone.
 
@@ -99,3 +101,40 @@ from exactly that kind of extrapolation.
 - **P1a below 0.80** — stop; a frozen foreign encoder is not a viable starting point at this
   granularity, and the fine-grained gap between 200 M-image pretraining and task-specific training is
   itself reportable.
+
+
+---
+
+## P1a: 0.8444 vs 0.9021 on a decontaminated fold (2026-08-27)
+
+**Predicted in-distribution 0.86–0.91, falsified below 0.80. Landed 0.8629 on the full fold —
+inside the range.** But the full fold is 65.4 % BioCLIP-2's own training data
+([[2026-08-26-bioclip2-has-seen-two-thirds-of-our-test-fold]]), so both arms were re-scored on the
+219,048-image / 11,998-species clean subset:
+
+| | full fold | clean fold | change |
+|---|---|---|---|
+| our baseline | 0.9148 | **0.9021** | −1.27 |
+| **P1a** (BioCLIP-2 frozen + fitted head) | 0.8629 | **0.8444** | −1.85 |
+| **gap** | −5.19 | **−5.77** | |
+
+**Contamination was worth about 0.58 pt to P1a**, not the several points I expected from a 65 %
+overlap. Most of the −1.27 / −1.85 drop is the *denominator*, not the leak: the clean subset has a
+median of 8 images per species against 20, which makes it a harder benchmark for everyone. The
+contamination-specific effect is the **difference** of the two drops, and it is small.
+
+That is a more interesting result than a large leak would have been. It says a fitted classifier on
+frozen features does not memorise its trunk's training images the way a fine-tuned network would —
+consistent with the trunk being frozen and only 12,041 prototypes being fitted.
+
+**The 5.77 pt gap is the headline, and it is real** — far outside any plausible spread on an
+in-distribution metric (measured spread 0.0010). A frozen BioCLIP-2 trunk is meaningfully behind a
+task-trained one at this granularity, even though BioCLIP-2 saw 93 % of our species and 200 M
+organism images.
+
+Coarse levels tell the same story: genus 0.9125 vs 0.9525, family 0.9511 vs 0.9683.
+
+**What it does not decide.** P1a is the *in-distribution* arm, which was never the interesting one.
+The question is whether our classifier stages close that gap on the **shifted** benchmark, where the
+comparison is uncontaminated and where the project's subject actually lives. That is P1b, running now
+after a mount fix.

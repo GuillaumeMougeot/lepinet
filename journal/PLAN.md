@@ -1,6 +1,6 @@
 # PLAN — where we are, and what runs next
 
-**Kind:** living · **Last updated:** 2026-08-26 · **Supersedes:** [[2026-07-28-landscape-and-plan]]
+**Kind:** living · **Last updated:** 2026-08-27 · **Supersedes:** [[2026-07-28-landscape-and-plan]]
 
 The one file in `journal/` meant to be true *today*. Everything else is a record of a moment.
 
@@ -27,27 +27,29 @@ operational text and were effectively unfindable.)*
 | **P** | pretrained encoders (BioCLIP-2) as frozen trunks | **deferred** (owner) |
 | **T** | what target labels would have bought | **closed** |
 
-## 2. State (2026-08-26)
+## 2. State (2026-08-27)
 
-**Storage fixed by UCloud; everything is running again.** Parallel read throughput is back to
-**992 files/s** and G3b trains at **509 img/s**, better than before the outage.
-[[2026-08-24-work-storage-degraded]] is RESOLVED.
+**Two conclusions retracted today.** G3b — an exact repeat of G3 — scored held-out **0.7892 against
+G3's 0.7518**, a 3.74 pt spread between identical runs and **7.2x the floor** we had been quoting.
+The floors were measured on 5-epoch end-to-end 20 M runs and do not transfer to 2-epoch frozen-trunk
+stages at 198 M. [[2026-08-27-the-noise-floor-does-not-transfer-across-training-regimes]]
 
-**Gate any future restart on `ucloud/lepinet-ioprobe-par.toml`** (64 threads, ~2 min), not on the
-single-threaded `ioprobe3`. The single-threaded probe returned NO-GO at 13.2 files/s while the real
-parallel throughput was 992 -- its threshold was borrowed from a parallel figure and is not
-comparable. `ioprobe3` answers only "is the storage broken at all".
+Dead as a result: **"balance is a trade at 198 M"** and **"end-to-end leads at 198 M"**. Staged is
+either ahead or behind end-to-end depending on which of two identical draws you pick, so the honest
+statement is that they are indistinguishable at 198 M.
 
-**Running, fully serialised** (one image-heavy job at a time, each `--after` the previous):
+**Still true:** the staged recipe's in-distribution advantage (+0.71 to +0.88 across four runs, on a
+metric whose spread here is 0.0010), and everything with a margin above ~3 pt.
 
-| run | predicted | falsified if | note |
-|---|---|---|---|
-| **G3b** | held-out 0.745-0.760 | above 0.7652 | G3's drop would be noise, and finding 7 loses its 198 M clause |
-| **P1a** | in-dist 0.86-0.91 | below 0.80 | **PREDICTION COMPROMISED** — 65.4 % of the test fold is in BioCLIP-2's training set. Still interpretable as "what this trunk can do"; cannot support "within N pt of our backbone". Needs both arms re-scored on the decontaminated fold. [[2026-08-26-bioclip2-has-seen-two-thirds-of-our-test-fold]] |
-| **P1b** | probe 0.72-0.78 vs T2b's 0.7515 | below 0.70 | **UNCONTAMINATED and now the decisive run.** The trap imagery is not in ToL at all, so the shifted comparison is clean on both sides. |
+**Highest-value cheap run available:** one repeat of R5 (~40 min) to measure the 20 M frozen-trunk
+spread. F2/F3/R3/R4/R5/T2 are *all* frozen-trunk stages scored against an end-to-end floor, so the
+same problem may apply there; the margins are mostly larger, but R5-vs-R3 probe (+1.07) is exposed.
 
-**Landed 24 Aug:** H4 falsified (-4.25 pt on a matched fold), B10 a tie. See
-[[2026-08-24-three-week-report]].
+| run | result |
+|---|---|
+| **G3b** | probe 0.7870 / held-out 0.7892 / in-dist 0.9148. **FALSIFIED** its 0.745-0.760 prediction |
+| **P1a** | full fold 0.8629, **clean fold 0.8444 vs baseline 0.9021 — a 5.77 pt gap**. Contamination was worth only ~0.58 pt; most of the drop is the harder denominator [[2026-08-24-does-the-recipe-need-our-backbone]] |
+| **P1b** | **relaunched** — failed on a missing `flemming` mount (the pseudo-label parquet reaches trap images via `../../flemming/images/`). Third time this class of bug has hit; note added to all three P1b TOMLs |
 
 ## 2b. ToL-200M direction (opened 2026-08-26)
 

@@ -145,6 +145,15 @@ smaller, probabilistically coherent (the coarse posterior *is* the sum of the sp
 
 ---
 
+### A noise floor belongs to (metric x benchmark x training procedure)
+
+Our floors were measured on 5-epoch end-to-end 20 M runs and then applied to 2-epoch frozen-trunk
+stages at 198 M, where the true spread is **7.2x larger** on held-out species (0.0374 vs 0.0052).
+Two identical runs of G3 differed by 3.74 pt on that benchmark while agreeing to 0.0010
+in-distribution. Re-measure the floor whenever the procedure changes, and prefer stating a margin in
+points with the spread beside it over "Nx floor", which hides which floor is being invoked.
+[[2026-08-27-the-noise-floor-does-not-transfer-across-training-regimes]]
+
 ### Measure at two capacities before claiming a method property
 
 *Change one factor per run* is not sufficient. Five interventions here have changed magnitude across
