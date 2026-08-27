@@ -41,8 +41,11 @@ statement is that they are indistinguishable at 198 M.
 **Still true:** the staged recipe's in-distribution advantage (+0.71 to +0.88 across four runs, on a
 metric whose spread here is 0.0010), and everything with a margin above ~3 pt.
 
-**Highest-value cheap run available:** one repeat of R5 (~40 min) to measure the 20 M frozen-trunk
-spread. F2/F3/R3/R4/R5/T2 are *all* frozen-trunk stages scored against an end-to-end floor, so the
+**R5b measured it (2026-08-27):** probe spread **0.0119**, held-out 0.0079. Probe is ~0.012 in both
+frozen-trunk regimes and ~3x the old floor, which retracts "R5 beats R3 on probe" and "balance is
+worth +1.51 probe". The core self-training story (coverage dominates, no gate) is untouched.
+
+*(original note)* one repeat of R5 to measure the 20 M frozen-trunk spread. F2/F3/R3/R4/R5/T2 are *all* frozen-trunk stages scored against an end-to-end floor, so the
 same problem may apply there; the margins are mostly larger, but R5-vs-R3 probe (+1.07) is exposed.
 
 | run | result |
@@ -60,7 +63,8 @@ same problem may apply there; the margins are mostly larger, but R5-vs-R3 probe 
 | **zero-shot vs probe** | fitted probe beats zero-shot by ~9 pt at matched class count; prompt template worth 0.3 pt. Zero-shot is the wrong instrument for representation quality. |
 | **P3 (running)** | our recipe, their backbone, UNFROZEN, 3 LR arms. Decides whether BioCLIP-2's representation is genuinely limited or merely badly read while frozen — the confound both P1 arms share. |
 | **next** | open-set at scale on the cached embeddings: near/mid/far strata sampled across the whole tree, and AUROC as a function of how many taxa are enrolled. Embedding-only, one GPU. |
-| **tail data** | the owner has the full ~20 M-image Lepidoptera set on UCloud already — our 6.3 M is what survived the `min_img_per_spc` floor, so the extra ~17 M *is* the tail we deliberately removed. No download needed if we revisit it. |
+| **L7 (running)** | **was cutting the head a mistake?** Our construction capped at ~2,000 imgs/species for balance and never tested it. ToL did not: 19.1 M vs our 6.2 M for the same 12,494 species, with near-identical medians -- the difference is entirely the head, and only 1.76 M ToL images are in species we lack. Sweep caps 250/500/1000 to measure the slope with local data. |
+| **tail data** | the owner has the full Lepidoptera set on UCloud already — our 6.3 M is what survived the `min_img_per_spc` floor, so the extra ~17 M *is* the tail we deliberately removed. No download needed if we revisit it. |
 | **do not** | pretrain a backbone on ToL-200M. It scales the *source* domain 43x, which our own factorial says does not buy shift robustness -- and BioCLIP-2 is a 200 M-image replication of exactly that. |
 
 **Caveat to carry:** absolute cosines differ between the two spaces, so every threshold (abstention,

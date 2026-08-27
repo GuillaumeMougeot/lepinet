@@ -1,0 +1,61 @@
+# L7: was cutting the head of the distribution a mistake?
+#
+# Our dataset construction capped images per species at ~2,000 for balance. It was never tested, and
+# two facts found on 2026-08-27 make it worth testing: ToL-200M did NOT do it (19.1 M images against
+# our 6.2 M for the same 12,494 species, with near-identical medians -- the whole difference is the
+# head), and our own results say data-level rebalancing is the wrong instrument (cRT put rebalancing
+# in the classifier; sqrt-oversampling costs 1.52 pt under shift at 20 M and 2.88 at 198 M).
+#
+# We cannot restore the head -- those images are not local -- so this measures the SLOPE using data
+# we already hold. If accuracy is still climbing at the right-hand end, we are on the wrong side of
+# the optimum and acquiring more head images is justified. If it flattens by 1,000, the cap is free
+# and the whole ToL-data direction closes cheaply.
+#
+# The uncapped control is the existing 0.9148 baseline; only the parquet differs between arms.
+# THE TEST FOLD IS NEVER CAPPED (dev/078 asserts it), because filtering the eval set is the mistake
+# this project has paid for most.
+#
+# Prediction (committed): in-distribution rises monotonically with the cap and is still rising at
+# 1,000 -- cap 250 ~0.885-0.900, cap 500 ~0.900-0.910, cap 1000 ~0.908-0.915 against the uncapped
+# 0.9148. Falsified if cap 1000 is within 0.15 pt of uncapped, which would say the head contributes
+# nothing over ~1,000 images/species and restoring it cannot help.
+#
+# The shifted axes are the more interesting half and I will not predict them tightly: macro-F1
+# weights rare species equally, so head images may buy little there -- but P1b showed representation
+# quality dominates under shift, and head images are representation training data.
+#
+# ARM: cap = 250 images/species
+version: 1.0
+desc: lepinet-L7cap250-effnetv2s-ucloud
+train:
+  parquet_path: /work/lepinet/data/head_caps/cap250.parquet
+  img_dir: /work/global_lepi/images
+  out_dir: /work/lepinet/data/ucloud_models
+  fold: '1'
+  min_img_per_spc: 50
+  # /work is a network mount (~90 ms/file); many readers park on I/O, so 256 on 48 vCPU is not
+  # real oversubscription. Measured ~950 img/s, ~1:24/epoch on gpu-nvidia-b200-1-gpu.
+  num_workers: 64
+  model_name: lepinet-L7cap250-effnetv2s-ucloud
+  model_arch_name: efficientnet_v2_s
+  head: independent
+  nb_epochs: 5
+  base_lr: 0.001
+  batch_size: 64
+  aug_img_size: 460
+  img_size: 256
+  optimizer: muon
+  fp16: true
+  precision: fp16
+  schedule: one_cycle
+  warmup_epochs: 0.5
+  grad_clip: 5.0
+  oversample_power: 0.5
+  family_filter: []
+  aug_kwargs:
+    max_warp: 0.0
+    max_lighting: 0.0
+    p_lighting: 0.0
+    flip_vert: true
+    max_rotate: 15.0
+    max_zoom: 1.1

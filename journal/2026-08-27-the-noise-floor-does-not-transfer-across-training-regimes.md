@@ -91,8 +91,29 @@ was measured on end-to-end runs:
 | R5 vs B3rep5x, probe | −0.14 | already reported as a tie |
 | G3 vs G2, both axes | ≤0.92 | **retracted above** |
 
-**The 20 M frozen-trunk spread is unmeasured.** One repeat of R5 (~40 min) would settle whether the
-self-training conclusions need the same treatment. That is the cheapest high-value run available.
+**Measured, same day (R5b).** An independent repeat of R5:
+
+| | R5 | R5b | spread |
+|---|---|---|---|
+| probe | 0.7692 | **0.7573** | **0.0119** |
+| held-out | 0.7781 | **0.7702** | 0.0079 |
+
+Predicted probe within 0.010 (missed by 0.0019) and held-out within 0.015 (correct); the 0.020
+falsification line cleared. **The probe spread is ~0.012 in both frozen-trunk regimes** -- 0.0119 at
+20 M and 0.0130 at 198 M, strikingly consistent, and ~3x the floor we had been quoting. Held-out is
+the axis that blows up with capacity: 0.0079 at 20 M against 0.0374 at 198 M.
+
+**Two further retractions follow:**
+
+- **"R5 beats R3 on probe" (+1.07) is inside the spread.** With the R5b draw, R5b (0.7573) sits
+  *below* R3 (0.7585). Not established.
+- **"Balance is worth +1.51 probe to a frozen trunk" (F2 -> R5) is not established** either: with
+  R5b it is +0.32, against a two-sided spread of ~0.017.
+
+**What survives:** self-training's +7.94, R2's -3.80, R3's +4.24, R4-vs-R5 held-out (+3.23 with R5,
++2.44 with R5b), and B9's -3.62. The core claim -- coverage dominates label quality, and no
+confidence gate is needed -- is untouched. What does not survive is the finer probe-side claim that
+*balancing specifically* helps a frozen trunk.
 
 ## The rule
 

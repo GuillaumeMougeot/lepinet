@@ -1,0 +1,28 @@
+name = "lepinet-L7cap500-probe"
+replicas = 1
+[application]
+name = "pytorch-te"
+version = "26.05"
+[product]
+id = "gpu-nvidia-b200-1-gpu"
+category = "gpu-nvidia-b200"
+provider = "ucloud"
+[time_allocation]
+hours = 6
+[sync]
+local = ".."
+remote = "/12347837/repos/lepinet"
+[setup]
+script = "setup-lepinet.sh"
+run = "lepinet test --model '/work/lepinet/data/ucloud_models/*-lepinet-L7cap500-effnetv2s-ucloud/*.pt' --parquet /work/lepinet/data/flemming/splits/flemming_probe.parquet --img-dir /work/flemming/images --out-dir /work/lepinet/data/ucloud_preds/L7cap500-probe --test-set 0 --min-img-per-spc 0 --img-size 256 --aug-img-size 460 --batch-size 128 --num-workers 32 --no-drop-unknown-species"
+[schedule]
+auto_extend = "1h"
+max_time = "16h"
+[[resources]]
+type = "file"
+path = "/12347837/datasets/global_lepi"
+read_only = true
+
+[[resources]]
+type = "file"
+path = "/12347837/datasets/flemming"
