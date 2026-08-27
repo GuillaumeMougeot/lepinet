@@ -1,0 +1,25 @@
+# P1a: BioCLIP-2 frozen trunk, classifier fitted on the global data. 3 epochs, head only.
+name = "lepinet-P3b"
+replicas = 1
+[application]
+name = "pytorch-te"
+version = "26.05"
+[product]
+id = "gpu-nvidia-b200-1-gpu"
+category = "gpu-nvidia-b200"
+provider = "ucloud"
+[time_allocation]
+hours = 16
+[sync]
+local = ".."
+remote = "/12347837/repos/lepinet"
+[setup]
+script = "setup-lepinet.sh"
+run = "uv pip install --no-deps open_clip_torch ftfy regex wcwidth && python dev/075_pretrained_trunk.py train configs/20260827_P3b_bioclip2_ft.yaml"
+[schedule]
+auto_extend = "1h"
+max_time = "48h"
+[[resources]]
+type = "file"
+path = "/12347837/datasets/global_lepi"
+read_only = true

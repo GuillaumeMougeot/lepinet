@@ -1,0 +1,61 @@
+# P3: OUR recipe, THEIR backbone. The decisive test of "is BioCLIP-2 under-optimised for this
+# task, or was it just being read badly by a frozen probe?"
+#
+# P1a froze the trunk and fitted a head: 0.8444 against our baseline's 0.9021 on the decontaminated
+# fold. That gap conflates two things -- their representation vs ours, AND frozen vs trained. This
+# run removes the second: identical to the 0.9148 baseline config in every respect except
+# `model_arch_name: bioclip2` (and the 224/256 resolution the encoder was trained at). Same
+# `independent` 3-level cosine head, same Muon, same one_cycle, same sqrt-oversampling, same 5
+# epochs, backbone UNFROZEN.
+#
+#   fine-tuned BioCLIP-2 >= 0.9021  -> their representation was fine, the frozen probe was the
+#                                      problem, and retraining on ToL has little headroom
+#   fine-tuned BioCLIP-2 <  0.9021  -> something in their pretraining genuinely limits it, and the
+#                                      "our tricks would beat them at ToL scale" hypothesis gains
+#                                      real support
+#
+# LEARNING RATE IS THE RISK, AND IT IS WHY THERE ARE THREE ARMS. base_lr 0.001 was tuned for an
+# ImageNet-initialised effnetv2_s. Fine-tuning a pretrained ViT-L/14 at that rate can destroy the
+# representation in the first few hundred steps -- the failure would look like a plausible-but-bad
+# number rather than a crash. Three arms in parallel cost the same wall-clock as one and remove the
+# possibility of spending 11 h to learn only that the LR was wrong.
+#
+# Cost: P1a's FROZEN epoch ran at 1937 img/s (43m22s for 5.04 M images). Backward through 303 M
+# params should put this near 600-700 img/s, i.e. ~2 h/epoch -- but that is an extrapolation, and
+# extrapolating throughput is what made the B10 costing wrong by 2.3x. Read it from epoch 1.
+#
+# ARM A: base_lr = 0.001  (our default, unchanged -- the strict 'our recipe' control; most likely to be too high)
+version: 1.0
+desc: lepinet-P3a-bioclip2-ft-ucloud
+train:
+  parquet_path: /work/global_lepi/0032836-250426092105405_processing_metadata_postprocessed_quality_filtered.parquet
+  img_dir: /work/global_lepi/images
+  out_dir: /work/lepinet/data/ucloud_models
+  fold: '1'
+  min_img_per_spc: 50
+  # /work is a network mount (~90 ms/file); many readers park on I/O, so 256 on 48 vCPU is not
+  # real oversubscription. Measured ~950 img/s, ~1:24/epoch on gpu-nvidia-b200-1-gpu.
+  num_workers: 64
+  model_name: lepinet-P3a-bioclip2-ft-ucloud
+  model_arch_name: bioclip2
+  head: independent
+  nb_epochs: 5
+  base_lr: 0.001
+  batch_size: 64
+  aug_img_size: 256
+  img_size: 224
+  optimizer: muon
+  fp16: true
+  precision: fp16
+  schedule: one_cycle
+  warmup_epochs: 0.5
+  grad_clip: 5.0
+  oversample_power: 0.5
+  family_filter: []
+  aug_kwargs:
+    max_warp: 0.0
+    max_lighting: 0.0
+    p_lighting: 0.0
+    flip_vert: true
+    max_rotate: 15.0
+    max_zoom: 1.1

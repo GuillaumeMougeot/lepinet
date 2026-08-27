@@ -1,0 +1,50 @@
+# R5b: an independent repeat of R5, to measure the 20 M FROZEN-TRUNK spread.
+#
+# G3b showed the noise floors do not transfer across training regimes: an exact repeat of G3 moved
+# held-out species by 3.74 pt, 7.2x the floor we had been quoting, because the floors were measured
+# on 5-epoch END-TO-END 20 M runs and applied to 2-epoch FROZEN-TRUNK stages at 198 M.
+#
+# F2, F3, R3, R4, R5 and T2 are all frozen-trunk stages at 20 M, and all were scored against that
+# same end-to-end floor. Their margins are mostly large (self-training +7.94, R2 -3.80, R3 +4.24),
+# but R5-vs-R3 on probe is +1.07 and would not survive a spread like G3b's.
+#
+# Prediction (committed): probe within 0.010 of R5's 0.7692 and held-out within 0.015 of 0.7781 --
+# i.e. the 20 M frozen-trunk spread is SMALLER than the 198 M one, because a 20 M head over the same
+# 2 epochs sees the same number of batches but far fewer parameters move per step, and because the
+# 198 M stage sits on a much larger, more plastic representation. Falsified if either axis moves
+# more than 0.020, which would put R5-vs-R3 inside the noise and force the same retraction at 20 M
+# that G3b forced at 198 M.
+version: 1.0
+desc: lepinet-R5b-repeat-effnetv2s-ucloud
+train:
+  parquet_path: /work/lepinet/data/flemming/splits/combined_balanced.parquet
+  img_dir: /work/global_lepi/images
+  out_dir: /work/lepinet/data/ucloud_models
+  fold: '1'
+  min_img_per_spc: 50
+  num_workers: 256
+  model_name: lepinet-R5b-repeat-effnetv2s-ucloud
+  model_arch_name: efficientnet_v2_s
+  head: independent
+  nb_epochs: 2
+  base_lr: 0.001
+  batch_size: 64
+  aug_img_size: 460
+  img_size: 256
+  optimizer: muon
+  fp16: true
+  precision: fp16
+  schedule: one_cycle
+  warmup_epochs: 0.5
+  grad_clip: 5.0
+  oversample_power: 0.5
+  family_filter: []
+  aug_kwargs:
+    max_warp: 0.0
+    max_lighting: 0.0
+    p_lighting: 0.0
+    flip_vert: true
+    max_rotate: 15.0
+    max_zoom: 1.1
+  levels:
+  - speciesKey
