@@ -118,8 +118,23 @@ def install(use_proj: bool = False) -> None:
         return _body().num_features if spec == SENTINEL else orig_feats(spec, img_size=img_size)
 
     M.ViTBody = _body                      # build_learner and build_backbone_model both call this
-    for mod in (M, T):
-        mod.resolve_arch, mod.arch_is_vit, mod.arch_body_features = resolve, is_vit, feats
+
+    # Patch every lepinet module that pulled these names into its own namespace, not just `model`.
+    # `from .model import resolve_arch` binds a *copy* of the function object at import time, so
+    # rebinding `lepinet.model.resolve_arch` alone leaves `lepinet.test.resolve_arch` pointing at the
+    # original. That is exactly how `dev/061` died on `Unknown model_arch_name 'bioclip2'` while the
+    # same install() worked fine for training: `train` was in the list and `test` was not.
+    # Importing `lepinet.test` here rather than trusting it to be loaded already, because the caller
+    # may install() before importing it.
+    import lepinet.test  # noqa: F401
+    import sys
+    targets = {M, T} | {m for n, m in list(sys.modules.items())
+                        if n.startswith("lepinet") and m is not None}
+    for mod in targets:
+        for attr, fn in (("resolve_arch", resolve), ("arch_is_vit", is_vit),
+                         ("arch_body_features", feats)):
+            if hasattr(mod, attr):
+                setattr(mod, attr, fn)
 
 
 def selftest() -> None:

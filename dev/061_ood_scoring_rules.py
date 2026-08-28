@@ -134,10 +134,31 @@ def _register_dev_heads():
     spec.loader.exec_module(mod)
 
 
+def _register_bioclip2():
+    """Make `model_arch_name: bioclip2` resolvable, the same way dev/075 does for train/test.
+
+    `install()` swaps `lepinet.model.ViTBody` for a factory returning a CLIP tower, and patches
+    `resolve_arch` / `arch_is_vit` / `arch_body_features` alongside. Without it, loading a P5
+    checkpoint here dies in `resolve_arch` -- the backbone equivalent of the dev/050 head trap, and
+    the reason the two best models in the project had no open-set numbers.
+    """
+    import importlib.util
+    from pathlib import Path
+
+    spec = importlib.util.spec_from_file_location(
+        "dev075_trunk", Path(__file__).with_name("075_pretrained_trunk.py"))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    mod.install()
+    return mod
+
+
 def main(a):
     import pandas as pd
 
     _register_dev_heads()
+    if a.bioclip2:
+        _register_bioclip2()
 
     from lepinet.data import DEFAULT_LEVELS, filter_df, make_dls
     from lepinet.test import load_model, resolve_checkpoint_path
@@ -199,6 +220,8 @@ if __name__ == "__main__":
     ap.add_argument("--img-dir", required=True)
     ap.add_argument("--out", default="ood_scoring_rules.json")
     ap.add_argument("--img-size", type=int, default=256)
+    ap.add_argument("--bioclip2", action="store_true",
+                    help="checkpoint uses the dev/075 BioCLIP-2 trunk (P5); installs that seam")
     ap.add_argument("--num-workers", type=int, default=32)
     ap.add_argument("--raw-scores", action="store_true",
                     help="Score on pre-clamp cos-like values instead of the head's clamped z-scores.")

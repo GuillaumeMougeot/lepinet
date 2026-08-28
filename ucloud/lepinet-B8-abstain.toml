@@ -1,0 +1,31 @@
+# O1: rank abstention on the PROBE fold for B8. Paper 4.6 calibrates thresholds on the
+# in-distribution fold with the original single-head model; neither recommended model has a
+# coverage/precision curve, and the deployment claim is about shifted data.
+# trains on 27,230 of them -- so none of those numbers is a valid reference for it. This
+# scores the model on `probe` only (15,200 images, whole (trap,night) groups that training
+# never touches), and separately on the held-out-species subset, which is what would expose
+# B3 specialising on the ~500 trap species rather than generalising.
+name = "lepinet-B8-abstain"
+replicas = 1
+[application]
+name = "pytorch-te"
+version = "26.05"
+[product]
+id = "gpu-nvidia-b200-1-gpu"
+category = "gpu-nvidia-b200"
+provider = "ucloud"
+[time_allocation]
+hours = 3
+[sync]
+local = ".."
+remote = "/12347837/repos/lepinet"
+[setup]
+script = "setup-lepinet.sh"
+run = "python dev/058_rank_abstention.py --predictions $(ls /work/lepinet/data/ucloud_preds/D1-probe/*/unrestricted/predictions.csv | head -1) --out /work/lepinet/data/ucloud_preds/abstain-B8 --target-precision 0.95"
+[schedule]
+auto_extend = "1h"
+max_time = "6h"
+[[resources]]
+type = "file"
+path = "/12347837/datasets/flemming"
+read_only = true
