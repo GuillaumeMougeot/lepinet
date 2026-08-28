@@ -318,17 +318,19 @@ corpus serving two roles is a public archive and the second role is somebody els
 
 The sections below each vary one factor. For orientation, the models the paper refers to repeatedly:
 
-| model | what it is | in-dist | probe | probe-HO | open-set |
-|---|---|---|---|---|---|
-| baseline | effnetv2_s, single head + marginals, √-oversampling | 0.9135 | 0.6270 | 0.6412 | 0.8990 |
-| A1 | baseline + ArcFace × z-score | 0.9035 | 0.6437 | — | **0.9068** |
-| best in-distribution | ConvNeXtV2-L @320, multi-head | **0.9316** | — | — | — |
-| **B8 — best deployable (ours)** | 198 M, no √-oversampling, self-training at the 2 % dose | 0.9060 | **0.7798** | **0.7816** | — |
-| **P5 — best deployable (foundation)** | BioCLIP-2 fine-tuned + unfrozen adaptation | 0.9113 | **0.7810** | 0.7806 | — |
-| shippable student | fastvit_sa12, distilled | 0.8967 | — | — | — |
+| model | what it is | in-dist | probe | probe-HO | open-set | useful-answer |
+|---|---|---|---|---|---|---|
+| baseline | effnetv2_s, single head + marginals, √-oversampling | 0.9135 | 0.6270 | 0.6412 | 0.8990 | — |
+| A1 | baseline + ArcFace × z-score | 0.9035 | 0.6437 | — | 0.9068 | — |
+| best in-distribution | ConvNeXtV2-L @320, multi-head | **0.9316** | — | — | — | — |
+| **B8 — best deployable (ours)** | 198 M, no √-oversampling, self-training at the 2 % dose | 0.9060 | 0.7798 | **0.7816** | 0.9153 | 71.17 % |
+| **P5 — SHIP THIS** | BioCLIP-2 fine-tuned + unfrozen adaptation | 0.9113 | **0.7810** | 0.7806 | **0.9161** | **88.44 %** |
+| shippable student | fastvit_sa12, distilled | 0.8967 | — | — | — | — |
 
-**B8 and P5 are tied** (§4.14.4). Open-set AUROC is each model's *best* scoring rule (§4.9) and is
-not measured for the two deployable models — see Limitations.
+**B8 and P5 tie on accuracy** (§4.14.4) **and are 17.3 points apart on useful-answer rate** (§4.6a),
+which is why P5 is the recommendation. Open-set AUROC is each model's *best* scoring rule (§4.9);
+useful-answer is the fraction of probe images given an answer that is correct, under a 95 %-precision
+back-off policy.
 
 ### 4.1 Hierarchical heads: what the taxonomy should and should not touch (C1, C2)
 
@@ -543,6 +545,43 @@ user receives as the species bar rises.)
 
 Coverage/precision per rank from marginalised posteriors with per-level thresholds.
 
+### 4.6a Under domain shift, abstention is expensive — and two models with equal accuracy are not equally deployable
+
+The numbers above are in-distribution. Repeating the same 95 %-precision policy on the shifted probe
+fold, for the two models this paper recommends:
+
+| | B8 (198 M, ours) | P5 (BioCLIP-2 fine-tuned) |
+|---|---|---|
+| species: coverage / precision | 69.72 % / 0.9737 | 71.48 % / 0.9530 |
+| genus | 1.43 % / **0.8073** | **0.00 %** |
+| family | 2.14 % / 0.9939 | 21.31 % / 0.9537 |
+| **abstain** | **26.70 %** | **7.21 %** |
+| answered | 73.30 % | **92.79 %** |
+| **useful (answered and correct)** | **71.17 %** | **88.44 %** |
+
+**Reaching 95 % precision costs 0.82 % abstention in-distribution and 26.70 % under source shift.**
+The mechanism of §4.6 is the same and its magnitude is not: a back-off policy that looks nearly free
+on a held-out fold withholds an answer on a quarter of images from a different camera. Any paper
+reporting abstention coverage on an in-distribution split is reporting the easy case.
+
+**The conditional-calibration failure of §4.6 also sharpens.** On the 4,603 images where B8's species
+confidence falls below threshold, genus precision is **0.5570** against 0.8511 overall and **never
+reaches 95 % at any threshold**. The genus rung is therefore unusable for that model at that target —
+the ladder loses a step exactly where §4.6 predicts it should.
+
+**And the result we did not expect: these two models are statistically tied on probe macro-F1
+(0.7798 vs 0.7810) and 17.3 points apart on the fraction of images that receive a usable answer.**
+The difference is not discriminative power — it is confidence calibration. B8 buys its higher
+precision-among-answered (97.10 % vs 95.31 %) by declining to answer, which is what a model does when
+its confidence does not cleanly separate its correct predictions from its errors. P5's calibration
+also lets it skip the genus rung entirely and fall straight to family, where the evidence actually
+supports the promised precision.
+
+The practical consequence is that **a per-class accuracy metric cannot rank deployable systems.**
+Selecting on probe macro-F1 would have called this pair a coin flip; one of them answers 93 % of
+photographs and the other 73 %. We report useful-answer rate alongside accuracy for that reason, and
+recommend it for any system that is permitted to abstain.
+
 ### 4.7 The margin and marginalisation interact — through calibration
 
 Sections 4.1 and 4.3 present two independent contributions: coarse ranks by marginalisation, and an
@@ -647,10 +686,28 @@ With each model's best rule, the picture is a mild disagreement rather than an i
 | DINOv3-ConvNeXt-L | **0.9216** | 0.6616 | 0.8904 |
 | + domain aug | **0.9216** | **0.7101** | 0.8893 |
 
-The largest augmented model leads two axes and gives up 1.75 points on the third; the smallest model
-leads open-set detection. Selecting on in-distribution macro-F1 alone would still pick a model 6.6
-points worse on external data, which is the practical argument for reporting all three — but it would
-not, as an earlier version of this analysis claimed, pick the worst deployable system.
+Among *these* models the largest augmented one leads two axes and gives up 1.75 points on the third,
+and the smallest leads open-set detection.
+
+**That last clause does not survive scoring the models we actually recommend.** Scored on the same
+open-set benchmark with each model's own best rule (§4.9):
+
+| model | in-distribution | probe | open-set |
+|---|---|---|---|
+| efficientnet\_v2\_s (A1) | 0.9035 | 0.6437 | 0.9068 |
+| **B8** — our best | 0.9060 | 0.7798 | **0.9153** (entropy) |
+| **P5** — BioCLIP-2 fine-tuned | 0.9113 | **0.7810** | **0.9161** (entropy) |
+
+**Both recommended models beat the small one at open-set detection**, so the capacity/novelty
+tension reported above is a property of the four models in that factorial rather than a general one.
+**P5 leads or ties on all three axes at once.** The practical argument for reporting three axes
+survives — they measure different things and a reader needs all of them — but the stronger claim,
+that they *rank models oppositely*, does not. We state this plainly because an earlier version of
+this section made the stronger claim, and the correction runs in the direction of the boring answer.
+
+The disagreement that *does* survive is between accuracy and **deployability**, and it is large:
+§4.6a shows B8 and P5 tied on probe macro-F1 and 17.3 points apart on the fraction of images that
+receive a usable answer.
 
 We report this correction explicitly because it illustrates the failure mode the section above
 describes: an inherited default that was never visible as a decision propagated through every
@@ -1145,9 +1202,10 @@ the claim we make is that the **recipe closes the gap**, which is a claim about 
 Single taxonomic domain and one 3-level hierarchy. $m = 0.3$, $s = 30$ were first guesses, so the
 margin's measured effect is not a tuned optimum. Distillation experiments use one student family.
 
-**Open-set is not measured on the models we recommend.** Every AUROC here comes from a 20 M or 198 M
-task-trained trunk, and the abstention analysis of §4.6 uses the original single-head model. The two
-configurations the paper actually recommends have no open-set or abstention numbers.
+**Open-set under shift is measured for no model we recommend.** §4.6a and §4.10 now report
+abstention and open-set AUROC for both recommended models, but on the *no-domain-shift* novelty
+benchmark; §4.5 shows novelty detection is not domain-robust, and the compounded case is unmeasured
+for B8 and P5.
 
 **Statistical power is uneven, and we say where.** Differences are quoted against the regime-matched
 floors of §4.11, but several results rest on n = 2 and a few on n = 1. Where a difference is under

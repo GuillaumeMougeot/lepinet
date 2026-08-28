@@ -74,14 +74,55 @@ figure is a floor set by threshold resolution rather than a smooth operating poi
 before the number is quoted, though it does not change the direction: even at t = 1.00 B8 covers only
 69.72 %.
 
+## Open-set: both models beat everything in the paper, and entropy wins twice
+
+632,913 images, 3,171 novel-species images, five rules from one forward pass:
+
+| rule | B8 | P5 |
+|---|---|---|
+| **entropy** | **0.9153** | **0.9161** |
+| margin | 0.9108 | 0.8890 |
+| max-logit | 0.8889 | 0.9160 |
+| msp | *degenerate* | 0.9087 |
+| energy | *degenerate* | 0.9156 |
+| **best** | **0.9153** | **0.9161** |
+
+**Three results here, and the first contradicts the paper.**
+
+**1. Section 4.10's claim that the smallest model leads open-set detection is wrong.** Its table has
+`efficientnet_v2_s` best at 0.9068, and both recommended models beat it: **B8 0.9153, P5 0.9161.**
+The "three axes disagree" story weakens accordingly -- P5 now leads or ties on *all three*
+(in-distribution 0.9113, probe 0.7810, open-set 0.9161), and the mild disagreement 4.10 reports does
+not survive scoring the models we actually recommend. That section needs rewriting, not patching.
+
+**2. Entropy wins for both, which is a fourth distinct answer and finally a pattern.** Section 4.9
+recorded max-logit best at 20 M and MSP best at 198 M and concluded rules do not transfer across
+capacity. With two more models the finer statement is available: **the best rule tracks the head's
+output convention and the representation's calibration, not the parameter count.** Both of these
+models are well-calibrated and shape-based rules win on both. The recommendation in 4.9 -- name the
+rule, re-select it per model -- is unaffected and if anything better supported.
+
+**3. Rule-insensitivity is not a property of the angular margin.** Section 4.3 attributes it to the
+margin: the ArcFace head's five rules span 1.2 pt against the plain head's 28.4. **P5 has no margin**
+-- it is the plain `independent` cosine head -- and its three best rules sit within **0.0005** of each
+other, with a full span of 2.71 pt. So a strong, well-calibrated representation delivers the same
+insensitivity the margin was credited with. The margin's remaining distinct contribution is smaller
+than 4.3 implies.
+
+**B8's `energy` and `msp` are correctly flagged as meaningless**, not measured as bad: its
+`marginal_arcface` head emits log-probabilities, so `energy = logsumexp(log p) = 0` for every image
+and `msp` is a monotone function of `max` (identical to 4 decimals, as predicted). `dev/061` detects
+this from the data. Section 4.9's DINOv3 row is *not* affected -- its max and msp differ (0.8298 vs
+0.8904), so that head was not emitting log-probabilities.
+
 ## Open
 
-- **Open-set AUROC for both models under all five rules** is running (`dev/061`), and is the other
-  half of this gap. Section 4.9 says rules do not transfer across capacity; P5 is a 303 M ViT-L and
-  B8 a 198 M ConvNeXt, so neither inherits the other's best rule and neither inherits A1's.
 - **Restriction plus abstention.** D1 showed a checklist concentrates false positives onto scored
   classes on the probe fold; a restricted head that may also abstain should send that mass to
   abstention instead. With P5 abstaining on only 7.21 % there is room to spend.
+- **Open-set under shift** for both models. Everything above is the no-domain-shift benchmark;
+  section 4.5 says novelty detection is not domain-robust, and neither recommended model has that
+  number either.
 
 ## Method note
 
