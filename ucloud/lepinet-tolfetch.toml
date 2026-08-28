@@ -1,0 +1,36 @@
+# TOL-2: crawl the TreeOfLife-200M images listed in the manifest built by lepinet-tolplan.
+#
+# CPU-only: this is network-bound, not GPU work. 64 vCPU gives headroom for the JPEG decode/resize
+# threads, which are the only CPU cost -- everything else is waiting on HTTP.
+#
+# RESUMABLE BY DESIGN, and it has to be: 88 M images will not finish inside one job. A manifest part
+# is skipped once its .meta.parquet exists, and rows already recorded inside a part are skipped, so
+# re-submitting this file simply continues. Killing it costs at most one part's in-flight work.
+#
+# Per-host budgets are adaptive and start low; the S3 bucket that carries 58 % of the corpus ramps to
+# 256 over the first few thousand successes, so early throughput understates the steady state.
+name = "lepinet-tolfetch"
+replicas = 1
+[application]
+name = "pytorch-te"
+version = "26.05"
+[product]
+id = "cpu-amd-zen5-64-vcpu"
+category = "cpu-amd-zen5"
+provider = "ucloud"
+[time_allocation]
+hours = 24
+[sync]
+local = ".."
+remote = "/12347837/repos/lepinet"
+[setup]
+script = "setup-lepinet.sh"
+run = "python dev/082_tol_crawler.py fetch --manifest /work/lepinet/data/tol/manifest --images /work/lepinet/data/tol/images --size 256 --variant medium --workers 48 --report-every 300"
+[schedule]
+auto_extend = "1h"
+max_time = "168h"
+
+[[resources]]
+type = "file"
+path = "/12347837/datasets/global_lepi"
+read_only = true

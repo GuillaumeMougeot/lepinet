@@ -1,15 +1,21 @@
-# Rebuilds the decontaminated test fold ON /work, so the evals can use it. dev/076 reads the
-# ToL embedding cache's taxonomy columns straight from HuggingFace (no GPU, ~20 min) rather than
-# us committing 1.4 MB of derived ids -- data/ is gitignored by convention and a split should be
-# reproducible, not shipped.
+# TOL-1b: reshard the manifest into 50k-row parts. `plan` writes one part per host, and the
+# iNaturalist part is ~50 M rows -- a part is only marked done when it finishes in full, so a
+# 24 h job slot would resume from zero every time. Resume granularity is the part size.
+#
+# Streams catalog.parquet (16.8 GB, 233,055,986 rows) twice -- once to count images per species,
+# once to emit rows for species clearing min-50, stopping each at cap-2000. Writes
+# manifest/host=<slug>/part-*.parquet, which is what `fetch` consumes.
+#
+# CPU-only on purpose: this is network and string work, no GPU involved. The 64-vCPU product is for
+# parquet decode headroom, not parallelism -- the HF read is the bottleneck.
 name = "lepinet-tolsplit"
 replicas = 1
 [application]
 name = "pytorch-te"
 version = "26.05"
 [product]
-id = "gpu-nvidia-b200-1-gpu"
-category = "gpu-nvidia-b200"
+id = "cpu-amd-zen5-64-vcpu"
+category = "cpu-amd-zen5"
 provider = "ucloud"
 [time_allocation]
 hours = 4
@@ -18,10 +24,11 @@ local = ".."
 remote = "/12347837/repos/lepinet"
 [setup]
 script = "setup-lepinet.sh"
-run = "uv pip install --no-deps huggingface_hub && mkdir -p /work/lepinet/data/tol_overlap && python dev/076_tol_overlap.py --parquet /work/global_lepi/0032836-250426092105405_processing_metadata_postprocessed_quality_filtered.parquet --out /work/lepinet/data/tol_overlap && python -c \"import pandas as pd;d=pd.read_parquet('/work/global_lepi/0032836-250426092105405_processing_metadata_postprocessed_quality_filtered.parquet');c=set(pd.read_parquet('/work/lepinet/data/tol_overlap/test_ids_clean_of_tol.parquet')['gbifID']);it=d['set'].astype(str)=='0';k=(~it)|d['gbifID'].astype(str).isin(c);d[k].to_parquet('/work/lepinet/data/tol_overlap/global_clean_of_tol.parquet',index=False);print('clean test rows',int((k&it).sum()))\""
+run = "python dev/082_tol_crawler.py split --manifest /work/lepinet/data/tol/manifest --rows-per-part 50000"
 [schedule]
 auto_extend = "1h"
-max_time = "8h"
+max_time = "48h"
+
 [[resources]]
 type = "file"
 path = "/12347837/datasets/global_lepi"

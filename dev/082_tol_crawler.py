@@ -53,6 +53,9 @@ return with HTTP 200.
     # 1. plan: stream the catalog, apply the policy, write a host-partitioned manifest
     python dev/082_tol_crawler.py plan --out data/tol/manifest --min-img 50 --cap 2000
 
+    # 1b. split: reshard into bounded parts, so resume granularity is 50k images not 50M
+    python dev/082_tol_crawler.py split --manifest data/tol/manifest --rows-per-part 50000
+
     # 2. fetch: crawl. Resumable, restartable, safe to run many times
     python dev/082_tol_crawler.py fetch --manifest data/tol/manifest --images /work/tol/images
 
@@ -533,6 +536,11 @@ class Fetcher:
             return
         b = self.budget(host)
         results: list[dict] = []
+        # Chunked rather than one gather over the whole part. `stage_split` keeps parts small, but a
+        # manifest written before that stage existed has one part per host -- 50 M rows for the
+        # iNaturalist bucket -- and gathering 50 M coroutines exhausts memory before a single image
+        # is fetched. Chunking bounds live coroutines regardless of how the manifest was written.
+        chunk = max(1, self.a.chunk)
 
         async def one(row):
             jpg, status, meta = await self.fetch_one(session, row, b)
@@ -550,7 +558,8 @@ class Fetcher:
             self.totals[status if status == STATUS_OK else "fail"] += 1
             self.totals["total"] += 1
 
-        await asyncio.gather(*(one(r) for r in rows))
+        for k in range(0, len(rows), chunk):
+            await asyncio.gather(*(one(r) for r in rows[k:k + chunk]))
         pq.write_table(pa.Table.from_pylist(results), tmp_path)
         os.replace(tmp_path, meta_path)
 
@@ -616,6 +625,52 @@ class Fetcher:
 def stage_fetch(a):
     Path(a.images).mkdir(parents=True, exist_ok=True)
     asyncio.run(Fetcher(a).main())
+
+
+# ---------------------------------------------------------------------------------------------
+# Stage 1b -- split
+# ---------------------------------------------------------------------------------------------
+
+def stage_split(a):
+    """Reshard an existing manifest into bounded parts, without re-scanning the catalog.
+
+    `plan` writes one part per host, which is wrong for the hosts that matter: the iNaturalist bucket
+    is ~50 M rows in a single file, and a part is only marked done when it finishes **in full**. So a
+    crawl killed after 40 M images would resume from zero, and 24-hour job slots guarantee it gets
+    killed. Resume granularity is a property of the part size.
+
+    Resharding is local parquet I/O over a manifest already on disk -- minutes -- against 45 minutes
+    to re-run `plan`. Idempotent: hosts already split into `part-00001` or beyond are left alone.
+    """
+    root = Path(a.manifest)
+    total_in = total_out = 0
+    for d in sorted(root.glob("host=*")):
+        parts = [p for p in sorted(d.glob("part-*.parquet")) if not p.name.endswith(".meta.parquet")]
+        if not parts:
+            continue
+        if len(parts) > 1 or pq.ParquetFile(parts[0]).metadata.num_rows <= a.rows_per_part:
+            total_in += sum(pq.ParquetFile(p).metadata.num_rows for p in parts)
+            total_out += len(parts)
+            continue
+        src = parts[0]
+        n = pq.ParquetFile(src).metadata.num_rows
+        tbl = pq.read_table(src)
+        tmp = d / "_resharding"
+        tmp.mkdir(exist_ok=True)
+        k = 0
+        for off in range(0, n, a.rows_per_part):
+            pq.write_table(tbl.slice(off, a.rows_per_part), tmp / f"part-{k:05d}.parquet")
+            k += 1
+        del tbl
+        src.unlink()
+        for f in sorted(tmp.glob("part-*.parquet")):
+            f.rename(d / f.name)
+        tmp.rmdir()
+        total_in += n
+        total_out += k
+        print(f"  {d.name[5:]:52s} {n:>12,} rows -> {k:,} parts", flush=True)
+    print(f"\nmanifest: {total_in:,} rows in {total_out:,} parts "
+          f"(<= {a.rows_per_part:,} rows each)")
 
 
 # ---------------------------------------------------------------------------------------------
@@ -687,11 +742,18 @@ def build_parser():
     q.add_argument("--limit-hosts", type=int, default=0, help="smoke test: only the first N hosts")
     q.add_argument("--retry-failed", action="store_true")
     q.add_argument("--report-every", type=float, default=60.0)
+    q.add_argument("--chunk", type=int, default=20_000,
+                   help="rows gathered concurrently within a part; bounds live coroutines")
     q.add_argument("--block-probe", type=int, default=40,
                    help="attempts before the blocked-host circuit breaker may trip")
     q.add_argument("--block-ratio", type=float, default=0.9,
                    help="forbidden fraction at which a host is declared blocking")
     q.set_defaults(fn=stage_fetch)
+
+    q = sub.add_parser("split", help="reshard a manifest into bounded parts (resume granularity)")
+    q.add_argument("--manifest", default="data/tol/manifest")
+    q.add_argument("--rows-per-part", type=int, default=50_000)
+    q.set_defaults(fn=stage_split)
 
     q = sub.add_parser("report", help="what we have and what failed")
     q.add_argument("--manifest", default="data/tol/manifest")
