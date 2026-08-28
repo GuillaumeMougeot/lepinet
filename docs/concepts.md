@@ -68,7 +68,7 @@ tightly-concentrated distribution onto an approximately **standard normal** one 
 deviation 1) — the statistician's **z-score**:
 
 $$
-Z(\cos\theta) = \sqrt{d-2}\,\bigl(\arccos(-\cos\theta) - \tfrac{\pi}{2}\bigr)
+Z(\cos\theta) = \sqrt{d-2} \bigl(\arccos(-\cos\theta) - \tfrac{\pi}{2}\bigr)
 $$
 
 Two things are worth knowing about it, and they are the reason it recurs everywhere:
@@ -88,7 +88,7 @@ produce a logit outside that. Section 5 explains why that matters.
 *worse* than it really is:
 
 $$
-\cos\theta_y \;\longmapsto\; \cos(\theta_y + m)
+\cos\theta_y  \longmapsto  \cos(\theta_y + m)
 $$
 
 The model is then penalised for not getting the answer right *despite the handicap*. To satisfy that,

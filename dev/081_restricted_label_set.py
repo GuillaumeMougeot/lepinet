@@ -124,7 +124,24 @@ def build_checklist(checklist_parquets: list[str], species_col: str, vocab: list
     return np.asarray(keep, dtype=np.int64)
 
 
+def _register_dev_heads():
+    """Import `dev/050` for its side effect of registering the dev heads.
+
+    Without this, `build_head` raises `Unknown head 'marginal_arcface'` the moment a checkpoint that
+    uses one is loaded -- which is every model worth evaluating, B8 and P5 included. This is the
+    fourth script to die on it (PLAN.md lists it under queue discipline), so it is done here rather
+    than left to the caller.
+    """
+    import importlib.util
+    p = Path(__file__).with_name("050_hierarchical_heads.py")
+    spec = importlib.util.spec_from_file_location("dev050_heads", p)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def main(a):
+    _register_dev_heads()
     import lepinet.test as T
 
     # --- one shared guard, applied to every arm -------------------------------------------------
@@ -149,22 +166,27 @@ def main(a):
 
     T.predict_df = patched_predict_df
 
+    # Read the vocabulary once, before any arm runs. It is needed by *every* arm -- the restricted
+    # ones to build the mask, the unrestricted one to report how many labels were allowed -- so
+    # loading it lazily inside the restricted branch left the baseline arm reading a key that did
+    # not exist yet. It failed only after a full 15,200-image inference pass had already run.
+    ck = torch.load(_resolve(a.model), map_location="cpu", weights_only=False)
+    ck_vocabs = ck.get("vocabs") or ck["cfg"]["vocabs"]
+    # The finest level is whatever the checkpoint calls it -- `speciesKey` here, `species` in other
+    # corpora. Guessing the name in a default costs a full job to discover, so resolve it from the
+    # checkpoint and let --level override only when there is a real ambiguity.
+    level = a.level if a.level and a.level in ck_vocabs else next(iter(ck_vocabs))
+    state["vocab"] = [str(v) for v in ck_vocabs[level]]
+    del ck, ck_vocabs
+    print(f"model vocabulary: {len(state['vocab']):,} labels at level {level!r}")
+
     results = []
     for pad in a.pad_to:
-        tag = "unrestricted" if pad == -1 else (f"checklist" if pad == 0 else f"checklist+pad{pad}")
+        tag = "unrestricted" if pad == -1 else ("checklist" if pad == 0 else f"checklist+pad{pad}")
         print(f"\n=== {tag} ===", flush=True)
-
-        if pad == -1:
-            state["keep"] = None
-        else:
-            # vocab comes from the checkpoint; read it once via a throwaway load
-            if "vocab" not in state:
-                ck = torch.load(_resolve(a.model), map_location="cpu", weights_only=False)
-                vocabs = ck.get("vocabs") or ck["cfg"]["vocabs"]
-                state["vocab"] = [str(v) for v in vocabs[a.level]]
-                print(f"  model vocabulary: {len(state['vocab']):,} species")
-            state["keep"] = build_checklist(a.checklist_from, a.species_col,
-                                            state["vocab"], pad, a.seed)
+        state["keep"] = (None if pad == -1 else
+                         build_checklist(a.checklist_from, a.species_col,
+                                         state["vocab"], pad, a.seed))
 
         out = T.evaluate(
             model_path=_resolve(a.model), parquet_path=a.parquet, img_dir=a.img_dir,
@@ -203,7 +225,8 @@ if __name__ == "__main__":
     p.add_argument("--img-dir", required=True)
     p.add_argument("--out-dir", required=True)
     p.add_argument("--species-col", default="speciesKey")
-    p.add_argument("--level", default="species")
+    p.add_argument("--level", default=None,
+                   help="finest level name; default resolves it from the checkpoint")
     p.add_argument("--test-set", default="0")
     p.add_argument("--batch-size", type=int, default=128)
     p.add_argument("--img-size", type=int, default=256)

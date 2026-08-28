@@ -152,7 +152,7 @@ $e = z/\|z\|$. Each class $j$ owns a prototype $w_j$ constrained to $\|w_j\| = 1
 (weight-norm with the row norm frozen), so the pre-activation is a cosine similarity
 
 $$
-\cos\theta_j \;=\; e^{\top} w_j \;\in\; [-1, 1].
+\cos\theta_j  =  e^{\top} w_j  \in  [-1, 1].
 $$
 
 ### 2.2 The z-score transform (and why a raw cosine is a poor logit)
@@ -167,7 +167,7 @@ Instead of an arbitrary multiplier we apply the transform that maps this concent
 onto an approximately standard normal one:
 
 $$
-Z(\cos\theta) \;=\; \sqrt{d-2}\;\Bigl(\arccos(-\cos\theta) - \tfrac{\pi}{2}\Bigr).
+Z(\cos\theta)  =  \sqrt{d-2} \Bigl(\arccos(-\cos\theta) - \tfrac{\pi}{2}\Bigr).
 $$
 
 Its derivative at $\cos\theta = 0$ is $\sqrt{d-2}$, i.e. the transform *is* a scale — but a
@@ -191,7 +191,7 @@ $\ell_j = s\cos\theta_j$ for $j \ne y$, $\ell_y = s\cos(\theta_y + m)$.
 We instead **compose the margin with the z-score transform**:
 
 $$
-\ell_j \;=\; \begin{cases} Z\bigl(\cos(\theta_y + m)\bigr) & j = y \\ Z(\cos\theta_j) & j \ne y \end{cases}
+\ell_j  =  \begin{cases} Z\bigl(\cos(\theta_y + m)\bigr) & j = y \\ Z(\cos\theta_j) & j \ne y \end{cases}
 $$
 
 with, as usual, the margin applied **only during training** (at inference $m = 0$, so the forward
@@ -214,7 +214,7 @@ Let $\pi(\cdot)$ map a class to its parent. Coarse posteriors are obtained from 
 posterior rather than from dedicated heads:
 
 $$
-\log P(g) \;=\; \mathrm{logsumexp}_{\{\,s\,:\,\pi(s)=g\,\}} \log P(s),
+\log P(g)  =  \mathrm{logsumexp}_{\{ s : \pi(s)=g \}} \log P(s),
 $$
 
 applied recursively up the taxonomy. This is exact, adds no parameters, and makes the levels
@@ -349,7 +349,7 @@ already-conditioned score, so a child cannot be more confident than its parent's
 
 $$
 C^{(\text{top})} = M^{(\text{top})}, \qquad
-C^{(i)} = M^{(i)} + \mathrm{gather}_{\pi}\!\Bigl(C^{(i+1)} - \mathrm{logsumexp}_{\text{siblings}} M^{(i)}\Bigr)
+C^{(i)} = M^{(i)} + \mathrm{gather}_{\pi}\Bigl(C^{(i+1)} - \mathrm{logsumexp}_{\text{siblings}} M^{(i)}\Bigr)
 $$
 
 i.e. $P_{\text{cond}}(\text{child}) = P(\text{child}) \cdot P_{\text{cond}}(\text{parent}) / P(\text{siblings})$ in log-space. Marginalisation (§2.4) is the exact mirror: information flows

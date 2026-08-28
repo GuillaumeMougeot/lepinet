@@ -1,0 +1,33 @@
+# TOL-1: build the host-partitioned crawl manifest for TreeOfLife-200M.
+#
+# Streams catalog.parquet (16.8 GB, 233,055,986 rows) twice -- once to count images per species,
+# once to emit rows for species clearing min-50, stopping each at cap-2000. Writes
+# manifest/host=<slug>/part-*.parquet, which is what `fetch` consumes.
+#
+# CPU-only on purpose: this is network and string work, no GPU involved. The 64-vCPU product is for
+# parquet decode headroom, not parallelism -- the HF read is the bottleneck.
+name = "lepinet-tolplan"
+replicas = 1
+[application]
+name = "pytorch-te"
+version = "26.05"
+[product]
+id = "cpu-amd-zen5-64-vcpu"
+category = "cpu-amd-zen5"
+provider = "ucloud"
+[time_allocation]
+hours = 12
+[sync]
+local = ".."
+remote = "/12347837/repos/lepinet"
+[setup]
+script = "setup-lepinet.sh"
+run = "LEPINET_NO_GPU=1 python dev/082_tol_crawler.py plan --out /work/lepinet/data/tol/manifest --min-img 50 --cap 2000"
+[schedule]
+auto_extend = "1h"
+max_time = "48h"
+
+[[resources]]
+type = "file"
+path = "/12347837/datasets/global_lepi"
+read_only = true
