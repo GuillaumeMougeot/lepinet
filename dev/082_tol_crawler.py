@@ -181,6 +181,62 @@ def slug(h: str) -> str:
 # Stage 1 -- plan
 # ---------------------------------------------------------------------------------------------
 
+def n_row_groups(path: str) -> int:
+    from huggingface_hub import HfFileSystem
+    with HfFileSystem().open(path, "rb") as f:
+        return pq.ParquetFile(f).metadata.num_row_groups
+
+
+def iter_row_groups(path: str, columns: list[str], first: int, last: int,
+                    workers: int, prefetch: int):
+    """Yield ``(index, table)`` in order, fetching ahead with a thread pool.
+
+    Reading row-groups one at a time over HTTP leaves the link idle for the whole decode, and the
+    decode idle for the whole fetch. Observed on the first attempt at this scan: **CPU below 0.5 %
+    and network alternating between 0 and 15 MB/s** -- i.e. almost all of the wall clock was one
+    stream waiting on latency. At ~11 row-groups/min the two passes over 1,838 groups would have
+    taken most of a day.
+
+    So fetch ``prefetch`` groups concurrently while the consumer works. Results are still yielded
+    **in order**, which matters because pass 2 applies a per-species cap by taking the first N rows
+    it sees: out-of-order reads would still respect the cap but would select a different, seed-free
+    subset on every run, and a corpus you cannot rebuild identically is a corpus you cannot debug.
+
+    Each worker keeps its own file handle in thread-local storage. A `ParquetFile` wraps a single
+    seekable stream and is **not** thread-safe -- sharing one handle across threads produces
+    interleaved seeks and silently corrupt batches rather than an exception.
+    """
+    import threading
+    from collections import deque
+    from huggingface_hub import HfFileSystem
+
+    local = threading.local()
+
+    def read(i: int):
+        if not hasattr(local, "pf"):
+            local.fs = HfFileSystem()
+            local.fh = local.fs.open(path, "rb")
+            local.pf = pq.ParquetFile(local.fh)
+        return local.pf.read_row_group(i, columns=columns)
+
+    with ThreadPoolExecutor(max_workers=workers) as ex:
+        pending: deque = deque()
+        todo = iter(range(first, last))
+        for _ in range(prefetch):
+            try:
+                i = next(todo)
+            except StopIteration:
+                break
+            pending.append((i, ex.submit(read, i)))
+        while pending:
+            i, fut = pending.popleft()
+            yield i, fut.result()
+            try:
+                j = next(todo)
+            except StopIteration:
+                continue
+            pending.append((j, ex.submit(read, j)))
+
 def stage_plan(a):
     """Stream the catalog, apply the data policy, write a host-partitioned manifest.
 
@@ -201,18 +257,20 @@ def stage_plan(a):
         counts = {k: v for k, v in json.loads(counts_path.read_text()).items()}
         print(f"reusing species counts for {len(counts):,} species ({counts_path})")
     else:
-        print("pass 1/2: counting images per species over the whole catalog ...")
-        counts= Counter()
-        with fs.open(CATALOG, "rb") as f:
-            pf = pq.ParquetFile(f)
-            for i in range(pf.metadata.num_row_groups):
-                t = pf.read_row_group(i, columns=["genus", "species"])
-                g = t["genus"].to_pylist(); s = t["species"].to_pylist()
-                counts.update(f"{(gg or '').strip()} {(ss or '').strip()}".strip()
-                              for gg, ss in zip(g, s))
-                if i % 100 == 0:
-                    print(f"  row-group {i}/{pf.metadata.num_row_groups}: "
-                          f"{len(counts):,} species", flush=True)
+        nrg = n_row_groups(CATALOG)
+        print(f"pass 1/2: counting images per species over {nrg:,} row-groups "
+              f"({a.readers} readers) ...")
+        counts = Counter()
+        t0 = time.monotonic()
+        for i, tb in iter_row_groups(CATALOG, ["genus", "species"], 0, nrg,
+                                     a.readers, a.prefetch):
+            g = tb["genus"].to_pylist(); s = tb["species"].to_pylist()
+            counts.update(f"{(gg or '').strip()} {(ss or '').strip()}".strip()
+                          for gg, ss in zip(g, s))
+            if i % 100 == 0:
+                el = time.monotonic() - t0
+                print(f"  row-group {i}/{nrg}: {len(counts):,} species "
+                      f"| {i/max(el,1e-9)*60:.0f} rg/min", flush=True)
         counts.pop("", None)
         counts_path.write_text(json.dumps(counts))
         print(f"wrote {counts_path}")
@@ -221,14 +279,15 @@ def stage_plan(a):
     total = sum(min(counts[k], a.cap) for k in keep)
     print(f"policy: min {a.min_img} / cap {a.cap} -> {len(keep):,} species, ~{total:,} images")
 
-    print("pass 2/2: emitting host-partitioned manifest ...")
+    nrg = n_row_groups(CATALOG)
+    print(f"pass 2/2: emitting host-partitioned manifest over {nrg:,} row-groups ...")
     writers: dict[str, tuple] = {}
     emitted: Counter = Counter()
     n_rows = 0
-    with fs.open(CATALOG, "rb") as f:
-        pf = pq.ParquetFile(f)
-        for i in range(pf.metadata.num_row_groups):
-            t = pf.read_row_group(i, columns=PLAN_COLS).to_pydict()
+    t0 = time.monotonic()
+    if True:
+        for i, _tb in iter_row_groups(CATALOG, PLAN_COLS, 0, nrg, a.readers, a.prefetch):
+            t = _tb.to_pydict()
             rows_by_host: dict[str, list] = defaultdict(list)
             for j in range(len(t["uuid"])):
                 sp = f"{(t['genus'][j] or '').strip()} {(t['species'][j] or '').strip()}".strip()
@@ -257,7 +316,9 @@ def stage_plan(a):
                     w, schema = writers[h]
                     w.write_table(pa.Table.from_pylist(rows, schema=schema))
             if i % 100 == 0:
-                print(f"  row-group {i}/{pf.metadata.num_row_groups}: {n_rows:,} kept", flush=True)
+                el = time.monotonic() - t0
+                print(f"  row-group {i}/{nrg}: {n_rows:,} kept "
+                      f"| {i/max(el,1e-9)*60:.0f} rg/min", flush=True)
     for w, _ in writers.values():
         w.close()
     (out / "plan_summary.json").write_text(json.dumps(
@@ -604,6 +665,10 @@ def build_parser():
     q.add_argument("--min-img", type=int, default=50)
     q.add_argument("--cap", type=int, default=2000)
     q.add_argument("--recount", action="store_true")
+    q.add_argument("--readers", type=int, default=16,
+                   help="concurrent row-group readers. The scan is latency-bound, not CPU-bound.")
+    q.add_argument("--prefetch", type=int, default=32,
+                   help="row-groups fetched ahead of the consumer (bounds memory)")
     q.set_defaults(fn=stage_plan)
 
     q = sub.add_parser("fetch", help="crawl the manifest; resumable")

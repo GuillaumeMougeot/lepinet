@@ -112,10 +112,10 @@ retracted comparison); re-score §4.5 with each head's own rule.
 
 | # | work | GPU | why, and the gate |
 |---|---|---|---|
-| **D1** | **regional checklist restriction, curve over checklist size** | eval only | queued behind P5b. The one lever needing no training, no labels and no data |
+| ~~**D1**~~ | **DONE (probe). micro-acc +5.06, macro-F1 -1.70.** The metrics disagree: restriction concentrates false positives onto the scored classes, so it helps the average observation and hurts the tail. macro-F1 peaks at ~4,000 labels, not at the true 464. probeho arm running. [[2026-08-28-a-regional-checklist-helps-the-user-and-hurts-the-tail]] | eval only | **next: restricted head + abstention**, which should recover the tail damage |
 | **P5b** | seed repeat of P5 | running | "P5 ties B8" is n = 1 on a shifted axis, and two conclusions have died that way |
 | **O1** | **open-set + abstention on B8 and P5** | eval only | the paper recommends two models and reports open-set for neither. Closes the last Limitations gap |
-| **D2a** | **ToL-10M download pipeline** (2.0 TB, parallel ranged HTTP, resume, per-tarball checksum) | none | no rate limiting to design around, so it is a day not a week. Do *after* D1 |
+| **D2a** | ~~ToL-10M~~ **ToL-200M crawler (owner chose 200M): `dev/082`, running** | CPU node | plan stage scanning 1,838 row-groups. Measured: 99.5 % success on S3, ~25 KB/image, iNat `medium` variant is **10.2x less transfer** than `original` for identical output |
 | **D2b** | train our objective on ToL-10M, eval on Lepidoptera | ~2.5 h/epoch | the controlled objective comparison. Predicted: accuracy within ±1.5 pt, **frozen probe better by >3 pt** |
 | **O2** | open-set at 12 K -> 204 K taxa on cached ToL embeddings | 1 GPU, no download | turns §4.9 from "rules do not transfer across model scale" into "nor across class-count scale" |
 | ~~1~~ | ~~read H4 and B10~~ | — | **DONE 2026-08-24.** H4 falsified, B10 a tie. |

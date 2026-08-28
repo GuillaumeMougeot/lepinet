@@ -22,7 +22,7 @@ local = ".."
 remote = "/12347837/repos/lepinet"
 [setup]
 script = "setup-lepinet.sh"
-run = "LEPINET_NO_GPU=1 python dev/082_tol_crawler.py plan --out /work/lepinet/data/tol/manifest --min-img 50 --cap 2000"
+run = "LEPINET_NO_GPU=1 python dev/082_tol_crawler.py plan --out /work/lepinet/data/tol/manifest --min-img 50 --cap 2000 --readers 24 --prefetch 48"
 [schedule]
 auto_extend = "1h"
 max_time = "48h"
