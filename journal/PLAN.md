@@ -87,20 +87,36 @@ A 5-epoch 20 M run is ≈6.4 h; a 2-epoch frozen-trunk stage is ≈30 min at 20 
 images in 18 h). Using the 20 M figure for a 198 M run underestimates by 2.3x — it turned a
 costed "7-10 h" into 18 h on 2026-08-09.
 
-**The backlog is now led by writing, not measurement.** A full audit of `paper/DRAFT.md` against the
-journal on 2026-08-28 found **eight retracted or false numbers still in the draft**, **six results
-with no home in it at all** (the whole BioCLIP-2 arc, contamination, cRT, L7, ToL head-scaling,
-macro-F1 non-decomposition), and one structural hole: the long-tail section is cross-referenced six
-times as "§4.x" and does not exist. Phases and reasoning in
-[[2026-08-28-what-the-paper-is-still-missing]]. Phase 1 (correctness) is done; phases 2-3 are
-one sitting each and need no GPU.
+**The paper is written.** The 2026-08-28 audit ([[2026-08-28-what-the-paper-is-still-missing]]) found
+eight retracted or false numbers in the draft and six results with no home in it; all are fixed.
+**§4.13** (long-tail rebalancing / cRT, resolving six dangling `§4.x` refs), **§4.14** (foundation
+models and contamination), **§3.2** (the four benchmarks) and **§4.0** (summary of models) are
+written, and the abstract, contributions, discussion, limitations and references are reconciled.
+
+**Owner-owned remainder**, listed in the draft's own header: fact-check the `[VERIFY]` citations;
+redraw `fig4` per-head-best-rule (it currently scores both heads with max-logit, which is the
+retracted comparison); re-score §4.5 with each head's own rule.
+
+**Two new directions opened (owner, 2026-08-28)**, scoped with committed predictions in
+[[2026-08-28-two-directions-checklists-and-our-objective-on-tol]]:
+
+- **D1 — regional checklist at inference.** Every number in the paper uses a 12,041-class global
+  head; no deployment does. Mask the species logits to a national checklist (the trap corpus's 486
+  Danish species), measure the accuracy-vs-checklist-size curve. Inference-only. `dev/081`.
+- **D2 — our objective on Tree-of-Life.** Does cosine z-score + marginal supervision build a better
+  *classifier trunk* than CLIP contrastive, on the same data? **Scoping found that ToL-200M hosts
+  metadata only (0.05 TB) while ToL-10M hosts 2.0 TB of image tarballs** — so the 200M route needs an
+  84 M-request crawler and the 10M route needs a download. **ToL-10M is also the better experiment**,
+  because BioCLIP-1 was trained on exactly it, making the comparison matched-corpus with the
+  objective as the only variable.
 
 | # | work | GPU | why, and the gate |
 |---|---|---|---|
-| **P2** | **write §4.14 — long-tail rebalancing belongs to the classifier** | none | the structural hole. Six `§4.x` refs resolve here; §4.13's first pillar is cRT |
-| **P3** | **write §4.15 — foundation models and benchmark contamination** | none | the headline changed: our contribution is the recipe, not the encoder. Then reconcile abstract + contributions |
+| **D1** | **regional checklist restriction, curve over checklist size** | eval only | queued behind P5b. The one lever needing no training, no labels and no data |
 | **P5b** | seed repeat of P5 | running | "P5 ties B8" is n = 1 on a shifted axis, and two conclusions have died that way |
-| **O1** | **open-set + abstention on B8 and P5** | eval only | the paper recommends two models and reports open-set for neither |
+| **O1** | **open-set + abstention on B8 and P5** | eval only | the paper recommends two models and reports open-set for neither. Closes the last Limitations gap |
+| **D2a** | **ToL-10M download pipeline** (2.0 TB, parallel ranged HTTP, resume, per-tarball checksum) | none | no rate limiting to design around, so it is a day not a week. Do *after* D1 |
+| **D2b** | train our objective on ToL-10M, eval on Lepidoptera | ~2.5 h/epoch | the controlled objective comparison. Predicted: accuracy within ±1.5 pt, **frozen probe better by >3 pt** |
 | **O2** | open-set at 12 K -> 204 K taxa on cached ToL embeddings | 1 GPU, no download | turns §4.9 from "rules do not transfer across model scale" into "nor across class-count scale" |
 | ~~1~~ | ~~read H4 and B10~~ | — | **DONE 2026-08-24.** H4 falsified, B10 a tie. |
 | 2 | **decide the staged-vs-end-to-end question** | none | see section 7. It has flipped twice; recommendation is to freeze it |

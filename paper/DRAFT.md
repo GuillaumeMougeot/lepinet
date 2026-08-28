@@ -148,10 +148,12 @@ poorly-calibrated posterior gives a wrong parent even when the top-1 is right.
 ### 2.1 Cosine classification head
 
 A backbone $f_\theta$ maps an image to $z \in \mathbb{R}^{d}$ through a bottleneck, then
-$e = z/\lVert z\rVert$. Each class $j$ owns a prototype $w_j$ constrained to $\lVert w_j\rVert = 1$
+$e = z/\|z\|$. Each class $j$ owns a prototype $w_j$ constrained to $\|w_j\| = 1$
 (weight-norm with the row norm frozen), so the pre-activation is a cosine similarity
 
-$$\cos\theta_j \;=\; e^{\top} w_j \;\in\; [-1, 1].$$
+$$
+\cos\theta_j \;=\; e^{\top} w_j \;\in\; [-1, 1].
+$$
 
 ### 2.2 The z-score transform (and why a raw cosine is a poor logit)
 
@@ -164,7 +166,9 @@ cosine classifiers need a scale factor.
 Instead of an arbitrary multiplier we apply the transform that maps this concentrated distribution
 onto an approximately standard normal one:
 
-$$Z(\cos\theta) \;=\; \sqrt{d-2}\;\Bigl(\arccos(-\cos\theta) - \tfrac{\pi}{2}\Bigr).$$
+$$
+Z(\cos\theta) \;=\; \sqrt{d-2}\;\Bigl(\arccos(-\cos\theta) - \tfrac{\pi}{2}\Bigr).
+$$
 
 Its derivative at $\cos\theta = 0$ is $\sqrt{d-2}$, i.e. the transform *is* a scale — but a
 principled, dimension-aware one rather than a tuned constant. Logits are $Z(\cos\theta_j) + b_j$
@@ -186,7 +190,9 @@ $\ell_j = s\cos\theta_j$ for $j \ne y$, $\ell_y = s\cos(\theta_y + m)$.
 
 We instead **compose the margin with the z-score transform**:
 
-$$\ell_j \;=\; \begin{cases} Z\bigl(\cos(\theta_y + m)\bigr) & j = y \\[2pt] Z(\cos\theta_j) & j \ne y \end{cases}$$
+$$
+\ell_j \;=\; \begin{cases} Z\bigl(\cos(\theta_y + m)\bigr) & j = y \\ Z(\cos\theta_j) & j \ne y \end{cases}
+$$
 
 with, as usual, the margin applied **only during training** (at inference $m = 0$, so the forward
 pass is label-free and exports to ONNX unchanged).
@@ -207,7 +213,9 @@ Two implementation notes make this practical:
 Let $\pi(\cdot)$ map a class to its parent. Coarse posteriors are obtained from the species
 posterior rather than from dedicated heads:
 
-$$\log P(g) \;=\; \operatorname*{log\,sum\,exp}_{\{\,s\,:\,\pi(s)=g\,\}} \log P(s),$$
+$$
+\log P(g) \;=\; \mathrm{logsumexp}_{\{\,s\,:\,\pi(s)=g\,\}} \log P(s),
+$$
 
 applied recursively up the taxonomy. This is exact, adds no parameters, and makes the levels
 **probabilistically coherent**: the reported coarse posterior *is* the sum of the fine one, so the
@@ -339,11 +347,12 @@ genus (4,333) and family (102).
 The parent-conditioned head corrects each level's independent logits $M^{(i)}$ by the parent's
 already-conditioned score, so a child cannot be more confident than its parent's evidence allows:
 
-$$C^{(\text{top})} = M^{(\text{top})}, \qquad
-C^{(i)} = M^{(i)} + \operatorname{gather}_{\pi}\!\Bigl(C^{(i+1)} - \operatorname*{log\,sum\,exp}_{\text{siblings}} M^{(i)}\Bigr)$$
+$$
+C^{(\text{top})} = M^{(\text{top})}, \qquad
+C^{(i)} = M^{(i)} + \mathrm{gather}_{\pi}\!\Bigl(C^{(i+1)} - \mathrm{logsumexp}_{\text{siblings}} M^{(i)}\Bigr)
+$$
 
-i.e. $P_{\text{cond}}(\text{child}) = P(\text{child}) \cdot P_{\text{cond}}(\text{parent}) /
-P(\text{siblings})$ in log-space. Marginalisation (§2.4) is the exact mirror: information flows
+i.e. $P_{\text{cond}}(\text{child}) = P(\text{child}) \cdot P_{\text{cond}}(\text{parent}) / P(\text{siblings})$ in log-space. Marginalisation (§2.4) is the exact mirror: information flows
 *up*, and no coarse parameters exist at all.
 
 | head | species | genus | family | **external (shifted)** |
@@ -614,13 +623,12 @@ Recomputing five rules from the same forward pass, on the same images and embedd
 by 6.1–7.6 points at 198 M. Using each model's best rule, the apparent capacity penalty falls from
 **7.70 to 1.64 points**.
 
-The mechanism is a saturation argument. Since $\mathrm{msp} \approx z_{\max} -
-\operatorname{logsumexp}(z)$, max-logit asks *how strongly does the best prototype match*, while MSP
+The mechanism is a saturation argument. Since $\mathrm{msp} \approx z_{\max} - \mathrm{logsumexp}(z)$, max-logit asks *how strongly does the best prototype match*, while MSP
 asks *how much better than the alternatives*. In a well-fitted embedding every input — known or novel
 — attains a high cosine to some prototype, so the absolute maximum saturates and stops
 discriminating; what still separates them is whether one prototype **dominates**. Only the
 shape-sensitive rules (MSP, entropy, top-2 margin) see that, and they are exactly the three that gain.
-Energy tracks max-logit to within 0.15 points everywhere, as it must: $\operatorname{logsumexp}$ is
+Energy tracks max-logit to within 0.15 points everywhere, as it must: $\mathrm{logsumexp}$ is
 dominated by its largest term for peaked logits and is therefore near-monotone in $z_{\max}$.
 
 **Recommendation.** Open-set results should be reported *with the scoring rule named*, and rules
@@ -766,12 +774,11 @@ split: CIFAR-LT, ImageNet-LT and iNaturalist ship no shifted test set. We have o
 does not survive it.
 
 **Two preliminaries, because they change what there is to test.** First, Balanced Softmax [Ren et al.
-2020] trains with $-\log\bigl(n_y e^{z_y} / \sum_j n_j e^{z_j}\bigr)$; since $\log n_j = \log \pi_j +
-\log N$ and the constant cancels inside the softmax, **it is exactly logit adjustment [Menon et al.
+2020] trains with $-\log\bigl(n_y e^{z_y} / \sum_j n_j e^{z_j}\bigr)$; since $\log n_j = \log \pi_j + \log N$ and the constant cancels inside the softmax, **it is exactly logit adjustment [Menon et al.
 2021] at $\tau = 1$**. The two papers do not note this. Second, $\tau$-normalisation — rescaling
-classifier weights by $\lVert w_j \rVert^{-\tau}$, one of the decoupling line's strongest
+classifier weights by $\|w_j\|^{-\tau}$, one of the decoupling line's strongest
 interventions [Kang et al. 2020] — is **already in our architecture**: the cosine head constrains
-every prototype to $\lVert w_j\rVert = 1$, which is $\tau$-normalisation at $\tau=1$ enforced during
+every prototype to $\|w_j\| = 1$, which is $\tau$-normalisation at $\tau=1$ enforced during
 training rather than applied afterwards. Methods that correct the classifier's *norm* bias therefore
 have nothing left to do here, and only methods that change **which examples the loss weights** have
 room to act. That is a useful reminder that a method's value is a property of the system it sits in,

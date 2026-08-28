@@ -23,7 +23,9 @@ particular.
 
 To turn them into probabilities you apply the **softmax**:
 
-$$P(\text{species } j) = \frac{e^{z_j}}{\sum_k e^{z_k}}$$
+$$
+P(\text{species } j) = \frac{e^{z_j}}{\sum_k e^{z_k}}
+$$
 
 Exponentiate each, then divide by the total so they sum to 1. The important consequence: **softmax
 only cares about *differences* between logits, not their absolute values.** Adding 100 to every
@@ -42,7 +44,9 @@ internal description of the photo. Each species owns its own vector $w_j$, calle
 think "what a *Noctua pronuba* looks like, in the model's coordinates". Both are scaled to length 1,
 and the score is the **cosine of the angle** between them:
 
-$$\cos\theta_j = e^\top w_j \in [-1, 1]$$
+$$
+\cos\theta_j = e^\top w_j \in [-1, 1]
+$$
 
 1 means "pointing the same way" (perfect match), 0 means "unrelated", −1 means "opposite". So
 classification becomes: *which prototype does this image point most closely toward?*
@@ -63,7 +67,9 @@ Instead of an arbitrary multiplier, this project applies the transform that maps
 tightly-concentrated distribution onto an approximately **standard normal** one (mean 0, standard
 deviation 1) — the statistician's **z-score**:
 
-$$Z(\cos\theta) = \sqrt{d-2}\,\bigl(\arccos(-\cos\theta) - \tfrac{\pi}{2}\bigr)$$
+$$
+Z(\cos\theta) = \sqrt{d-2}\,\bigl(\arccos(-\cos\theta) - \tfrac{\pi}{2}\bigr)
+$$
 
 Two things are worth knowing about it, and they are the reason it recurs everywhere:
 
@@ -81,7 +87,9 @@ produce a logit outside that. Section 5 explains why that matters.
 *correct* class's angle by a fixed extra amount $m$ (here 0.3 radians ≈ 17°), making that class look
 *worse* than it really is:
 
-$$\cos\theta_y \;\longmapsto\; \cos(\theta_y + m)$$
+$$
+\cos\theta_y \;\longmapsto\; \cos(\theta_y + m)
+$$
 
 The model is then penalised for not getting the answer right *despite the handicap*. To satisfy that,
 it must push each image well past the boundary rather than just barely over it — so classes end up
@@ -167,7 +175,9 @@ Two ways to predict all three:
 - **Marginalisation** — one species classifier, and the genus probability is simply the **sum of the
   probabilities of all species in that genus**. No extra parameters at all.
 
-$$P(\text{genus } g) = \sum_{\text{species } s \in g} P(s)$$
+$$
+P(\text{genus } g) = \sum_{\text{species } s \in g} P(s)
+$$
 
 Marginalisation makes the levels **probabilistically coherent** — the coarse number *is* the sum of
 the fine ones, so both are statements from a single set of beliefs. Separate heads have no such

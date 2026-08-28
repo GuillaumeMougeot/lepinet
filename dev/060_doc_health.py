@@ -140,8 +140,37 @@ def check_plan_is_current(fail):
              f"Work landed without the status board moving.")
 
 
+def check_math_renders(fail):
+    """LaTeX that a terminal shows fine and GitHub silently refuses to render.
+
+    GitHub's MathJax subset rejects some macros outright ("The following macros are not allowed:
+    operatorname"), needs `$$` alone on its own line for display math, and cannot parse an inline
+    `$...$` that spans a newline -- which markdown reflowing produces very easily. All three fail
+    *silently* in the sense that nothing is wrong locally; the equation just does not appear.
+    Found the hard way on 2026-08-28, when six equations in the paper had never rendered.
+    """
+    blocked = ["\\operatorname", "\\lVert", "\\rVert", "\\substack", "\\bm{", "\\\\[",
+               "\\mathbb{1}", "\\overset"]
+    for rel in ["paper/DRAFT.md", "docs/concepts.md", "README.md"]:
+        p = ROOT / rel
+        if not p.exists():
+            continue
+        for n, line in enumerate(p.read_text().split("\n"), 1):
+            for b in blocked:
+                if b in line:
+                    fail(f"{rel}:{n}: {b!r} is not in GitHub's MathJax subset -- "
+                         f"use \\mathrm{{}}, \\|, or plain \\\\.")
+            if "$$" in line and line.strip() != "$$":
+                fail(f"{rel}:{n}: `$$` must be alone on its line for GitHub to render a display "
+                     f"block.")
+            stripped = re.sub(r"\$\$.*?\$\$", "", line)
+            if len(re.findall(r"(?<!\$)\$(?!\$)", stripped)) % 2:
+                fail(f"{rel}:{n}: inline math spans a line break; GitHub renders it as literal "
+                     f"text. Keep `$...$` on one line.")
+
+
 CHECKS = [check_journal_naming, check_kind_and_status, check_index_complete,
-          check_links, check_no_emoji, check_plan_is_current]
+          check_links, check_no_emoji, check_plan_is_current, check_math_renders]
 
 
 def run() -> list[str]:

@@ -1,0 +1,31 @@
+# D1: what is a regional species checklist worth at inference? Restricts the LABEL SPACE
+# (never the eval set) to the Danish trap list, and sweeps checklist size. See
+# journal/2026-08-28-two-directions-checklists-and-our-objective-on-tol.md
+# trains on 27,230 of them -- so none of those numbers is a valid reference for it. This
+# scores the model on `probe` only (15,200 images, whole (trap,night) groups that training
+# never touches), and separately on the held-out-species subset, which is what would expose
+# B3 specialising on the ~500 trap species rather than generalising.
+name = "lepinet-D1-probe"
+replicas = 1
+[application]
+name = "pytorch-te"
+version = "26.05"
+[product]
+id = "gpu-nvidia-b200-1-gpu"
+category = "gpu-nvidia-b200"
+provider = "ucloud"
+[time_allocation]
+hours = 3
+[sync]
+local = ".."
+remote = "/12347837/repos/lepinet"
+[setup]
+script = "setup-lepinet.sh"
+run = "python dev/081_restricted_label_set.py --model '/work/lepinet/data/ucloud_models/*-lepinet-B8-best-at-2pct-dinov3cnxl-ucloud/*.pt' --parquet /work/lepinet/data/flemming/splits/flemming_probe.parquet --checklist-from /work/lepinet/data/flemming/splits/flemming_probe.parquet /work/lepinet/data/flemming/splits/flemming_adapt.parquet --img-dir /work/flemming/images --out-dir /work/lepinet/data/ucloud_preds/D1-probe --species-col speciesKey --test-set 0 --img-size 320 --aug-img-size 384 --batch-size 128 --num-workers 32 --pad-to -1 0 1000 2000 4000"
+[schedule]
+auto_extend = "1h"
+max_time = "6h"
+[[resources]]
+type = "file"
+path = "/12347837/datasets/flemming"
+read_only = true
