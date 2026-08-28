@@ -3,11 +3,12 @@
 **Status:** working draft (2026-08-28). Numbers are from `RESULTS.md`; the reasoning behind each is
 in [`../journal/`](../journal/). Sections marked _(pending)_ await runs that are in flight.
 
-**Outstanding writing debt**, audited in
-[`../journal/2026-08-28-what-the-paper-is-still-missing.md`](../journal/2026-08-28-what-the-paper-is-still-missing.md):
-§4.14 (long-tail rebalancing / cRT) and §4.15 (foundation models and benchmark contamination) are
-referenced but not yet written, six `§4.x` cross-references await them, and the abstract and
-contribution list still predate the foundation-model results.
+Audited against the journal on 2026-08-28
+([`../journal/2026-08-28-what-the-paper-is-still-missing.md`](../journal/2026-08-28-what-the-paper-is-still-missing.md));
+§4.13 (long-tail rebalancing) and §4.14 (foundation models and benchmark contamination) were written
+in that pass, and all six unresolved section placeholders now point somewhere. **Remaining for the
+authors:** fact-check the `[VERIFY]` citations in §1b and the reference list, redraw `fig4`
+per-head-best-rule (see `figures/README.md`), and re-score §4.5 with each head's own scoring rule.
 
 ---
 
@@ -22,10 +23,13 @@ autoregressive head are all matched or beaten by a *single* species head whose c
 marginalising its own posterior — but the finer statement is that coarse **parameters** hurt while
 coarse **supervision** helps, and only the second is visible off the training distribution. Second,
 in-distribution accuracy is close to saturated (0.9316) yet falls to **0.69 on data from a different
-source**, and interventions selected on the first axis routinely invert on the others: square-root
-resampling buys 1.9 points in-distribution and costs 2.9 under shift; the best open-set scoring rule
-changes with model capacity, a 6–7.6 point effect that inverted a published ranking of our own.
-Third, and most usefully, **unlabelled** target-domain images are the strongest lever we find:
+source**, and interventions selected on the first axis routinely invert on the others: the long-tail
+literature's methods degrade cross-source accuracy **monotonically in how hard they reweight the
+tail** (a 9.5-point spread over which the in-distribution column does not order at all), and the best
+open-set scoring rule changes with model capacity, a 6–7.6 point effect that inverted a published
+ranking of our own. Both inversions are invisible to the standard protocol, which evaluates on a
+held-out fold of the training distribution. Third, and most usefully, **unlabelled** target-domain
+images are the strongest lever we find:
 self-training on machine-generated labels beats 12,230 human labels, costs nothing in-distribution,
 and lets a 20 M model outperform a 198 M one — with a sharp interior optimum in the *share* of target
 data, beyond which adaptation silently becomes memorisation. We also show that an **additive angular
@@ -34,8 +38,14 @@ as **relocate its signal**: given each head its own best scoring rule the margin
 of AUROC (0.8990 → **0.9068**) for 1.00 point of accuracy, but it collapses the spread across
 scoring rules from 28.4 points to 1.2, so the readout no longer has to be tuned. Finally, the
 resulting classifier matrix can be replaced at inference by class centroids for 0.29 points — though
-it is not low-rank, because the margin spends dimensions rather than economising on them. We release
-the package, the models and the reproduction recipes.
+it is not low-rank, because the margin spends dimensions rather than economising on them. Finally, we
+report a contamination result with implications beyond this dataset: **two thirds of our held-out
+test fold, 413,865 images, lie inside a biological foundation model's training set by exact
+occurrence identifier** rather than by species name, which is the check the field actually performs.
+On a decontaminated fold that model, fine-tuned, is the better representation — a *frozen* probe
+understates it by 7 points — and once our adaptation recipe is applied to each, the two converge.
+Our contribution is therefore the recipe rather than the encoder, and the ceiling is set by
+target-domain data. We release the package, the models and the reproduction recipes.
 
 ---
 
@@ -50,12 +60,30 @@ the package, the models and the reproduction recipes.
   1. **Image-space / open-set** — the taxon was never trained on. Detect it.
   2. **Hierarchy-space / rank abstention** — the photo cannot resolve the species. Back off to the
      rank the evidence supports ("unknown species, but *Noctuidae*").
-- Contributions: (C1) a negative result on hierarchical heads with a like-for-like protocol;
-  (C2) the marginalisation-beats-coarse-heads result; (C3) **ArcFace × z-score**, with the analysis
-  of *why* the two compose; (C4) a measured generalisation gap, **decomposed** into the part
-  removable by naming nuisances (17 %) and the part that is not; (C5) an interaction result — an
-  angular margin degrades *marginalisation* more than classification, because summing a posterior is
-  calibration-dependent, replicated across a 10× scale change; (C6) an open, reproducible package.
+- Contributions:
+  - **(C1)** a negative result on hierarchical heads with a like-for-like protocol, refined into the
+    distinction that coarse *parameters* hurt while coarse *supervision* helps — and only the second
+    is visible in-distribution (§4.1);
+  - **(C2)** **the classifier, not the representation, is where interventions belong.** Four
+    independent questions — coarse supervision, long-tail rebalancing, domain adaptation, and the
+    prototype matrix itself — resolve the same way (§4.15). This is the paper's spine;
+  - **(C3)** **unlabelled target-domain data is the strongest and cheapest lever**, beating human
+    labels, capacity and augmentation, with a sharp interior optimum in its *share* beyond which
+    adaptation becomes memorisation (§4.11);
+  - **(C4)** **the long-tail literature's ranking inverts under source shift**, monotonically in how
+    hard a method reweights the tail — and the trade is an artefact of *where* the rebalancing is
+    applied, not of rebalancing (§4.13);
+  - **(C5)** **a benchmark-contamination result and a cheap method for detecting it**: two thirds of
+    our test fold is inside a foundation model's training set by exact occurrence identifier, and a
+    frozen probe understates that model by 7 points (§4.14);
+  - **(C6)** **ArcFace × z-score**, with the analysis of why the two compose, and the finding that
+    the margin *relocates* open-set signal rather than creating it (§2.3, §4.3);
+  - **(C7)** a measured generalisation gap **decomposed** into the part removable by naming nuisances
+    (17 %) and the part that is not (§4.8);
+  - **(C8)** an interaction result — an angular margin degrades *marginalisation* more than
+    classification, because summing a posterior is calibration-dependent, replicated across a 10×
+    scale change (§4.7);
+  - **(C9)** an open, reproducible package, with every negative result and retraction recorded.
 
 ## 1b. Related work _(drafted from memory — every citation marked [VERIFY] needs checking against the source before submission; author lists, years and venues are not reliable)_
 
@@ -79,7 +107,7 @@ which to our knowledge evaluates in-distribution throughout.
 adjustment [Menon et al., ICLR 2021, VERIFY], Balanced Softmax [Ren et al., NeurIPS 2020, VERIFY],
 LDAM [Cao et al., NeurIPS 2019, VERIFY], class-balanced reweighting by effective number [Cui et al.,
 CVPR 2019, VERIFY] and the decoupling/τ-normalisation line [Kang et al., ICLR 2020, VERIFY]. Two
-observations. Balanced Softmax and logit adjustment at τ=1 are the **same objective** (§4.x), which
+observations. Balanced Softmax and logit adjustment at τ=1 are the **same objective** (§4.13), which
 the two papers do not note. And the cosine head already implements τ-normalisation at τ=1 by
 construction, so results transferred from a linear-classifier setting should not be expected to hold.
 Our contribution here is the **evaluation axis**: these methods are benchmarked on in-distribution
@@ -96,9 +124,20 @@ adding to them.
 **Domain adaptation and self-training.** Pseudo-labelling with confidence thresholds is long
 established [Lee, ICML workshop 2013, VERIFY], with FixMatch and noisy-student as modern
 representatives [Sohn et al. 2020; Xie et al. 2020, VERIFY]. Our finding of a sharp interior optimum
-in the *share* of target-domain data (§4.x) — and specifically that transfer to unseen classes falls
+in the *share* of target-domain data (§4.11) — and specifically that transfer to unseen classes falls
 monotonically as that share rises — is, as far as we know, not documented; the usual concern is
 label noise rather than dosage.
+
+**Biological foundation models, and benchmark contamination.** BioCLIP and BioCLIP-2 [Stevens et al.,
+CVPR 2024; 2025, VERIFY] train CLIP-style encoders on TreeOfLife-10M/200M, assembled largely from
+GBIF, iNaturalist and EOL. The standard evaluation of such a model on a downstream taxonomic
+benchmark is a frozen linear probe. We report two problems with that protocol (§4.14). First, the
+benchmarks are drawn from the same public archives as the pretraining corpus, and we measure a
+**65.4 % image-level overlap with our own held-out test fold by exact GBIF occurrence identifier**;
+the overlap checks we have seen reported are taxonomic, which is both weaker and more reassuring.
+Data-contamination audits of this kind are routine in NLP [Dodge et al., EMNLP 2021, VERIFY] and, as
+far as we know, not yet routine here. Second, the frozen probe itself understates the representation
+by 7 points relative to fine-tuning, which is large enough to reverse a published-style comparison.
 
 **Calibration.** Temperature scaling [Guo et al., ICML 2017, VERIFY]. We use it as shipped, and note
 in §4.7 that marginalisation makes calibration *load-bearing* rather than cosmetic: summing a
@@ -237,7 +276,51 @@ contributions are unrecoverable; and the 10-epoch run was still improving when i
 numbers here understate what the architecture can reach, while the *differences* between arms, which
 is what we claim, are measured at matched budget.
 
+### 3.2 Four benchmarks, and why they are not interchangeable
+
+Results are reported on several evaluation sets. They answer different questions and **differences
+are only meaningful within a column.**
+
+| name | images | species | what it is |
+|---|---|---|---|
+| **in-distribution** | 629,742 | 12,041 | held-out fold of the training distribution |
+| **full trap** | 47,905 | 486 | every camera-trap image. *Contaminated for anything trained on trap data* |
+| **probe** | 15,200 | 368 | whole (trap, night) capture groups held out of adaptation. The honest shifted column |
+| **probe held-out species** | 2,455 | 58 | probe restricted to species adaptation never saw. Separates domain adaptation from specialisation on the adapted taxa |
+| **open-set** | 3,000 | 566 unseen | novel species drawn from the *same* image distribution, isolating novelty from shift |
+
+**Macro-F1 does not decompose over subsets, so two benchmarks over the same images can rank two
+models oppositely with both results correct.** One model ties another on all 47,905 trap images
+(+0.0002) and beats it by **2.03 points** on a 15,200-image *subset* of them, because the full set
+averages over 486 species at $1/486$ each and the subset averages over its 368 at $1/368$. Neither
+number is wrong. This is a property of any per-class average, and it is why we never quote a
+difference computed across two evaluation sets — a discipline that took one misdiagnosed
+"regression" to adopt.
+
+**A benchmark's exclusivity has to be recorded in the split, not assumed in the pipeline.** The trap
+corpus was simultaneously our external benchmark and the only source of unlabelled target images, and
+nothing recorded that those roles conflict; self-training would have trained on its own test set and
+reported a better number for it. The grouped (trap, night) partition above exists to make that
+conflict structural rather than remembered. §4.14 reports the same failure one level up, where the
+corpus serving two roles is a public archive and the second role is somebody else's pretraining.
+
 ## 4. Results
+
+### 4.0 Summary of models
+
+The sections below each vary one factor. For orientation, the models the paper refers to repeatedly:
+
+| model | what it is | in-dist | probe | probe-HO | open-set |
+|---|---|---|---|---|---|
+| baseline | effnetv2_s, single head + marginals, √-oversampling | 0.9135 | 0.6270 | 0.6412 | 0.8990 |
+| A1 | baseline + ArcFace × z-score | 0.9035 | 0.6437 | — | **0.9068** |
+| best in-distribution | ConvNeXtV2-L @320, multi-head | **0.9316** | — | — | — |
+| **B8 — best deployable (ours)** | 198 M, no √-oversampling, self-training at the 2 % dose | 0.9060 | **0.7798** | **0.7816** | — |
+| **P5 — best deployable (foundation)** | BioCLIP-2 fine-tuned + unfrozen adaptation | 0.9113 | **0.7810** | 0.7806 | — |
+| shippable student | fastvit_sa12, distilled | 0.8967 | — | — | — |
+
+**B8 and P5 are tied** (§4.14.4). Open-set AUROC is each model's *best* scoring rule (§4.9) and is
+not measured for the two deployable models — see Limitations.
 
 ### 4.1 Hierarchical heads: what the taxonomy should and should not touch (C1, C2)
 
@@ -632,7 +715,7 @@ entirely, with no memorisation signature.
 model without it (0.7209) on the probe benchmark. They are complementary rather than substitutes —
 the larger model leads on held-out species (0.7559 vs 0.7231), so capacity buys generalisation to
 unseen *taxa* while adaptation buys generalisation to unseen *conditions* — and combining them, while
-also removing the resampling of §4.x, gives the best model we obtain: **probe 0.7798, held-out
+also removing the resampling of §4.13, gives the best model we obtain: **probe 0.7798, held-out
 0.7816**.
 
 *(The dose effect is itself capacity-dependent: moving from 6 % to 2 % is worth 3.36 points at 20 M
@@ -660,9 +743,258 @@ angular margin *pushes classes apart*, so it spends dimensions rather than econo
 margin and low-rank compression want opposite things** — a trade-off worth stating for anyone
 combining metric learning with extreme classification.
 
-### 4.13 Almost everything that matters is a classifier-stage concern
+**Nor is training against centroids, or sampling the softmax.** We measured four further routes and
+all fail: uniform sampled softmax degrades smoothly with no plateau (at 1M classes, 1024 negatives is
+0.1 % coverage); taxonomy-aware hard negatives recover only 26 % of that loss; fixed taxonomy codes
+are weakened by the same spectrum; and a proxy-free head that keeps EMA class centroids in a buffer
+with no matrix and no optimiser state — removing 10.24 GB of the 15.36 GB — costs **4.63 points**. So
+**centroids can *replace* a trained matrix at inference but cannot *substitute* for training one.**
 
-The results of §4.1, §4.x (resampling), §4.11 and §4.12 were obtained separately and answer different
+**The resolution is a data policy, not an architecture.** The obstacle is stated above as ~1 M
+species, but that count includes taxa with a handful of images. Applying the same minimum-image floor
+we already use for unrelated reasons ($\geq 50$ images) to TreeOfLife-200M reduces **884,662 species
+to 203,878** — a 4.3× cut that drops 680,784 taxa but only ~7 % of images — and with it a 15.36 GB
+parameter-plus-optimiser footprint to **3.13 GB, which fits on one device.** The extreme-classification
+problem at Tree-of-Life scale is therefore largely self-inflicted: the honest answer is to apply an
+image floor and train an ordinary matrix, and the interesting residue is what the floor costs in
+coverage rather than how to compress what it removes.
+
+### 4.13 Long-tail rebalancing trades robustness for accuracy — and the trade is an artefact of where it is applied
+
+Every method in the long-tailed-recognition literature is validated on an in-distribution held-out
+split: CIFAR-LT, ImageNet-LT and iNaturalist ship no shifted test set. We have one, and the ranking
+does not survive it.
+
+**Two preliminaries, because they change what there is to test.** First, Balanced Softmax [Ren et al.
+2020] trains with $-\log\bigl(n_y e^{z_y} / \sum_j n_j e^{z_j}\bigr)$; since $\log n_j = \log \pi_j +
+\log N$ and the constant cancels inside the softmax, **it is exactly logit adjustment [Menon et al.
+2021] at $\tau = 1$**. The two papers do not note this. Second, $\tau$-normalisation — rescaling
+classifier weights by $\lVert w_j \rVert^{-\tau}$, one of the decoupling line's strongest
+interventions [Kang et al. 2020] — is **already in our architecture**: the cosine head constrains
+every prototype to $\lVert w_j\rVert = 1$, which is $\tau$-normalisation at $\tau=1$ enforced during
+training rather than applied afterwards. Methods that correct the classifier's *norm* bias therefore
+have nothing left to do here, and only methods that change **which examples the loss weights** have
+room to act. That is a useful reminder that a method's value is a property of the system it sits in,
+not of the method.
+
+So the live question is a 2×2 over the two families that remain — resampling and loss reweighting —
+which are usually presented as alternatives and rarely crossed.
+
+| | oversampling | balanced softmax | in-distribution | **shifted** | shifted **micro** |
+|---|---|---|---|---|---|
+| L0 | — | — | 0.8949 | **0.6445** | 0.6589 |
+| baseline | √ ($p=0.5$) | — | **0.9135** | 0.6293 | 0.6156 |
+| L1 | — | $\tau=1$ | 0.8970 | 0.5726 | 0.5214 |
+| L2 | √ ($p=0.5$) | $\tau=1$ | 0.8689 | **0.5492** | 0.4694 |
+
+**Rank the cells by how hard they push probability mass toward rare classes — nothing,
+√-oversampling, full prior correction, both — and the shifted score falls monotonically at every
+step, a 9.5 point spread against a 0.69 point floor. The in-distribution column does not order at
+all** (0.8949, 0.9135, 0.8970, 0.8689). The ordering was committed as a prediction before the runs
+and all four cells landed in the predicted order.
+
+**The micro column shows the mechanism directly.** For the un-reweighted cells macro < micro (0.6445
+< 0.6589), the normal pattern — rare species are harder. For both balanced-softmax cells the sign
+**flips**: L2 scores macro 0.5492 against micro 0.4694. The model is not merely helping the tail, it
+is *over-predicting* it, and under shift — where the tail's evidence was flimsiest to begin with —
+that costs 19 points of ordinary accuracy.
+
+Why this is the expected direction: macro-F1 weights every species equally, so all of these methods
+target the classes with the fewest images. What a model learns from 43 photographs is
+disproportionately about *those photographs* — one photographer, one background, one camera. **Tail
+reweighting up-weights the least transferable part of the training signal.** In-distribution that is
+invisible, because the held-out fold shares the same artefacts.
+
+**The cost grows with capacity rather than being absorbed by it.** Removing √-oversampling from the
+198 M model costs 1.64 points in-distribution and buys **+2.88 on probe** (7.0× floor), against
+−1.52 at 20 M:
+
+| intervention | effect at 20 M | effect at 198 M |
+|---|---|---|
+| domain augmentation's in-distribution cost | −0.36 | **0.00** (absorbed) |
+| marginal supervision's shifted benefit | +1.79 | **+0.02** (absorbed) |
+| **√-oversampling's robustness cost** | **−1.52** | **−2.88** (**grows**) |
+
+The two that vanish are *constraints on the optimisation* — auxiliary losses, corrupted inputs — and
+a model with enough capacity satisfies them without giving anything up. Oversampling is not a
+constraint: it **changes which data the model sees**, and no amount of capacity makes a model learn
+from images it is shown less often. At higher capacity the model fits the reweighted distribution
+better, which means it fits its bias better too. **Interventions that constrain the objective weaken
+with capacity; interventions that reshape the data distribution do not, and may strengthen.**
+Predicting which of the two an intervention is, is worth more than measuring it at one scale.
+
+**The trade is not intrinsic.** cRT [Kang et al. 2020] — train the representation on the natural
+distribution, then freeze it and rebalance only the classifier — separates *what* is rebalanced from
+*where*:
+
+| | in-distribution | probe |
+|---|---|---|
+| L0 — no oversampling at all | 0.8949 | 0.6445 |
+| baseline — oversampling throughout | **0.9135** | 0.6293 |
+| **L4 — cRT: L0's representation, classifier rebalanced** | 0.9068 | **0.6539** |
+
+cRT recovers **+1.19** of oversampling's +1.86 in-distribution gain while scoring **+2.46 above** the
+fully-oversampled baseline under shift — and above L0 itself by +0.94. Rebalancing the classifier
+costs nothing under shift; rebalancing the *data the backbone sees* is what cost 1.52 points. The
+damage was in the representation all along, and freezing it closes that channel while the classifier,
+which only has to re-scale decision boundaries, gets the benefit for free.
+
+**The recommendation is therefore not "leave oversampling off" but "apply it to the classifier
+only"** — and it composes with domain adaptation rather than competing with it. At 198 M, removing
+oversampling and adding self-training are worth +0.97 probe and **+2.90 held-out species** over the
+same recipe with oversampling on, so neither subsumes the other.
+
+#### 4.13.1 The same shape appears in the *data*: truncating the head has an interior optimum
+
+Rebalancing acts on classes the model already has. The dual question is how many images per class to
+collect at all. Our corpus was built with a cap of ~2,000 images per species, chosen for balance on
+an untested intuition. Sweeping it:
+
+| cap | train images | in-distribution | probe | held-out species |
+|---|---|---|---|---|
+| 250 | 2.13 M | 0.8783 | 0.5776 | 0.6248 |
+| 500 | 3.18 M | 0.8955 | 0.6281 | 0.6371 |
+| **1,000** | **4.49 M** | 0.9060 | **0.6446** | **0.6706** |
+| uncapped (~2,000) | 5.70 M | **0.9148** | 0.6270 | 0.6412 |
+
+**In-distribution accuracy rises monotonically with the cap. Both deployment axes peak at 1,000 and
+then fall.** Capping at 1,000 rather than 2,000 buys **+1.76 probe and +2.94 held-out species** for
+−0.84 in-distribution ($n=2$ on both arms, roughly 3× the combined spread).
+
+This is the same shape as the self-training dose curve of §4.11 — an interior optimum, with the
+metric that looks like progress continuing to rise past the point where the useful metrics turn over
+— and it is a third instance of the section's theme: **images of species that already have thousands
+of them buy accuracy on the axis this problem has already saturated, and cost accuracy on the two
+axes that describe deployment.** Our own cut was right in kind and too shallow.
+
+It also answers the acquisition question from the other side. Measured on TreeOfLife-200M's own
+per-species counts, the Lepidoptera surplus over our corpus is **3.1× uncapped but only 1.2× at our
+2,000 cap** — about 90 % of it is head images beyond the cap. Uncapped, the ten most-photographed
+species would take 7.8 % of every epoch while the 65,453 rarest combined take 11.6 %. Acquiring that
+data would move us further right on a curve whose deployment axes are already declining.
+
+This is the second of the paper's four independent questions to resolve toward the classifier, and
+§4.15 assembles them.
+
+### 4.14 Foundation models: contamination, a frozen probe that understates by 7 points, and what the recipe is actually contributing
+
+A reviewer's first question about any specialist model is why not use a foundation model instead.
+BioCLIP-2 [Stevens et al., VERIFY] — a ViT-L/14 CLIP model trained on TreeOfLife-200M, i.e. this
+exact domain at 43× our data — makes the question sharp. Answering it properly required first
+discovering that the obvious comparison is invalid.
+
+#### 4.14.1 The benchmark is inside the foundation model's training set
+
+Our corpus is GBIF-derived. So is TreeOfLife-200M. Joining the two on **GBIF occurrence identifier**
+— photograph identity, not species name:
+
+| | |
+|---|---|
+| our species also in ToL-200M | **11,916 of 12,772 — 93.3 %** |
+| our images in ToL-200M, by exact occurrence id | 4,141,385 — **65.4 %** |
+| **our held-out test-fold images in ToL-200M** | **413,865 of 629,742 — 65.4 %** |
+
+**Two thirds of our test fold is BioCLIP-2's training data.** Every in-distribution comparison against
+it is contaminated in its favour, so all in-distribution numbers below are re-scored on a
+**decontaminated fold** — the 219,048 images / 11,998 species carrying no ToL occurrence id — with
+*both* arms re-scored on it, since a clean-subset score cannot be compared against a full-fold one
+either.
+
+**The generalisable point is the method, not our number.** *"Pretrained on a public archive"* and
+*"evaluated on a public archive"* are the same sentence far more often than anyone checks, and the
+reason it goes unnoticed is that the usual check is **taxonomic** overlap — "does the model know
+these species?" — which is the weaker question and reassuringly answerable at 93 % without anyone
+realising the images are literally the same. The check costs nothing: the parquet footers locate the
+relevant shards, and reading only the taxonomy and provenance columns skips the embeddings (~99 % of
+the bytes), so the whole join runs on a laptop in twenty minutes against a 350 GB cache with nothing
+downloaded. We recommend it as routine for any benchmark evaluated against a biological foundation
+model.
+
+The shifted benchmarks are **not** contaminated: they are camera-trap imagery with no GBIF occurrence
+ids, a different camera and a different collection process. The shifted comparison is clean on both
+sides, which makes it the decisive one.
+
+#### 4.14.2 A frozen probe can understate a representation by 7 points
+
+The standard way to compare representations is a linear (here, cosine) probe on frozen features. On
+the decontaminated fold:
+
+| BioCLIP-2 trunk | species macro-F1 | vs our baseline (0.9021) |
+|---|---|---|
+| frozen, classifier fitted | 0.8444 | **−5.77** |
+| fine-tuned, lr 1e-3 *(our default)* | 0.8912 | −1.09 |
+| fine-tuned, lr 1e-4 | 0.9025 | +0.04 |
+| **fine-tuned, lr 1e-5** | **0.9146** | **+1.25** |
+
+**Unfreezing is worth +7.02 points**, and the learning rate spans 2.34 of them — with *our own
+default the worst of the three arms*. A single-arm run at the rate tuned for our CNN would have
+returned 0.8912, sat 1.09 points below baseline, and supported the conclusion opposite to the truth,
+from a plausible number with no crash to warn anyone. We report the three arms because the reason for
+running three was written down beforehand: a rate that suits a CNN can destroy a pretrained ViT-L's
+representation in the first few hundred steps, and that failure looks like a bad number rather than
+an error.
+
+Under shift the fine-tuned model leads by more, not less:
+
+| | in-distribution | probe | held-out species |
+|---|---|---|---|
+| our task-trained baseline | 0.9021 | 0.6270 | 0.6412 |
+| **BioCLIP-2, fine-tuned** | **0.9146** | **0.6630** | **0.6937** |
+| Δ | +1.25 | +3.60 | **+5.25** |
+
+**The best representation for this task is not ours**, and the margin is largest on the hardest and
+most deployment-relevant axis. A frozen probe reported the opposite.
+
+#### 4.14.3 Frozen-trunk adaptation is bounded to trunks trained with the same head
+
+§4.15 will claim that the classifier stages are cheap because they run on a frozen trunk. That claim
+has a boundary, and a foreign trunk finds it.
+
+| adaptation stage | probe | held-out species |
+|---|---|---|
+| our trunk, frozen (T2b) | 0.7515 | — |
+| BioCLIP-2, frozen (P1b: fitted then adapted, never unfrozen) | 0.5901 | 0.5599 |
+| BioCLIP-2 fine-tuned, then **frozen** adaptation | 0.7218 | 0.7540 |
+| BioCLIP-2 fine-tuned, then **unfrozen** adaptation | **0.7810** | **0.7806** |
+
+Unfreezing the adaptation stage is worth **+5.93 points**. So the apparent crossover — BioCLIP-2
+leading our baseline by 3.60 before adaptation and trailing by 3.16 after it — is a **frozen-readout
+artefact**, not evidence that adaptation and pretraining are substitutes.
+
+The mechanism is not mysterious. Our trunk was trained *with the very cosine head we then re-fit*, so
+its features are already arranged for that readout. BioCLIP-2's are arranged for alignment with
+**text**. Freezing them and attaching a cosine head asks the head to read a geometry it was never
+shaped for. The correct statement is therefore:
+
+> **Frozen-trunk adaptation is cheap when the frozen trunk was trained with the same head geometry
+> you are re-fitting. On a foreign trunk it costs about six points, and the trunk must be unfrozen.**
+
+This bounds §4.15 to trunks trained with the head in question. It retracts none of its numbers; it
+removes an extrapolation.
+
+#### 4.14.4 What this says the contribution is
+
+Fine-tuned BioCLIP-2 with our unfrozen adaptation reaches probe 0.7810 / held-out 0.7806. Our own
+best model reaches 0.7798 / 0.7816. **They are tied.** The honest summary is:
+
+- before adaptation, their representation is **better** than ours (+3.60 probe, +5.25 held-out);
+- after each is given its best treatment, the two **converge**;
+- the advantage a 200 M-image encoder brings is real, and **the adaptation recipe closes it**.
+
+That is more useful than either backbone winning. It says the ceiling here is set by **target-domain
+data**, not by the encoder — the same conclusion §4.11 and §4.13 reach from other directions — and it
+locates our contribution in the **recipe** (classifier stages, self-training, abstention, open-set
+scoring) rather than in the representation. A recipe transfers to other groups and other taxa; a
+backbone does not.
+
+It also settles a costly question in the negative: **retraining a backbone on ToL-200M is not worth
+doing.** A ~84 M-image download would buy a worse version of something downloadable. Two independent
+measurements agree — the fine-tune already exceeds what we could train, and (§4.13) the extra data is
+almost entirely head images, which our own cap policy says to discard.
+
+### 4.15 Almost everything that matters is a classifier-stage concern
+
+The results of §4.1, §4.13 (resampling), §4.11 and §4.12 were obtained separately and answer different
 questions. Placed together they say the same thing, and it is the strongest through-line we have.
 
 **Coarse supervision.** Per-level classifier *parameters* hurt (§4.1); the per-level *losses* help,
@@ -672,7 +1004,7 @@ and only visibly off the training distribution.
 points in-distribution and costs 2.9 under source shift. Applied only to a classifier retrained on a
 frozen representation (cRT; Kang et al. [VERIFY]), it recovers **+1.19** of the in-distribution gain
 while scoring **+2.46 above** the fully-resampled model externally. The accuracy/robustness trade of
-§4.x is therefore not intrinsic — it is an artefact of where the rebalancing is applied.
+§4.13 is therefore not intrinsic — it is an artefact of where the rebalancing is applied.
 
 **Domain adaptation.** Freezing the representation and adapting only the classifier for 2 epochs on
 pseudo-labelled target images captures **83 %** of what full self-training gives on held-out capture
@@ -757,9 +1089,9 @@ hierarchical prediction heads. That comparison is a null result, and the interes
 out to lie one level down: not *how the taxonomy enters the architecture*, but *which component of
 the model each intervention should act on*. Four independent questions — coarse supervision,
 long-tail resampling, domain adaptation, and the classifier matrix itself — all resolved toward the
-classifier (§4.13).
+classifier (§4.15).
 
-**The methodological finding may outlast the empirical ones.** Three times, a conclusion this project
+**The methodological finding may outlast the empirical ones.** Five times, a conclusion this work
 held was overturned not by a better model but by a better measurement:
 
 1. An open-set scoring rule chosen on a 20 M model does not transfer to a 198 M one; reading every
@@ -767,24 +1099,39 @@ held was overturned not by a better model but by a better measurement:
 2. That same oversight, applied to our own headline, produced a claimed 31-point advantage for an
    angular margin that is **0.78 points** when each head is read with its best rule (§4.3).
 3. Macro-F1 does not decompose over subsets, so two benchmarks over the *same images* can rank two
-   models oppositely with both results correct (§4.x).
+   models oppositely with both results correct (§3.2).
+4. A run-to-run noise floor is a property of the (metric × benchmark × **training procedure**)
+   triple. Floors measured on 5-epoch end-to-end runs were quoted against 2-epoch frozen-trunk
+   stages, where the true spread is 3–7× larger; an exact repeat of one configuration differed from
+   itself by 3.74 points, and two conclusions did not survive it (§4.11).
+5. A frozen linear probe — the standard way to compare representations — understated a foundation
+   model by **7 points**, and the fine-tuning learning rate spanned 2.34 more. The default tuned for
+   our own architecture was the worst of three arms and would have supported the opposite conclusion,
+   from a plausible number with no error to warn us (§4.14).
 
 Each was a comparison made with a default nobody had recorded as a decision. We report them because
 the corrected numbers are the paper's numbers, and because the failure mode is not specific to us:
-**a baseline that everyone quotes is the one least likely to be re-measured.**
+**a baseline that everyone quotes is the one least likely to be re-measured.** The pattern is
+consistent enough to state as a working rule — *give every arm its own best configuration, or you are
+comparing configurations rather than methods* — and twice a headline gap in this paper collapsed
+under it, from 31 points to 0.78 and from 1.65 to 0.14.
 
-**What we would tell a practitioner.** Train one representation, cleanly, without resampling and
-without hand-authored domain augmentation. Then do the cheap work: rebalance the classifier if the
-in-distribution metric matters, adapt the classifier on unlabelled target images if deployment does,
-and read novelty with a rule chosen on *your* model rather than inherited. Report accuracy, external
-accuracy, and open-set detection separately, because they disagree — and never compare two of them
-across different evaluation sets.
+**What we would tell a practitioner.** Start from the best available pretrained encoder and
+**fine-tune it** — do not judge it by a frozen probe, and check whether your benchmark is inside its
+training set before you believe any in-distribution comparison. Then do the cheap work: rebalance the
+classifier if the in-distribution metric matters, adapt the classifier on unlabelled target images if
+deployment does, and read novelty with a rule chosen on *your* model rather than inherited. Cap the
+head of your training distribution more aggressively than feels comfortable. Report accuracy,
+external accuracy, and open-set detection separately, because they disagree — and never compare two
+of them across different evaluation sets.
 
 **What we do not claim.** That the classifier/representation split generalises beyond fine-grained
 recognition under source shift; that self-training's advantage over labels survives at much larger
-label budgets (it is still rising at 12,230); or that the angular margin is not worth its cost — we
-show only that its cost and benefit are both about one point, and that its real advantage is
-insensitivity to the readout rather than a better score.
+label budgets (it is still rising at 12,230); that the angular margin is not worth its cost — we show
+only that its cost and benefit are both about one point, and that its real advantage is insensitivity
+to the readout rather than a better score; or that our recipe would beat a foundation model given
+comparable pretraining data. On the contrary: §4.14 finds the better representation is not ours, and
+the claim we make is that the **recipe closes the gap**, which is a claim about the recipe.
 
 ## 6. Limitations
 
@@ -800,12 +1147,25 @@ floors of §4.11, but several results rest on n = 2 and a few on n = 1. Where a 
 3x its floor we describe it rather than claim it. The novelty-plus-shift benchmark of §4.5 has only
 234 novel images among 47,905 and is directional.
 
-**In-distribution comparisons against foundation models are contaminated** (§4.15), and we do not
+**In-distribution comparisons against foundation models are contaminated** (§4.14), and we do not
 have an uncontaminated version of that axis — only a decontaminated fold that removes the overlap we
 could detect by exact identifier.
 
 ## References _(to complete)_
 
+All entries below are drafted from memory and carry the §1b `[VERIFY]` caveat: author lists, years
+and venues must be checked against the sources before submission.
+
 Deng et al., *ArcFace*, CVPR 2019 · Wang et al., *NormFace*, ACM MM 2017 · Liu et al., *ConvNeXt V2*,
 CVPR 2023 · Oquab et al., *DINOv2* / *DINOv3* · Jordan & Jacobs, hierarchical mixtures · Hinton et
-al., *Distilling the knowledge in a neural network*, 2015.
+al., *Distilling the knowledge in a neural network*, 2015 · Kang et al., *Decoupling representation
+and classifier for long-tailed recognition*, ICLR 2020 · Menon et al., *Long-tail learning via logit
+adjustment*, ICLR 2021 · Ren et al., *Balanced Meta-Softmax*, NeurIPS 2020 · Cao et al., *LDAM-DRW*,
+NeurIPS 2019 · Cui et al., *Class-balanced loss based on effective number of samples*, CVPR 2019 ·
+Mahajan et al., *Exploring the limits of weakly supervised pretraining*, ECCV 2018 · Hendrycks &
+Gimpel, *A baseline for detecting misclassified and out-of-distribution examples*, ICLR 2017 · Liu et
+al., *Energy-based out-of-distribution detection*, NeurIPS 2020 · Lee, *Pseudo-label*, ICML workshop
+2013 · Sohn et al., *FixMatch*, NeurIPS 2020 · Xie et al., *Self-training with noisy student*, CVPR
+2020 · Guo et al., *On calibration of modern neural networks*, ICML 2017 · Stevens et al., *BioCLIP*,
+CVPR 2024 · Stevens et al., *BioCLIP 2* / *TreeOfLife-200M*, 2025 · Dodge et al., *Documenting large
+webtext corpora*, EMNLP 2021.

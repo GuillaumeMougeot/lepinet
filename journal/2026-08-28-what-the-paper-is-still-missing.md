@@ -1,6 +1,14 @@
 # What the paper is still missing — a top-down audit of DRAFT.md against the project
 
-**Kind:** infrastructure · **Status:** **OPEN (2026-08-28).** A full re-read of `paper/DRAFT.md`
+**Kind:** infrastructure · **Status:** **RESOLVED (2026-08-28). Phases 1-3 done in one session.**
+All eight Tier 1 corrections applied; **§4.13** (long-tail rebalancing, resolving the six `§4.x`
+placeholders), **§4.14** (foundation models and contamination), **§3.2** (the four benchmarks and
+macro-F1 non-decomposition) and **§4.0** (summary of models) written; abstract, contributions,
+discussion, limitations and references reconciled. What remains is owner-owned (`[VERIFY]`
+citations), one figure to redraw, and one benchmark to re-score — listed in the draft's own header.
+Tier 4 measurement gaps stay open and are tracked in `PLAN.md`.
+
+*(original)* A full re-read of `paper/DRAFT.md`
 against `PLAN.md`, `START-HERE.md` §2 and every journal entry. The draft's header says 2026-08-05 and
 that is accurate: **it has not absorbed anything from 6-28 August.** The audit finds **eight places
 where the draft asserts something the project has since retracted**, **six results with no home in

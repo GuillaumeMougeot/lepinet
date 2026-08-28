@@ -173,7 +173,7 @@ Six phases, in order. The engineering lessons each one produced are consolidated
 
 | opened | question | status |
 |---|---|---|
-| [08-28](2026-08-28-what-the-paper-is-still-missing.md) | Is `paper/DRAFT.md` in step with what the project now believes? | **OPEN — no.** **Eight retracted or false numbers still in the draft**, six results with no home in it (BioCLIP-2, contamination, cRT, L7, ToL head-scaling, macro-F1 non-decomposition), and a section cited six times as "§4.x" that does not exist. Phase 1 (correctness) done |
+| [08-28](2026-08-28-what-the-paper-is-still-missing.md) | Is `paper/DRAFT.md` in step with what the project now believes? | **RESOLVED — it was not, and now is.** Eight retracted or false numbers removed; **§4.13** (long tail / cRT), **§4.14** (foundation models, contamination) and **§3.2** (the benchmarks) written; six `§4.x` placeholders resolved. `[VERIFY]` and one figure remain owner-owned |
 | [08-24](2026-08-24-work-storage-degraded.md) | Why did both training jobs stall with no error? | **OPEN** — `/work` per-file read latency collapsed to seconds. 41 img/s vs ~1100 historical; metadata fine, data path not. Not a hang: starvation |
 | [07-17](2026-07-17-ucloud-benchmark-oom.md) | Why does the UCloud benchmark keep OOM-ing? | RESOLVED — image-pipeline anon × workers, not the dataframe; 128 workers safe |
 | [07-18](2026-07-18-ucloud-throughput.md) | How to make the B200 fast (it is CPU-decode-bound)? | staging = the memory lever; GPU decode built but model-bound for effnetv2s |
