@@ -1,0 +1,56 @@
+# P4: the full recipe on the better backbone. P3c's fine-tuned BioCLIP-2, trunk frozen, classifier
+# adapted on target-domain pseudo-labels -- our standard 2-epoch adaptation stage, applied to a trunk
+# that now beats ours on all three axes.
+#
+# Where the pieces stand:
+#   our baseline (no adaptation)      in-dist 0.9021  probe 0.6270  held-out 0.6412
+#   P3c  fine-tuned BioCLIP-2         in-dist 0.9146  probe 0.6630  held-out 0.6937
+#   T2b  our trunk + adaptation                       probe 0.7515
+#   R5   our staged recipe, balanced                  probe 0.7692
+#
+# P3c is ahead of our baseline everywhere but behind our ADAPTED models, because it has no
+# adaptation stage. P4 adds it. The question is whether BioCLIP-2's representational advantage
+# composes with the +10 pt that adaptation is worth on our own trunk, or whether the two overlap.
+#
+# Balanced pseudo-labels and oversample_power 0.0, matching R5: R5/R5b established balance helps a
+# frozen-trunk stage on held-out species, and L7 has just shown that head-heavy data hurts the
+# shifted axes, so flattening is the right default here.
+#
+# Prediction (committed): probe 0.76-0.80. Below 0.7515 (T2b) would mean BioCLIP-2's advantage does
+# NOT survive adaptation and the two effects are substitutes rather than complements -- itself the
+# more interesting outcome, since it would say adaptation and pretraining buy the same thing.
+# Falsified below 0.7400.
+version: 1.0
+desc: lepinet-P4-bioclip2-adapted-ucloud
+train:
+  parquet_path: /work/lepinet/data/flemming/splits/combined_balanced_3lvl.parquet
+  img_dir: /work/global_lepi/images
+  out_dir: /work/lepinet/data/ucloud_models
+  fold: '1'
+  min_img_per_spc: 50
+  # /work is a network mount (~90 ms/file); many readers park on I/O, so 256 on 48 vCPU is not
+  # real oversubscription. Measured ~950 img/s, ~1:24/epoch on gpu-nvidia-b200-1-gpu.
+  num_workers: 64
+  model_name: lepinet-P4-bioclip2-adapted-ucloud
+  model_arch_name: bioclip2
+  head: independent
+  nb_epochs: 2
+  base_lr: 0.00001
+  batch_size: 64
+  aug_img_size: 256
+  img_size: 224
+  optimizer: muon
+  fp16: true
+  precision: fp16
+  schedule: one_cycle
+  warmup_epochs: 0.5
+  grad_clip: 5.0
+  oversample_power: 0.0
+  family_filter: []
+  aug_kwargs:
+    max_warp: 0.0
+    max_lighting: 0.0
+    p_lighting: 0.0
+    flip_vert: true
+    max_rotate: 15.0
+    max_zoom: 1.1

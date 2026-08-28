@@ -38,9 +38,44 @@ the runs: *"that rate can destroy a pretrained ViT-L's representation in the fir
 already have the better representation; we can have it for the cost of a fine-tune. The ~84 M-image
 download would buy us a worse version of something downloadable.
 
-**What it does not close.** This is the *in-distribution* axis. P1b showed frozen BioCLIP-2 collapses
-under shift (probe 0.5901 vs our 0.7515, −16.14). Whether fine-tuning rescues *that* is unmeasured
-and is now the only thing separating the two backbones. `lepi-P3c-probe/probeho` are running.
+**The shifted arm landed too, and it is stronger than the in-distribution one.**
+
+| | in-distribution | probe | held-out |
+|---|---|---|---|
+| our baseline | 0.9021 | 0.6270 | 0.6412 |
+| **P3c — fine-tuned BioCLIP-2** | **0.9146** | **0.6630** | **0.6937** |
+| Δ | **+1.25** | **+3.60** | **+5.25** |
+
+**Fine-tuned BioCLIP-2 beats our trunk on all three axes, and by the largest margin on held-out
+species** — the hardest and most deployment-relevant one. Against P1b's frozen 0.5901 it is +7.29 pt
+on probe *without any adaptation stage at all*.
+
+## This substantially revises finding 7d, which is four days old
+
+P1b concluded the recipe is "not trunk-agnostic — the backbone stays in the contribution list", and
+that is still literally true: the backbone matters a great deal. But the implicature was that **ours**
+is the one worth keeping, and that is now wrong. Theirs is better on every axis once fine-tuned.
+
+The accurate statement is: **the representation matters enormously, and the best available one is not
+ours.** Our contribution is the recipe around it — the classifier stages, self-training, abstention,
+open-set scoring — not the encoder. That is a *better* position for the paper than the one it
+replaces, because the recipe is what transfers to other groups and other taxa; a backbone is not.
+
+It also explains P1b without contradicting it. Frozen, BioCLIP-2's features are unreadable by a
+cosine head (−16.14 under shift). Unfrozen, they are the best features we have. Both facts are about
+the same encoder and only one of them is about its *quality*.
+
+## What is still missing, and it is running
+
+P3c has **no adaptation stage**. Our adapted models sit at probe 0.7515 (T2b) to 0.7706 (B3rep5x),
+still ahead of P3c's 0.6630. So the ranking today is:
+
+    our baseline 0.6270  <  P3c 0.6630  <  T2b 0.7515  <  R5 0.7692  <  B3rep5x 0.7706
+
+**P4** adds our 2-epoch adaptation stage on top of P3c's trunk — the full recipe on the better
+backbone. Predicted probe **0.76–0.80**, falsified below 0.7400. If it lands high the two effects
+compose and we have a new best model; if it lands near T2b they are substitutes, which would say
+adaptation and better pretraining buy the same thing, and that is the more interesting result.
 
 ## L7: the head hurts, and it hurts exactly where we care
 
