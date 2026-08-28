@@ -1,0 +1,69 @@
+# P5b: INDEPENDENT REPEAT of P5. Nothing in src/lepinet seeds the training path (no manual_seed,
+# no set_seed), so re-running the identical config is a genuine second draw. P5 landed probe 0.7810
+# on n = 1, and that single number carries the claim "P5 ties B8, our best model". Two conclusions
+# have already died on n = 1 shifted measurements (G3b: 3.74 pt between identical runs; R5b: probe
+# spread 0.0119 in the frozen-trunk regime). The unfrozen-adaptation spread is unmeasured, so this
+# run measures it and tests the tie at the same time.
+#
+# Prediction (committed): probe 0.770-0.792, i.e. P5 +/- ~0.011. Falsified outside that, which would
+# say the unfrozen regime is noisier than the frozen one and the P5-vs-B8 tie is unresolvable at n = 2.
+#
+# --- original P5 header follows ---
+# P5: the same adaptation stage as P4, but with the trunk UNFROZEN.
+#
+# P4 was falsified (probe 0.7199 against a predicted 0.76-0.80) and produced a crossover worth
+# explaining: BioCLIP-2 is +3.60 pt AHEAD of our baseline before adaptation and 3.16 pt BEHIND T2b
+# after it. Adaptation is worth +10.78 pt on our trunk and only +5.69 on theirs.
+#
+# Two explanations, and they make opposite predictions here:
+#
+#   (a) SUBSTITUTION -- BioCLIP-2's pretraining already supplies part of what adaptation supplies, so
+#       there is less left to gain. Then unfreezing changes little and P5 ~ P4.
+#   (b) FROZEN-READOUT HANDICAP -- P1b showed a cosine head cannot read frozen BioCLIP features
+#       (probe 0.5901, -16.14 vs ours), and P4's adaptation stage is a frozen-trunk stage, so it
+#       inherits exactly that handicap. Then unfreezing should recover most of the gap: P5 >> P4.
+#
+# (b) is the better-supported hypothesis: the same encoder gained +7.02 pt in-distribution purely
+# from unfreezing (P1a 0.8444 -> P3c 0.9146), so "frozen hides this representation" is already
+# measured rather than assumed.
+#
+# lr stays at 1e-5, P3c's winning rate -- fine-tuning on 2 % pseudo-labelled data with a higher rate
+# risks eating the representation that makes this trunk worth using.
+#
+# Prediction (committed): probe 0.74-0.79. Falsified below 0.7300, which would leave (a) standing and
+# say adaptation and better pretraining really are substitutes -- the more interesting result, and
+# the one that would explain why our +10.78 pt adaptation gain looked so large.
+version: 1.0
+desc: lepinet-P5b-bioclip2-adapted-unfrozen-repeat-ucloud
+train:
+  parquet_path: /work/lepinet/data/flemming/splits/combined_balanced_3lvl.parquet
+  img_dir: /work/global_lepi/images
+  out_dir: /work/lepinet/data/ucloud_models
+  fold: '1'
+  min_img_per_spc: 50
+  # /work is a network mount (~90 ms/file); many readers park on I/O, so 256 on 48 vCPU is not
+  # real oversubscription. Measured ~950 img/s, ~1:24/epoch on gpu-nvidia-b200-1-gpu.
+  num_workers: 64
+  model_name: lepinet-P5b-bioclip2-adapted-unfrozen-repeat-ucloud
+  model_arch_name: bioclip2
+  head: independent
+  nb_epochs: 2
+  base_lr: 0.00001
+  batch_size: 64
+  aug_img_size: 256
+  img_size: 224
+  optimizer: muon
+  fp16: true
+  precision: fp16
+  schedule: one_cycle
+  warmup_epochs: 0.5
+  grad_clip: 5.0
+  oversample_power: 0.0
+  family_filter: []
+  aug_kwargs:
+    max_warp: 0.0
+    max_lighting: 0.0
+    p_lighting: 0.0
+    flip_vert: true
+    max_rotate: 15.0
+    max_zoom: 1.1

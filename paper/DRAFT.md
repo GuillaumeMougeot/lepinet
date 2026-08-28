@@ -1,7 +1,13 @@
 # Knowing what you don't know: calibrated open-set hierarchical classification for long-tailed species identification
 
-**Status:** working draft (2026-08-05). Numbers are from `RESULTS.md`; the reasoning behind each is
+**Status:** working draft (2026-08-28). Numbers are from `RESULTS.md`; the reasoning behind each is
 in [`../journal/`](../journal/). Sections marked _(pending)_ await runs that are in flight.
+
+**Outstanding writing debt**, audited in
+[`../journal/2026-08-28-what-the-paper-is-still-missing.md`](../journal/2026-08-28-what-the-paper-is-still-missing.md):
+§4.14 (long-tail rebalancing / cRT) and §4.15 (foundation models and benchmark contamination) are
+referenced but not yet written, six `§4.x` cross-references await them, and the abstract and
+contribution list still predate the foundation-model results.
 
 ---
 
@@ -22,12 +28,14 @@ changes with model capacity, a 6–7.6 point effect that inverted a published ra
 Third, and most usefully, **unlabelled** target-domain images are the strongest lever we find:
 self-training on machine-generated labels beats 12,230 human labels, costs nothing in-distribution,
 and lets a 20 M model outperform a 198 M one — with a sharp interior optimum in the *share* of target
-data, beyond which adaptation silently becomes memorisation. We also show an **additive angular
-margin composed with a dimension-aware z-score transform** turns near-chance novelty detection
-(AUROC 0.601) into usable detection (**0.9115**) for 0.4 points of accuracy, and that the resulting
-classifier matrix can be replaced at inference by class centroids for 0.29 points — though it is not
-low-rank, because the margin spends dimensions rather than economising on them. We release the
-package, the models and the reproduction recipes.
+data, beyond which adaptation silently becomes memorisation. We also show that an **additive angular
+margin composed with a dimension-aware z-score transform** does not so much improve novelty detection
+as **relocate its signal**: given each head its own best scoring rule the margin is worth 0.78 points
+of AUROC (0.8990 → **0.9068**) for 1.00 point of accuracy, but it collapses the spread across
+scoring rules from 28.4 points to 1.2, so the readout no longer has to be tuned. Finally, the
+resulting classifier matrix can be replaced at inference by class centroids for 0.29 points — though
+it is not low-rank, because the margin spends dimensions rather than economising on them. We release
+the package, the models and the reproduction recipes.
 
 ---
 
@@ -215,9 +223,13 @@ any example, so it acts consistently at every level. This is the same argument t
 marginalisation over per-level heads (§2.4): **in a hierarchy, prefer mechanisms that do not require
 one constant to be right at every level at once.**
 
-**Numerics.** The cosine head overflows in fp16; all runs use bf16. This is not a tuning detail — an
-autoregressive baseline trained visibly broken under fp16 and the failure presents as a modelling
-bug rather than a numerical one.
+**Numerics.** Mixed precision interacts with the cosine head and the interaction is easy to
+misdiagnose. Runs use fp16 autocast with **the head forced to fp32 inside an adapter**; without that
+protection the head overflows, and an autoregressive baseline trained visibly broken until its
+precision was changed — a failure that presents as a modelling bug rather than a numerical one.
+ArcFace with a positive margin is fp16-unstable even with the adapter, because $s\cos\theta$
+overflows and $\arccos$ then returns NaN, so **every margin run in this paper uses bf16** and the
+configuration layer warns on the unsafe combination rather than trusting the operator to remember.
 
 Two caveats are stated rather than hidden. The +4.7 row bundles three changes, so their individual
 contributions are unrecoverable; and the 10-epoch run was still improving when it stopped, so the
@@ -388,7 +400,14 @@ Repeating the benchmark where the novel species *also* come from a different cam
 | cosine | 0.601 | 0.574 |
 | ArcFace × z-score | **0.9115** | **0.7272** |
 
-The advantage survives but halves (+31.1 → +15.3 points). The logits show why: under shift the
+> **Caveat, and it is the same one §4.3 raises.** Both columns score both heads with `max-logit`,
+> which §4.9 shows is the plain cosine head's *worst* rule by 27 points. The cosine row is therefore
+> a lower bound on that head, and **the "+31.1 → +15.3" reading below is not supported** — it is the
+> retracted best-vs-worst comparison carried into the shifted setting. What survives is the
+> within-row comparison: the margin head loses 18.4 points of AUROC when novelty is compounded with
+> domain shift. Re-scoring this benchmark with each head's best rule is outstanding.
+
+The absolute *drop* is what the section is about. The logits show why: under shift the
 *known* mean falls (32.6 → 20.6) toward the novel one (14.1), i.e. shift makes familiar species look
 unfamiliar rather than making novel ones look more distinct. Novelty detection is therefore **not
 domain-robust**, and domain adaptation is upstream of open-set rather than parallel to it. (Only 234
@@ -461,16 +480,18 @@ the *converse* intervention produces the mirror image: supervising the marginals
 (§2.4) leaves species macro-F1 **exactly unchanged** at 0.9135 while lifting genus by +0.27 and
 family by +0.39 — a change with no discriminative component at all, acting purely on the sum.
 
-**Practical consequence.** The margin is still worth its cost: it buys open-set AUROC 0.601 → 0.9068
-on this architecture (§4.3), and a classifier that cannot flag an unseen taxon fails in a way
-closed-set macro-F1 does not measure. But a system that both marginalises and uses a margin should
+**Practical consequence.** The margin's open-set benefit is small once each head is read with its own
+best rule — 0.8990 → 0.9068 (§4.3) — so on this architecture it does *not* pay for the 1.15 pt it
+costs the coarse ranks. What it buys is insensitivity to the readout, which is worth something in
+deployment and nothing on a benchmark. A system that both marginalises and uses a margin should
 **supervise the marginals as well**, since the two interventions act on the same quantity in opposite
 directions. We report this as an interaction to be managed rather than a solved problem; the combined
 model is future work.
 
 ### 4.8 How much of the domain gap is nameable nuisance?
 
-Section 4.2 measures a ~26-point drop from in-distribution to an external source. That number alone
+The gap between in-distribution and external accuracy is ~23 points for the best model of §4.2 and
+25.98 points for the 20 M model used in this section's table. That number alone
 does not say whether the shift is *nuisance* (blur, illumination, compression — removable by
 augmentation) or *semantic* (pose, background, taxon-mix, labelling conventions). We separate them by
 augmenting training with three hand-named nuisances and re-measuring.
@@ -556,7 +577,22 @@ night)** — nights running midday-to-midday, since moths fly across midnight �
 set (27,230 images) and a **probe** set (15,200) that no training run touches. Fifteen percent of
 species are withheld from adaptation entirely, giving a **held-out-species** subset (2,455 images,
 58 taxa) that separates domain adaptation from specialisation on the taxa being adapted to.
-Run-to-run floors, measured by retraining one configuration unchanged: probe 0.0041, held-out 0.0052.
+
+**Noise floors are reported per training regime, and this is not a formality.** Retraining one
+configuration unchanged and scoring the repeat gives:
+
+| regime | probe | held-out species |
+|---|---|---|
+| end-to-end, 20 M, 5 epochs | 0.0041 | 0.0052 |
+| frozen-trunk stage, 20 M, 2 epochs | **0.0119** | 0.0079 |
+| frozen-trunk stage, 198 M, 2 epochs | **0.0130** | **0.0374** |
+
+A floor is a property of the (metric × benchmark × **training procedure**) triple, not of the
+benchmark alone. We state this because we got it wrong: floors measured on the first row were quoted
+against results from the third, and two conclusions in an earlier version of this paper did not
+survive the correction. A 2-epoch stage on a frozen representation has far more run-to-run freedom
+than a 5-epoch end-to-end run, and the 198 M held-out floor — 0.0374 on a 2,455-image, 58-species
+benchmark — is large enough to swallow most differences reported at that scale.
 
 | intervention (efficientnet\_v2\_s, 20 M) | in-distribution | probe | held-out species |
 |---|---|---|---|
@@ -677,19 +713,32 @@ camera. Rebalancing that set so every species contributes equally is not a neutr
 | 198 M | **end-to-end, natural** | 0.9060 | 0.7798 | **0.7816** |
 | 198 M | end-to-end, balanced | 0.9058 | **0.7800** | 0.7741 |
 
-Two interactions. **Balancing helps a frozen trunk and harms a trainable one** (+1.51/+1.87 vs
-−0.71/−3.62 at 20 M): it concentrates replication on the classes with fewest unique images, which are
-also those with least reliable pseudo-labels, and only a frozen trunk keeps the representation from
-memorising them. **And the whole effect attenuates with capacity** — at 198 M the four measurements
-(staged/end-to-end x probe/held-out) span +0.92 to −0.82, against ±3.6 at 20 M. The pseudo-label
-class distribution is therefore a small-model lever: worth tuning at 20 M, within noise at
-deployment scale.
+**Read this table against the floors of §4.11, and most of it disappears.** The frozen-trunk probe
+floor is 0.0119 at 20 M and 0.0130 at 198 M, and the 198 M held-out floor is **0.0374**. Applying
+them:
 
-Comparing each regime at *its own* best configuration, the staged recipe is **+0.71 in-distribution /
-−0.14 probe / +0.77 held-out at 20 M**, and **+0.78 / −0.58 / −2.98 at 198 M**. The in-distribution
-advantage is stable across the 10x change; the external parity is not. We therefore report the staged
-recipe as a **cost and redeployability result with a capacity-dependent external trade**, not as a
-free lunch: at 20 M it matches end-to-end training under shift, and at 198 M it does not.
+- **Balancing harms a trainable trunk at 20 M.** −0.71 probe / **−3.62** held-out for end-to-end; the
+  held-out effect is 7x its floor and is the one solid cell in the table. It concentrates replication
+  on the classes with fewest unique images, which are also those with least reliable pseudo-labels,
+  and a trainable representation memorises them.
+- **Balancing's benefit to a frozen trunk does not survive.** +1.51 probe is 1.3x a 0.0119 floor.
+  Directionally consistent with the mechanism above, but we do not claim it.
+- **Nothing at 198 M is resolvable.** All four staged/end-to-end differences at that scale sit inside
+  the floors, and an exact repeat of the staged 198 M configuration scored held-out **0.7892 against
+  0.7518** — a 3.74 pt spread between identical runs.
+
+We therefore make the weaker and better-supported claim: **staged and end-to-end training are
+indistinguishable under shift at both scales we tested**, while the staged recipe's in-distribution
+advantage (+0.71 to +0.88 across four runs, against a species-level spread of 0.0010) is real and
+stable across the 10x change. The result is a **cost and redeployability** one. Two adaptation stages
+are repeatable per deployment: a new camera does not require a new model, it requires a new
+classifier, which is minutes on a frozen trunk and needs no labels.
+
+An earlier version of this section claimed the external trade was capacity-dependent — parity at
+20 M, a 2.98 pt deficit at 198 M. That was a single-draw measurement compared against a floor
+borrowed from a different training regime, and it did not survive a repeat. It is retracted here
+rather than quietly dropped, because it is the third time in this work that a difference smaller than
+its true noise floor was reported as a finding, and the pattern is more useful than the number.
 
 We flag the tuning point explicitly because it is the second time in this work that a headline gap
 moved once both arms were tuned — the first being the open-set head comparison of §4.3, where a
@@ -739,9 +788,21 @@ insensitivity to the readout rather than a better score.
 
 ## 6. Limitations
 
-Single taxonomic domain and one 3-level hierarchy. Open-set results are on a *no-domain-shift*
-benchmark; the harder novelty-plus-shift case is _(pending)_. $m = 0.3$, $s = 30$ were first guesses,
-so 0.9115 is a floor, not a tuned optimum. Distillation experiments use one student family.
+Single taxonomic domain and one 3-level hierarchy. $m = 0.3$, $s = 30$ were first guesses, so the
+margin's measured effect is not a tuned optimum. Distillation experiments use one student family.
+
+**Open-set is not measured on the models we recommend.** Every AUROC here comes from a 20 M or 198 M
+task-trained trunk, and the abstention analysis of §4.6 uses the original single-head model. The two
+configurations the paper actually recommends have no open-set or abstention numbers.
+
+**Statistical power is uneven, and we say where.** Differences are quoted against the regime-matched
+floors of §4.11, but several results rest on n = 2 and a few on n = 1. Where a difference is under
+3x its floor we describe it rather than claim it. The novelty-plus-shift benchmark of §4.5 has only
+234 novel images among 47,905 and is directional.
+
+**In-distribution comparisons against foundation models are contaminated** (§4.15), and we do not
+have an uncontaminated version of that axis — only a decontaminated fold that removes the overlap we
+could detect by exact identifier.
 
 ## References _(to complete)_
 

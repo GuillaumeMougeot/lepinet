@@ -87,8 +87,21 @@ A 5-epoch 20 M run is ≈6.4 h; a 2-epoch frozen-trunk stage is ≈30 min at 20 
 images in 18 h). Using the 20 M figure for a 198 M run underestimates by 2.3x — it turned a
 costed "7-10 h" into 18 h on 2026-08-09.
 
+**The backlog is now led by writing, not measurement.** A full audit of `paper/DRAFT.md` against the
+journal on 2026-08-28 found **eight retracted or false numbers still in the draft**, **six results
+with no home in it at all** (the whole BioCLIP-2 arc, contamination, cRT, L7, ToL head-scaling,
+macro-F1 non-decomposition), and one structural hole: the long-tail section is cross-referenced six
+times as "§4.x" and does not exist. Phases and reasoning in
+[[2026-08-28-what-the-paper-is-still-missing]]. Phase 1 (correctness) is done; phases 2-3 are
+one sitting each and need no GPU.
+
 | # | work | GPU | why, and the gate |
 |---|---|---|---|
+| **P2** | **write §4.14 — long-tail rebalancing belongs to the classifier** | none | the structural hole. Six `§4.x` refs resolve here; §4.13's first pillar is cRT |
+| **P3** | **write §4.15 — foundation models and benchmark contamination** | none | the headline changed: our contribution is the recipe, not the encoder. Then reconcile abstract + contributions |
+| **P5b** | seed repeat of P5 | running | "P5 ties B8" is n = 1 on a shifted axis, and two conclusions have died that way |
+| **O1** | **open-set + abstention on B8 and P5** | eval only | the paper recommends two models and reports open-set for neither |
+| **O2** | open-set at 12 K -> 204 K taxa on cached ToL embeddings | 1 GPU, no download | turns §4.9 from "rules do not transfer across model scale" into "nor across class-count scale" |
 | ~~1~~ | ~~read H4 and B10~~ | — | **DONE 2026-08-24.** H4 falsified, B10 a tie. |
 | 2 | **decide the staged-vs-end-to-end question** | none | see section 7. It has flipped twice; recommendation is to freeze it |
 | 3 | **seed-repeat of G3** | ~1 h at 198 M | the held-out drop at 198 M is n = 1, and two conclusions have already moved on single measurements |

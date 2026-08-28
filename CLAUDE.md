@@ -57,7 +57,13 @@ that chat logs are not load-bearing. `dev/036_ledger.py` prints every run's conf
 
 - **Never run `uv sync`** on the training venv. It prunes and breaks torch/torchvision. The venv is
   hand-managed. `journal/2026-07-16-venv-uv-sync-incident.md`.
-- **bf16, never fp16.** The cosine head overflows in fp16. A head that "trains broken" is this.
+- **bf16 for any margin head; fp16 elsewhere is what the project actually does.** The compressed
+  form of this rule used to read "bf16, never fp16" and that is *false*: 63 of 115 configs set
+  `precision: fp16`, including the headline baseline. The true rule is narrower — the cosine head
+  overflows in fp16 unless forced to fp32 in an adapter (which `lepinet` does), and **ArcFace with a
+  positive margin overflows anyway**, so every margin run is bf16 and `config.py` warns on the
+  combination. A head that "trains broken" is still this. `docs/design-decisions.md` has the
+  accurate version; corrected 2026-08-28 after the paper was found asserting the wrong one.
 - **Never filter the test fold.** `--min-img-per-spc` on evaluation silently drops the tail out of a
   *macro* average and inflates the number by ~3 points. If a score jumps, audit the eval set before
   celebrating. `journal/2026-07-24-src-lepinet-baseline-port.md`.
