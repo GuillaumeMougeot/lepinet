@@ -1,0 +1,34 @@
+# The number P3 is missing: does FINE-TUNING fix BioCLIP-2's shift collapse? Frozen (P1b) it
+# scored probe 0.5901 against our 0.7515. Fine-tuned it now beats us in-distribution (+1.25 pt),
+# so the frozen deficit was a readout problem there. Whether that also holds under shift is
+# unmeasured and is the only thing still separating the two backbones.
+# Arm 2 of the decontaminated comparison: P1a on the clean fold, via dev/075 so `bioclip2`
+# resolves. Paired with lepinet-baseline-cleanfold.toml -- both arms, same 219,048 images.
+name = "lepinet-P5-probe"
+replicas = 1
+[application]
+name = "pytorch-te"
+version = "26.05"
+[product]
+id = "gpu-nvidia-b200-1-gpu"
+category = "gpu-nvidia-b200"
+provider = "ucloud"
+[time_allocation]
+hours = 6
+[sync]
+local = ".."
+remote = "/12347837/repos/lepinet"
+[setup]
+script = "setup-lepinet.sh"
+run = "uv pip install --no-deps open_clip_torch ftfy regex wcwidth && python dev/075_pretrained_trunk.py test --model '/work/lepinet/data/ucloud_models/*-lepinet-P5-bioclip2-adapted-unfrozen-ucloud/*.pt' --parquet /work/lepinet/data/flemming/splits/flemming_probe.parquet --img-dir /work/flemming/images --out-dir /work/lepinet/data/ucloud_preds/P5-probe --test-set 0 --min-img-per-spc 0 --img-size 224 --aug-img-size 256 --batch-size 128 --num-workers 32 --no-drop-unknown-species"
+[schedule]
+auto_extend = "1h"
+max_time = "12h"
+[[resources]]
+type = "file"
+path = "/12347837/datasets/global_lepi"
+read_only = true
+
+[[resources]]
+type = "file"
+path = "/12347837/datasets/flemming"

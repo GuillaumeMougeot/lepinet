@@ -72,10 +72,52 @@ still ahead of P3c's 0.6630. So the ranking today is:
 
     our baseline 0.6270  <  P3c 0.6630  <  T2b 0.7515  <  R5 0.7692  <  B3rep5x 0.7706
 
-**P4** adds our 2-epoch adaptation stage on top of P3c's trunk — the full recipe on the better
-backbone. Predicted probe **0.76–0.80**, falsified below 0.7400. If it lands high the two effects
-compose and we have a new best model; if it lands near T2b they are substitutes, which would say
-adaptation and better pretraining buy the same thing, and that is the more interesting result.
+## P4: falsified, and it produces a crossover
+
+**Predicted probe 0.76–0.80, falsified below 0.7400. Landed 0.7199.**
+
+| | in-distribution | probe | held-out |
+|---|---|---|---|
+| **P4** — BioCLIP-2 fine-tuned + adaptation | 0.9131 | **0.7199** | 0.7578 |
+| R5 — our staged recipe | 0.9074 | **0.7692** | 0.7781 |
+| T2b — our trunk + adaptation | — | 0.7515 | — |
+
+**Adaptation is worth half as much on the better trunk:**
+
+| trunk | before adaptation | after | gain |
+|---|---|---|---|
+| our A1 | 0.6437 | 0.7515 | **+10.78** |
+| BioCLIP-2 (P3c) | 0.6630 | 0.7199 | **+5.69** |
+
+So the two backbones **cross over**. BioCLIP-2 starts 3.60 pt ahead of our baseline and finishes
+3.16 pt behind T2b, and 4.93 behind R5. Starting higher, ending lower.
+
+## Two explanations, and P5 separates them
+
+**(a) Substitution.** BioCLIP-2's pretraining already supplies part of what adaptation supplies —
+robustness to varied imaging conditions — so there is less left for adaptation to buy. Then our
++10.78 pt was partly compensating for a weaker starting representation, and the ceiling is similar.
+
+**(b) Frozen-readout handicap.** P1b measured that a cosine head cannot read *frozen* BioCLIP
+features (probe 0.5901, −16.14 vs ours). **P4's adaptation stage is a frozen-trunk stage**, so it
+inherits exactly that handicap — the adaptation is being done through a bottleneck that does not
+exist for our own trunk.
+
+**(b) is the better-supported hypothesis**, because the same encoder gained **+7.02 pt
+in-distribution purely from unfreezing** (P1a 0.8444 → P3c 0.9146). "Frozen hides this
+representation" is measured, not assumed.
+
+**P5** runs the identical adaptation with the trunk unfrozen at lr 1e-5. Predicted probe
+**0.74–0.79**, falsified below 0.7300. If P5 ≈ P4, (a) stands and adaptation and pretraining are
+substitutes. If P5 ≫ P4, the whole P4 result is an artefact of freezing and the recipe needs a
+different second stage for foreign trunks.
+
+## On n = 1
+
+Both **L7 cap 1000** and **P4** carry claims on a single draw, and G3b showed a 3.74 pt spread
+between identical runs on a shifted benchmark. Repeats of both are running alongside P5. The uncapped
+L7 control already has n = 2 (probe 0.6250 / 0.6291), which is where the 0.0041 floor came from — so
+only the cap-1000 arm needs a second draw for that comparison to be honest.
 
 ## L7: the head hurts, and it hurts exactly where we care
 
