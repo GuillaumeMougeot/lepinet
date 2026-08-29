@@ -323,12 +323,13 @@ The sections below each vary one factor. For orientation, the models the paper r
 | baseline | effnetv2_s, single head + marginals, √-oversampling | 0.9135 | 0.6270 | 0.6412 | 0.8990 | — |
 | A1 | baseline + ArcFace × z-score | 0.9035 | 0.6437 | — | 0.9068 | — |
 | best in-distribution | ConvNeXtV2-L @320, multi-head | **0.9316** | — | — | — | — |
-| **B8 — best deployable (ours)** | 198 M, no √-oversampling, self-training at the 2 % dose | 0.9060 | 0.7798 | **0.7816** | 0.9153 | 71.17 % |
-| **P5 — SHIP THIS** | BioCLIP-2 fine-tuned + unfrozen adaptation | 0.9113 | **0.7810** | 0.7806 | **0.9161** | **88.44 %** |
+| **B8 — best deployable (ours)** | 198 M, no √-oversampling, self-training at the 2 % dose | 0.9060 | **0.7798** | 0.7816 | 0.9153 | 71.17 % |
+| **P5 — SHIP THIS** | BioCLIP-2 fine-tuned + unfrozen adaptation | 0.9113 | 0.7757 | 0.7817 | **0.9161** | **88.44 %** |
 | shippable student | fastvit_sa12, distilled | 0.8967 | — | — | — | — |
 
-**B8 and P5 tie on accuracy** (§4.14.4) **and are 17.3 points apart on useful-answer rate** (§4.6a),
-which is why P5 is the recommendation. Open-set AUROC is each model's *best* scoring rule (§4.9);
+**B8 and P5 tie on accuracy** (§4.14.4; P5 probe/held-out are means of two draws, spread 0.0107 and
+0.0021) **and are 17.3 points apart on useful-answer rate** (§4.6a), which is why P5 is the
+recommendation — the case for it rests on deployability, not on accuracy. Open-set AUROC is each model's *best* scoring rule (§4.9);
 useful-answer is the fraction of probe images given an answer that is correct, under a 95 %-precision
 back-off policy.
 
@@ -734,9 +735,13 @@ configuration unchanged and scoring the repeat gives:
 | end-to-end, 20 M, 5 epochs | 0.0041 | 0.0052 |
 | frozen-trunk stage, 20 M, 2 epochs | **0.0119** | 0.0079 |
 | frozen-trunk stage, 198 M, 2 epochs | **0.0130** | **0.0374** |
+| unfrozen adaptation, 303 M, 2 epochs | 0.0107 | **0.0021** |
 
 A floor is a property of the (metric × benchmark × **training procedure**) triple, not of the
-benchmark alone. We state this because we got it wrong: floors measured on the first row were quoted
+benchmark alone, and the spread varies by a factor of **18** across these four rows on the same
+2,455-image benchmark. Note in particular that unfreezing does not only score better than a frozen
+readout on a foreign trunk (§4.14.3), it scores far more *reproducibly* — consistent with a frozen
+cosine fit on features arranged for a different objective being badly conditioned. We state this because we got it wrong: floors measured on the first row were quoted
 against results from the third, and two conclusions in an earlier version of this paper did not
 survive the correction. A 2-epoch stage on a frozen representation has far more run-to-run freedom
 than a 5-epoch end-to-end run, and the 198 M held-out floor — 0.0374 on a 2,455-image, 58-species
@@ -1038,8 +1043,10 @@ removes an extrapolation.
 
 #### 4.14.4 What this says the contribution is
 
-Fine-tuned BioCLIP-2 with our unfrozen adaptation reaches probe 0.7810 / held-out 0.7806. Our own
-best model reaches 0.7798 / 0.7816. **They are tied.** The honest summary is:
+Fine-tuned BioCLIP-2 with our unfrozen adaptation reaches probe **0.7757 ± 0.0054** / held-out
+**0.7817 ± 0.0011** over two draws. Our own best model reaches 0.7798 / 0.7816. **They are tied**,
+and the tie is measured rather than assumed: the difference is 0.41 points against a run-to-run
+spread of 1.07 on that benchmark. The honest summary is:
 
 - before adaptation, their representation is **better** than ours (+3.60 probe, +5.25 held-out);
 - after each is given its best treatment, the two **converge**;

@@ -45,6 +45,41 @@ That bounds T2b, F2, R5 and the whole staged-recipe story to trunks we trained o
 retract them — every number stands — but it removes an extrapolation the project had been making
 implicitly since 6 August.
 
+## P5b: the repeat, and the spread it measures (2026-08-29)
+
+**Predicted probe 0.770-0.792. Landed 0.7703 -- inside, at the bottom edge.**
+
+| draw | probe | held-out species |
+|---|---|---|
+| P5 | 0.7810 | 0.7806 |
+| P5b | 0.7703 | 0.7827 |
+| **mean (n = 2)** | **0.7757** | **0.7817** |
+| **spread** | **0.0107** | **0.0021** |
+
+**This is a fourth training regime with its own noise floor**, and it belongs with the other three:
+
+| regime | probe | held-out |
+|---|---|---|
+| end-to-end, 20 M, 5 epochs | 0.0041 | 0.0052 |
+| frozen-trunk stage, 20 M, 2 epochs | 0.0119 | 0.0079 |
+| frozen-trunk stage, 198 M, 2 epochs | 0.0130 | 0.0374 |
+| **unfrozen adaptation, 303 M, 2 epochs** | **0.0107** | **0.0021** |
+
+The held-out figure is the interesting one: **0.0021 against the frozen 198 M regime's 0.0374**, a
+factor of 18. Unfreezing does not merely score better, it scores *more reproducibly* -- consistent
+with the reading that a frozen cosine readout on a foreign trunk is a badly-conditioned fit whose
+outcome depends heavily on initialisation, while fine-tuning lands in the same place each time.
+
+**The "P5 ties B8" claim survives, and its basis changes.** On n = 1 it rested on P5 leading by
++0.12; at n = 2 P5's mean is **0.7757 against B8's 0.7798, i.e. 0.41 pt behind** -- comfortably
+inside a 0.0107 spread either way. The conclusion is unchanged and now properly supported, but the
+earlier framing of P5 as marginally ahead on probe should not be carried: **they are
+indistinguishable, and P5's case rests on held-out species, in-distribution accuracy, and above all
+on deployability** ([[2026-08-28-two-tied-models-differ-by-17-points-in-deployment]]), not on probe.
+
+Note that the 17.3 pt useful-answer gap was measured on P5's first draw and is n = 1 on a derived
+metric -- but it is 16x the probe spread, so it is not a sampling artefact.
+
 ## Where this leaves the model ranking
 
 | model | probe | held-out |
