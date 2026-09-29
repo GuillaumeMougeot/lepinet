@@ -37,6 +37,7 @@ speed.
 | **Output** | species, genus and family probabilities, calibrated species logits, a 1280-d embedding |
 | **Format** | ONNX fp32 (149 MB) or fp16 (109 MB, same predictions). Runs with `onnxruntime` alone |
 | **Licence** | CC-BY-NC-4.0 (non-commercial; see [Licence](#licence)) |
+| **Other sizes** | [`lepinet-effnetv2s`](https://huggingface.co/gmougeot/lepinet-effnetv2s) (37 M, fast on CPU) · [`lepinet-dinov3-convnextl`](https://huggingface.co/gmougeot/lepinet-dinov3-convnextl) (217 M) · [`lepinet-bioclip2-vitl14`](https://huggingface.co/gmougeot/lepinet-bioclip2-vitl14) (321 M, recommended); all in [one collection](https://huggingface.co/collections/gmougeot/lepinet-lepidoptera-identification-6abbc33d250430f8c67db428) |
 
 ## Quick start
 
@@ -106,7 +107,7 @@ Name the providers explicitly. `ort.get_available_providers()` puts TensorRT fir
 TensorRT installed onnxruntime then falls back to the CPU without saying so. `predict.py` picks CUDA
 automatically.
 
-The two lepinet releases share **identical** `taxonomy.json` and `names.json` files, so they are
+The three lepinet releases share **identical** `taxonomy.json` and `names.json` files, so they are
 drop-in interchangeable.
 
 ## Files
@@ -152,9 +153,42 @@ else family     if prob_family.max()  >= t_family
 else "unknown"
 ```
 
+In code, continuing the quick start above (`out`, `names` and `repo` come from there):
+
+```python
+thresholds = {k: v["threshold"] for k, v in json.load(open(f"{repo}/thresholds.json"))["levels"].items()}
+
+def answer(out, i=0):
+    """Deepest rank the model is confident about for image i, or None ("unknown")."""
+    for rank in ("species", "genus", "family"):
+        p = out[f"prob_{rank}"][i]
+        if p.max() >= thresholds[rank]:          # a threshold above 1 means "never answer at this rank"
+            return rank, names[rank][p.argmax()], float(p.max())
+    return None
+
+print(answer(out))    # ('species', 'Macaria notata', 0.99), ('family', 'Erebidae', 0.97) or None
+
+p = out["prob_species"][0]
+novelty = float(-(p * np.log(p + 1e-12)).sum())   # entropy: higher = less familiar image
+```
+
+`predict.py` does exactly this.
+
 The thresholds were fitted on half of the light-trap capture nights and verified on the other half:
 
 {{THRESHOLDS_TABLE}}
+
+### Species the model has never seen
+
+Any closed-set classifier gives a species to a species it does not know. What the back-off buys is
+that it usually does not *commit* to one. Measured with the file above on **3,171 GBIF photos of 591
+species outside the label set** (the test-fold species below the training floor):
+
+{{NOVEL_BLOCK}}
+
+"Unknown" is not proof of a novel species, and a species answer is not proof that the species is in
+the label set: the same rule catches hard photos of known species. Use `novelty` for a graded
+score, for instance to send the most unfamiliar images to an expert.
 
 ## Evaluation
 

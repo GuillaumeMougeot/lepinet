@@ -218,3 +218,77 @@ with onnxruntime-gpu puts TensorRT first. Without TensorRT, ORT falls back to *C
 the pip CUDA libraries are only loaded by `ort.preload_dlls()`. Fixed in `predict.py` and in both
 cards. That session also established that ORT's CUDA provider works on this box although
 `nvidia-smi` reports an NVML driver mismatch, which is what made the GPU measurements possible.
+
+## Follow-up 2 (owner): transformers support for P5, and B8 as a third release
+
+**transformers.** P5 now loads with `pipeline("image-classification", ..., trust_remote_code=True)`
+and `AutoModelForImageClassification`. The design point is **one weights file**:
+`modeling_lepinet.py` (torch only, no open_clip, no lepinet) mirrors the lepinet parameter names,
+with an open_clip ViT under `0.visual` and the cosine head under `1.head`. So the same
+`model.safetensors` serves lepinet, transformers and the ONNX export, and the repo does not carry a
+second 1.3 GB copy. `config.json` is shared too: transformers keeps unknown keys, so the ONNX / app
+keys survive next to `model_type` and `id2label` (species names). Measured: 306/306 weights load, no
+missing or unexpected keys; identical inputs give 100 % top-1 agreement with `model.onnx` (max logit
+difference 3e-4). Through `CLIPImageProcessor`'s own preprocessing, 99.6 % of 1,000 probe images
+agree with the ONNX quick start (tiny crops again). Verified from the Hub in a fresh
+`transformers torch torchvision pillow` venv. Two traps, both worked around:
+- transformers 5 builds models on the meta device and leaves **non-persistent buffers
+  uninitialised**. The genus/family index buffers came out as garbage (an index error, luckily
+  rather than silent), so they are built from the config at first use instead.
+- transformers refuses a safetensors file without `format: pt` metadata, which lepinet's
+  `save_file` did not write. Re-saved with the same tensors (`dev/083 transformers`).
+
+Only P5 has this. B3rep5x and B8 would need their own modeling code (torchvision EfficientNet, timm
+ConvNeXt), and the ONNX route already covers them.
+
+**B8 (DINOv3 ConvNeXt-L, 217 M) -> `gmougeot/lepinet-dinov3-convnextl`.** The owner asked for a
+mid-size model. Published under the **DINOv3 License**, because its section 1.b.i allows
+derivatives to be distributed only under that agreement, with a copy included. The card adds a
+separate, clearly labelled request for non-commercial use, which concerns the training data (owner's
+decision). The export is species-only: `marginal_arcface` computes genus/family as species marginals
+in the checkpoint's own label order, so the graph's shared-taxonomy sums carry the same
+information and keep all three releases interchangeable.
+
+| | probe | held-out species | GBIF 10k | GPU fp32 / fp16 img/s |
+|---|---|---|---|---|
+| B8 ONNX (fp16 identical to 1e-4) | **0.7766** | 0.7708 | **0.9261** | 378 / 715 |
+| P5 ONNX | 0.7723 | **0.7897** | 0.9247 | 371 / 667 |
+
+**O1 revisited.** B8 is badly over-confident: 81 % of validation images saturate at p = 1.0 in fp32,
+and the fitted T = 1.91 cuts NLL 0.567 -> 0.387. With calibrated probabilities and the split-fitted
+95 % policy, B8 answers correctly on **77.2 %** of trap images against P5's **83.3 %** and B3rep5x's
+85.8 %. O1 reported 71.2 % vs 88.4 %, but with uncalibrated probabilities *and* a different fitting
+procedure (dev/058), under which P5 itself scores 5 points higher. So the two gaps are not
+comparable, and I do not attribute a share of O1's 17 points to calibration. What survives:
+**calibrated and measured one way, P5 still leads B8 by about 6 points on useful answers**, and
+O1's recommendation stands.
+
+**B8 precisions.** fp16 is identical to fp32 (to 1e-4 on all three sets; GPU 715 vs 378 img/s) and,
+unlike the ViT, loads in a default CPU session. The hybrid int8 recipe transfers once `mlp/fc2`
+stands in for `c_proj`: -0.18 / +0.33 / +0.05 pt, 1.46x faster per image, 245 MB. `dev/083
+quantize --arch vit` reproduces it byte for byte.
+
+## Follow-up 3 (owner): using the open-set behaviour, measured
+
+The owner asked whether the cards show how to get a genus / family / "unknown" answer. They showed
+the rule as pseudo-code only. Now every card has a runnable back-off + entropy snippet, run verbatim
+from the published card, and P5's transformers `predict()` returns the same `answer` and
+`novelty` (thresholds stored in `config.json`). The claims are measured on the published fp32 files:
+3,171 GBIF test-fold photos of **591 species outside the label set** (the species below the training
+floor; O1's novel set) against the 10,000-photo known sample.
+
+| | claims a species on unseen species (always wrong) | genus (correct) | family (correct) | unknown | known photos: species answered (precision) | AUROC, entropy |
+|---|---|---|---|---|---|---|
+| **P5** | **13.7 %** | 8.6 % (87 %) | 26.2 % (98 %) | 51.5 % | 80.6 % (99.1 %) | 0.915 |
+| B8 | 20.9 % | 0.9 % (79 %) | 2.0 % (100 %) | 76.3 % | 91.9 % (97.6 %) | 0.917 |
+| B3rep5x | 25.2 % | 0 % | 30.4 % (93 %) | 44.4 % | 88.6 % (97.7 %) | 0.908 |
+
+Three readings. (1) The entropy AUROC barely separates the models (0.908-0.917), yet the *policy*
+outcome does: P5 commits to a wrong species half as often as B3rep5x. As in O1, the ranking metric and
+the deployment metric disagree, and the deployment one is the one a user meets. (2) The genus rung is
+almost unused by B8 and B3rep5x, for different reasons. B3rep5x's genus threshold never reaches
+95 % conditional precision on trap data, so it is disabled (> 1). B8's is 0.945, but when its species
+confidence fails, its genus confidence rarely clears that bar either. P5 is the only model that often
+says "*Colias*, species unsure". (3) These
+thresholds were fitted on trap images and are conservative on photos (97.6-99.1 % precision against a
+95 % target). A photo-domain fit would answer more, which is a cheap improvement for the app.

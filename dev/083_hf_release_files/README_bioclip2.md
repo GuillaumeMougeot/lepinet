@@ -1,6 +1,6 @@
 ---
 license: cc-by-nc-4.0
-library_name: onnx
+library_name: transformers
 pipeline_tag: image-classification
 base_model: imageomics/bioclip-2
 tags:
@@ -15,6 +15,8 @@ tags:
   - gbif
   - camera-trap
   - onnx
+  - transformers
+  - custom_code
 ---
 
 # lepinet · BioCLIP-2 ViT-L/14: moth and butterfly identification
@@ -38,6 +40,7 @@ alternative. That study fitted thresholds in-sample; the stricter fit shipped he
 | **Output** | species, genus and family probabilities, raw logits, a 1024-d embedding |
 | **Format** | ONNX in three precisions: fp32 (1.3 GB), **int8 for CPUs** (331 MB), **fp16 for GPUs** (680 MB); see [Which file to use](#which-file-to-use). Runs with `onnxruntime` alone: no PyTorch, no lepinet |
 | **Licence** | CC-BY-NC-4.0 (non-commercial; see [Licence](#licence)) |
+| **Other sizes** | [`lepinet-effnetv2s`](https://huggingface.co/gmougeot/lepinet-effnetv2s) (37 M, fast on CPU) · [`lepinet-dinov3-convnextl`](https://huggingface.co/gmougeot/lepinet-dinov3-convnextl) (217 M) · [`lepinet-bioclip2-vitl14`](https://huggingface.co/gmougeot/lepinet-bioclip2-vitl14) (321 M, recommended); all in [one collection](https://huggingface.co/collections/gmougeot/lepinet-lepidoptera-identification-6abbc33d250430f8c67db428) |
 
 ## Quick start
 
@@ -76,6 +79,48 @@ python lepinet/predict.py moth1.jpg moth2.jpg --top 3 --model-file model_int8.on
 ```
 
 Batching works: the input's first axis is dynamic.
+
+### With transformers (PyTorch)
+
+If you already work in PyTorch, the same weights load through transformers in three lines. The
+model code ships in this repo, hence `trust_remote_code=True`: read `modeling_lepinet.py` first if
+your environment requires it (about 200 lines, torch only).
+
+```bash
+pip install transformers torch torchvision pillow
+```
+
+```python
+from transformers import pipeline
+
+clf = pipeline("image-classification", model="gmougeot/lepinet-bioclip2-vitl14", trust_remote_code=True)
+clf("moth.jpg", top_k=3)   # [{'label': 'Macaria notata', 'score': 0.99...}, ...]
+```
+
+The pipeline gives species only. For all three ranks at once, plus the embedding, call the model:
+
+```python
+from PIL import Image
+from transformers import AutoImageProcessor, AutoModelForImageClassification
+
+repo = "gmougeot/lepinet-bioclip2-vitl14"
+processor = AutoImageProcessor.from_pretrained(repo)
+model = AutoModelForImageClassification.from_pretrained(repo, trust_remote_code=True).eval()
+inputs = processor(Image.open("moth.jpg"), return_tensors="pt")
+model.predict(inputs["pixel_values"], top_k=3)       # backed-off answer, novelty, top-k per rank
+out = model(**inputs)                                # .prob_species .prob_genus .prob_family .embedding
+```
+
+transformers warns when it downloads the code file. For a reproducible setup, pin a commit: pass
+`revision="<commit hash>"` (listed under *Files and versions*) to `pipeline`, `from_pretrained` and
+the processor.
+
+This is the same network as `model.onnx`: on identical inputs the two agree on every image tested
+(largest logit difference 3e-4). Through the pipeline's own image preprocessing, 99.6 % of 1,000
+trap images get the same species as the ONNX quick start; the rest are tiny crops, where resize
+implementations differ. It is
+also the starting point for fine-tuning: `out.loss` is the species cross-entropy when you pass
+`labels=`. It uses the full-precision `model.safetensors`, the file lepinet itself loads.
 
 ## Which file to use
 
@@ -127,7 +172,8 @@ TensorRT installed onnxruntime then falls back to the CPU without saying so. Rem
 | `thresholds.json` | per-rank confidence thresholds for a 95 %-precision back-off policy, with the precision and coverage they achieve on held-out data |
 | `config.json` | preprocessing and output description (it doubles as a [lepinet-app](https://github.com/GuillaumeMougeot/lepinet-app) bundle manifest) |
 | `predict.py` | a standalone CLI and `Lepinet` class (onnxruntime + Pillow only) |
-| `model.safetensors` | full-precision PyTorch weights, for fine-tuning with lepinet |
+| `model.safetensors` | full-precision PyTorch weights, for transformers and for fine-tuning with lepinet |
+| `modeling_lepinet.py`, `configuration_lepinet.py`, `preprocessor_config.json` | the transformers integration (`config.json` serves both it and the ONNX files) |
 
 ### Outputs
 
@@ -154,13 +200,43 @@ else family     if prob_family.max()  >= t_family
 else "unknown"
 ```
 
+In code, continuing the quick start above (`out`, `names` and `repo` come from there):
+
+```python
+thresholds = {k: v["threshold"] for k, v in json.load(open(f"{repo}/thresholds.json"))["levels"].items()}
+
+def answer(out, i=0):
+    """Deepest rank the model is confident about for image i, or None ("unknown")."""
+    for rank in ("species", "genus", "family"):
+        p = out[f"prob_{rank}"][i]
+        if p.max() >= thresholds[rank]:          # a threshold above 1 means "never answer at this rank"
+            return rank, names[rank][p.argmax()], float(p.max())
+    return None
+
+print(answer(out))    # ('species', 'Macaria notata', 0.99), ('family', 'Erebidae', 0.97) or None
+
+p = out["prob_species"][0]
+novelty = float(-(p * np.log(p + 1e-12)).sum())   # entropy: higher = less familiar image
+```
+
+`predict.py` does exactly this; with transformers, `model.predict()` returns the same `answer` plus `novelty`.
+
 The thresholds were fitted on half of the light-trap capture nights and verified on the other half:
 
 {{THRESHOLDS_TABLE}}
 
-A low maximum species probability, or high entropy of `prob_species`, is also the best novelty
-signal this model has. Ranking known against unseen species by entropy gives **AUROC 0.916** on the
-GBIF test fold.
+### Species the model has never seen
+
+Any closed-set classifier gives a species to a species it does not know. What the back-off buys is
+that it usually does not *commit* to one. Measured with the file above on **3,171 GBIF photos of 591
+species outside the label set** (the test-fold species below the training floor):
+
+{{NOVEL_BLOCK}}
+
+"Unknown" is not proof of a novel species, and a species answer is not proof that the species is in
+the label set: the same rule catches hard photos of known species. Use `novelty` for a graded
+score, for instance to send the most unfamiliar images to an expert.
+
 
 ## Evaluation
 

@@ -2,7 +2,7 @@
 
     python dev/083_hf_release_files/fill_card.py README_bioclip2.md <release_dir> key=value ...
 
-Numbers are copied mechanically from thresholds.json / eval_*.json so the card cannot drift from
+``KEY=@file`` reads the value from a file. Numbers are copied mechanically from thresholds.json / eval_*.json so the card cannot drift from
 what was measured. Extra key=value pairs fill anything else.
 """
 import json
@@ -45,6 +45,8 @@ def main():
     if thr.exists():
         s = s.replace("{{THRESHOLDS_TABLE}}", thresholds_table(json.loads(thr.read_text())))
     for k, v in extra.items():
+        if v.startswith("@"):  # KEY=@file: multi-line values (tables) come from a file
+            v = Path(v[1:]).read_text()
         s = s.replace("{{" + k + "}}", v.replace("\\n", "\n"))
     left = sorted(set(re.findall(r"\{\{[A-Z0-9_]+\}\}", s)))
     if left:

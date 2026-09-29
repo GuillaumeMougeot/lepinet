@@ -36,6 +36,7 @@ import torch.nn.functional as F
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 LEVEL_COLS = ["speciesKey", "genusKey", "familyKey"]
+DEV050 = next(p.stem for p in Path(__file__).resolve().parent.glob("050_*.py"))
 LEVELS = ["species", "genus", "family"]
 
 
@@ -53,7 +54,8 @@ def ort_session(path, provider: str = "cpu", threads: int | None = None):
         so.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_EXTENDED  # EXTENDED slows them
     if provider == "cuda":
         ort.preload_dlls()
-        providers = ["CUDAExecutionProvider", "CPUExecutionProvider"]
+        # TF32 off: evaluation numbers must be the fp32 model's, not TF32's (logit diffs ~6e-3 on).
+        providers = [("CUDAExecutionProvider", {"use_tf32": 0}), "CPUExecutionProvider"]
     else:
         providers = ["CPUExecutionProvider"]
     return ort.InferenceSession(str(path), so, providers=providers)
@@ -67,6 +69,9 @@ def load(ckpt_path: str, img_size: int):
     ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=False)
     if ckpt["model_arch_name"] == "bioclip2":
         importlib.import_module("075_pretrained_trunk").install()
+    from lepinet.heads import HEAD_REGISTRY
+    if ckpt["head"] not in HEAD_REGISTRY:  # marginal / marginal_arcface / hierarchical live in dev/050
+        importlib.import_module(DEV050)
     from lepinet.test import load_model
     model, meta = load_model(ckpt, img_size=img_size)
     return ckpt, model.eval(), meta
@@ -99,9 +104,14 @@ def build_full_taxonomy(species_vocab: list[str], parquet: str) -> dict:
     }
 
 
-def taxonomy_for(ckpt: dict, meta: dict, parquet: str) -> dict:
-    """Multi-level checkpoints: keep their own coarse vocab order (their coarse logits index it)."""
-    if len(meta["levels"]) == 3:
+def taxonomy_for(ckpt: dict, meta: dict, parquet: str, species_only: bool = False) -> dict:
+    """Multi-level checkpoints: keep their own coarse vocab order (their coarse logits index it).
+
+    ``species_only`` publishes only the species logits and rebuilds the tree from the data, in the
+    shared order -- right for a head whose coarse outputs are themselves species marginals (B8's
+    ``marginal_arcface``), which then carry no information the graph's own sums do not.
+    """
+    if len(meta["levels"]) == 3 and not species_only:
         from lepinet.export import build_taxonomy
         tax = build_taxonomy(ckpt, meta, level_names=LEVELS)
         tax.pop("note", None)
@@ -204,12 +214,12 @@ def cmd_export(a):
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     ckpt, model, meta = load(a.ckpt, a.img_size)
-    tax = taxonomy_for(ckpt, meta, a.parquet)
+    tax = taxonomy_for(ckpt, meta, a.parquet, a.species_only)
     (out / "taxonomy.json").write_text(json.dumps(tax))
     from lepinet.calibrate import build_names
     build_names(a.parquet, out / "taxonomy.json", out / "names.json")
 
-    n_heads = len(meta["levels"])
+    n_heads = 1 if a.species_only else len(meta["levels"])
     names = output_names(n_heads)
     x = torch.rand(2, 3, a.img_size, a.img_size)
     # nn.MultiheadAttention's eval fast path emits aten::_native_multi_head_attention, which has no
@@ -310,6 +320,7 @@ def cmd_eval(a):
                                                   else df["speciesKey"].astype(str) + "/" + df["filename"])]
     rows = {f"{p}_{lv}": [] for lv in LEVELS for p in ("pred", "conf")}
     rows.update({f"head_{p}_{lv}": [] for lv in LEVELS for p in ("pred", "conf")})
+    rows["entropy_species"] = []  # the novelty score the cards document
     with ThreadPoolExecutor(8) as pool:
         for i in range(0, len(paths), a.batch):
             batch = np.stack(list(pool.map(lambda p: preprocess(p, size, a.resize), paths[i:i + a.batch])))
@@ -318,6 +329,8 @@ def cmd_eval(a):
                 p = res[f"prob_{lv}"]
                 rows[f"pred_{lv}"] += p.argmax(1).tolist()
                 rows[f"conf_{lv}"] += p.max(1).tolist()
+                if lv == "species":
+                    rows["entropy_species"] += (-(p * np.log(np.clip(p, 1e-12, None))).sum(1)).tolist()
                 if f"logits_{lv}" in res:
                     q = torch.softmax(torch.from_numpy(res[f"logits_{lv}"]), 1).numpy()
                     rows[f"head_pred_{lv}"] += q.argmax(1).tolist()
@@ -363,7 +376,6 @@ def cmd_calibrate(a):
     """
     from concurrent.futures import ThreadPoolExecutor
 
-    import onnxruntime as ort
     import pandas as pd
     out = Path(a.out)
     cfg = json.loads((out / "config.json").read_text())
@@ -375,9 +387,7 @@ def cmd_calibrate(a):
     df = df[df["set"].astype(str) == a.set].dropna()
     df["speciesKey"] = df["speciesKey"].astype("int64").astype(str)
     df = df[df["speciesKey"].isin(sp_idx)].sample(a.n, random_state=0)
-    so = ort.SessionOptions()
-    so.intra_op_num_threads = a.threads
-    sess = ort.InferenceSession(str(out / "model.onnx"), so, providers=["CPUExecutionProvider"])
+    sess = ort_session(out / "model.onnx", a.provider, a.threads)
     paths = [str(Path(a.img_dir) / k / f) for k, f in zip(df["speciesKey"], df["filename"])]
     y = df["speciesKey"].map(sp_idx).to_numpy()
     chunks = []
@@ -520,7 +530,8 @@ def cmd_quantize(a):
     """model.onnx -> model_int8.onnx, the CPU file. One recipe per architecture, because what makes
     int8 fast and what breaks it differ (measured, journal 2026-09-29, follow-up):
 
-    ``vit``: dynamic int8 (per-channel weights, activations quantized on the fly) for every matmul
+    ``vit`` (also B8's ConvNeXt, whose MLPs are matmuls; B8: 1.46x per image, 3.5x smaller, within
+        0.35 pt): dynamic int8 (per-channel weights, activations quantized on the fly) for every matmul
         except the classifier and the 24 MLP output projections (``c_proj``). ``c_proj`` reads the
         post-GELU activations, whose outliers per-tensor int8 cannot represent; it gets 8-bit
         *weight-only* quantization (MatMulNBits: float activations) instead. P5: 1.44x faster at batch
@@ -545,7 +556,8 @@ def cmd_quantize(a):
     try:
         if a.arch == "vit":
             from onnxruntime.quantization.matmul_nbits_quantizer import MatMulNBitsQuantizer
-            cproj = [n for n in names if "c_proj" in n]
+            # the MLP output projections: open_clip ViT `c_proj`, timm ConvNeXt `mlp/fc2`
+            cproj = [n for n in names if "c_proj" in n or "/mlp/fc2" in n]
             quantize_dynamic(str(mm), str(dst), weight_type=QuantType.QInt8, per_channel=True,
                              op_types_to_quantize=["MatMul"], nodes_to_exclude=head + cproj)
             q = MatMulNBitsQuantizer(onnx.load(str(dst)), bits=8, block_size=128, is_symmetric=True,
@@ -582,6 +594,82 @@ def cmd_quantize(a):
     print(f"model_int8.onnx {dst.stat().st_size / 1e6:.0f} MB -- score it with `eval --model model_int8.onnx`")
 
 
+def cmd_transformers(a):
+    """Make a ViT release loadable with transformers (``trust_remote_code=True``), in place.
+
+    The repo keeps ONE ``model.safetensors``: ``modeling_lepinet.py`` mirrors the lepinet parameter
+    names, so the same file serves lepinet, transformers and (via the ONNX export) everyone else.
+    ``config.json`` gains the transformers keys and keeps every ONNX / app key it already had.
+    """
+    import shutil
+
+    from safetensors.torch import load_file, save_file
+    out = Path(a.out)
+    src = Path(__file__).resolve().parent / "083_hf_release_files" / "transformers"
+    for f in ("configuration_lepinet.py", "modeling_lepinet.py"):
+        shutil.copy(src / f, out / f)
+    cfg = json.loads((out / "config.json").read_text())
+    tax = json.loads((out / "taxonomy.json").read_text())
+    names = json.loads((out / "names.json").read_text())["names"]
+    sp = [n or k for n, k in zip(names["species"], tax["vocabs"]["species"])]
+    cfg.update({
+        "model_type": "lepinet",
+        "architectures": ["LepinetForImageClassification"],
+        "auto_map": {"AutoConfig": "configuration_lepinet.LepinetConfig",
+                     "AutoModelForImageClassification": "modeling_lepinet.LepinetForImageClassification"},
+        "image_size": cfg["image_size"], "patch_size": 14, "width": 1024, "layers": 24, "heads": 16,
+        "mlp_ratio": 4.0, "head_hidden": 1024,
+        "n_classes": [len(tax["vocabs"][lv]) for lv in LEVELS],
+        "temperature": cfg.get("species_temperature", 1.0),
+        "species_to_genus": tax["parents"]["species_to_genus"],
+        "genus_to_family": tax["parents"]["genus_to_family"],
+        "species_keys": tax["vocabs"]["species"],
+        "genus_labels": [n or k for n, k in zip(names["genus"], tax["vocabs"]["genus"])],
+        "genus_keys": tax["vocabs"]["genus"],
+        "family_labels": [n or k for n, k in zip(names["family"], tax["vocabs"]["family"])],
+        "family_keys": tax["vocabs"]["family"],
+        "id2label": {str(i): n for i, n in enumerate(sp)},
+        "label2id": {n: i for i, n in enumerate(sp)},
+        "torch_dtype": "float32",
+        # the 95 %-precision back-off thresholds; `predict()` applies them (> 1 means "never")
+        "thresholds": {lv: v["threshold"] for lv, v in
+                       json.loads((out / "thresholds.json").read_text())["levels"].items()},
+    })
+    (out / "config.json").write_text(json.dumps(cfg, indent=1))
+    (out / "preprocessor_config.json").write_text(json.dumps({
+        "image_processor_type": "CLIPImageProcessor",
+        "do_resize": True, "size": {"shortest_edge": cfg["image_size"]}, "resample": 3,
+        "do_center_crop": True, "crop_size": {"height": cfg["image_size"], "width": cfg["image_size"]},
+        "do_rescale": True, "rescale_factor": 1 / 255, "do_normalize": True,
+        "image_mean": [0.48145466, 0.4578275, 0.40821073],
+        "image_std": [0.26862954, 0.26130258, 0.27577711],
+        "do_convert_rgb": True}, indent=1))
+    st = out / "model.safetensors"
+    from safetensors import safe_open
+    with safe_open(str(st), "pt") as f:
+        meta = f.metadata() or {}
+    if meta.get("format") != "pt":  # transformers refuses a safetensors file without it
+        save_file(load_file(str(st)), str(st), metadata={**meta, "format": "pt"})
+    print("transformers files written:", sorted(p.name for p in out.iterdir() if p.suffix in (".py", ".json")))
+
+
+def cmd_novelty(a):
+    """AUROC of species entropy for "is this image of a species outside the label set?".
+
+    Known = an eval parquet of in-vocabulary images; novel = one of out-of-vocabulary images (the
+    test-fold species below the training floor), both produced by `eval` with the published file.
+    """
+    import pandas as pd
+    from sklearn.metrics import roc_auc_score
+    out = Path(a.out)
+    k = pd.read_parquet(out / f"eval_{a.known}.parquet")["entropy_species"].to_numpy()
+    n = pd.read_parquet(out / f"eval_{a.novel}.parquet")["entropy_species"].to_numpy()
+    auc = roc_auc_score(np.r_[np.zeros(len(k)), np.ones(len(n))], np.r_[k, n])
+    res = {"auroc_entropy": float(auc), "n_known": len(k), "n_novel": len(n), "known": a.known, "novel": a.novel}
+    (out / f"novelty_{a.novel}.json").write_text(json.dumps(res, indent=2))
+    print(json.dumps(res))
+
+
 def cmd_upload(a):
     from huggingface_hub import HfApi
     api = HfApi()
@@ -602,6 +690,8 @@ def main():
     e.add_argument("--name", required=True)
     e.add_argument("--arch-desc", required=True)
     e.add_argument("--no-fp16", action="store_true")
+    e.add_argument("--species-only", action="store_true",
+                   help="publish species logits only; genus/family come from the shared taxonomy")
     e.add_argument("--temperature", type=float, default=1.0,
                    help="divide the species logits by this inside the graph (from `calibrate`)")
     c = sub.add_parser("calibrate")
@@ -611,6 +701,7 @@ def main():
     c.add_argument("--n", type=int, default=10000)
     c.add_argument("--set", default="1")
     c.add_argument("--threads", type=int, default=24)
+    c.add_argument("--provider", default="cpu", choices=["cpu", "cuda"])
     v = sub.add_parser("eval")
     v.add_argument("--out", required=True)
     v.add_argument("--parquet", required=True)
@@ -620,6 +711,12 @@ def main():
     v.add_argument("--test-set", default=None)
     v.add_argument("--resize", default="bicubic", choices=["bicubic", "bilinear", "fastai"])
     v.add_argument("--provider", default="cpu", choices=["cpu", "cuda"])
+    nv = sub.add_parser("novelty")
+    nv.add_argument("--out", required=True)
+    nv.add_argument("--known", required=True)
+    nv.add_argument("--novel", required=True)
+    tr = sub.add_parser("transformers")
+    tr.add_argument("--out", required=True)
     q = sub.add_parser("quantize")
     q.add_argument("--out", required=True)
     q.add_argument("--arch", required=True, choices=["vit", "cnn"])
@@ -637,7 +734,7 @@ def main():
     u.add_argument("--repo", required=True)
     u.add_argument("--message", default="lepinet release")
     a = p.parse_args()
-    {"export": cmd_export, "quantize": cmd_quantize, "calibrate": cmd_calibrate, "eval": cmd_eval, "thresholds": cmd_thresholds, "upload": cmd_upload}[a.cmd](a)
+    {"novelty": cmd_novelty, "export": cmd_export, "quantize": cmd_quantize, "transformers": cmd_transformers, "calibrate": cmd_calibrate, "eval": cmd_eval, "thresholds": cmd_thresholds, "upload": cmd_upload}[a.cmd](a)
 
 
 if __name__ == "__main__":
