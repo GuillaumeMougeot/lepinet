@@ -34,6 +34,19 @@ def preprocess(path: str, size: int) -> np.ndarray:
     return np.asarray(img, dtype=np.float32).transpose(2, 0, 1) / 255.0
 
 
+def providers() -> list[str]:
+    """CUDA (or CoreML) when available, else CPU.
+
+    Not ``ort.get_available_providers()``: with onnxruntime-gpu that lists TensorRT first, which fails
+    without TensorRT installed, and the fallback ends on CPU because the pip-installed CUDA/cuDNN
+    libraries are only loaded by ``preload_dlls()``.
+    """
+    if hasattr(ort, "preload_dlls"):
+        ort.preload_dlls()
+    return [p for p in ("CUDAExecutionProvider", "CoreMLExecutionProvider", "CPUExecutionProvider")
+            if p in ort.get_available_providers()]
+
+
 class Lepinet:
     def __init__(self, folder: str | Path, model_file: str = "model.onnx"):
         folder = Path(folder)
@@ -43,8 +56,16 @@ class Lepinet:
         thr = folder / "thresholds.json"
         self.thresholds = ({lv: v["threshold"] for lv, v in json.loads(thr.read_text())["levels"].items()}
                            if thr.exists() else {lv: 0.0 for lv in LEVELS})
-        self.session = ort.InferenceSession(str(folder / model_file),
-                                            providers=ort.get_available_providers())
+        version = tuple(int(x) for x in ort.__version__.split(".")[:2])
+        if "int8" in model_file and version < (1, 22):
+            raise SystemExit(f"{model_file} needs onnxruntime >= 1.22 (you have {ort.__version__}): "
+                             "pip install -U onnxruntime, or use model.onnx")
+        so = ort.SessionOptions()
+        chosen = providers()
+        if "fp16" in model_file and chosen == ["CPUExecutionProvider"]:
+            # onnxruntime's x86 NCHWc layout pass segfaults on the fp16 ViT graph; skip layout passes.
+            so.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_EXTENDED
+        self.session = ort.InferenceSession(str(folder / model_file), so, providers=chosen)
         self.outputs = [o.name for o in self.session.get_outputs()]
 
     def __call__(self, paths: list[str], top: int = 1) -> list[dict]:

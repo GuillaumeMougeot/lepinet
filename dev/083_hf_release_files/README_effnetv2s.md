@@ -73,9 +73,38 @@ hf download gmougeot/lepinet-effnetv2s model.onnx predict.py config.json taxonom
 python lepinet/predict.py moth1.jpg moth2.jpg --top 3
 ```
 
-For the half-size file, download `model_fp16.onnx` and pass `--model-file model_fp16.onnx`. Its
-backbone is fp16 and its classifier fp32. On the 15,200-image probe set it agrees with fp32 on
-{{FP16_AGREE}} of species predictions.
+### Which file to use
+
+| file | use it on | size | batch of 32 | one image |
+|---|---|---|---|---|
+| `model.onnx` (fp32) | **CPU**, and anywhere | 149 MB | CPU 174 img/s (4 threads: 61) · GPU 2,780 img/s | CPU 10 ms (4 threads: 18) · GPU 3.3 ms |
+| `model_fp16.onnx` | **NVIDIA GPU** | 109 MB | GPU **3,430 img/s** · CPU 107 img/s (slower than fp32) | GPU 3.8 ms |
+
+Measured with onnxruntime 1.30 on an RTX 5090 and a 24-core Intel Core Ultra 9 285K (a shared server
+under some background load, so read the ratios rather than the absolute CPU numbers). fp16 keeps the
+classifier in fp32 and agrees with fp32 on {{FP16_AGREE}} of species predictions on the probe set; on
+the GPU, predictions match the CPU on every image tested.
+
+**Why there is no int8 file.** Plain dynamic int8 made this network 4× *slower*, because
+onnxruntime has no fast kernel for its int8 convolutions. Calibrated static int8 does run 2.2×
+faster (374 img/s), but it lost 0.6–1.2 points of species macro-F1 on light-trap images in every
+variant tried: different calibration data, keeping the depthwise convolutions in fp32. At 10 ms per
+image on a CPU, that trade is not worth it. The large model, for which it is, has an int8 file.
+
+### Running on a GPU
+
+```bash
+pip install "onnxruntime-gpu[cuda,cudnn]"   # instead of onnxruntime; do not install both
+```
+
+```python
+ort.preload_dlls()   # loads the CUDA/cuDNN libraries that pip installed
+session = ort.InferenceSession(f"{repo}/model.onnx", providers=["CUDAExecutionProvider", "CPUExecutionProvider"])
+```
+
+Name the providers explicitly. `ort.get_available_providers()` puts TensorRT first, and without
+TensorRT installed onnxruntime then falls back to the CPU without saying so. `predict.py` picks CUDA
+automatically.
 
 The two lepinet releases share **identical** `taxonomy.json` and `names.json` files, so they are
 drop-in interchangeable.

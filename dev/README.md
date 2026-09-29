@@ -60,7 +60,7 @@ torchvision callable or a timm string, and `032`/`040` reconstruct either transp
 
 | script | what it is |
 |---|---|
-| **083**`_hf_release.py` | Checkpoint → a public Hugging Face repo: ONNX with normalisation, marginalisation and (optionally) a species temperature inside the graph, safetensors, shared `taxonomy.json`/`names.json`; `calibrate` fits the temperature on the validation fold, `eval` scores the *published* file with the *card's* preprocessing, `thresholds` fits the 95 %-precision back-off on half the trap nights and verifies on the other half. Card templates, `predict.py` and `fill_card.py` in `083_hf_release_files/`. [[2026-09-29-public-hf-release]] |
+| **083**`_hf_release.py` | Checkpoint → a public Hugging Face repo: ONNX with normalisation, marginalisation and (optionally) a species temperature inside the graph, safetensors, shared `taxonomy.json`/`names.json`; `quantize --arch vit|cnn` builds the CPU int8 file (per-architecture recipe; works around an onnxruntime quantizer bug that mis-transposes square Gemms), `calibrate` fits the temperature on the validation fold, `eval` scores the *published* file with the *card's* preprocessing, `thresholds` fits the 95 %-precision back-off on half the trap nights and verifies on the other half. Card templates, `predict.py` and `fill_card.py` in `083_hf_release_files/`. [[2026-09-29-public-hf-release]] |
 
 ## Experiments & probes (frozen after measuring)
 

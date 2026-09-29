@@ -36,7 +36,7 @@ alternative. That study fitted thresholds in-sample; the stricter fit shipped he
 | **Architecture** | [BioCLIP-2](https://huggingface.co/imageomics/bioclip-2) ViT-L/14 image tower (303 M params), fine-tuned end to end, plus a 1024-d cosine classifier; 321 M in total |
 | **Input** | one RGB image of **one** insect, 224×224 |
 | **Output** | species, genus and family probabilities, raw logits, a 1024-d embedding |
-| **Format** | ONNX (fp32, 1.3 GB). Runs with `onnxruntime` alone: no PyTorch, no lepinet |
+| **Format** | ONNX in three precisions: fp32 (1.3 GB), **int8 for CPUs** (331 MB), **fp16 for GPUs** (680 MB); see [Which file to use](#which-file-to-use). Runs with `onnxruntime` alone: no PyTorch, no lepinet |
 | **Licence** | CC-BY-NC-4.0 (non-commercial; see [Licence](#licence)) |
 
 ## Quick start
@@ -70,19 +70,58 @@ for rank in ("species", "genus", "family"):
 Or use the bundled command-line script, which applies the confidence thresholds for you:
 
 ```bash
-hf download gmougeot/lepinet-bioclip2-vitl14 model.onnx predict.py config.json taxonomy.json names.json thresholds.json --local-dir lepinet
-python lepinet/predict.py moth1.jpg moth2.jpg --top 3
+hf download gmougeot/lepinet-bioclip2-vitl14 model_int8.onnx predict.py config.json taxonomy.json names.json thresholds.json --local-dir lepinet
+python lepinet/predict.py moth1.jpg moth2.jpg --top 3 --model-file model_int8.onnx
 #   -> species: Macaria notata (0.99)  https://www.gbif.org/species/5880550
 ```
 
-Batching works: the input's first axis is dynamic. On a GPU, install `onnxruntime-gpu`; the session
-picks CUDA automatically.
+Batching works: the input's first axis is dynamic.
+
+## Which file to use
+
+| file | use it on | size | batch of 32 | one image | same prediction as fp32 (probe) |
+|---|---|---|---|---|---|
+| `model.onnx` (fp32) | anything; the reference | 1.29 GB | CPU {{P5_CPU32_B32}} · GPU {{P5_GPU32_B32}} img/s | CPU {{P5_CPU32_B1}} ms · GPU {{P5_GPU32_B1}} ms | – |
+| `model_int8.onnx` | **CPU** (laptop, server, no GPU) | 331 MB | CPU **{{P5_CPU8_B32}}** img/s | CPU **{{P5_CPU8_B1}}** ms | 98.6 % |
+| `model_fp16.onnx` | **NVIDIA GPU** | 680 MB | GPU **{{P5_GPU16_B32}}** img/s | GPU {{P5_GPU16_B1}} ms | 99.8 % |
+
+Measured with onnxruntime 1.30 on an RTX 5090 and on a 24-core Intel Core Ultra 9 285K (a shared
+server under some background load, so read the ratios rather than the absolute CPU numbers); a 4-thread
+CPU run (closer to a laptop) gives {{P5_CPU4}}. The accuracy of each file is in
+[Evaluation](#evaluation): fp16 matches fp32, and int8 is within 0.1 pt on two sets and 0.7 pt on the
+third.
+
+- **int8 needs onnxruntime ≥ 1.22.** Most of it is standard int8 matmuls. The 24 MLP output
+  projections use 8-bit *weight-only* quantization instead, because their inputs carry outlier
+  values that plain int8 cannot represent (it cost 1.6 pt on trap images).
+- **int8 does not help on a GPU**: its integer ops fall back to the CPU. Use fp16 there.
+- **fp16 is for GPUs only.** On a CPU it is not faster, and onnxruntime 1.27–1.30 **crashes**
+  (segmentation fault) when creating a default CPU session for it: a bug in its x86 NCHWc layout
+  optimisation. If you must run it on a CPU, set
+  `so.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_EXTENDED`. `predict.py` does
+  this for you.
+
+### On a GPU
+
+```bash
+pip install "onnxruntime-gpu[cuda,cudnn]"   # instead of onnxruntime; do not install both
+```
+
+```python
+ort.preload_dlls()   # loads the CUDA/cuDNN libraries that pip installed
+session = ort.InferenceSession(f"{repo}/model_fp16.onnx", providers=["CUDAExecutionProvider", "CPUExecutionProvider"])
+```
+
+Name the providers explicitly. `ort.get_available_providers()` puts TensorRT first, and without
+TensorRT installed onnxruntime then falls back to the CPU without saying so. Remember to add
+`model_fp16.onnx` to `allow_patterns` when downloading. `predict.py` picks CUDA automatically:
+`python predict.py *.jpg --model-file model_fp16.onnx`.
 
 ## Files
 
 | file | what it is |
 |---|---|
-| `model.onnx` | the network. Input `image`: float32 `[N, 3, 224, 224]`, RGB, values in [0, 1]. **Normalisation is inside the graph** (do not normalise yourself) |
+| `model.onnx`, `model_int8.onnx`, `model_fp16.onnx` | the network, in three precisions (see [Which file to use](#which-file-to-use)). Input `image`: float32 `[N, 3, 224, 224]`, RGB, values in [0, 1], for all three. **Normalisation is inside the graph** (do not normalise yourself) |
 | `taxonomy.json` | `vocabs.<rank>[i]` is the [GBIF](https://www.gbif.org) taxon key of output index `i`; `parents` maps species to genus and genus to family |
 | `names.json` | scientific names, aligned index for index with `taxonomy.json` |
 | `thresholds.json` | per-rank confidence thresholds for a 95 %-precision back-off policy, with the precision and coverage they achieve on held-out data |
@@ -139,18 +178,18 @@ Three evaluation sets:
 - **Probe, held-out species:** 2,455 images of 58 species for which no trap images were used in any
   form during training.
 
-| evaluation | species macro-F1, training pipeline | species macro-F1, **this ONNX file** + the quick-start preprocessing |
-|---|---|---|
-| GBIF test fold, clean subset | 0.9113 | not re-run |
-| GBIF test fold, random 10,000 images | not measured | {{GBIF_ONNX}} |
-| Probe (light traps) | 0.7810 (a repeat training run: 0.7703) | 0.7723 |
-| Probe, held-out species | 0.7806 | 0.7897 |
+| evaluation | training pipeline | **`model.onnx`** + quick-start preprocessing | `model_int8.onnx` | `model_fp16.onnx` |
+|---|---|---|---|---|
+| GBIF test fold, clean subset | 0.9113 | not re-run | | |
+| GBIF test fold, random 10,000 images | not measured | {{GBIF_ONNX}} | 0.9237 | 0.9246 |
+| Probe (light traps) | 0.7810 (a repeat training run: 0.7703) | 0.7723 | 0.7716 | 0.7723 |
+| Probe, held-out species | 0.7806 | 0.7897 | 0.7830 | 0.7897 |
 
-Genus and family macro-F1 on probe, from the summed probabilities: **0.826** and **0.842**. At family
-level the sum beats the model's own family head (0.818), which is why `prob_family` is the
-recommended output.
+All numbers are species macro-F1. Genus and family macro-F1 on probe, from the summed
+probabilities: **0.826** and **0.842**. At family level the sum beats the model's own family head
+(0.818), which is why `prob_family` is the recommended output.
 
-The two columns differ by under 1 point, which is within the run-to-run noise of these evaluation
+The training-pipeline and `model.onnx` columns differ by under 1 point, which is within the run-to-run noise of these evaluation
 sets. The network is numerically identical to the PyTorch model (max |Δ| ≈ 3e-5); the difference is
 image resizing. Trap crops are small (median shorter side 157 px), so they are *up*-sampled, and
 up-sampling with a different kernel changes 3–6 % of individual predictions. **For small crops,

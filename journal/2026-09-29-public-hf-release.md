@@ -132,3 +132,89 @@ of precision**, which is the honest error bar on any threshold fitted to 7,400 t
 in-sample would hide it. B3rep5x edging P5 on useful rate is inside that variance and is **not** a
 ranking; O1's P5-over-B8 claim stands on its own evidence. Shipped thresholds are refitted on all
 nights: P5 0.99 / 0.99 / 0.965, B3rep5x 0.93 / never / 0.505.
+
+## Follow-up (same day): int8 for CPUs, fp16 for GPUs, and two onnxruntime bugs
+
+The owner asked whether other precisions would help users. P5 was the case that mattered: on CPU it
+ran at 7.8 img/s (127 ms per image), and it is a 1.3 GB download.
+
+**Measured on 1,000 probe images, then on the full sets below** (ORT 1.30; Core Ultra 9 285K with
+AVX-VNNI; RTX 5090):
+
+| P5 variant | size | CPU img/s | GPU img/s | agreement with fp32 |
+|---|---|---|---|---|
+| fp32 | 1285 MB | 7.8 | 371 | - |
+| **dynamic int8**, per-channel, MatMul only | **327 MB** | **14.9** | 20 (falls back to CPU) | 97.3 % |
+| 8-bit weight-only (MatMulNBits, int8 compute) | 336 MB | 8.8 | 367 | 99.6 % |
+| 4-bit weight-only | 266 MB | 7.5 | - | 96.4 % |
+| **fp16** (PyTorch half export) | **680 MB** | crashes | **680** | 100.0 % |
+| fp16 (converted fp32 graph) | 644 MB | crashes | 559 | 99.9 %, floods buffer-reuse warnings |
+
+(The table is the 1,000-image screen, and at first it read "ship plain dynamic int8". The full sets
+said otherwise, as recorded next.)
+
+**Full sets, species macro-F1 delta vs fp32** (probe / held-out species / GBIF 10k):
+
+| file | delta | agreement | verdict |
+|---|---|---|---|
+| P5 fp16, GPU | 0.00 / 0.00 / -0.01 | 99.8 % | **shipped** (`model_fp16.onnx`) |
+| P5 plain dynamic int8 | **-1.60** / -1.18 / -0.37 | 97.3 % | rejected (bar: 0.5 pt) |
+| P5 hybrid int8: dynamic int8 + 8-bit weight-only `c_proj` | -0.07 / -0.67 / -0.09 | 98.6 % | **shipped** (`model_int8.onnx`) |
+| B3rep5x static QDQ int8, GBIF calibration | -1.01 / +0.09 / -0.02 | 95.5 % | rejected |
+| B3rep5x static QDQ, 3:1 trap:GBIF calibration | -0.58 on probe | 95.7 % | rejected |
+| B3rep5x static QDQ, depthwise convs fp32 | -0.78 / -1.15 on probe (two op sets) | 95.0-96.4 % | rejected -- **B3rep5x ships no int8** |
+
+**Final speeds** (ORT 1.30, shared server with background load, so ratios are the robust part):
+
+| file | CPU 24 thr, batch 32 | CPU 24 thr, 1 image | CPU 4 thr, 1 image | GPU batch 32 | GPU 1 image |
+|---|---|---|---|---|---|
+| P5 fp32 | 7.7 img/s | 125 ms | 307 ms | 371 img/s | 4.5 ms |
+| P5 int8 | 12.3 img/s (1.6x) | 69 ms (1.8x) | 167 ms (1.8x) | - | - |
+| P5 fp16 | - | - | - | 667 img/s (1.8x) | 5.3 ms |
+| B3rep5x fp32 | 174 img/s | 10 ms | 18 ms | 2,780 img/s | 3.3 ms |
+| B3rep5x fp16 | 107 img/s (slower) | 18 ms | 27 ms | 3,432 img/s (1.23x) | 3.8 ms |
+
+So the shipped matrix is fp32 + fp16 for both models and int8 only for P5. The rule behind it:
+**ship a precision where it is faster on the hardware it targets and costs under 0.5 pt**, measured
+per architecture. fp16 is a GPU format for both (on CPU it is slower, or crashes for the ViT). int8
+passed only for the ViT: its compute is matmuls, whose int8 kernels are fast and whose error could be
+confined to one layer type. The CNN's int8 error is spread across its depthwise and
+squeeze-excite structure. `dev/083 quantize --arch vit` reproduces the shipped P5 file byte for byte.
+
+**Where the int8 error lives differs by architecture, and that is why the two models got different
+recipes.** In P5 it is concentrated in the 24 MLP output projections: they read post-GELU
+activations with outliers that per-tensor int8 cannot represent. Keeping only those fp32 raises
+agreement from 97.3 % to 98.9 %. 8-bit weight-only quantization keeps them float at run time and
+the file at 331 MB (1.44x faster at batch 32, 1.65x on one image). So the outlier hypothesis I
+first used to explain the 0 % result was *also* right, just for the wrong bug and at a
+thousandth of the size. For B3rep5x, *dynamic* int8 is simply the wrong tool: ConvInteger has no
+fast kernel and ran 4x slower. *Static* QDQ runs 2.2x faster (374 vs 173 img/s). Its error does not
+come from calibration data: trap-aware calibration moved agreement 95.5 -> 95.7 %. It sits in the
+architecture (depthwise convs, squeeze-excite gates).
+
+**Minimum onnxruntime:** every file loads in ORT 1.20 except P5's int8, which needs **1.22**
+(8-bit MatMulNBits; 1.20-1.21 support only 4-bit). `predict.py` says so instead of crashing.
+
+**Bug 1, the quantizer.** Every dynamic-int8 variant first scored **0 % agreement**, on both models.
+I read that as CLIP's activation outliers crushing per-tensor quantization. **This was a genuine
+mistake**, and a test that took the words literally exposed it. A quantization that touched *only*
+B3rep5x's final classifier MatMul still destroyed the *embedding*, which is computed upstream of it
+(cosine 0.04 with fp32), and so did a no-op quantization. Cause: ORT's quantizer pre-processing
+rewrites `Gemm` as `MatMul + Add` and ignores `transB=1`. All our Gemms are square (1024^2 attention
+out-projections, 1280^2 bottlenecks), so the untransposed weight type-checks and computes garbage
+silently. `dev/083 quantize` does the rewrite itself first (`gemm_to_matmul`), and int8 then agrees
+97 %. Same lesson as CLAUDE.md section 4: suspect the harness before the model.
+
+**Bug 2, fp16 on CPU.** Any fp16 P5 graph segfaults at *default* CPU session creation in ORT 1.27
+and 1.30. Bisected to `NchwcTransformer`, the x86 blocked-layout pass that only runs at
+`ORT_ENABLE_ALL`. It crashes even after the patch-embedding conv is rewritten as reshape + Linear
+(`PatchLinear`, kept in the export anyway), so the trigger is not the Conv itself. Not bisected
+further: fp16 is not faster on CPU, and on CUDA the pass never runs. The file ships as GPU-only,
+with the workaround (`ORT_ENABLE_EXTENDED`) in the card and applied automatically by `predict.py` and
+`dev/083`.
+
+**Found by session lepinet-19 (GPU):** `predict.py` passed `ort.get_available_providers()`, which
+with onnxruntime-gpu puts TensorRT first. Without TensorRT, ORT falls back to *CPU* silently because
+the pip CUDA libraries are only loaded by `ort.preload_dlls()`. Fixed in `predict.py` and in both
+cards. That session also established that ORT's CUDA provider works on this box although
+`nvidia-smi` reports an NVML driver mismatch, which is what made the GPU measurements possible.

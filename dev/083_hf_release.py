@@ -39,6 +39,26 @@ LEVEL_COLS = ["speciesKey", "genusKey", "familyKey"]
 LEVELS = ["species", "genus", "family"]
 
 
+def ort_session(path, provider: str = "cpu", threads: int | None = None):
+    """An onnxruntime session that cannot hit the fp16 NCHWc crash.
+
+    ORT 1.27-1.30's x86 ``NchwcTransformer`` (ORT_ENABLE_ALL only) segfaults at session creation
+    on the fp16 ViT graphs, with or without a Conv in them; EXTENDED skips only layout transforms.
+    """
+    import onnxruntime as ort
+    so = ort.SessionOptions()
+    if threads:
+        so.intra_op_num_threads = threads
+    if "fp16" in Path(path).name and provider != "cuda":  # CUDA sessions are unaffected, and
+        so.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_EXTENDED  # EXTENDED slows them
+    if provider == "cuda":
+        ort.preload_dlls()
+        providers = ["CUDAExecutionProvider", "CPUExecutionProvider"]
+    else:
+        providers = ["CPUExecutionProvider"]
+    return ort.InferenceSession(str(path), so, providers=providers)
+
+
 # ---------------------------------------------------------------------------
 # Model loading
 # ---------------------------------------------------------------------------
@@ -93,6 +113,45 @@ def taxonomy_for(ckpt: dict, meta: dict, parquet: str) -> dict:
 # The release graph
 # ---------------------------------------------------------------------------
 
+class PatchLinear(nn.Module):
+    """A ViT patch embedding (Conv2d with kernel == stride, no padding) as reshape + Linear.
+
+    Mathematically the same map. It exists for onnxruntime: its x86 ``NchwcTransformer`` (enabled
+    only at the default ORT_ENABLE_ALL level) segfaults at session creation on fp16 ViT graphs,
+    in ORT 1.27 and 1.30, whether the graph comes from a half-precision export or from
+    converting the fp32 graph. It rewrites only Conv nodes, so a graph without a Conv avoids it
+    without users having to pass session flags.
+    """
+
+    def __init__(self, conv: nn.Conv2d):
+        super().__init__()
+        k = conv.kernel_size
+        assert k == conv.stride and conv.padding in ((0, 0), 0) and conv.groups == 1, "not a patchify conv"
+        self.k, self.c_out = k, conv.out_channels
+        self.proj = nn.Linear(conv.in_channels * k[0] * k[1], conv.out_channels, bias=conv.bias is not None)
+        with torch.no_grad():
+            self.proj.weight.copy_(conv.weight.reshape(conv.out_channels, -1))
+            if conv.bias is not None:
+                self.proj.bias.copy_(conv.bias)
+
+    def forward(self, x):
+        n, c, h, w = x.shape
+        kh, kw = self.k
+        gh, gw = h // kh, w // kw
+        x = x.reshape(n, c, gh, kh, gw, kw).permute(0, 2, 4, 1, 3, 5).reshape(n, gh * gw, c * kh * kw)
+        return self.proj(x).permute(0, 2, 1).reshape(n, self.c_out, gh, gw)
+
+
+def replace_patchify_conv(body: nn.Module) -> bool:
+    """Swap a ViT's single patch-embedding conv for :class:`PatchLinear`; False if not a ViT."""
+    convs = [(n, m) for n, m in body.named_modules() if isinstance(m, nn.Conv2d)]
+    if len(convs) != 1 or convs[0][1].kernel_size != convs[0][1].stride:
+        return False
+    parent, _, child = convs[0][0].rpartition(".")
+    setattr(body.get_submodule(parent) if parent else body, child, PatchLinear(convs[0][1]))
+    return True
+
+
 class ReleaseWrapper(nn.Module):
     """[0,1] RGB -> raw logits (per trained head) + coherent probabilities + embedding."""
 
@@ -107,6 +166,7 @@ class ReleaseWrapper(nn.Module):
         self.n_heads = n_heads
         self.half_body = half_body
         if half_body:
+            replace_patchify_conv(self.body)
             self.body.half()
         self.register_buffer("mean", torch.tensor(IMAGENET_MEAN).view(1, 3, 1, 1))
         self.register_buffer("std", torch.tensor(IMAGENET_STD).view(1, 3, 1, 1))
@@ -156,9 +216,7 @@ def cmd_export(a):
     # ONNX symbolic; the slow path is numerically identical and exports.
     torch.backends.mha.set_fastpath_enabled(False)
     ref = None
-    # --no-fp16: onnxruntime 1.27 segfaults at session creation (ORT_ENABLE_ALL only; BASIC and
-    # EXTENDED load fine) on the fp16 BioCLIP-2 graph, with or without an fp32 patch-embedding conv.
-    # A file that crashes a default InferenceSession is not publishable, so the ViT ships fp32 only.
+    # fp16 ViTs used to segfault onnxruntime at session creation; see PatchLinear for the fix.
     for precision in ("fp32",) if a.no_fp16 else ("fp32", "fp16"):
         w = ReleaseWrapper(model, tax, n_heads, half_body=(precision == "fp16"),
                            temperature=a.temperature).eval()
@@ -169,8 +227,7 @@ def cmd_export(a):
                               opset_version=17, do_constant_folding=True, dynamo=False)
             if ref is None:
                 ref = [o.numpy() for o in w(x)]
-        import onnxruntime as ort
-        got = ort.InferenceSession(str(path), providers=["CPUExecutionProvider"]).run(None, {"image": x.numpy()})
+        got = ort_session(path).run(None, {"image": x.numpy()})
         for n, r, g in zip(names, ref, got):
             print(f"  {precision} {n:16s} max|d| {np.abs(r - g).max():.2e}  top1 agree "
                   f"{(r.argmax(1) == g.argmax(1)).mean():.0%}")
@@ -237,7 +294,6 @@ def preprocess(path: str, size: int, mode: str = "bicubic") -> np.ndarray:
 def cmd_eval(a):
     from concurrent.futures import ThreadPoolExecutor
 
-    import onnxruntime as ort
     import pandas as pd
     out = Path(a.out)
     cfg = json.loads((out / "config.json").read_text())
@@ -248,9 +304,7 @@ def cmd_eval(a):
         df = df[df["set"].astype(str) == a.test_set]
     df = df.reset_index(drop=True)
     idx = {lv: {k: i for i, k in enumerate(tax["vocabs"][lv])} for lv in LEVELS}
-    so = ort.SessionOptions()
-    so.intra_op_num_threads = a.threads
-    sess = ort.InferenceSession(str(out / a.model), so, providers=["CPUExecutionProvider"])
+    sess = ort_session(out / a.model, a.provider, a.threads)
     names = [o.name for o in sess.get_outputs()]
     paths = [str(Path(a.img_dir) / p) for p in (df["image_path"] if "image_path" in df
                                                   else df["speciesKey"].astype(str) + "/" + df["filename"])]
@@ -424,6 +478,110 @@ def cmd_thresholds(a):
     print(json.dumps(report, indent=2))
 
 
+def gemm_to_matmul(model):
+    """Rewrite every Gemm with a constant weight as MatMul (+ Add), transposing the weight correctly.
+
+    onnxruntime's quantizer (1.30) does this rewrite itself during pre-processing and ignores
+    ``transB=1``. Our Gemms are all square (1024x1024 attention out-projections and bottlenecks,
+    1280x1280), so the untransposed weight still type-checks and the quantized model silently
+    computes garbage: 0 % agreement with fp32, first misread as CLIP activation outliers.
+    Doing the rewrite ourselves first leaves the quantizer nothing to get wrong.
+    """
+    from onnx import helper, numpy_helper
+    g = model.graph
+    inits = {i.name: i for i in g.initializer}
+    nodes = []
+    for n in g.node:
+        if n.op_type != "Gemm" or n.input[1] not in inits:
+            nodes.append(n)
+            continue
+        at = {x.name: helper.get_attribute_value(x) for x in n.attribute}
+        assert at.get("alpha", 1.0) == 1.0 and at.get("beta", 1.0) == 1.0 and not at.get("transA", 0), n.name
+        wname = n.input[1] + "_mm"
+        if wname not in inits:  # a weight shared by several Gemms is transposed once
+            w = numpy_helper.to_array(inits[n.input[1]])
+            inits[wname] = numpy_helper.from_array((w.T if at.get("transB", 0) else w).copy(), wname)
+            g.initializer.append(inits[wname])
+        mm_out = n.output[0] + "_mm" if len(n.input) > 2 else n.output[0]
+        nodes.append(helper.make_node("MatMul", [n.input[0], wname], [mm_out], name=n.name + "_MatMul"))
+        if len(n.input) > 2:
+            nodes.append(helper.make_node("Add", [mm_out, n.input[2]], [n.output[0]], name=n.name + "_Add"))
+    del g.node[:]
+    g.node.extend(nodes)
+    used = {i for n in g.node for i in n.input}
+    keep = [i for i in g.initializer if i.name in used]
+    del g.initializer[:]
+    g.initializer.extend(keep)
+    del g.value_info[:]
+    return model
+
+
+def cmd_quantize(a):
+    """model.onnx -> model_int8.onnx, the CPU file. One recipe per architecture, because what makes
+    int8 fast and what breaks it differ (measured, journal 2026-09-29, follow-up):
+
+    ``vit``: dynamic int8 (per-channel weights, activations quantized on the fly) for every matmul
+        except the classifier and the 24 MLP output projections (``c_proj``). ``c_proj`` reads the
+        post-GELU activations, whose outliers per-tensor int8 cannot represent; it gets 8-bit
+        *weight-only* quantization (MatMulNBits: float activations) instead. P5: 1.44x faster at batch
+        32, 1.65x on one image, 4x smaller. Needs onnxruntime >= 1.22 to run and `onnx-ir` to build.
+    ``cnn``: static QDQ int8, calibrated on validation images (never test), activations clipped at
+        the 99.999th percentile (min/max and entropy calibration: 94 % agreement vs 98 %), classifier
+        fp32. Dynamic int8 is the wrong tool for a CNN: onnxruntime's ConvInteger made B3rep5x 4x
+        *slower*; static QDQ uses the fused QLinearConv kernels and is 2.2x faster.
+
+    Either way the model is first passed through :func:`gemm_to_matmul`. int8 is a CPU format: on a
+    GPU its integer ops fall back to the CPU (P5: 20 img/s vs 371 fp32); GPUs get the fp16 file.
+    """
+    import onnx
+    from onnxruntime.quantization import QuantType, quantize_dynamic
+    out = Path(a.out)
+    cfg = json.loads((out / "config.json").read_text())
+    size = cfg["image_size"]
+    mm, dst = out / "_mm.onnx", out / "model_int8.onnx"
+    onnx.save(gemm_to_matmul(onnx.load(str(out / "model.onnx"))), str(mm))
+    names = [n.name for n in onnx.load(str(mm), load_external_data=False).graph.node]
+    head = [n for n in names if n.startswith(("/head", "/hidden"))]
+    try:
+        if a.arch == "vit":
+            from onnxruntime.quantization.matmul_nbits_quantizer import MatMulNBitsQuantizer
+            cproj = [n for n in names if "c_proj" in n]
+            quantize_dynamic(str(mm), str(dst), weight_type=QuantType.QInt8, per_channel=True,
+                             op_types_to_quantize=["MatMul"], nodes_to_exclude=head + cproj)
+            q = MatMulNBitsQuantizer(onnx.load(str(dst)), bits=8, block_size=128, is_symmetric=True,
+                                     accuracy_level=4, nodes_to_include=cproj)
+            q.process()
+            q.model.save_model_to_file(str(dst), use_external_data_format=False)
+        else:
+            import pandas as pd
+            from onnxruntime.quantization import CalibrationDataReader, CalibrationMethod, QuantFormat, quantize_static
+            from onnxruntime.quantization.shape_inference import quant_pre_process
+            pre = out / "_pre.onnx"
+            quant_pre_process(str(mm), str(pre), skip_symbolic_shape=True)
+            df = pd.read_parquet(a.calib_parquet, columns=["speciesKey", "filename", "set"])
+            df = df[df["set"].astype(str) == "1"].dropna().sample(a.calib_n, random_state=1)
+            paths = [str(Path(a.img_dir) / str(int(k)) / f) for k, f in zip(df.speciesKey, df.filename)]
+
+            class Reader(CalibrationDataReader):
+                def __init__(self):
+                    self.it = (np.stack([preprocess(p, size) for p in paths[i:i + 16]])
+                               for i in range(0, len(paths), 16))
+
+                def get_next(self):
+                    x = next(self.it, None)
+                    return None if x is None else {"image": x}
+
+            quantize_static(str(pre), str(dst), Reader(), quant_format=QuantFormat.QDQ, per_channel=True,
+                            activation_type=QuantType.QUInt8, weight_type=QuantType.QInt8,
+                            calibrate_method=CalibrationMethod.Percentile,
+                            extra_options={"CalibPercentile": 99.999},
+                            op_types_to_quantize=["Conv", "MatMul", "Mul", "Add"], nodes_to_exclude=head)
+            pre.unlink(missing_ok=True)
+    finally:
+        mm.unlink(missing_ok=True)
+    print(f"model_int8.onnx {dst.stat().st_size / 1e6:.0f} MB -- score it with `eval --model model_int8.onnx`")
+
+
 def cmd_upload(a):
     from huggingface_hub import HfApi
     api = HfApi()
@@ -461,6 +619,13 @@ def main():
     v.add_argument("--model", default="model.onnx")
     v.add_argument("--test-set", default=None)
     v.add_argument("--resize", default="bicubic", choices=["bicubic", "bilinear", "fastai"])
+    v.add_argument("--provider", default="cpu", choices=["cpu", "cuda"])
+    q = sub.add_parser("quantize")
+    q.add_argument("--out", required=True)
+    q.add_argument("--arch", required=True, choices=["vit", "cnn"])
+    q.add_argument("--calib-parquet", help="cnn: dataset parquet; calibration uses set == '1' (validation)")
+    q.add_argument("--img-dir", help="cnn: image root")
+    q.add_argument("--calib-n", type=int, default=256)
     v.add_argument("--batch", type=int, default=32)
     v.add_argument("--threads", type=int, default=16)
     t = sub.add_parser("thresholds")
@@ -472,7 +637,7 @@ def main():
     u.add_argument("--repo", required=True)
     u.add_argument("--message", default="lepinet release")
     a = p.parse_args()
-    {"export": cmd_export, "calibrate": cmd_calibrate, "eval": cmd_eval, "thresholds": cmd_thresholds, "upload": cmd_upload}[a.cmd](a)
+    {"export": cmd_export, "quantize": cmd_quantize, "calibrate": cmd_calibrate, "eval": cmd_eval, "thresholds": cmd_thresholds, "upload": cmd_upload}[a.cmd](a)
 
 
 if __name__ == "__main__":
