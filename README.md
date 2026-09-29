@@ -24,6 +24,12 @@ model able to flag species it was never trained on (open-set AUROC 0.601 → 0.9
 
 > **New to this repository?** [`START-HERE.md`](START-HERE.md) is a guided map of everything —
 > code, results, and the reasoning behind them.
+>
+> **Just want to identify moths?** The trained models are public on Hugging Face, and run with
+> `onnxruntime` alone, with no need to install this package:
+> [`gmougeot/lepinet-bioclip2-vitl14`](https://huggingface.co/gmougeot/lepinet-bioclip2-vitl14)
+> (recommended) and [`gmougeot/lepinet-effnetv2s`](https://huggingface.co/gmougeot/lepinet-effnetv2s)
+> (small, fast). How they were chosen and packaged: [the release entry](journal/2026-09-29-public-hf-release.md).
 
 **Docs:** [user guide](docs/user-guide.md) · [developer guide](docs/developer-guide.md) ·
 [design journal](journal/2026-07-24-src-lepinet-baseline-port.md)

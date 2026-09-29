@@ -1,6 +1,6 @@
 # PLAN — where we are, and what runs next
 
-**Kind:** living · **Last updated:** 2026-08-28 · **Supersedes:** [[2026-07-28-landscape-and-plan]]
+**Kind:** living · **Last updated:** 2026-09-29 · **Supersedes:** [[2026-07-28-landscape-and-plan]]
 
 The one file in `journal/` meant to be true *today*. Everything else is a record of a moment.
 
@@ -18,7 +18,7 @@ operational text and were effectively unfindable.)*
 | **A** | consolidate the architecture (single head × ArcFace × distillation) | **closed** |
 | **B** | robustness: augmentation, self-training, capacity | **closed** — B3 is the project's biggest lever |
 | **C** | open-set: abstention, stratified novelty, AUROC | **closed** — C3b confirms monotonicity is not a rarity artefact |
-| **D** | product: bundle, calibration, small student | **closed** |
+| **D** | product: bundle, calibration, small student | **closed** — P5 and B3rep5x public on Hugging Face since 2026-09-29 [[2026-09-29-public-hf-release]] |
 | **E** | is open-set the binding constraint? | **closed — no**, the premise was a scoring-rule artefact |
 | **F** | the assembled recipe | **closed** — F2 composes |
 | **G** | the 198 M confirmation | **closed** — the staged/end-to-end verdict is capacity-dependent; B10 confirms the comparison is fair |

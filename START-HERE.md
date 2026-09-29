@@ -14,6 +14,7 @@ a moth or butterfly, over ~12,000 species with a heavy long tail.
 
 | If you want to… | Go to | What you'll find |
 |---|---|---|
+| **Use a trained model** *(no training, no install of this package)* | [Hugging Face collection](https://huggingface.co/collections/gmougeot/lepinet-lepidoptera-identification-6abbc33d250430f8c67db428) → [release entry](journal/2026-09-29-public-hf-release.md) | P5 and B3rep5x as ONNX with model cards; ten lines of `onnxruntime` |
 | **Get up to speed on the vocabulary** *(logits, cosine head, margins, AUROC, marginalisation…)* | [`docs/concepts.md`](docs/concepts.md) | Every recurring term explained from the ground up, with this project's actual numbers |
 | **Understand the problem & method** | [`README.md`](README.md) | What the task is, why it's hard (fine-grained + long-tailed), and the method (per-level cosine head + square-root oversampling) |
 | **Use the package** (train / test / predict / export) | [`docs/user-guide.md`](docs/user-guide.md) | Install, the CLI (`lepinet train|test|predict|export|bundle|distill`), config reference |
