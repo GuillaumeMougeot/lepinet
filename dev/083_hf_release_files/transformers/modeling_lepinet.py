@@ -173,7 +173,14 @@ class LepinetForImageClassification(LepinetPreTrainedModel):
             1, self._parent_index(name, p.device), p)
 
     def forward(self, pixel_values: torch.Tensor, labels: torch.Tensor | None = None, **kwargs) -> LepinetOutput:
-        """``pixel_values``: CLIP-normalised RGB, ``[N, 3, 224, 224]`` (what the image processor gives)."""
+        """``pixel_values``: CLIP-normalised RGB, ``[N, 3, S, S]`` as the image processor gives it
+        (S = ``config.input_size``, 256 for P5); resampled to ``config.image_size`` here."""
+        size = self.config.image_size
+        if pixel_values.shape[-2:] != (size, size):
+            # The training pipeline's last step (see config.input_size): a bilinear, non-antialiased
+            # resample to the model size. Linear, so it commutes with the processor's normalisation.
+            pixel_values = F.interpolate(pixel_values, size=(size, size), mode="bilinear",
+                                         align_corners=False, antialias=False)
         feats = getattr(self, "0").visual(pixel_values)
         head = getattr(self, "1").head
         emb = head.embed(feats.float())

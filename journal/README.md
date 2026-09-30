@@ -170,6 +170,7 @@ Six phases, in order. The engineering lessons each one produced are consolidated
 | [07-23](2026-07-23-lepi-app-HANDOFF.md) | Self-contained handoff: state, env, how-to, open problems | snapshot of Jul 23 |
 | [07-24](2026-07-24-src-lepinet-baseline-port.md) | How to port the 0.9148 baseline into a clean, fastai-only package? | **RESOLVED** — reproduces it (0.9152 vs 0.9148); that run is the milestone baseline |
 | [07-25](2026-07-25-teacher-student-app-bridge.md) | How to make shipping a model (teacher→student→bundle→release) one command? | OPEN — distillation works (T=1); int8 dead in ORT-Web, fp16 ships |
+| [09-30](2026-09-30-full-fold-and-p5-resize.md) | Do the published files reproduce the training pipeline on the full test fold? | **RESOLVED — B8 exactly; P5 did not.** P5's documented preprocessing skipped fastai's 256->224 GPU resample (-0.4 pt photos, -1.1 pt traps). Fixed inside the graph; P5 now 0.9210 full fold, 0.7829 probe, 98.7-99.1 % per-image agreement with lepinet |
 | [09-29](2026-09-29-public-hf-release.md) | Release the recommended models for general public use on Hugging Face | **RESOLVED** — P5, B8 and B3rep5x published as onnxruntime-only ONNX (P5 also via transformers) with model cards; published files reproduce the pipeline within 0.9 pt; B3rep5x needed a temperature (T = 1.70) |
 | [07-28](2026-07-28-landscape-and-plan.md) | Global landscape and ordered backlog, as of Jul 28 | **SUPERSEDED** by [PLAN.md](PLAN.md) — kept for its execution log and the Q1–Q6 answers |
 

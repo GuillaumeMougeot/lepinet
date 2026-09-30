@@ -27,16 +27,17 @@ family are computed from the species probabilities. The model also tells you whe
 answer at species level.
 
 It is the model recommended by the [lepinet](https://github.com/GuillaumeMougeot/lepinet) project:
-tied for the most accurate of the project's models on images from a *different* source than its training data
+the most accurate of the released models on ordinary photos (species macro-F1 0.921 over the full
+GBIF test fold), at least as accurate on images from a *different* source than its training data
 (automated light-trap cameras), and the best calibrated. In the project's deployment study, at a
 95 % precision target, it answered 93 % of trap images against 73 % for an equally accurate
-alternative. That study fitted thresholds in-sample; the stricter fit shipped here answers 87 %
+alternative. That study fitted thresholds in-sample; the stricter fit shipped here answers {{P5_ANSWERED}}
 (see [Using the confidence](#using-the-confidence)).
 
 | | |
 |---|---|
 | **Architecture** | [BioCLIP-2](https://huggingface.co/imageomics/bioclip-2) ViT-L/14 image tower (303 M params), fine-tuned end to end, plus a 1024-d cosine classifier; 321 M in total |
-| **Input** | one RGB image of **one** insect, 224×224 |
+| **Input** | one RGB image of **one** insect, 256×256 (the model resamples it to 224 internally, exactly as in training) |
 | **Output** | species, genus and family probabilities, raw logits, a 1024-d embedding |
 | **Format** | ONNX in three precisions: fp32 (1.3 GB), **int8 for CPUs** (331 MB), **fp16 for GPUs** (680 MB); see [Which file to use](#which-file-to-use). Runs with `onnxruntime` alone: no PyTorch, no lepinet |
 | **Licence** | CC-BY-NC-4.0 (non-commercial; see [Licence](#licence)) |
@@ -57,10 +58,10 @@ repo = snapshot_download("gmougeot/lepinet-bioclip2-vitl14", allow_patterns=["mo
 session = ort.InferenceSession(f"{repo}/model.onnx")
 names = json.load(open(f"{repo}/names.json"))["names"]
 
-def load(path, size=224):  # shorter side -> size, centre crop, RGB in [0, 1]
+def load(path, size=256):  # shorter side -> size, centre crop, RGB in [0, 1]
     img = Image.open(path).convert("RGB")
     s = size / min(img.size)
-    img = img.resize((max(size, round(img.width * s)), max(size, round(img.height * s))), Image.BICUBIC)
+    img = img.resize((max(size, round(img.width * s)), max(size, round(img.height * s))), Image.BILINEAR)
     l, t = (img.width - size) // 2, (img.height - size) // 2
     return np.asarray(img.crop((l, t, l + size, t + size)), np.float32).transpose(2, 0, 1)[None] / 255
 
@@ -79,6 +80,12 @@ python lepinet/predict.py moth1.jpg moth2.jpg --top 3 --model-file model_int8.on
 ```
 
 Batching works: the input's first axis is dynamic.
+
+**Why 256, then 224 inside the model?** That is how the model saw images in training: resized to 256,
+then resampled to 224 (bilinear) on the GPU. Resizing straight to 224 gives slightly different pixels,
+and cost 0.3–0.4 points of macro-F1 on ordinary photos. The graph now does the second step itself.
+It also accepts 224×224 input, which it passes through unchanged, so code written for the first
+release keeps working.
 
 ### With transformers (PyTorch)
 
@@ -116,10 +123,8 @@ transformers warns when it downloads the code file. For a reproducible setup, pi
 the processor.
 
 This is the same network as `model.onnx`: on identical inputs the two agree on every image tested
-(largest logit difference 3e-4). Through the pipeline's own image preprocessing, 99.6 % of 1,000
-trap images get the same species as the ONNX quick start; the rest are tiny crops, where resize
-implementations differ. It is
-also the starting point for fine-tuning: `out.loss` is the species cross-entropy when you pass
+(largest logit difference 2e-4). The processor resizes to 256 and the model resamples to 224, as in
+training. It is also the starting point for fine-tuning: `out.loss` is the species cross-entropy when you pass
 `labels=`. It uses the full-precision `model.safetensors`, the file lepinet itself loads.
 
 ## Which file to use
@@ -127,14 +132,13 @@ also the starting point for fine-tuning: `out.loss` is the species cross-entropy
 | file | use it on | size | batch of 32 | one image | same prediction as fp32 (probe) |
 |---|---|---|---|---|---|
 | `model.onnx` (fp32) | anything; the reference | 1.29 GB | CPU {{P5_CPU32_B32}} · GPU {{P5_GPU32_B32}} img/s | CPU {{P5_CPU32_B1}} ms · GPU {{P5_GPU32_B1}} ms | – |
-| `model_int8.onnx` | **CPU** (laptop, server, no GPU) | 331 MB | CPU **{{P5_CPU8_B32}}** img/s | CPU **{{P5_CPU8_B1}}** ms | 98.6 % |
-| `model_fp16.onnx` | **NVIDIA GPU** | 680 MB | GPU **{{P5_GPU16_B32}}** img/s | GPU {{P5_GPU16_B1}} ms | 99.8 % |
+| `model_int8.onnx` | **CPU** (laptop, server, no GPU) | 331 MB | CPU **{{P5_CPU8_B32}}** img/s | CPU **{{P5_CPU8_B1}}** ms | {{INT8_AGREE}} |
+| `model_fp16.onnx` | **NVIDIA GPU** | 680 MB | GPU **{{P5_GPU16_B32}}** img/s | GPU {{P5_GPU16_B1}} ms | {{FP16_AGREE}} |
 
 Measured with onnxruntime 1.30 on an RTX 5090 and on a 24-core Intel Core Ultra 9 285K (a shared
 server under some background load, so read the ratios rather than the absolute CPU numbers); a 4-thread
 CPU run (closer to a laptop) gives {{P5_CPU4}}. The accuracy of each file is in
-[Evaluation](#evaluation): fp16 matches fp32, and int8 is within 0.1 pt on two sets and 0.7 pt on the
-third.
+[Evaluation](#evaluation): {{PRECISION_SUMMARY}}
 
 - **int8 needs onnxruntime ≥ 1.22.** Most of it is standard int8 matmuls. The 24 MLP output
   projections use 8-bit *weight-only* quantization instead, because their inputs carry outlier
@@ -166,7 +170,7 @@ TensorRT installed onnxruntime then falls back to the CPU without saying so. Rem
 
 | file | what it is |
 |---|---|
-| `model.onnx`, `model_int8.onnx`, `model_fp16.onnx` | the network, in three precisions (see [Which file to use](#which-file-to-use)). Input `image`: float32 `[N, 3, 224, 224]`, RGB, values in [0, 1], for all three. **Normalisation is inside the graph** (do not normalise yourself) |
+| `model.onnx`, `model_int8.onnx`, `model_fp16.onnx` | the network, in three precisions (see [Which file to use](#which-file-to-use)). Input `image`: float32 `[N, 3, 256, 256]`, RGB, values in [0, 1], for all three. The graph resamples to 224 and normalises (do neither yourself) |
 | `taxonomy.json` | `vocabs.<rank>[i]` is the [GBIF](https://www.gbif.org) taxon key of output index `i`; `parents` maps species to genus and genus to family |
 | `names.json` | scientific names, aligned index for index with `taxonomy.json` |
 | `thresholds.json` | per-rank confidence thresholds for a 95 %-precision back-off policy, with the precision and coverage they achieve on held-out data |
@@ -245,31 +249,19 @@ Three evaluation sets:
 
 - **GBIF test fold (in-distribution):** held-out images from the same GBIF sources as training.
   BioCLIP-2's pre-training data contains about two thirds of these exact images, so the score is
-  reported on the 219,048-image subset BioCLIP-2 never saw ("clean fold"). The published file was
-  also checked on a random 10,000-image sample of the full fold. That sample is partly
-  contaminated, and macro-F1 over a sample is not the full-fold number, so read it as "the file
-  works on ordinary photos", not as a benchmark.
+  reported on the 217,856 images of it that BioCLIP-2 never saw ("clean subset"). The full fold is
+  629,742 images of all 12,041 species. The int8 and fp16 files were scored on a random
+  10,000-image sample, which is a check against fp32, not a benchmark.
 - **Probe:** 15,200 light-trap images of 368 Danish species, from (trap, night) groups never used in
   training. This is a real domain shift: night-time camera crops, not curated photos.
 - **Probe, held-out species:** 2,455 images of 58 species for which no trap images were used in any
   form during training.
 
-| evaluation | training pipeline | **`model.onnx`** + quick-start preprocessing | `model_int8.onnx` | `model_fp16.onnx` |
-|---|---|---|---|---|
-| GBIF test fold, clean subset | 0.9113 | not re-run | | |
-| GBIF test fold, random 10,000 images | not measured | {{GBIF_ONNX}} | 0.9237 | 0.9246 |
-| Probe (light traps) | 0.7810 (a repeat training run: 0.7703) | 0.7723 | 0.7716 | 0.7723 |
-| Probe, held-out species | 0.7806 | 0.7897 | 0.7830 | 0.7897 |
+{{EVAL_TABLE}}
 
-All numbers are species macro-F1. Genus and family macro-F1 on probe, from the summed
-probabilities: **0.826** and **0.842**. At family level the sum beats the model's own family head
-(0.818), which is why `prob_family` is the recommended output.
+All numbers are species macro-F1. {{COARSE_SENTENCE}}
 
-The training-pipeline and `model.onnx` columns differ by under 1 point, which is within the run-to-run noise of these evaluation
-sets. The network is numerically identical to the PyTorch model (max |Δ| ≈ 3e-5); the difference is
-image resizing. Trap crops are small (median shorter side 157 px), so they are *up*-sampled, and
-up-sampling with a different kernel changes 3–6 % of individual predictions. **For small crops,
-resize consistently**, and prefer larger crops where you can.
+{{PIPELINE_SENTENCE}}
 
 For comparison, BioCLIP-2 fine-tuned *without* the trap-domain stage scores 0.6630 on probe, and
 the project's in-house EfficientNetV2-S baseline scores 0.6270.

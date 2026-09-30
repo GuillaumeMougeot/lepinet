@@ -25,10 +25,10 @@ family are computed from the species probabilities.
 
 This is the **small** model of the [lepinet](https://github.com/GuillaumeMougeot/lepinet) project:
 37 M parameters (a 20 M backbone plus the 12,041-class classifier), fast enough for a laptop CPU or an
-edge device. It is about half a point behind the
-project's best model ([`gmougeot/lepinet-bioclip2-vitl14`](https://huggingface.co/gmougeot/lepinet-bioclip2-vitl14),
-9× larger) on images from automated light traps. Use the large one when accuracy matters more than
-speed.
+edge device. It is about 2 points of species macro-F1 behind the project's best model
+([`gmougeot/lepinet-bioclip2-vitl14`](https://huggingface.co/gmougeot/lepinet-bioclip2-vitl14),
+9× larger): 0.765 vs 0.783 on light-trap images, 0.899 vs 0.921 on ordinary photos. Use the large
+one when accuracy matters more than speed.
 
 | | |
 |---|---|
@@ -195,9 +195,8 @@ score, for instance to send the most unfamiliar images to an expert.
 Species **macro-F1** averages F1 over species, so the rare species count as much as the common ones.
 
 - **GBIF test fold (in-distribution):** held-out images from the same GBIF sources as training.
-  The published file was scored on a random 10,000-image sample of the 629,742-image fold. Macro-F1
-  over a sample is not the same number as over the whole fold, so treat it as a check that the file
-  works on ordinary photos, not as a benchmark.
+  The full fold is 629,742 images of all 12,041 species; the fp16 file was checked on a random
+  10,000-image sample.
 - **Probe:** 15,200 light-trap images of 368 Danish species, from (trap, night) groups never used in
   training. This is a real domain shift: night-time camera crops, not curated photos.
 - **Probe, held-out species:** 2,455 images of 58 species for which no trap images were used in any
@@ -205,7 +204,8 @@ Species **macro-F1** averages F1 over species, so the rare species count as much
 
 | evaluation | species macro-F1, training pipeline | species macro-F1, **this ONNX file** + the quick-start preprocessing |
 |---|---|---|
-| GBIF test fold, random 10,000 images | not measured | 0.9096 (top-1 92.3 %; genus 0.953, family 0.974) |
+| GBIF test fold, full (629,742 images) | not measured | **0.8985** (top-1 92.5 %; genus 0.950, family 0.968) |
+| GBIF test fold, random 10,000 images | not measured | 0.9096 |
 | Probe (light traps) | 0.7706 | 0.7649 (top-1 82.9 %) |
 | Probe, held-out species | 0.7704 | 0.7719 |
 

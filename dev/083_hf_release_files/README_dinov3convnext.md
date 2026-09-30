@@ -28,12 +28,14 @@ Identifies **Lepidoptera** (moths and butterflies) from a photo at three ranks a
 family are computed from the species probabilities.
 
 This is the **mid-size** model of the [lepinet](https://github.com/GuillaumeMougeot/lepinet)
-project: a DINOv3 ConvNeXt-L (217 M parameters) that is as accurate as the recommended
+project: a DINOv3 ConvNeXt-L (217 M parameters), close behind the recommended
 [`gmougeot/lepinet-bioclip2-vitl14`](https://huggingface.co/gmougeot/lepinet-bioclip2-vitl14)
-(321 M), and the most accurate of the three on ordinary GBIF photos. Its weakness is confidence: at
-a 95 % precision target it gives a correct answer on {{B8_USEFUL}} of light-trap images, against
-{{P5_USEFUL}} for the BioCLIP-2 model. **If you rely on the confidence thresholds, prefer the BioCLIP-2
-model**; if you use the top prediction, or want the smaller download, this one is as good.
+(321 M). It is within noise of it on light-trap images (species macro-F1 0.777 vs 0.783) and 1.5
+points behind on ordinary photos (0.906 vs 0.921 over the full GBIF test fold). Its weakness is
+confidence: at a 95 % precision target it gives a correct answer on {{B8_USEFUL}} of light-trap
+images, against {{P5_USEFUL}} for the BioCLIP-2 model. **Prefer the BioCLIP-2 model in general**;
+this one is a smaller download, and a reasonable choice if you use its top prediction rather than
+its confidence.
 
 | | |
 |---|---|
@@ -190,15 +192,15 @@ score, for instance to send the most unfamiliar images to an expert.
 With the same protocol the BioCLIP-2 model answers correctly on {{P5_USEFUL}} and the small
 EfficientNetV2-S model on {{B3_USEFUL}}. An earlier study used this model's *uncalibrated*
 probabilities and a different fitting protocol, and found a 17-point gap to the BioCLIP-2 model.
-Calibrated and measured as above, the gap is about 6 points: smaller, but real.
+Calibrated and measured as above, the gap is about 9 points: smaller, but real.
 
 ## Evaluation
 
 Species **macro-F1** averages F1 over species, so the rare species count as much as the common ones.
 
-- **GBIF test fold (in-distribution):** held-out images from the same GBIF sources as training. The
-  published file was checked on a random 10,000-image sample (macro-F1 over a sample is not the
-  full-fold number). Whether DINOv3's LVD-1689M pre-training images overlap this fold has not been
+- **GBIF test fold (in-distribution):** held-out images from the same GBIF sources as training: the
+  full fold (629,742 images, all 12,041 species) for the fp32 file, and a random 10,000-image sample
+  to check the fp16 and int8 files against it. Whether DINOv3's LVD-1689M pre-training images overlap this fold has not been
   checked.
 - **Probe:** 15,200 light-trap images of 368 Danish species, from (trap, night) groups never used in
   training. This is a real domain shift: night-time camera crops, not curated photos.
@@ -207,14 +209,15 @@ Species **macro-F1** averages F1 over species, so the rare species count as much
 
 | evaluation | training pipeline | **`model.onnx`** + quick-start preprocessing | `model_fp16.onnx` |{{INT8_EVAL_HEAD}}
 |---|---|---|---|{{INT8_EVAL_SEP}}
-| GBIF test fold, full (629,742 images) | 0.9060 | not re-run | |{{INT8_EVAL_FULL}}
+| GBIF test fold, full (629,742 images) | 0.9060 | **0.9059** (top-1 94.5 %) | |{{INT8_EVAL_FULL}}
 | GBIF test fold, random 10,000 images | not measured | 0.9261 | 0.9262 |{{INT8_EVAL_GBIF}}
 | Probe (light traps) | 0.7798 | 0.7766 | 0.7765 |{{INT8_EVAL_PROBE}}
 | Probe, held-out species | 0.7816 | 0.7708 | 0.7707 |{{INT8_EVAL_HO}}
 
-All numbers are species macro-F1. The training-pipeline and ONNX columns differ by up to 1.1 points
-on the smallest set. The network is numerically identical to the PyTorch model; the difference is
-image resizing of small, up-sampled trap crops (median shorter side 157 px).
+All numbers are species macro-F1. On ordinary photos the published file reproduces the training
+pipeline (0.9059 vs 0.9060 over the full fold). On trap crops the two differ by up to 1.1 points on
+the smallest set: the network is numerically identical, and the difference is the resizing of
+small, up-sampled crops (median shorter side 157 px).
 
 ## Training
 

@@ -166,9 +166,10 @@ class ReleaseWrapper(nn.Module):
     """[0,1] RGB -> raw logits (per trained head) + coherent probabilities + embedding."""
 
     def __init__(self, model: nn.Module, tax: dict, n_heads: int, half_body: bool = False,
-                 temperature: float = 1.0):
+                 temperature: float = 1.0, model_size: int | None = None):
         super().__init__()
         self.temperature = float(temperature)
+        self.model_size = model_size
         from lepinet.infer import IMAGENET_MEAN, IMAGENET_STD
         self.body, self.wrap = model[0], model[1]
         self.head = self.wrap.head
@@ -191,6 +192,13 @@ class ReleaseWrapper(nn.Module):
         return torch.zeros(p.shape[0], n, dtype=p.dtype, device=p.device).scatter_add(1, idx, p)
 
     def forward(self, image: torch.Tensor):
+        if self.model_size:
+            # The training pipeline's last step: fastai resamples the item-size image to the model
+            # size on the GPU, bilinear, no antialias. Doing it in the graph lets users feed the item
+            # size (P5: 256) and get the training-time pixels; input already at model_size passes
+            # through unchanged (a same-size bilinear resample is the identity).
+            image = F.interpolate(image, size=(self.model_size, self.model_size), mode="bilinear",
+                                  align_corners=False, antialias=False)
         x = (image - self.mean) / self.std
         f = self.body(x.half() if self.half_body else x).float()
         if self.pool is not None:
@@ -221,7 +229,8 @@ def cmd_export(a):
 
     n_heads = 1 if a.species_only else len(meta["levels"])
     names = output_names(n_heads)
-    x = torch.rand(2, 3, a.img_size, a.img_size)
+    in_size = a.input_size or a.img_size
+    x = torch.rand(2, 3, in_size, in_size)
     # nn.MultiheadAttention's eval fast path emits aten::_native_multi_head_attention, which has no
     # ONNX symbolic; the slow path is numerically identical and exports.
     torch.backends.mha.set_fastpath_enabled(False)
@@ -229,11 +238,13 @@ def cmd_export(a):
     # fp16 ViTs used to segfault onnxruntime at session creation; see PatchLinear for the fix.
     for precision in ("fp32",) if a.no_fp16 else ("fp32", "fp16"):
         w = ReleaseWrapper(model, tax, n_heads, half_body=(precision == "fp16"),
-                           temperature=a.temperature).eval()
+                           temperature=a.temperature,
+                           model_size=a.img_size if a.input_size else None).eval()
         path = out / ("model.onnx" if precision == "fp32" else "model_fp16.onnx")
         with torch.no_grad():
             torch.onnx.export(w, (x,), str(path), input_names=["image"], output_names=names,
-                              dynamic_axes={"image": {0: "batch"}, **{n: {0: "batch"} for n in names}},
+                              dynamic_axes={"image": {0: "batch", **({2: "height", 3: "width"} if a.input_size else {})},
+                                            **{n: {0: "batch"} for n in names}},
                               opset_version=17, do_constant_folding=True, dynamo=False)
             if ref is None:
                 ref = [o.numpy() for o in w(x)]
@@ -255,16 +266,20 @@ def cmd_export(a):
         "architecture": a.arch_desc,
         "lepinet_checkpoint": meta_json,
         "image_size": a.img_size,
+        "input_size": in_size,
+        "resample": a.resample,
         "species_temperature": a.temperature,
-        "preprocessing": {"resize_shorter_side": a.img_size, "center_crop": a.img_size,
-                          "input": "float32 NCHW, RGB, values in [0, 1]; normalisation is inside the graph"},
-        "inputs": {"image": ["batch", 3, a.img_size, a.img_size]},
+        "preprocessing": {"resize_shorter_side": in_size, "center_crop": in_size, "resample": a.resample,
+                          "input": "float32 NCHW, RGB, values in [0, 1]; normalisation is inside the graph"
+                                   + (f"; resampled to {a.img_size} inside the graph, as in training"
+                                      if a.input_size else "")},
+        "inputs": {"image": ["batch", 3, in_size, in_size]},
         "output_names": names,
         "n_classes": {lv: len(tax["vocabs"][lv]) for lv in LEVELS},
         "gbif_species_url": "https://www.gbif.org/species/{key}",
         # lepinet-app bundle keys: the release folder is also a valid app bundle.
         "name": a.name, "model": "model.onnx" if a.no_fp16 else "model_fp16.onnx", "taxonomy": "taxonomy.json", "names": "names.json",
-        "thresholds": "thresholds.json", "imageSize": a.img_size, "inputName": "image",
+        "thresholds": "thresholds.json", "imageSize": in_size, "inputName": "image",
         "outputs": {"species": "logits_species"}, "gbifBase": "https://www.gbif.org/species/",
     }
     (out / "config.json").write_text(json.dumps(cfg, indent=2))
@@ -308,7 +323,8 @@ def cmd_eval(a):
     out = Path(a.out)
     cfg = json.loads((out / "config.json").read_text())
     tax = json.loads((out / "taxonomy.json").read_text())
-    size = cfg["image_size"]
+    size = cfg.get("input_size", cfg["image_size"])
+    mode = a.resize or cfg.get("resample", "bicubic")
     df = pd.read_parquet(a.parquet)
     if a.test_set is not None:
         df = df[df["set"].astype(str) == a.test_set]
@@ -321,9 +337,9 @@ def cmd_eval(a):
     rows = {f"{p}_{lv}": [] for lv in LEVELS for p in ("pred", "conf")}
     rows.update({f"head_{p}_{lv}": [] for lv in LEVELS for p in ("pred", "conf")})
     rows["entropy_species"] = []  # the novelty score the cards document
-    with ThreadPoolExecutor(8) as pool:
+    with ThreadPoolExecutor(a.workers) as pool:
         for i in range(0, len(paths), a.batch):
-            batch = np.stack(list(pool.map(lambda p: preprocess(p, size, a.resize), paths[i:i + a.batch])))
+            batch = np.stack(list(pool.map(lambda p: preprocess(p, size, mode), paths[i:i + a.batch])))
             res = dict(zip(names, sess.run(None, {"image": batch})))
             for lv in LEVELS:
                 p = res[f"prob_{lv}"]
@@ -393,7 +409,9 @@ def cmd_calibrate(a):
     chunks = []
     with ThreadPoolExecutor(8) as pool:
         for i in range(0, len(paths), 32):
-            batch = np.stack(list(pool.map(lambda p: preprocess(p, cfg["image_size"]), paths[i:i + 32])))
+            batch = np.stack(list(pool.map(
+                lambda p: preprocess(p, cfg.get("input_size", cfg["image_size"]), cfg.get("resample", "bicubic")),
+                paths[i:i + 32])))
             chunks.append(sess.run(["logits_species"], {"image": batch})[0])
             print(f"\r{i + len(batch)}/{len(paths)}", end="", flush=True)
     print()
@@ -636,10 +654,12 @@ def cmd_transformers(a):
                        json.loads((out / "thresholds.json").read_text())["levels"].items()},
     })
     (out / "config.json").write_text(json.dumps(cfg, indent=1))
+    in_size = cfg.get("input_size", cfg["image_size"])
     (out / "preprocessor_config.json").write_text(json.dumps({
         "image_processor_type": "CLIPImageProcessor",
-        "do_resize": True, "size": {"shortest_edge": cfg["image_size"]}, "resample": 3,
-        "do_center_crop": True, "crop_size": {"height": cfg["image_size"], "width": cfg["image_size"]},
+        "do_resize": True, "size": {"shortest_edge": in_size},
+        "resample": 2 if cfg.get("resample") == "bilinear" else 3,
+        "do_center_crop": True, "crop_size": {"height": in_size, "width": in_size},
         "do_rescale": True, "rescale_factor": 1 / 255, "do_normalize": True,
         "image_mean": [0.48145466, 0.4578275, 0.40821073],
         "image_std": [0.26862954, 0.26130258, 0.27577711],
@@ -690,6 +710,10 @@ def main():
     e.add_argument("--name", required=True)
     e.add_argument("--arch-desc", required=True)
     e.add_argument("--no-fp16", action="store_true")
+    e.add_argument("--input-size", type=int, default=None,
+                   help="publish at the training item size and resample to --img-size inside the graph")
+    e.add_argument("--resample", default="bicubic", choices=["bicubic", "bilinear"],
+                   help="PIL resample for the shorter-side resize the card documents")
     e.add_argument("--species-only", action="store_true",
                    help="publish species logits only; genus/family come from the shared taxonomy")
     e.add_argument("--temperature", type=float, default=1.0,
@@ -709,8 +733,10 @@ def main():
     v.add_argument("--name", required=True)
     v.add_argument("--model", default="model.onnx")
     v.add_argument("--test-set", default=None)
-    v.add_argument("--resize", default="bicubic", choices=["bicubic", "bilinear", "fastai"])
+    v.add_argument("--resize", default=None, choices=["bicubic", "bilinear", "fastai"],
+                   help="override the config's resample (default: what the card documents)")
     v.add_argument("--provider", default="cpu", choices=["cpu", "cuda"])
+    v.add_argument("--workers", type=int, default=8, help="image-decoding threads")
     nv = sub.add_parser("novelty")
     nv.add_argument("--out", required=True)
     nv.add_argument("--known", required=True)

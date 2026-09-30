@@ -22,12 +22,13 @@ from PIL import Image
 LEVELS = ("species", "genus", "family")
 
 
-def preprocess(path: str, size: int) -> np.ndarray:
+def preprocess(path: str, size: int, resample: str = "bicubic") -> np.ndarray:
     """Shorter side -> size, centre crop, RGB float32 in [0, 1], NCHW. Normalisation is in the graph."""
     img = Image.open(path).convert("RGB")
     w, h = img.size
     s = size / min(w, h)
-    img = img.resize((max(size, round(w * s)), max(size, round(h * s))), Image.BICUBIC)
+    method = Image.BILINEAR if resample == "bilinear" else Image.BICUBIC
+    img = img.resize((max(size, round(w * s)), max(size, round(h * s))), method)
     w, h = img.size
     left, top = (w - size) // 2, (h - size) // 2
     img = img.crop((left, top, left + size, top + size))
@@ -69,7 +70,8 @@ class Lepinet:
         self.outputs = [o.name for o in self.session.get_outputs()]
 
     def __call__(self, paths: list[str], top: int = 1) -> list[dict]:
-        batch = np.stack([preprocess(p, self.cfg["image_size"]) for p in paths])
+        size = self.cfg.get("input_size", self.cfg["image_size"])  # what the graph expects as input
+        batch = np.stack([preprocess(p, size, self.cfg.get("resample", "bicubic")) for p in paths])
         out = dict(zip(self.outputs, self.session.run(None, {"image": batch})))
         results = []
         for i, path in enumerate(paths):
