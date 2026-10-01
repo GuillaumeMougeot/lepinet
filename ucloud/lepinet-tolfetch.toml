@@ -1,21 +1,32 @@
-# TOL-2: crawl the TreeOfLife-200M images listed in the manifest built by lepinet-tolplan.
+# TOL-3: resume the TreeOfLife-200M crawl, writing straight to the `datasets` drive.
 #
-# CPU-only: this is network-bound, not GPU work. 64 vCPU gives headroom for the JPEG decode/resize
-# threads, which are the only CPU cost -- everything else is waiting on HTTP.
+# CPU BUDGET -- read before changing the product or max_time.
+#   The first crawl (2026-08-28) ran on 64 vCPU for 63 h: 4,032 core-hours, 58 % of the project's
+#   7,000 core-hour CPU allocation, for a job that measured ~1.1 cores per 240 img/s of decode and
+#   spent its last 23 h at 22 img/s throttled by politeness caps, the node idle. Worst case under
+#   auto_extend + max_time 168h would have been 10,752. See journal/2026-10-01-*cpu-budget*.md.
 #
-# RESUMABLE BY DESIGN, and it has to be: 88 M images will not finish inside one job. A manifest part
-# is skipped once its .meta.parquet exists, and rows already recorded inside a part are skipped, so
-# re-submitting this file simply continues. Killing it costs at most one part's in-flight work.
+#   Now: 1 vCPU. The remaining 6.66 M rows sit on 17 hosts, almost all herbaria at the politeness
+#   cap of 4 (sweetgum.nybg.org alone has 2.13 M). Their speed is set by per-host
+#   politeness caps, not by cores, so duration is fixed and CPU spend scales only with node size.
+#   JPEGs are decoded in the DCT domain (draft mode, 11x less CPU on large scans), so one core
+#   keeps up, and the crawler streams parts, so memory fits 3 GB.
+#   ucloud/budget_check.py (CI test + PreToolUse hook) refuses this spec if it grows past
+#   8 vCPU or 300 worst-case core-hours without an owner sign-off line.
 #
-# Per-host budgets are adaptive and start low; the S3 bucket that carries 58 % of the corpus ramps to
-# 256 over the first few thousand successes, so early throughput understates the steady state.
+# The crawler also refuses to start if effective_cpus() exceeds --max-cpus, and pins library
+# thread pools to the cgroup quota (UCloud reports 256 cores to os.cpu_count() on every node).
+#
+# Resumable: finished parts are skipped by their .meta.parquet; inside a part, images already on
+# disk and complete (JPEG ends FFD9) are recorded without a request. Hosts that refused us are in
+# manifest/blocked_hosts.json and are not contacted (--retry-blocked once access is granted).
 name = "lepinet-tolfetch"
 replicas = 1
 [application]
 name = "pytorch-te"
 version = "26.05"
 [product]
-id = "cpu-amd-zen5-64-vcpu"
+id = "cpu-amd-zen5-1-vcpu"
 category = "cpu-amd-zen5"
 provider = "ucloud"
 [time_allocation]
@@ -25,12 +36,11 @@ local = ".."
 remote = "/12347837/repos/lepinet"
 [setup]
 script = "setup-lepinet.sh"
-run = "python dev/082_tol_crawler.py fetch --manifest /work/lepinet/data/tol/manifest --images /work/lepinet/data/tol/images --size 256 --variant medium --workers 48 --report-every 300"
+run = "python dev/082_tol_crawler.py fetch --manifest /work/treeoflife_200m/manifest --images /work/treeoflife_200m/images --size 256 --variant medium --workers 1 --chunk 2000 --max-cpus 1 --report-every 600"
 [schedule]
 auto_extend = "1h"
-max_time = "168h"
+max_time = "150h"
 
 [[resources]]
 type = "file"
-path = "/12347837/datasets/global_lepi"
-read_only = true
+path = "/12383016/treeoflife_200m"

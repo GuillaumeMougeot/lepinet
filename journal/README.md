@@ -187,6 +187,7 @@ Six phases, in order. The engineering lessons each one produced are consolidated
 
 | opened | what broke | status |
 |---|---|---|
+| [10-01](2026-10-01-the-crawl-that-spent-58-percent-of-the-cpu-budget.md) | A network-bound crawler ran on 64 vCPU for 63 h | **RESOLVED.** **4,032 core-hours, 58 % of the CPU allocation**, for work needing 1-2 cores. Three guards now refuse it (pre-submit hook, CI test, runtime). Also found: UCloud reports 256 cores to `os.cpu_count()`; the blocked-host breaker had sent 1.66 M requests to institutions that refused us. Crawl resumed on 1 vCPU, corpus moved to the `datasets` drive |
 | [08-06](2026-08-06-the-cosine-head-is-not-unit-norm.md) | The cosine head's prototype rows are **not** unit-norm, though the design says they are | **OPEN** — confirmed on two checkpoints (mean 1.081 and 1.767); mechanism unknown. Accuracy numbers unaffected; the z-score calibration argument and the ArcFace round-trip may be |
 | [07-16](2026-07-16-gpu-hang.md) | The training box hard-hung overnight | RESOLVED as far as the evidence allows — hardware |
 | [07-16](2026-07-16-venv-uv-sync-incident.md) | `uv sync` pruned the venv and broke torch | RESOLVED — **never run `uv sync` here**; known-good version set recorded |

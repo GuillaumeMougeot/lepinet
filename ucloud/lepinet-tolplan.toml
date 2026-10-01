@@ -1,3 +1,6 @@
+# CPU budget (2026-10-01): 4 vCPU x 6h max = 24 core-hours worst case.
+# Network-bound: measured CPU < 0.5 % on the first, serial attempt and still a few cores with 24
+# parallel readers. It ran on 64 vCPU; 4 is ample.
 # TOL-1: build the host-partitioned crawl manifest for TreeOfLife-200M.
 #
 # Streams catalog.parquet (16.8 GB, 233,055,986 rows) twice -- once to count images per species,
@@ -12,22 +15,21 @@ replicas = 1
 name = "pytorch-te"
 version = "26.05"
 [product]
-id = "cpu-amd-zen5-64-vcpu"
+id = "cpu-amd-zen5-4-vcpu"
 category = "cpu-amd-zen5"
 provider = "ucloud"
 [time_allocation]
-hours = 12
+hours = 3
 [sync]
 local = ".."
 remote = "/12347837/repos/lepinet"
 [setup]
 script = "setup-lepinet.sh"
-run = "LEPINET_NO_GPU=1 python dev/082_tol_crawler.py plan --out /work/lepinet/data/tol/manifest --min-img 50 --cap 2000 --readers 24 --prefetch 48"
+run = "python dev/082_tol_crawler.py plan --out /work/treeoflife_200m/manifest --min-img 50 --cap 2000 --readers 16 --prefetch 32"
 [schedule]
 auto_extend = "1h"
-max_time = "48h"
+max_time = "6h"
 
 [[resources]]
 type = "file"
-path = "/12347837/datasets/global_lepi"
-read_only = true
+path = "/12383016/treeoflife_200m"

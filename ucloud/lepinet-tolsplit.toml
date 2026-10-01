@@ -1,3 +1,5 @@
+# CPU budget (2026-10-01): 2 vCPU x 4h max = 8 core-hours worst case.
+# Local parquet I/O. Now streams its input, so it no longer needs the RAM of a large node.
 # TOL-1b: reshard the manifest into 50k-row parts. `plan` writes one part per host, and the
 # iNaturalist part is ~50 M rows -- a part is only marked done when it finishes in full, so a
 # 24 h job slot would resume from zero every time. Resume granularity is the part size.
@@ -14,22 +16,21 @@ replicas = 1
 name = "pytorch-te"
 version = "26.05"
 [product]
-id = "cpu-amd-zen5-64-vcpu"
+id = "cpu-amd-zen5-2-vcpu"
 category = "cpu-amd-zen5"
 provider = "ucloud"
 [time_allocation]
-hours = 4
+hours = 2
 [sync]
 local = ".."
 remote = "/12347837/repos/lepinet"
 [setup]
 script = "setup-lepinet.sh"
-run = "python dev/082_tol_crawler.py split --manifest /work/lepinet/data/tol/manifest --rows-per-part 50000"
+run = "python dev/082_tol_crawler.py split --manifest /work/treeoflife_200m/manifest --rows-per-part 50000"
 [schedule]
 auto_extend = "1h"
-max_time = "48h"
+max_time = "4h"
 
 [[resources]]
 type = "file"
-path = "/12347837/datasets/global_lepi"
-read_only = true
+path = "/12383016/treeoflife_200m"

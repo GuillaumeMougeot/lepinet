@@ -1,6 +1,6 @@
 # PLAN — where we are, and what runs next
 
-**Kind:** living · **Last updated:** 2026-09-30 · **Supersedes:** [[2026-07-28-landscape-and-plan]]
+**Kind:** living · **Last updated:** 2026-10-01 · **Supersedes:** [[2026-07-28-landscape-and-plan]]
 
 The one file in `journal/` meant to be true *today*. Everything else is a record of a moment.
 
@@ -115,7 +115,7 @@ retracted comparison); re-score §4.5 with each head's own rule.
 | ~~**D1**~~ | **DONE (probe). micro-acc +5.06, macro-F1 -1.70.** The metrics disagree: restriction concentrates false positives onto the scored classes, so it helps the average observation and hurts the tail. macro-F1 peaks at ~4,000 labels, not at the true 464. probeho arm running. [[2026-08-28-a-regional-checklist-helps-the-user-and-hurts-the-tail]] | eval only | **next: restricted head + abstention**, which should recover the tail damage |
 | ~~**P5b**~~ | **DONE — prediction correct. probe 0.7703** (predicted 0.770-0.792). P5 n = 2: probe **0.7757 ± 0.0054**, held-out **0.7817 ± 0.0011**. The tie with B8 survives and is now measured (0.41 pt against a 1.07 pt spread). Adds a **fourth noise-floor regime**: unfrozen adaptation at 303 M, held-out spread **0.0021 vs 0.0374 frozen at 198 M** — unfreezing scores more *reproducibly*, not just better | done | P5 case now rests on deployability, not probe |
 | ~~**O1**~~ | **abstention DONE: B8 and P5 tie on macro-F1 and differ by 17.3 pt on useful-answer rate** (73.3 % vs 92.8 % answered). Abstention under shift costs 26.7 % coverage against 0.82 % in-distribution. Open-set rules running. [[2026-08-28-two-tied-models-differ-by-17-points-in-deployment]] | eval only | **P5 is the model to ship**, and the reason is calibration, not accuracy |
-| **D2a** | **ToL-200M crawler `dev/082` — CRAWLING.** Manifest built and resharded: **87,560,065 rows over 354 hosts in 2,050 parts**, reproducing the 88.1 M estimate from an independent source. Measured: 99.5 % success on S3, ~25 KB/image, iNat `medium` variant **10.2x less transfer** than `original` for identical output | CPU node | ~2.2 TB expected. observation.org (9.3 %) and mediaphoto.mnhn.fr (3.6 %) hard-block crawlers and need a research-access request |
+| **D2a** | **ToL-200M crawler `dev/082` — RESUMED on 1 vCPU (2026-10-01).** The first crawl spent **4,032 core-hours (58 % of the CPU allocation)** on a 64-vCPU node and stopped at 71.6 %; [[2026-10-01-the-crawl-that-spent-58-percent-of-the-cpu-budget]]. Corpus now on the `datasets` drive at **`/12383016/treeoflife_200m/`**. Done: 62.6 M rows; **left: 6.66 M over 17 hosts**, mostly herbaria at the politeness cap; 18.3 M on 9 hosts that block us | 1 vCPU, **150 core-hours max** | tail rate decides whether 150 h suffices -- report the number to the owner before extending. Ask the 9 blocked institutions for research access |
 | **D2b** | train our objective on ToL-10M, eval on Lepidoptera | ~2.5 h/epoch | the controlled objective comparison. Predicted: accuracy within ±1.5 pt, **frozen probe better by >3 pt** |
 | **O2** | open-set at 12 K -> 204 K taxa on cached ToL embeddings | 1 GPU, no download | turns §4.9 from "rules do not transfer across model scale" into "nor across class-count scale" |
 | ~~1~~ | ~~read H4 and B10~~ | — | **DONE 2026-08-24.** H4 falsified, B10 a tie. |

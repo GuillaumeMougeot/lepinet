@@ -137,6 +137,7 @@ MAGIC = ((b"\xff\xd8\xff", "jpeg"), (b"\x89PNG\r\n\x1a\n", "png"), (b"GIF8", "gi
          (b"RIFF", "webp"), (b"II*\x00", "tiff"), (b"MM\x00*", "tiff"), (b"BM", "bmp"))
 
 STATUS_OK = "ok"
+SKIPPED_BLOCKED = "skipped_blocked"   # never recorded: the row stays unattempted
 
 
 # iNaturalist's open-data bucket serves every photo at four sizes, and the catalog always points at
@@ -167,6 +168,16 @@ def variant_url(url: str, variant: str) -> str | None:
     if not dot or "/original" not in base:
         return None
     return base.replace("/original", f"/{variant}") + dot + ext
+
+
+def _complete_jpeg(p: Path) -> bool:
+    """True if `p` exists and ends with the JPEG end-of-image marker -- i.e. was fully written."""
+    try:
+        with open(p, "rb") as f:
+            f.seek(-2, os.SEEK_END)
+            return f.read(2) == b"\xff\xd9"
+    except OSError:
+        return False
 
 
 def host_of(url: str) -> str:
@@ -251,6 +262,7 @@ def stage_plan(a):
     hundreds of genera, and keying on it would silently merge unrelated taxa.
     """
     from huggingface_hub import HfFileSystem
+    pin_thread_pools(effective_cpus())
     fs = HfFileSystem()
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -353,6 +365,7 @@ class HostBudget:
     cooldown_until: float = 0.0
     stats: Counter = field(default_factory=Counter)
     blocked: bool = False
+    window: list = field(default_factory=list)   # recent outcomes, 1 = forbidden
 
     def __post_init__(self):
         self.cur = max(MIN_CAP, int(self.cap * START_FRACTION))
@@ -371,7 +384,13 @@ class HostBudget:
         else:
             self._sem.release()
 
+    def _observe(self, forbidden: bool):
+        self.window.append(1 if forbidden else 0)
+        if len(self.window) > 200:
+            del self.window[0]
+
     def on_success(self):
+        self._observe(False)
         self.stats["ok"] += 1
         self.ok_streak += 1
         if self.ok_streak >= self.grow_after and self.cur < self.cap:
@@ -388,20 +407,27 @@ class HostBudget:
         self.cooldown_until = time.monotonic() + (retry_after if retry_after else 5.0)
 
     def on_error(self):
+        self._observe(False)
         self.stats["error"] += 1
         self.ok_streak = 0
 
     def note_forbidden(self, probe: int, ratio: float):
-        """Circuit breaker for a host that is refusing us outright.
+        """Circuit breaker for a host that is refusing us.
 
         A handful of 403s is normal -- individual records get withdrawn or embargoed. A host that
-        returns 403 to *almost everything* is not losing records, it is blocking the crawler, and
-        continuing to ask is both futile and rude. After ``probe`` attempts, if the forbidden rate
-        exceeds ``ratio``, we stop that host and record it for a human to follow up.
+        returns 403 to *almost everything* is blocking the crawler, and continuing is futile and
+        rude to a server someone runs on a museum budget.
+
+        The rate is taken over a **sliding window of the last 200 outcomes**, not over the host's
+        lifetime. The first crawl used a lifetime ratio, and `medialib.naturalis.nl` showed why
+        that is wrong: it served ~137 k images, then banned us, and the lifetime ratio took **1.26
+        million further forbidden requests** to climb past 90 %. A window trips within ``probe``
+        requests of the ban however much the host served before it.
         """
         self.stats["forbidden"] += 1
-        seen = self.stats["ok"] + self.stats["forbidden"] + self.stats["error"]
-        if seen >= probe and self.stats["forbidden"] / seen >= ratio:
+        self._observe(True)
+        n = len(self.window)
+        if n >= probe and sum(self.window[-probe:]) / probe >= ratio:
             self.blocked = True
 
 
@@ -418,11 +444,20 @@ def verify_and_encode(body: bytes, size: int, quality: int, min_dim: int):
         return None, "bad_magic", None
     try:
         img = Image.open(io.BytesIO(body))
-        img.load()                                   # full decode; catches truncation
+        orig = img.size                              # from the header, before any decoding
+        # DCT-domain downscaling: libjpeg decodes JPEGs directly at 1/2, 1/4 or 1/8 scale, never
+        # below `size` on the short side. The remaining hosts are herbaria serving 50-100 MP
+        # specimen scans that we shrink to 256 px anyway; measured on a 54 MP scan, full decode
+        # took 250 ms and draft decode 22 ms (11x) for a mean pixel difference of 0.29/255. On a
+        # 1-vCPU job that is the difference between keeping up and becoming the bottleneck.
+        # A no-op for non-JPEG formats.
+        img.draft("RGB", (size, size))
+        img.load()                                   # still a full decode of the (reduced) stream:
+                                                     # truncation is still caught
     except Exception as e:
         return None, f"decode_fail:{type(e).__name__}", None
-    if min(img.size) < min_dim:
-        return None, f"too_small:{img.size[0]}x{img.size[1]}", None
+    if min(orig) < min_dim:
+        return None, f"too_small:{orig[0]}x{orig[1]}", None
     if img.mode not in ("RGB", "L"):
         img = img.convert("RGB")
     elif img.mode == "L":
@@ -449,6 +484,29 @@ class Fetcher:
         self.budgets: dict[str, HostBudget] = {}
         self.totals = Counter()
         self.t0 = time.monotonic()
+        self.blocked_path = Path(a.manifest) / "blocked_hosts.json"
+        try:
+            self.known_blocked: dict = json.loads(self.blocked_path.read_text())
+        except (OSError, ValueError):
+            self.known_blocked = {}
+
+    def record_blocked(self, b: "HostBudget"):
+        """Persist a tripped breaker, so a resumed crawl skips the host instead of re-probing it.
+
+        The file is also the to-do list for a human: these are institutions to ask for research
+        access, which is the correct response to an explicit block -- not a better disguise.
+        """
+        if b.host in self.known_blocked:
+            return
+        self.known_blocked[b.host] = {
+            "forbidden": b.stats["forbidden"], "ok": b.stats["ok"], "error": b.stats["error"],
+            "when": time.strftime("%Y-%m-%d %H:%M:%S")}
+        tmp = self.blocked_path.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps(self.known_blocked, indent=2, sort_keys=True))
+        os.replace(tmp, self.blocked_path)
+        print(f"  [blocked] {b.host}: {b.stats['forbidden']:,} forbidden, {b.stats['ok']:,} ok -- "
+              f"stopped and recorded in {self.blocked_path.name}. Ask the institution for access "
+              f"rather than retrying.", flush=True)
 
     def budget(self, host: str) -> HostBudget:
         """`host` must be the real hostname, never the directory slug.
@@ -472,6 +530,13 @@ class Fetcher:
         url = urls[0]
         for attempt in range(self.a.attempts):
             await b.acquire()
+            # Re-check AFTER the semaphore, immediately before the request leaves. Every row of a
+            # chunk is scheduled at once and passes any earlier check while the breaker is still
+            # closed, then waits here; checking only before the wait let a blocked host receive
+            # every queued request anyway (measured: 120 of 120, with the breaker tripped at ~40).
+            if b.blocked:
+                b.release()
+                return None, SKIPPED_BLOCKED, None
             try:
                 async with session.get(url, allow_redirects=True) as r:
                     if r.status in (429, 503):
@@ -521,47 +586,85 @@ class Fetcher:
         return None, "exhausted_attempts", None
 
     async def run_part(self, session, part: Path, host: str):
+        """Crawl one manifest part, streaming its rows rather than materialising them.
+
+        Four properties, each the fix for something that went wrong on the first full crawl:
+
+        * **Streaming.** Rows are read `--chunk` at a time from Arrow. Materialising a whole 50 k-row
+          part as Python dicts costs ~50 MB per active host, and a few hundred active hosts is what
+          forced a large node. Memory is now ~hosts x chunk, which is what lets this run on 2 vCPU.
+        * **Resumable inside a part.** A part's metadata is only written when it completes, so a
+          crawl killed mid-part used to refetch the whole part. Now a row whose image is already on
+          disk *and complete* is recorded without a request. Completeness = the JPEG ends in FFD9;
+          a file truncated by a kill does not, and is refetched.
+        * **Atomic image writes** (tmp + rename), so a future kill cannot leave a truncated file
+          that looks finished.
+        * **The circuit breaker is checked on every row**, not at part boundaries. Checking only
+          between parts meant every blocked host still received its full first part -- 50,000
+          requests to a server that had already said no.
+        """
         meta_path = part.with_suffix(".meta.parquet")
         tmp_path = part.with_suffix(".meta.parquet.tmp")
         if meta_path.exists() and not self.a.retry_failed:
+            return
+        b = self.budget(host)
+        if b.blocked:
             return
         done: set[str] = set()
         if meta_path.exists():
             d = pq.read_table(meta_path, columns=["uuid", "status"]).to_pydict()
             done = {u for u, s in zip(d["uuid"], d["status"])
                     if s == STATUS_OK or not self.a.retry_failed}
-        rows = pq.read_table(part).to_pylist()
-        rows = [r for r in rows if r["uuid"] not in done]
-        if not rows:
-            return
-        b = self.budget(host)
-        results: list[dict] = []
-        # Chunked rather than one gather over the whole part. `stage_split` keeps parts small, but a
-        # manifest written before that stage existed has one part per host -- 50 M rows for the
-        # iNaturalist bucket -- and gathering 50 M coroutines exhausts memory before a single image
-        # is fetched. Chunking bounds live coroutines regardless of how the manifest was written.
-        chunk = max(1, self.a.chunk)
 
-        async def one(row):
-            jpg, status, meta = await self.fetch_one(session, row, b)
-            rec = {"uuid": row["uuid"], "species": row["species"], "status": status,
-                   "path": "", "content_hash": "", "width": 0, "height": 0, "bytes": 0}
-            if jpg is not None:
+        tables: list[pa.Table] = []
+        aborted = False
+        for batch in pq.ParquetFile(part).iter_batches(batch_size=max(1, self.a.chunk),
+                                                       columns=["uuid", "url", "species"]):
+            if b.blocked:
+                aborted = True
+                break
+            rows = [r for r in batch.to_pylist() if r["uuid"] not in done]
+            recs: list[dict] = []
+
+            async def one(row):
+                if b.blocked:
+                    return                    # leave unattempted, so a later --retry-blocked can finish it
                 d = self.images / slug(row["species"])
-                d.mkdir(parents=True, exist_ok=True)
                 p = d / f"{row['uuid']}.jpg"
-                p.write_bytes(jpg)
-                ch, (w, h) = meta
-                rec |= {"path": str(p.relative_to(self.images)), "content_hash": ch,
-                        "width": w, "height": h, "bytes": len(jpg)}
-            results.append(rec)
-            self.totals[status if status == STATUS_OK else "fail"] += 1
-            self.totals["total"] += 1
+                rec = {"uuid": row["uuid"], "species": row["species"], "status": "",
+                       "path": "", "content_hash": "", "width": 0, "height": 0, "bytes": 0}
+                if _complete_jpeg(p):
+                    rec |= {"status": STATUS_OK, "path": str(p.relative_to(self.images)),
+                            "bytes": p.stat().st_size}
+                    self.totals["already_on_disk"] += 1
+                    recs.append(rec)
+                    return
+                jpg, status, meta = await self.fetch_one(session, row, b)
+                if status == SKIPPED_BLOCKED:
+                    return
+                rec["status"] = status
+                if jpg is not None:
+                    d.mkdir(parents=True, exist_ok=True)
+                    tmp = p.with_suffix(".jpg.part")
+                    tmp.write_bytes(jpg)
+                    os.replace(tmp, p)
+                    ch, (w, h) = meta
+                    rec |= {"path": str(p.relative_to(self.images)), "content_hash": ch,
+                            "width": w, "height": h, "bytes": len(jpg)}
+                recs.append(rec)
+                self.totals[status if status == STATUS_OK else "fail"] += 1
+                self.totals["total"] += 1
 
-        for k in range(0, len(rows), chunk):
-            await asyncio.gather(*(one(r) for r in rows[k:k + chunk]))
-        pq.write_table(pa.Table.from_pylist(results), tmp_path)
-        os.replace(tmp_path, meta_path)
+            await asyncio.gather(*(one(r) for r in rows))
+            if recs:
+                tables.append(pa.Table.from_pylist(recs))
+
+        if aborted or b.blocked:
+            self.record_blocked(b)
+            return                            # part not finished: no meta, so it stays resumable
+        if tables:
+            pq.write_table(pa.concat_tables(tables), tmp_path)
+            os.replace(tmp_path, meta_path)
 
     async def main(self):
         import aiohttp
@@ -589,13 +692,11 @@ class Fetcher:
         async with aiohttp.ClientSession(timeout=timeout, connector=conn,
                                          headers=BASE_HEADERS) as session:
             async def host_worker(host, plist):
+                if host in self.known_blocked and not self.a.retry_blocked:
+                    self.totals["skipped_blocked_parts"] += len(plist)
+                    return
                 for p in plist:
-                    b = self.budget(host)
-                    if b.blocked:
-                        self.totals["skipped_blocked"] += len(plist)
-                        print(f"  [blocked] {host}: {b.stats['forbidden']} forbidden of "
-                              f"{sum(b.stats.values())} -- stopping this host. Request research "
-                              f"access from the institution rather than retrying.", flush=True)
+                    if self.budget(host).blocked:
                         break
                     await self.run_part(session, p, host)
 
@@ -622,7 +723,55 @@ class Fetcher:
                   f"ok={b.stats['ok']:,} throttled={b.stats['throttled']} err={b.stats['error']}")
 
 
+def effective_cpus() -> int:
+    """CPUs this process may actually use: the cgroup quota if set, else the affinity mask.
+
+    `os.cpu_count()` reports the *host's* cores inside a container, which is the wrong number to
+    budget against -- a 4-vCPU job on a 128-core machine would look huge, and the reverse mistake
+    is just as easy.
+    """
+    n = len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else (os.cpu_count() or 1)
+    try:
+        quota, period = Path("/sys/fs/cgroup/cpu.max").read_text().split()
+        if quota != "max":
+            n = min(n, max(1, round(int(quota) / int(period))))
+    except (OSError, ValueError):
+        pass
+    return n
+
+
+def pin_thread_pools(n: int) -> None:
+    """Size every library thread pool to the job's real allocation, not the machine's.
+
+    Measured on UCloud (2026-10-01): a 2-vCPU job runs on a 256-core host, and inside the
+    container `os.cpu_count()` and the affinity mask both report **256**; only the cgroup quota
+    says 2. Libraries that size pools from `os.cpu_count()` -- pyarrow's CPU pool among them --
+    therefore start 256 threads on 2 CPUs. Pin them to what `effective_cpus()` measured.
+    """
+    pa.set_cpu_count(max(1, n))
+    pa.set_io_thread_count(max(4, 2 * n))   # I/O threads mostly wait; a few more than CPUs is right
+    for var in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
+        os.environ.setdefault(var, str(max(1, n)))
+
+
 def stage_fetch(a):
+    """Crawl. Refuses to start on an oversized node.
+
+    This job is network-bound: measured at ~1.1 cores per 240 img/s of decode, so the fastest
+    phase of the first crawl (~385 img/s) needed under 2 cores and the slow tail under one. It was
+    nonetheless run on 64 vCPU for 63 hours -- **4,032 core-hours, 58 % of the project's CPU
+    allocation** -- because nothing measured the need or capped the spend. The guard below makes a
+    repeat cost a few minutes instead of days. `ucloud/budget_check.py` refuses the spec before
+    submission; this refuses the process if the spec got through anyway.
+    """
+    n = effective_cpus()
+    print(f"effective CPUs: {n} (limit {a.max_cpus}); os.cpu_count() says {os.cpu_count()}", flush=True)
+    pin_thread_pools(n)
+    if n > a.max_cpus and not a.allow_big_node:
+        raise SystemExit(
+            f"REFUSING to crawl on {n} CPUs (limit {a.max_cpus}). This job is network-bound and "
+            f"wastes CPU budget on a large node -- see the stage_fetch docstring. Use a smaller "
+            f"product, or pass --allow-big-node with the owner's approval.")
     Path(a.images).mkdir(parents=True, exist_ok=True)
     asyncio.run(Fetcher(a).main())
 
@@ -642,6 +791,7 @@ def stage_split(a):
     Resharding is local parquet I/O over a manifest already on disk -- minutes -- against 45 minutes
     to re-run `plan`. Idempotent: hosts already split into `part-00001` or beyond are left alone.
     """
+    pin_thread_pools(effective_cpus())
     root = Path(a.manifest)
     total_in = total_out = 0
     for d in sorted(root.glob("host=*")):
@@ -654,14 +804,15 @@ def stage_split(a):
             continue
         src = parts[0]
         n = pq.ParquetFile(src).metadata.num_rows
-        tbl = pq.read_table(src)
         tmp = d / "_resharding"
         tmp.mkdir(exist_ok=True)
+        # Streamed, so peak memory is one output part regardless of input size. Reading the
+        # 50 M-row iNaturalist part whole needs ~15 GB of Arrow, which is what pushed this onto a
+        # 64-vCPU node the first time; a batch at a time it runs on 2.
         k = 0
-        for off in range(0, n, a.rows_per_part):
-            pq.write_table(tbl.slice(off, a.rows_per_part), tmp / f"part-{k:05d}.parquet")
+        for batch in pq.ParquetFile(src).iter_batches(batch_size=a.rows_per_part):
+            pq.write_table(pa.Table.from_batches([batch]), tmp / f"part-{k:05d}.parquet")
             k += 1
-        del tbl
         src.unlink()
         for f in sorted(tmp.glob("part-*.parquet")):
             f.rename(d / f.name)
@@ -671,6 +822,46 @@ def stage_split(a):
         print(f"  {d.name[5:]:52s} {n:>12,} rows -> {k:,} parts", flush=True)
     print(f"\nmanifest: {total_in:,} rows in {total_out:,} parts "
           f"(<= {a.rows_per_part:,} rows each)")
+
+
+# ---------------------------------------------------------------------------------------------
+# Stage 2b -- remaining
+# ---------------------------------------------------------------------------------------------
+
+def stage_remaining(a):
+    """What is left to crawl, per host -- the number a resume should be budgeted from.
+
+    Reads only parquet footers for row counts, so it is cheap even over 2,050 parts. A part with a
+    `.meta.parquet` is finished; a part without one counts in full (an over-estimate by at most the
+    in-flight rows, which the resumed crawl skips from disk without a request).
+    """
+    root = Path(a.manifest)
+    try:
+        blocked = set(json.loads((root / "blocked_hosts.json").read_text()))
+    except (OSError, ValueError):
+        blocked = set()
+    rows_done = rows_left = 0
+    left_by_host: Counter = Counter()
+    blocked_left = 0
+    for d in sorted(root.glob("host=*")):
+        parts = [p for p in sorted(d.glob("part-*.parquet")) if not p.name.endswith(".meta.parquet")]
+        if not parts:
+            continue
+        host = host_of(pq.read_table(parts[0], columns=["url"]).column("url")[0].as_py())
+        for p in parts:
+            n = pq.ParquetFile(p).metadata.num_rows
+            if p.with_suffix(".meta.parquet").exists():
+                rows_done += n
+            elif host in blocked:
+                blocked_left += n
+            else:
+                rows_left += n
+                left_by_host[host] += n
+    print(f"finished parts: {rows_done:,} rows | still to crawl: {rows_left:,} rows over "
+          f"{len(left_by_host)} hosts | on blocked hosts (skipped): {blocked_left:,}")
+    print("\nlargest remaining hosts, with the politeness cap that bounds their speed:")
+    for h, n in left_by_host.most_common(a.top):
+        print(f"  {n:>11,}  cap {HOST_CAPS.get(h, DEFAULT_CAP):>3}  {h}")
 
 
 # ---------------------------------------------------------------------------------------------
@@ -742,8 +933,14 @@ def build_parser():
     q.add_argument("--limit-hosts", type=int, default=0, help="smoke test: only the first N hosts")
     q.add_argument("--retry-failed", action="store_true")
     q.add_argument("--report-every", type=float, default=60.0)
-    q.add_argument("--chunk", type=int, default=20_000,
-                   help="rows gathered concurrently within a part; bounds live coroutines")
+    q.add_argument("--chunk", type=int, default=2_000,
+                   help="rows streamed per batch within a part; bounds memory and live coroutines")
+    q.add_argument("--max-cpus", type=int, default=8,
+                   help="refuse to run on more CPUs than this (network-bound job; see stage_fetch)")
+    q.add_argument("--allow-big-node", action="store_true",
+                   help="override --max-cpus. Owner approval only")
+    q.add_argument("--retry-blocked", action="store_true",
+                   help="re-attempt hosts recorded in blocked_hosts.json (e.g. after access is granted)")
     q.add_argument("--block-probe", type=int, default=40,
                    help="attempts before the blocked-host circuit breaker may trip")
     q.add_argument("--block-ratio", type=float, default=0.9,
@@ -754,6 +951,11 @@ def build_parser():
     q.add_argument("--manifest", default="data/tol/manifest")
     q.add_argument("--rows-per-part", type=int, default=50_000)
     q.set_defaults(fn=stage_split)
+
+    q = sub.add_parser("remaining", help="rows left to crawl, per host (budget a resume from this)")
+    q.add_argument("--manifest", default="data/tol/manifest")
+    q.add_argument("--top", type=int, default=25)
+    q.set_defaults(fn=stage_remaining)
 
     q = sub.add_parser("report", help="what we have and what failed")
     q.add_argument("--manifest", default="data/tol/manifest")

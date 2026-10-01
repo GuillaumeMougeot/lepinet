@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/ucloud/budget_check.py\" --hook",
+            "timeout": 20,
+            "statusMessage": "Checking UCloud CPU budget"
+          }
+        ]
+      }
+    ]
+  }
+}

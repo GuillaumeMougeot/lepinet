@@ -67,10 +67,25 @@ that chat logs are not load-bearing. `dev/036_ledger.py` prints every run's conf
 - **Never filter the test fold.** `--min-img-per-spc` on evaluation silently drops the tail out of a
   *macro* average and inflates the number by ~3 points. If a score jumps, audit the eval set before
   celebrating. `journal/2026-07-24-src-lepinet-baseline-port.md`.
-- **`ucloud q` only advances when a daemon or cron ticks it.** Without one, `auto_extend` is inert
-  and `--after` jobs never launch, while `ucloud q ls` still looks healthy. Check
-  `ps aux | grep "ucloud q daemon"` before diagnosing any lost or stuck job.
-  `journal/2026-07-30-ucloud-queue-daemon.md`.
+- **`ucloud q` only advances when a tick *succeeds*.** Without one, `auto_extend` is inert and
+  `--after` jobs never launch, while `ucloud q ls` still looks healthy. A cron entry exists, so the
+  check is not "is it scheduled" but **"is it working"**: `tail ~/.ucloud-tick.log`. On
+  2026-08-30 the UCloud refresh token expired, every tick since has failed, and a 40-hour crawl was
+  terminated mid-run because nothing extended it. Fix: the owner runs `ucloud login` with a fresh
+  browser token. `journal/2026-07-30-ucloud-queue-daemon.md`.
+- **CPU core-hours are scarcer than GPU hours. Compute the cost before submitting any CPU job.**
+  Worst case = vCPU x `max_time` (or `hours` without `auto_extend`); put that number in the message
+  to the owner. On 2026-08-28 a network-bound crawler ran on 64 vCPU for 63 h and spent **4,032
+  core-hours, 58 % of the 7,000 allocation**, needing one or two cores. Size nodes from a measured
+  CPU profile; never on "headroom". `ucloud/budget_check.py` enforces it three ways -- a PreToolUse
+  hook in `.claude/settings.json` blocks `ucloud q submit` / `jobs create`, a CI test checks every
+  committed spec, and the crawler refuses an oversized node at runtime. Over 8 vCPU or 300 worst-case
+  core-hours needs `# budget-approved: <who/when/why>` in the spec, and only the owner grants it.
+  `journal/2026-10-01-the-crawl-that-spent-58-percent-of-the-cpu-budget.md`.
+- **Inside a UCloud job, `os.cpu_count()` reports the host's 256 cores, not your allocation.** So
+  does the affinity mask; only `/sys/fs/cgroup/cpu.max` is right. Anything that sizes a thread pool
+  from `os.cpu_count()` (pyarrow, torch intra-op, BLAS) oversubscribes the job's real CPUs. Read the
+  cgroup quota -- `effective_cpus()` in `dev/082_tol_crawler.py` -- and pin pools to it.
 - **`data/` is a symlink to machine-local storage and is gitignored.** A clone elsewhere has no runs.
   `RESULTS.md` is generated but **tracked**, because it is the only copy of those numbers that leaves
   the training box.
