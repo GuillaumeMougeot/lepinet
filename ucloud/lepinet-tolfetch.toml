@@ -44,3 +44,10 @@ max_time = "150h"
 [[resources]]
 type = "file"
 path = "/12383016/treeoflife_200m"
+
+# Our own GBIF Lepidoptera download, read-only: dev/084 fill/extend rows are file:// paths into it
+# (/work/global_lepi/images/<speciesKey>/<url_hash>.jpg), copied through the crawler's QC/resize.
+[[resources]]
+type = "file"
+path = "/12383016/global_lepi"
+read_only = true

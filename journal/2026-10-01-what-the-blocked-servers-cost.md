@@ -151,3 +151,38 @@ README.
 manifest's own JSON so it can be refreshed as the crawl proceeds: layout, schemas, the selection
 policy, image processing, composition by kingdom/class/basis, the label caveats above, the blocked
 and dead servers with contacts, what they cost, licences, and how to reproduce.
+
+## Update (2026-10-01): Lepidoptera completed from our own GBIF download
+
+The owner pointed out that our `global_lepi` corpus (6.3 M images, downloaded earlier with gbifxdl,
+on the `datasets` drive at `/12383016/global_lepi`) overlaps the TreeOfLife subset. `dev/084`
+replays the selection and substitution for Lepidoptera (exact: the cap is per species) and joins
+on the image URL, or on the GBIF occurrence id when an occurrence has exactly one image on each
+side. 4,142,511 of our images are in ToL, matching August's contamination count of 4,141,385.
+
+| Lepidoptera | images |
+|---|---:|
+| selected from ToL | 8,781,713 |
+| on unreachable servers (13) | 1,633,559 |
+| covered by substitutes | 620,636 |
+| **filled from our download** (same photograph: 263,277 by URL, 2,497 by occurrence) | **265,774** |
+| still lost | 747,149 |
+| **extended** (images ToL does not have, 11,054 species under the cap) | **1,262,865** |
+
+**7,768,790 -> 9,297,429 Lepidoptera images (+20 %), 19,214 -> 19,981 species** (767 clear the
+50-image floor only with our images). Our download holds **549,702 observation.org images**, plus
+121,440 from artsobservasjoner.no and 40,027 from ALA -- fetched before those servers refused
+crawlers, and exactly the European field photographs the recommendation above wanted. That weakens
+the case for writing to observation.org *for Lepidoptera*; it still holds for other taxa.
+
+Copied by the crawler itself: `file://` rows go through the same QC, resize and metadata as
+downloads (verified on the first 3,326, zero errors).
+
+Two cautions for D3:
+
+* **152,833 of these rows are from lepinet's held-out test fold** (`global_lepi_set == '0'`). They
+  are tagged and must be excluded from every training set.
+* **Extended species carry GBIF-backbone names**, while ToL aligned its taxonomy with TaxonoPy. Some
+  of the 767 "new" species may be synonyms of ToL species spelled differently, which would split one
+  species into two classes. Check before training: join on GBIF `speciesKey` / accepted names, not on
+  the name string.

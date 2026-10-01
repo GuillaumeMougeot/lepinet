@@ -1413,6 +1413,25 @@ def stage_describe(a):
               f"{plan.get('min_img', 50)}-image floor.", "",
               "Lost species by kingdom: " + ", ".join(f"{k} {f(v)}" for k, v in
                                                      rep.get("lost_species_by_kingdom", [])[:6]), ""]
+    fill = load("global_lepi_fill_report.json", {})
+    if fill:
+        L += ["## Lepidoptera completed from our own GBIF download", "",
+              "Our earlier Lepidoptera download (`/12383016/global_lepi`, gbifxdl, ~512 px) overlaps "
+              f"this subset heavily ({f(fill.get('global_lepi_also_in_tol'))} of its "
+              f"{f(fill.get('global_lepi_images'))} images are in TreeOfLife). `dev/084` uses it two ways, "
+              "as `host=file/part-g*.parquet` rows that the crawler copies through the same QC and resize:", "",
+              f"* **fill** -- {f(fill.get('filled_from_global_lepi'))} Lepidoptera images lost on "
+              "unreachable servers are the same photograph in our download (matched by URL, or by GBIF "
+              "occurrence when unambiguous). It was fetched before several servers began refusing "
+              "crawlers, and holds 549,702 observation.org images among others.",
+              f"* **extend** -- {f(fill.get('extended_images'))} images TreeOfLife does not have, for "
+              f"{f(fill.get('extended_species'))} species under the cap; "
+              f"{f(fill.get('species_new_above_floor'))} species clear the 50-image floor only this way.", "",
+              f"Lepidoptera: **{f(fill.get('lepidoptera_images_before'))} -> "
+              f"{f(fill.get('lepidoptera_images_after'))} images**, "
+              f"{f(fill.get('lepidoptera_species_planned'))} -> {f(fill.get('lepidoptera_species_after'))} "
+              "species. Each such row carries `gbif_id` and `global_lepi_set`; rows with "
+              "`global_lepi_set == '0'` are lepinet's **held-out test fold** and must never be trained on.", ""]
     L += ["## Licences -- read before redistributing", "",
           "Every image keeps the licence its publisher gave it (mostly CC0, CC-BY and CC-BY-NC; "
           "some datasets are more restrictive). This folder is a **research working copy**: fine "
