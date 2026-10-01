@@ -648,6 +648,11 @@ def verify_and_encode(body: bytes, size: int, quality: int, min_dim: int):
         # took 250 ms and draft decode 22 ms (11x) for a mean pixel difference of 0.29/255. On a
         # 1-vCPU job that is the difference between keeping up and becoming the bottleneck.
         # A no-op for non-JPEG formats.
+        # Draft decoding bounds a JPEG's memory however large it is; PNG/TIFF/WebP get decoded at
+        # full size, so the raised 400 MP ceiling must not apply to them -- one 400 MP PNG is
+        # ~1.2 GB decoded and ~2.4 GB once converted, most of a 3 GB job.
+        if img.format != "JPEG" and orig[0] * orig[1] > 60_000_000:
+            return None, f"too_large_pixels:{orig[0]}x{orig[1]}:{img.format}", None
         img.draft("RGB", (size, size))
         img.load()                                   # still a full decode of the (reduced) stream:
                                                      # truncation is still caught
@@ -729,6 +734,23 @@ class Fetcher:
         return self.budgets[host]
 
     async def fetch_one(self, session, row, b: HostBudget):
+        """Fetch, verify and encode one image, holding one memory slot from request to encode.
+
+        The slot used to be released when the body finished downloading, *before* decoding.
+        Decoding runs on one core, so whenever downloads outpace it -- 235 active hosts, the
+        iNaturalist substitutes at 64+ in parallel -- finished bodies queued for the decoder with
+        no bound, and the 3 GB job was killed within two minutes, three times, with no traceback.
+        Holding the slot through the encode makes `--max-inflight` a true bound on the bodies in
+        memory: at most max_inflight x max_bytes, whatever the download/decode speed ratio.
+        """
+        state = {"mem": False}
+        try:
+            return await self._fetch_one(session, row, b, state)
+        finally:
+            if state["mem"]:
+                self.inflight.release()
+
+    async def _fetch_one(self, session, row, b: HostBudget, state: dict):
         import aiohttp
         # Try the cheap size variant first; fall back to the catalog URL if it is missing.
         alt = variant_url(row["url"], self.a.variant)
@@ -776,7 +798,26 @@ class Fetcher:
                     cl = r.headers.get("content-length")
                     if cl and int(cl) > self.a.max_bytes:
                         return None, f"too_large:{cl}", None
-                    body = await r.read()
+                    # The memory slot covers exactly the life of a body: taken here, once the
+                    # response is known to be worth reading, and held through the encode
+                    # (released in fetch_one's finally). Not before the host slot -- coroutines
+                    # queued behind a slow host would sit on global slots and starve fast hosts --
+                    # and not for failed responses, which never hold a body, so dead hosts'
+                    # retry back-offs cannot hog slots either.
+                    if not state["mem"]:
+                        await self.inflight.acquire()
+                        state["mem"] = True
+                    # Streamed with a hard cap: with no Content-Length header, r.read() would
+                    # pull a body of any size into memory before the size check could run.
+                    chunks, size = [], 0
+                    async for piece in r.content.iter_chunked(1 << 16):
+                        size += len(piece)
+                        if size > self.a.max_bytes:
+                            b.on_error()
+                            return None, f"too_large:>{self.a.max_bytes}", None
+                        chunks.append(piece)
+                    body = b"".join(chunks)
+                    del chunks
                     b.on_success()
             except asyncio.TimeoutError:
                 b.on_throttle()                # a timeout from a small host is usually overload
@@ -904,6 +945,13 @@ class Fetcher:
 
     async def main(self):
         import aiohttp
+        # Memory bounds that do not grow with the number of hosts. Substitution gave 235 hosts
+        # work instead of 17, and the 1-vCPU (3 GB) job was killed: every active host held a
+        # chunk of pending coroutines and its in-flight bodies -- herbarium originals run to tens
+        # of MB -- so memory scaled with host count. Politeness caps already bound each host's
+        # speed, so capping active hosts and total in-flight requests costs no throughput.
+        self.inflight = asyncio.Semaphore(self.a.max_inflight)
+        self.active_hosts = asyncio.Semaphore(self.a.max_active_hosts)
         parts: list[tuple[Path, str]] = []
         for d in sorted(Path(self.a.manifest).glob("host=*")):
             ps = [p for p in sorted(d.glob("part-*.parquet")) if not p.name.endswith(".meta.parquet")]
@@ -931,10 +979,11 @@ class Fetcher:
                 if host in self.known_blocked and not self.a.retry_blocked:
                     self.totals["skipped_blocked_parts"] += len(plist)
                     return
-                for p in plist:
-                    if self.budget(host).blocked:
-                        break
-                    await self.run_part(session, p, host)
+                async with self.active_hosts:
+                    for p in plist:
+                        if self.budget(host).blocked:
+                            break
+                        await self.run_part(session, p, host)
 
             reporter = asyncio.create_task(self.report_loop())
             await asyncio.gather(*(host_worker(h, ps) for h, ps in by_host.items()))
@@ -953,7 +1002,8 @@ class Fetcher:
         ok = self.totals[STATUS_OK]
         print(f"[{dt/60:6.1f} min] {n:,} attempted | {ok:,} ok "
               f"({100*ok/max(n,1):.1f} %) | {rate:.0f} img/s | "
-              f"{self.totals['already_on_disk']:,} recovered from disk", flush=True)
+              f"{self.totals['already_on_disk']:,} recovered from disk | {cgroup_memory()}",
+              flush=True)
         # Sorted by activity, not successes: a table sorted by `ok` shows arbitrary idle hosts when
         # nothing is succeeding, which is exactly when you need to see where the requests are going.
         act = lambda b: sum(b.stats.values())
@@ -979,6 +1029,26 @@ def effective_cpus() -> int:
     except (OSError, ValueError):
         pass
     return n
+
+
+def cgroup_memory() -> str:
+    """Container memory as the kernel sees it: what the OOM killer acts on, not the process RSS.
+
+    Added after two crawls were killed with no traceback; the next one should say how close to
+    the limit it was and whether the kernel had already killed something.
+    """
+    def read(name):
+        try:
+            return Path(f"/sys/fs/cgroup/{name}").read_text().strip()
+        except OSError:
+            return ""
+    cur, mx = read("memory.current"), read("memory.max")
+    ooms = next((ln.split()[1] for ln in read("memory.events").splitlines()
+                 if ln.startswith("oom_kill ")), "?")
+    if not cur:
+        return "mem n/a"
+    gb = lambda s: f"{int(s)/1e9:.2f}" if s.isdigit() else s
+    return f"mem {gb(cur)}/{gb(mx)} GB, oom_kill {ooms}"
 
 
 def pin_thread_pools(n: int) -> None:
@@ -1267,19 +1337,27 @@ def stage_describe(a):
         L += [f"**Lepidoptera:** {f(lp.get('species'))} species, {f(lp.get('images'))} images.", "",
               table(comp.get("host", []), ("largest source servers", "images"), 12, total), ""]
     if blocked:
-        L += ["## Servers that refuse automated access", "",
-              f"{len(blocked)} servers return HTTP 403 to every request from the crawler (it "
-              "identifies itself and does not impersonate a browser). Their images are listed in "
-              "the manifest but not fetched. Contacts are the institutions' GBIF-registered "
-              "addresses.", "",
-              "| server | operator | contact | requests refused |", "|---|---|---|---:|"]
-        for h, v in sorted(blocked.items(), key=lambda kv: -kv[1].get("forbidden", 0)):
+        why = lambda v: {"forbidden": "refuses (HTTP 403)"}.get(v.get("reason", "forbidden"),
+                                                             v.get("reason", "?").replace("dead:", "dead: "))
+        L += ["## Servers we cannot fetch from", "",
+              f"{len(blocked)} servers are skipped. Some **refuse** automated access (HTTP 403; the "
+              "crawler identifies itself and does not impersonate a browser); others are **dead** -- "
+              "images removed (`http_404`), a hostname that no longer resolves (`connect`), an expired "
+              "certificate (`tls`). Their images stay in the manifest but are not fetched; most of "
+              "their species are covered by substitutes. Contacts are official addresses, from the "
+              "GBIF registry or the operator's own contact page. Which ones are worth writing to is "
+              "argued in `journal/2026-10-01-what-the-blocked-servers-cost.md` in the lepinet repo.", "",
+              "| server | why | operator | contact | requests before stopping |",
+              "|---|---|---|---|---:|"]
+        for h, v in sorted(blocked.items(),
+                           key=lambda kv: -(kv[1].get("forbidden", 0) + kv[1].get("error", 0))):
             c = contacts.get(h, {})
-            L.append(f"| `{h}` | {c.get('operator', '?')} | {c.get('contact', '?')} | "
-                     f"{f(v.get('forbidden', 0))} |")
+            L.append(f"| `{h}` | {c.get('why') or why(v)} | {c.get('operator', '?')} | "
+                     f"{c.get('contact', '?')} | "
+                     f"{f(v.get('forbidden', 0) + v.get('error', 0))} |")
         L += [""]
     if rep:
-        L += ["## What the blocked servers cost", "",
+        L += ["## What the unreachable servers cost", "",
               f"* {f(rep.get('selected_on_blocked_hosts'))} selected images sit on them, across "
               f"{f(rep.get('species_affected'))} species.",
               f"* Substitution finds {f(rep.get('substitutes_found'))} replacements, leaving "
@@ -1356,7 +1434,11 @@ def build_parser():
                    help="iNaturalist size variant to request (58 %% of the corpus). 'medium' is "
                         "500 px and 10x cheaper than 'original'; we downsize to --size anyway.")
     q.add_argument("--min-dim", type=int, default=64, help="reject images smaller than this")
-    q.add_argument("--max-bytes", type=int, default=40_000_000)
+    q.add_argument("--max-bytes", type=int, default=25_000_000)
+    q.add_argument("--max-inflight", type=int, default=48,
+                   help="requests in flight across all hosts; bounds memory held in bodies")
+    q.add_argument("--max-active-hosts", type=int, default=48,
+                   help="hosts crawled at once; bounds pending coroutines and buffers")
     q.add_argument("--attempts", type=int, default=4)
     q.add_argument("--timeout", type=float, default=60.0)
     q.add_argument("--workers", type=int, default=16, help="decode/encode threads")

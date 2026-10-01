@@ -24,7 +24,7 @@ hours = 3
 local = ".."
 remote = "/12347837/repos/lepinet"
 [setup]
-script = "setup-lepinet.sh"
+script = "setup-crawler.sh"
 run = "python dev/082_tol_crawler.py plan --out /work/treeoflife_200m/manifest --min-img 50 --cap 2000 --readers 16 --prefetch 32"
 [schedule]
 auto_extend = "1h"
