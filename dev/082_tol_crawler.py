@@ -134,6 +134,7 @@ HOST_CAPS: dict[str, int] = {
     "api.idigbio.org": 12,
     "www.boldsystems.org": 8,
     "fm-digital-assets.fieldmuseum.org": 8,
+    "file": 32,                  # local reads; cold network-FS reads run ~10/s per thread
 }
 DEFAULT_CAP = 4          # unknown institutional host
 MIN_CAP = 1
@@ -199,6 +200,8 @@ def _save_atomic(p: Path, data: bytes) -> None:
 
 
 def host_of(url: str) -> str:
+    if url.startswith("file://"):
+        return "file"            # images copied from a mounted drive (dev/084), not downloaded
     try:
         return urlparse.urlparse(url).netloc.lower()
     except Exception:
@@ -592,6 +595,12 @@ class HostBudget:
         """
         self._observe("D" if dead else "O")
         self.stats["error"] += 1
+        w = self.window
+        # Failing, whatever the kind: no success at all across the last 400 outcomes. Catches
+        # hosts that answer every request with a 5xx or an unclassified error (data.cyverse.org:
+        # 9,465 errors, 0 successes) which the dead breaker, keyed on 404/DNS/TLS, did not.
+        if len(w) >= 400 and "S" not in w[-400:] and "F" not in w[-400:] and not self.blocked:
+            self.blocked, self.reason = True, f"failing:{dead or 'errors'}"
         if dead:
             self.stats[f"dead_{dead}"] += 1
             w = self.window[-probe:]
@@ -752,6 +761,8 @@ class Fetcher:
 
     async def _fetch_one(self, session, row, b: HostBudget, state: dict):
         import aiohttp
+        if row["url"].startswith("file://"):
+            return await self._read_local(row["url"][len("file://"):], b, state)
         # Try the cheap size variant first; fall back to the catalog URL if it is missing.
         alt = variant_url(row["url"], self.a.variant)
         urls = [alt, row["url"]] if alt else [row["url"]]
@@ -776,6 +787,7 @@ class Fetcher:
                             url = urls[1]          # variant missing for this photo; use the original
                             self.totals["variant_fallback"] += 1
                             continue               # not evidence about the host: don't count it
+                        b.stats[f"http_{r.status}"] += 1
                         if r.status == 403:
                             b.note_forbidden(self.a.block_probe, self.a.block_ratio)
                         elif r.status in (404, 410):
@@ -823,6 +835,7 @@ class Fetcher:
                 b.on_throttle()                # a timeout from a small host is usually overload
                 continue
             except aiohttp.ClientError as e:
+                b.stats[f"exc_{type(e).__name__}"] += 1
                 # A name that does not resolve or a certificate that does not verify will not fix
                 # itself between retries; those count toward the dead-host breaker.
                 kind = ("tls" if isinstance(e, (aiohttp.ClientConnectorCertificateError,
@@ -844,6 +857,30 @@ class Fetcher:
                 return None, status, None
             return jpg, STATUS_OK, meta
         return None, "exhausted_attempts", None
+
+    async def _read_local(self, path: str, b: HostBudget, state: dict):
+        """A `file://` row: the image is already on a mounted drive (our own GBIF Lepidoptera
+        download), so read it instead of fetching it -- then the same verification, resize and
+        encode as a download, so filled images are indistinguishable from crawled ones."""
+        loop = asyncio.get_running_loop()
+        await b.acquire()
+        try:
+            await self.inflight.acquire()
+            state["mem"] = True
+            try:
+                body = await loop.run_in_executor(self.disk_pool, Path(path).read_bytes)
+            except FileNotFoundError:
+                b.on_error()
+                return None, "file_missing", None
+            except OSError as e:
+                b.on_error()
+                return None, f"file_error:{type(e).__name__}", None
+            b.on_success()
+        finally:
+            b.release()
+        jpg, status, meta = await loop.run_in_executor(
+            self.pool, verify_and_encode, body, self.a.size, self.a.quality, self.a.min_dim)
+        return (jpg, STATUS_OK, meta) if jpg is not None else (None, status, None)
 
     async def run_part(self, session, part: Path, host: str):
         """Crawl one manifest part, streaming its rows rather than materialising them.
@@ -1009,9 +1046,12 @@ class Fetcher:
         act = lambda b: sum(b.stats.values())
         hot = sorted((b for b in self.budgets.values() if act(b)), key=act, reverse=True)[:8]
         for b in hot:
+            kinds = sorted(((k, v) for k, v in b.stats.items()
+                            if k.startswith(("http_", "exc_"))), key=lambda kv: -kv[1])[:2]
             print(f"    {b.host[:46]:46s} conc={b.cur:3d}/{b.cap:3d} ok={b.stats['ok']:,} "
                   f"forbidden={b.stats['forbidden']:,} err={b.stats['error']:,} "
-                  f"throttled={b.stats['throttled']}", flush=True)
+                  f"throttled={b.stats['throttled']} {' '.join(f'{k}={v}' for k, v in kinds)}",
+                  flush=True)
 
 
 def effective_cpus() -> int:
@@ -1048,7 +1088,13 @@ def cgroup_memory() -> str:
     if not cur:
         return "mem n/a"
     gb = lambda s: f"{int(s)/1e9:.2f}" if s.isdigit() else s
-    return f"mem {gb(cur)}/{gb(mx)} GB, oom_kill {ooms}"
+    st = dict(ln.split() for ln in read("memory.stat").splitlines() if len(ln.split()) == 2)
+    # anon = the process; file/dirty/writeback = written images not yet on the network FS. When
+    # dirty+writeback crowd the limit, the kernel throttles writers -- saves freeze while
+    # downloads continue, which is how the first post-substitution run stalled.
+    parts = " ".join(f"{k} {gb(st[k])}" for k in ("anon", "file", "file_dirty", "file_writeback")
+                     if k in st)
+    return f"mem {gb(cur)}/{gb(mx)} GB [{parts}], oom_kill {ooms}"
 
 
 def pin_thread_pools(n: int) -> None:
@@ -1435,9 +1481,9 @@ def build_parser():
                         "500 px and 10x cheaper than 'original'; we downsize to --size anyway.")
     q.add_argument("--min-dim", type=int, default=64, help="reject images smaller than this")
     q.add_argument("--max-bytes", type=int, default=25_000_000)
-    q.add_argument("--max-inflight", type=int, default=48,
+    q.add_argument("--max-inflight", type=int, default=16,
                    help="requests in flight across all hosts; bounds memory held in bodies")
-    q.add_argument("--max-active-hosts", type=int, default=48,
+    q.add_argument("--max-active-hosts", type=int, default=32,
                    help="hosts crawled at once; bounds pending coroutines and buffers")
     q.add_argument("--attempts", type=int, default=4)
     q.add_argument("--timeout", type=float, default=60.0)
@@ -1448,7 +1494,7 @@ def build_parser():
                    help="re-attempt only rows whose status starts with one of these, e.g. "
                         "bad_content_type client_error")
     q.add_argument("--report-every", type=float, default=60.0)
-    q.add_argument("--chunk", type=int, default=2_000,
+    q.add_argument("--chunk", type=int, default=500,
                    help="rows streamed per batch within a part; bounds memory and live coroutines")
     q.add_argument("--disk-threads", type=int, default=16,
                    help="threads for file-system checks and writes (I/O-bound; not CPU)")

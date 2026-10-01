@@ -1,0 +1,24 @@
+# TOL-io: is the datasets drive slow to write right now, independent of the crawler?
+# The crawl stalled with saves frozen while downloads continued. This times small-file writes
+# and reads on the same mount. Worst case: 1 vCPU x 0.5 h = 0.5 core-hours. No auto_extend.
+name = "lepinet-tolio"
+replicas = 1
+[application]
+name = "pytorch-te"
+version = "26.05"
+[product]
+id = "cpu-amd-zen5-1-vcpu"
+category = "cpu-amd-zen5"
+provider = "ucloud"
+[time_allocation]
+hours = 1
+[sync]
+local = ".."
+remote = "/12347837/repos/lepinet"
+[setup]
+script = "setup-crawler.sh"
+run = "python -c \"import os,time,glob; d='/work/treeoflife_200m/_iotest'; os.makedirs(d,exist_ok=True); b=os.urandom(25000); t=time.time(); [open(f'{d}/f{i}.bin','wb').write(b) for i in range(200)]; w=time.time()-t; t=time.time(); fs=sorted(glob.glob('/work/treeoflife_200m/images/_cacia_dealbata/*.jpg'))[:200]; [open(f,'rb').read() for f in fs]; r=time.time()-t; print(f'WRITE 200x25KB: {w:.1f}s = {200/w:.1f} files/s | READ {len(fs)} imgs: {r:.1f}s = {len(fs)/max(r,1e-9):.1f} files/s'); [os.remove(f'{d}/f{i}.bin') for i in range(200)]; os.rmdir(d)\""
+
+[[resources]]
+type = "file"
+path = "/12383016/treeoflife_200m"

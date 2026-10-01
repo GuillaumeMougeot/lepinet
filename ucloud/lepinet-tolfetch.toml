@@ -36,7 +36,7 @@ local = ".."
 remote = "/12347837/repos/lepinet"
 [setup]
 script = "setup-crawler.sh"
-run = "python dev/082_tol_crawler.py fetch --manifest /work/treeoflife_200m/manifest --images /work/treeoflife_200m/images --size 256 --variant medium --workers 1 --chunk 2000 --max-cpus 1 --report-every 120"
+run = "python dev/082_tol_crawler.py fetch --manifest /work/treeoflife_200m/manifest --images /work/treeoflife_200m/images --size 256 --variant medium --workers 1 --chunk 500 --max-cpus 1 --report-every 120"
 [schedule]
 auto_extend = "1h"
 max_time = "150h"
