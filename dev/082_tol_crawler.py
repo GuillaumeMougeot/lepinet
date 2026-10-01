@@ -50,17 +50,25 @@ return with HTTP 200.
 
 ## Stages
 
+The corpus lives on the `datasets` drive at `/12383016/treeoflife_200m/`, which a job mounts as
+`/work/treeoflife_200m`. Run every stage on a small CPU node -- see the CPU budget note in
+`ucloud/lepinet-tolfetch.toml` before choosing one.
+
     # 1. plan: stream the catalog, apply the policy, write a host-partitioned manifest
-    python dev/082_tol_crawler.py plan --out data/tol/manifest --min-img 50 --cap 2000
+    python dev/082_tol_crawler.py plan --out /work/treeoflife_200m/manifest --min-img 50 --cap 2000
 
     # 1b. split: reshard into bounded parts, so resume granularity is 50k images not 50M
-    python dev/082_tol_crawler.py split --manifest data/tol/manifest --rows-per-part 50000
+    python dev/082_tol_crawler.py split --manifest /work/treeoflife_200m/manifest --rows-per-part 50000
 
     # 2. fetch: crawl. Resumable, restartable, safe to run many times
-    python dev/082_tol_crawler.py fetch --manifest data/tol/manifest --images /work/tol/images
+    python dev/082_tol_crawler.py fetch --manifest /work/treeoflife_200m/manifest \
+        --images /work/treeoflife_200m/images --workers 1 --max-cpus 1
+
+    # 2b. remaining: rows left per host -- budget a resume from this, not from a guess
+    python dev/082_tol_crawler.py remaining --manifest /work/treeoflife_200m/manifest
 
     # 3. report: what we have, what failed, and why
-    python dev/082_tol_crawler.py report --manifest data/tol/manifest
+    python dev/082_tol_crawler.py report --manifest /work/treeoflife_200m/manifest
 
 `fetch` is idempotent. A manifest part is skipped once its metadata parquet exists; within a part,
 rows already recorded are skipped. Killing the job at any point loses at most one part's in-flight
@@ -170,14 +178,24 @@ def variant_url(url: str, variant: str) -> str | None:
     return base.replace("/original", f"/{variant}") + dot + ext
 
 
-def _complete_jpeg(p: Path) -> bool:
-    """True if `p` exists and ends with the JPEG end-of-image marker -- i.e. was fully written."""
+def _complete_size(p: Path) -> int:
+    """Size in bytes if `p` is a fully written JPEG, else 0. Runs in the I/O pool."""
     try:
         with open(p, "rb") as f:
             f.seek(-2, os.SEEK_END)
-            return f.read(2) == b"\xff\xd9"
+            if f.read(2) == b"\xff\xd9":
+                return f.tell()
     except OSError:
-        return False
+        pass
+    return 0
+
+
+def _save_atomic(p: Path, data: bytes) -> None:
+    """Write via a temp file and rename, so a kill can never leave a truncated file that looks done."""
+    p.parent.mkdir(parents=True, exist_ok=True)
+    tmp = p.with_suffix(".jpg.part")
+    tmp.write_bytes(data)
+    os.replace(tmp, p)
 
 
 def host_of(url: str) -> str:
@@ -343,6 +361,150 @@ def stage_plan(a):
 
 
 # ---------------------------------------------------------------------------------------------
+# Stage 1c -- substitute
+# ---------------------------------------------------------------------------------------------
+
+def stage_substitute(a):
+    """Replace capped images that sit on blocked hosts with uncapped ones on accessible hosts.
+
+    The cap takes each species' first `cap` images in catalog order, blind to where they are
+    served from. So a species can have 2,000 selected images on a server that refuses us while
+    thousands more of the same species, never selected, sit on servers that do not. This pass
+    replays the plan's selection exactly, and for every selected row on a blocked host emits one
+    substitute: the next unselected row of the same species on an accessible host.
+
+    It also measures what cannot be substituted -- species with no accessible images at all, and
+    species pushed below the image floor -- broken down by kingdom, class and basis of record, so
+    the decision to chase the blocked institutions can be made on numbers.
+
+    Streaming and deterministic: within a species every selected row precedes every unselected
+    one in catalog order, so by the time a pool row arrives its species' blocked count is final.
+    Correctness check: the replayed selection must reproduce the manifest's row count exactly.
+
+    Runs anywhere; it needs only the catalog (HuggingFace) and the manifest's species_counts.json
+    and blocked_hosts.json. Run it on a workstation, not a UCloud CPU node.
+    """
+    pin_thread_pools(effective_cpus())
+    counts = json.loads(Path(a.species_counts).read_text())
+    keep = {k for k, v in counts.items() if v >= a.min_img}
+    blocked = set(json.loads(Path(a.blocked).read_text()))
+    out = Path(a.out); out.mkdir(parents=True, exist_ok=True)
+    print(f"{len(keep):,} species at min {a.min_img} / cap {a.cap}; {len(blocked)} blocked hosts")
+
+    emitted, sel_blocked, pool_ok, subs = Counter(), Counter(), Counter(), Counter()
+    tax: dict[str, tuple] = {}
+    by = {k: Counter() for k in ("host", "basis", "img_type", "kingdom", "class", "source",
+                                 "publisher")}
+    # Composition of the whole selection (not just the blocked part), for the dataset README.
+    comp = {k: Counter() for k in ("kingdom", "class", "order", "basis", "img_type", "source",
+                                   "host")}
+    # Buffered per host and flushed in blocks: one write per row would give a parquet file with
+    # millions of single-row row-groups -- slow to write, slow to read, and pointlessly large.
+    bufs: dict[str, list] = defaultdict(list)
+    parts: Counter = Counter()               # host -> parts written
+    rows_out: Counter = Counter()            # host -> substitute rows written
+    cols = PLAN_COLS + ["basis_of_record", "img_type", "publisher"]
+
+    def flush(host: str):
+        rows = bufs.pop(host, None)
+        if not rows:
+            return
+        d = out / f"host={slug(host)}"; d.mkdir(parents=True, exist_ok=True)
+        pq.write_table(pa.Table.from_pylist(rows), d / f"part-s{parts[host]:05d}.parquet")
+        parts[host] += 1; rows_out[host] += len(rows)
+
+    def emit(host: str, row: dict):
+        bufs[host].append(row)
+        if len(bufs[host]) >= a.rows_per_part:
+            flush(host)
+
+    nrg = n_row_groups(CATALOG); t0 = time.monotonic()
+    if a.limit_rg:
+        nrg = min(nrg, a.limit_rg)            # smoke tests only: the row-count check will not match
+    for i, tb in iter_row_groups(CATALOG, cols, 0, nrg, a.readers, a.prefetch):
+        d = tb.to_pydict()
+        for j in range(len(d["uuid"])):
+            sp = f"{(d['genus'][j] or '').strip()} {(d['species'][j] or '').strip()}".strip()
+            if sp not in keep:
+                continue
+            url = d["source_url"][j]
+            if not url:
+                continue
+            host = host_of(url)
+            if sp not in tax:
+                tax[sp] = (d["kingdom"][j] or "?", d["class"][j] or "?", d["order"][j] or "?")
+            if emitted[sp] < a.cap:                       # replay of the plan's selection
+                emitted[sp] += 1
+                comp["kingdom"][tax[sp][0]] += 1; comp["class"][tax[sp][1]] += 1
+                comp["order"][tax[sp][2]] += 1; comp["host"][host] += 1
+                comp["basis"][d["basis_of_record"][j] or "?"] += 1
+                comp["img_type"][d["img_type"][j] or "?"] += 1
+                comp["source"][d["data_source"][j] or "?"] += 1
+                if host in blocked:
+                    sel_blocked[sp] += 1
+                    by["host"][host] += 1
+                    by["basis"][d["basis_of_record"][j] or "?"] += 1
+                    by["img_type"][d["img_type"][j] or "?"] += 1
+                    by["kingdom"][tax[sp][0]] += 1
+                    by["class"][tax[sp][1]] += 1
+                    by["source"][d["data_source"][j] or "?"] += 1
+                    by["publisher"][f"{host} | {d['publisher'][j] or '?'}"] += 1
+            elif host not in blocked:                     # unselected, accessible: the pool
+                pool_ok[sp] += 1
+                if subs[sp] < sel_blocked[sp]:
+                    subs[sp] += 1
+                    emit(host, {"uuid": d["uuid"][j], "url": url, "species": sp,
+                                "genus": (d["genus"][j] or "").strip(),
+                                "family": (d["family"][j] or "").strip(),
+                                "order": (d["order"][j] or "").strip(),
+                                "data_source": d["data_source"][j] or "",
+                                "source_id": str(d["source_id"][j] or "")})
+        if i % 100 == 0:
+            el = time.monotonic() - t0
+            print(f"  row-group {i}/{nrg} | selected {sum(emitted.values()):,} | on blocked "
+                  f"{sum(sel_blocked.values()):,} | substitutes {sum(subs.values()):,} | "
+                  f"{i/max(el,1e-9)*60:.0f} rg/min", flush=True)
+    for h in list(bufs):
+        flush(h)
+
+    # --- what substitution recovers, and what is still lost ------------------------------------
+    sel_total = sum(emitted.values())
+    affected = [sp for sp in sel_blocked if sel_blocked[sp]]
+    lost_imgs = sum(sel_blocked[sp] - subs[sp] for sp in affected)
+    final = {sp: emitted[sp] - sel_blocked[sp] + subs[sp] for sp in affected}
+    gone = [sp for sp in affected if final[sp] == 0]
+    below = [sp for sp in affected if 0 < final[sp] < a.min_img]
+    def tally(spp, idx):
+        return Counter(tax[s][idx] for s in spp).most_common(12)
+    lepi = [sp for sp in affected if tax[sp][2] == "Lepidoptera"]
+    report = {
+        "selected_rows": sel_total, "manifest_rows_expected": a.expect_rows,
+        "selection_reproduced": sel_total == a.expect_rows if a.expect_rows else None,
+        "selected_on_blocked_hosts": sum(sel_blocked.values()),
+        "species_affected": len(affected),
+        "substitutes_found": sum(subs.values()),
+        "images_still_lost": lost_imgs,
+        "species_lost_entirely": len(gone),
+        "species_pushed_below_floor": len(below),
+        "species_kept": len(keep) - len(gone) - len(below),
+        "lost_species_by_kingdom": tally(gone, 0), "lost_species_by_class": tally(gone, 1),
+        "lepidoptera": {"species_affected": len(lepi),
+                        "selected_on_blocked": sum(sel_blocked[s] for s in lepi),
+                        "substituted": sum(subs[s] for s in lepi),
+                        "species_lost_entirely": sum(1 for s in lepi if final[s] == 0)},
+        "blocked_selected_by": {k: v.most_common(25) for k, v in by.items()},
+        "selection_composition": {k: v.most_common(30) for k, v in comp.items()},
+        "species_by_kingdom": Counter(tax[s][0] for s in emitted).most_common(),
+        "species_by_class": Counter(tax[s][1] for s in emitted).most_common(30),
+        "lepidoptera_planned": {"species": sum(1 for s in emitted if tax[s][2] == "Lepidoptera"),
+                                "images": comp["order"]["Lepidoptera"]},
+        "substitute_rows_by_host": dict(rows_out.most_common()),
+    }
+    (out / "substitution_report.json").write_text(json.dumps(report, indent=2))
+    print(json.dumps({k: v for k, v in report.items() if not isinstance(v, (dict, list))}, indent=2))
+    print(f"wrote {out / 'substitution_report.json'}")
+
+# ---------------------------------------------------------------------------------------------
 # Stage 2 -- fetch
 # ---------------------------------------------------------------------------------------------
 
@@ -365,7 +527,8 @@ class HostBudget:
     cooldown_until: float = 0.0
     stats: Counter = field(default_factory=Counter)
     blocked: bool = False
-    window: list = field(default_factory=list)   # recent outcomes, 1 = forbidden
+    reason: str = ""                             # "forbidden" or "dead:<kind>" once tripped
+    window: list = field(default_factory=list)   # recent outcomes: "S" ok, "F" 403, "D" dead, "O" other
 
     def __post_init__(self):
         self.cur = max(MIN_CAP, int(self.cap * START_FRACTION))
@@ -384,13 +547,13 @@ class HostBudget:
         else:
             self._sem.release()
 
-    def _observe(self, forbidden: bool):
-        self.window.append(1 if forbidden else 0)
-        if len(self.window) > 200:
+    def _observe(self, code: str):
+        self.window.append(code)
+        if len(self.window) > 400:
             del self.window[0]
 
     def on_success(self):
-        self._observe(False)
+        self._observe("S")
         self.stats["ok"] += 1
         self.ok_streak += 1
         if self.ok_streak >= self.grow_after and self.cur < self.cap:
@@ -406,9 +569,24 @@ class HostBudget:
         self._slack += shrink
         self.cooldown_until = time.monotonic() + (retry_after if retry_after else 5.0)
 
-    def on_error(self):
-        self._observe(False)
+    def on_error(self, dead: str = "", probe: int = 200, ratio: float = 0.97):
+        """An error. `dead` names a kind that means the resource or server is gone (http_404,
+        dns, tls, connect); enough of those, with no success in the window, stops the host.
+
+        Without this the crawler only stopped hosts that *refused* it (403). A server that is
+        simply gone -- `files.plutof.ut.ee` no longer resolves, `sernecportal.org` returns 404 for
+        every image, `scan-bugs.org` was retired -- got every one of its rows tried, each with
+        retries and back-off, for nothing. Partial 404s are normal (records get withdrawn), hence
+        a high ratio *and* zero successes in the window before a host is declared dead.
+        """
+        self._observe("D" if dead else "O")
         self.stats["error"] += 1
+        if dead:
+            self.stats[f"dead_{dead}"] += 1
+            w = self.window[-probe:]
+            if (len(w) >= probe and "S" not in w and w.count("D") / len(w) >= ratio
+                    and not self.blocked):
+                self.blocked, self.reason = True, f"dead:{dead}"
         self.ok_streak = 0
 
     def note_forbidden(self, probe: int, ratio: float):
@@ -425,10 +603,10 @@ class HostBudget:
         requests of the ban however much the host served before it.
         """
         self.stats["forbidden"] += 1
-        self._observe(True)
-        n = len(self.window)
-        if n >= probe and sum(self.window[-probe:]) / probe >= ratio:
-            self.blocked = True
+        self._observe("F")
+        w = self.window[-probe:]
+        if len(w) >= probe and w.count("F") / probe >= ratio and not self.blocked:
+            self.blocked, self.reason = True, "forbidden"
 
 
 def verify_and_encode(body: bytes, size: int, quality: int, min_dim: int):
@@ -439,7 +617,15 @@ def verify_and_encode(body: bytes, size: int, quality: int, min_dim: int):
     returned HTTP 200. The decode is the expensive part of this whole pipeline and the reason image
     work belongs on a thread pool rather than the event loop.
     """
+    import warnings
     from PIL import Image
+    # PIL treats anything over ~89 MP as a possible decompression bomb (warning) and over ~179 MP
+    # as one (error). Herbarium and museum scans legitimately reach 100-200 MP, and they arrive
+    # from known institutional servers, not adversaries. Draft decoding keeps a JPEG's memory at
+    # its reduced size however large the original, so 400 MP is safe here; the warning, which
+    # fired on every herbarium scan, is noise.
+    Image.MAX_IMAGE_PIXELS = 400_000_000
+    warnings.simplefilter("ignore", Image.DecompressionBombWarning)
     if not any(body.startswith(m) for m, _ in MAGIC):
         return None, "bad_magic", None
     try:
@@ -481,6 +667,12 @@ class Fetcher:
         self.a = a
         self.images = Path(a.images)
         self.pool = ThreadPoolExecutor(max_workers=a.workers)
+        # File-system work runs here, never on the event loop. On the 2026-10-01 resume the disk
+        # checks for in-flight parts ran synchronously inside the coroutines: on a network FS that
+        # is milliseconds per file, ~850 k files, and the whole event loop -- every host's HTTP --
+        # stalled behind them ("0 attempted" for the first reports). These threads only wait on
+        # I/O, so a pool much larger than the CPU count is correct even on 1 vCPU.
+        self.disk_pool = ThreadPoolExecutor(max_workers=a.disk_threads)
         self.budgets: dict[str, HostBudget] = {}
         self.totals = Counter()
         self.t0 = time.monotonic()
@@ -499,14 +691,17 @@ class Fetcher:
         if b.host in self.known_blocked:
             return
         self.known_blocked[b.host] = {
+            "reason": b.reason or "forbidden",
             "forbidden": b.stats["forbidden"], "ok": b.stats["ok"], "error": b.stats["error"],
             "when": time.strftime("%Y-%m-%d %H:%M:%S")}
         tmp = self.blocked_path.with_suffix(".json.tmp")
         tmp.write_text(json.dumps(self.known_blocked, indent=2, sort_keys=True))
         os.replace(tmp, self.blocked_path)
-        print(f"  [blocked] {b.host}: {b.stats['forbidden']:,} forbidden, {b.stats['ok']:,} ok -- "
-              f"stopped and recorded in {self.blocked_path.name}. Ask the institution for access "
-              f"rather than retrying.", flush=True)
+        why = ("ask the institution for access rather than retrying" if b.reason == "forbidden"
+               else "the server or its images are gone")
+        print(f"  [stopped] {b.host} ({b.reason}): {b.stats['forbidden']:,} forbidden, "
+              f"{b.stats['error']:,} errors, {b.stats['ok']:,} ok -- recorded in "
+              f"{self.blocked_path.name}; {why}.", flush=True)
 
     def budget(self, host: str) -> HostBudget:
         """`host` must be the real hostname, never the directory slug.
@@ -544,21 +739,29 @@ class Fetcher:
                         b.on_throttle(float(ra) if ra and ra.isdigit() else None)
                         continue
                     if r.status >= 400:
-                        if r.status == 403:
-                            b.note_forbidden(self.a.block_probe, self.a.block_ratio)
-                        else:
-                            b.on_error()
                         if r.status == 404 and len(urls) > 1 and url == urls[0]:
                             url = urls[1]          # variant missing for this photo; use the original
                             self.totals["variant_fallback"] += 1
-                            continue
+                            continue               # not evidence about the host: don't count it
+                        if r.status == 403:
+                            b.note_forbidden(self.a.block_probe, self.a.block_ratio)
+                        elif r.status in (404, 410):
+                            b.on_error(dead=f"http_{r.status}", probe=self.a.dead_probe,
+                                       ratio=self.a.dead_ratio)
+                        else:
+                            b.on_error()
                         if r.status in (404, 410, 403):
                             return None, f"http_{r.status}", None   # permanent; do not retry
+                        await asyncio.sleep(min(30, 2 ** attempt + random.random()))  # 5xx: back off
                         continue
                     ct = (r.headers.get("content-type") or "").split(";")[0].strip().lower()
-                    if ct and ct not in VALID_CT and not ct.startswith("image/"):
+                    # Only an obvious text response is rejected on its header. Everything else is
+                    # judged by its bytes: the magic-byte check and full decode below are
+                    # authoritative. Rejecting any non-`image/*` type threw away valid JPEGs that
+                    # CDNs serve as `application/octet-stream` -- 52 % of one host's images.
+                    if ct.startswith("text/"):
                         b.on_error()
-                        return None, f"bad_content_type:{ct}", None
+                        return None, f"not_an_image:{ct}", None
                     cl = r.headers.get("content-length")
                     if cl and int(cl) > self.a.max_bytes:
                         return None, f"too_large:{cl}", None
@@ -568,8 +771,13 @@ class Fetcher:
                 b.on_throttle()                # a timeout from a small host is usually overload
                 continue
             except aiohttp.ClientError as e:
-                b.on_error()
-                if attempt == self.a.attempts - 1:
+                # A name that does not resolve or a certificate that does not verify will not fix
+                # itself between retries; those count toward the dead-host breaker.
+                kind = ("tls" if isinstance(e, (aiohttp.ClientConnectorCertificateError,
+                                                aiohttp.ClientSSLError))
+                        else "connect" if isinstance(e, aiohttp.ClientConnectorError) else "")
+                b.on_error(dead=kind, probe=self.a.dead_probe, ratio=self.a.dead_ratio)
+                if b.blocked or attempt == self.a.attempts - 1:
                     return None, f"client_error:{type(e).__name__}", None
                 await asyncio.sleep(2 ** attempt + random.random())
                 continue
@@ -605,16 +813,25 @@ class Fetcher:
         """
         meta_path = part.with_suffix(".meta.parquet")
         tmp_path = part.with_suffix(".meta.parquet.tmp")
-        if meta_path.exists() and not self.a.retry_failed:
+        retrying = self.a.retry_failed or bool(self.a.retry_status)
+        if meta_path.exists() and not retrying:
             return
         b = self.budget(host)
         if b.blocked:
             return
         done: set[str] = set()
+        old_meta = None
         if meta_path.exists():
-            d = pq.read_table(meta_path, columns=["uuid", "status"]).to_pydict()
+            old_meta = pq.read_table(meta_path)
+            d = old_meta.select(["uuid", "status"]).to_pydict()
+            # Retry a row if it failed and, when --retry-status is given, only if its failure
+            # starts with one of those prefixes -- so a targeted retry of (say) `bad_content_type`
+            # does not re-request 404s that are gone for good.
+            want = tuple(self.a.retry_status)
             done = {u for u, s in zip(d["uuid"], d["status"])
-                    if s == STATUS_OK or not self.a.retry_failed}
+                    if s == STATUS_OK or (want and not s.startswith(want))}
+            if len(done) == len(d["uuid"]):
+                return
 
         tables: list[pa.Table] = []
         aborted = False
@@ -625,17 +842,19 @@ class Fetcher:
                 break
             rows = [r for r in batch.to_pylist() if r["uuid"] not in done]
             recs: list[dict] = []
+            loop = asyncio.get_running_loop()
+            paths = [self.images / slug(r["species"]) / f"{r['uuid']}.jpg" for r in rows]
+            sizes = await asyncio.gather(*(loop.run_in_executor(self.disk_pool, _complete_size, p)
+                                           for p in paths))
 
-            async def one(row):
+            async def one(row, p, size):
                 if b.blocked:
                     return                    # leave unattempted, so a later --retry-blocked can finish it
-                d = self.images / slug(row["species"])
-                p = d / f"{row['uuid']}.jpg"
                 rec = {"uuid": row["uuid"], "species": row["species"], "status": "",
                        "path": "", "content_hash": "", "width": 0, "height": 0, "bytes": 0}
-                if _complete_jpeg(p):
+                if size:
                     rec |= {"status": STATUS_OK, "path": str(p.relative_to(self.images)),
-                            "bytes": p.stat().st_size}
+                            "bytes": size}
                     self.totals["already_on_disk"] += 1
                     recs.append(rec)
                     return
@@ -644,10 +863,7 @@ class Fetcher:
                     return
                 rec["status"] = status
                 if jpg is not None:
-                    d.mkdir(parents=True, exist_ok=True)
-                    tmp = p.with_suffix(".jpg.part")
-                    tmp.write_bytes(jpg)
-                    os.replace(tmp, p)
+                    await loop.run_in_executor(self.disk_pool, _save_atomic, p, jpg)
                     ch, (w, h) = meta
                     rec |= {"path": str(p.relative_to(self.images)), "content_hash": ch,
                             "width": w, "height": h, "bytes": len(jpg)}
@@ -655,7 +871,7 @@ class Fetcher:
                 self.totals[status if status == STATUS_OK else "fail"] += 1
                 self.totals["total"] += 1
 
-            await asyncio.gather(*(one(r) for r in rows))
+            await asyncio.gather(*(one(r, p, s) for r, p, s in zip(rows, paths, sizes)))
             if recs:
                 tables.append(pa.Table.from_pylist(recs))
 
@@ -663,7 +879,16 @@ class Fetcher:
             self.record_blocked(b)
             return                            # part not finished: no meta, so it stays resumable
         if tables:
-            pq.write_table(pa.concat_tables(tables), tmp_path)
+            new_meta = pa.concat_tables(tables)
+            if old_meta is not None:
+                # Merge, never replace: a retry processes only the failed rows, and writing just
+                # those would drop every earlier success from the part's record (the images would
+                # still be on disk, but nothing would say so).
+                retried = set(new_meta.column("uuid").to_pylist())
+                keep = [u not in retried for u in old_meta.column("uuid").to_pylist()]
+                new_meta = pa.concat_tables([old_meta.filter(pa.array(keep)),
+                                             new_meta.cast(old_meta.schema)])
+            pq.write_table(new_meta, tmp_path)
             os.replace(tmp_path, meta_path)
 
     async def main(self):
@@ -685,7 +910,7 @@ class Fetcher:
         by_host: dict[str, list[Path]] = defaultdict(list)
         for p, h in parts:
             by_host[h].append(p)
-        print(f"{len(parts)} parts over {len(by_host)} hosts")
+        print(f"{len(parts)} parts over {len(by_host)} hosts", flush=True)
 
         timeout = aiohttp.ClientTimeout(total=self.a.timeout, connect=15)
         conn = aiohttp.TCPConnector(limit=0, limit_per_host=0, ttl_dns_cache=600)
@@ -716,11 +941,16 @@ class Fetcher:
         rate = n / dt if dt else 0
         ok = self.totals[STATUS_OK]
         print(f"[{dt/60:6.1f} min] {n:,} attempted | {ok:,} ok "
-              f"({100*ok/max(n,1):.1f} %) | {rate:.0f} img/s", flush=True)
-        hot = sorted(self.budgets.values(), key=lambda b: -b.stats["ok"])[:5]
+              f"({100*ok/max(n,1):.1f} %) | {rate:.0f} img/s | "
+              f"{self.totals['already_on_disk']:,} recovered from disk", flush=True)
+        # Sorted by activity, not successes: a table sorted by `ok` shows arbitrary idle hosts when
+        # nothing is succeeding, which is exactly when you need to see where the requests are going.
+        act = lambda b: sum(b.stats.values())
+        hot = sorted((b for b in self.budgets.values() if act(b)), key=act, reverse=True)[:8]
         for b in hot:
-            print(f"    {b.host[:46]:46s} conc={b.cur:3d}/{b.cap:3d} "
-                  f"ok={b.stats['ok']:,} throttled={b.stats['throttled']} err={b.stats['error']}")
+            print(f"    {b.host[:46]:46s} conc={b.cur:3d}/{b.cap:3d} ok={b.stats['ok']:,} "
+                  f"forbidden={b.stats['forbidden']:,} err={b.stats['error']:,} "
+                  f"throttled={b.stats['throttled']}", flush=True)
 
 
 def effective_cpus() -> int:
@@ -900,6 +1130,152 @@ def stage_report(a):
 
 
 # ---------------------------------------------------------------------------------------------
+# Stage 4 -- describe
+# ---------------------------------------------------------------------------------------------
+
+def stage_describe(a):
+    """Render README.md for the dataset folder from the manifest's own JSON files.
+
+    Generated, not hand-written, so it can be refreshed as the crawl progresses instead of
+    drifting from the data it describes. Inputs: plan_summary.json, substitution_report.json,
+    blocked_hosts.json, and optionally status.json ({"as_of", "acquired", "attempted", ...}) and
+    a contacts JSON for the blocked hosts.
+    """
+    m = Path(a.manifest)
+    load = lambda f, d=None: json.loads((m / f).read_text()) if (m / f).exists() else d
+    plan, rep = load("plan_summary.json", {}), load("substitution_report.json", {})
+    blocked = load("blocked_hosts.json", {})
+    status = json.loads(Path(a.status).read_text()) if a.status else {}
+    contacts = json.loads(Path(a.contacts).read_text()) if a.contacts else {}
+    f = lambda n: f"{n:,}" if isinstance(n, (int, float)) else str(n)
+    comp = rep.get("selection_composition", {})
+    total = plan.get("rows") or 1
+
+    def table(pairs, head, n=12, pct_of=None):
+        rows = [f"| {head[0]} | {head[1]} |" + (" share |" if pct_of else ""),
+                "|---|---:|" + ("---:|" if pct_of else "")]
+        for k, v in pairs[:n]:
+            rows.append(f"| {k} | {f(v)} |" + (f" {100*v/pct_of:.1f} % |" if pct_of else ""))
+        return "\n".join(rows)
+
+    L = []
+    L += [f"# TreeOfLife-200M, image subset ({f(plan.get('rows'))} images, "
+          f"{f(plan.get('species'))} species)", "",
+          "Images from **TreeOfLife-200M** (Imageomics, Gu et al. 2025) fetched from their source servers "
+          "for the `lepinet` project, under our own sampling policy. TreeOfLife-200M on HuggingFace "
+          "publishes metadata and URLs only; the images below were crawled with "
+          "`dev/082_tol_crawler.py` in the lepinet repository.", "",
+          f"*This file is generated by `python dev/082_tol_crawler.py describe`. Status as of "
+          f"**{status.get('as_of', '?')}**.*", ""]
+    L += ["## Status", "",
+          "| | images |", "|---|---:|",
+          f"| planned (selection below) | {f(plan.get('rows'))} |",
+          f"| acquired so far | {f(status.get('acquired', '?'))} |",
+          f"| still to crawl (accessible hosts) | {f(status.get('remaining', '?'))} |",
+          f"| on hosts that refuse automated access | {f(status.get('blocked_rows', '?'))} |",
+          f"| substitutes queued for those (same species, accessible host) | "
+          f"{f(rep.get('substitutes_found', '?'))} |", ""]
+    L += ["## Where things are", "",
+          "```",
+          "treeoflife_200m/",
+          "  README.md                          this file",
+          "  images/<species>/<uuid>.jpg        one folder per species (genus_epithet, lower-case, '_' for",
+          "                                     anything else); <uuid> is TreeOfLife's image uuid",
+          "  manifest/",
+          "    host=<server>/part-NNNNN.parquet      what to fetch, partitioned by source server",
+          "    host=<server>/part-sNNNNN.parquet     substitutes for images on blocked servers",
+          "    host=<server>/part-*.meta.parquet     what happened: status, path, hash, size, per image",
+          "    species_counts.json                   images per species in the whole catalog",
+          "    plan_summary.json                     the selection policy and totals",
+          "    blocked_hosts.json                    servers that refused us, and when",
+          "    substitution_report.json              what substitution recovered, what is lost",
+          "```", "",
+          "**Manifest columns:** `uuid, url, species, genus, family, order, data_source, source_id`. "
+          "`source_id` is the provider's record id -- for `data_source == gbif` it is the **GBIF "
+          "occurrence id**, the key for attribution, licence lookup and joining to other GBIF data.", "",
+          "**Meta columns:** `uuid, species, status, path, content_hash, width, height, bytes`. "
+          "`status == ok` means the file exists and passed every check; anything else names the "
+          "failure (`http_404`, `decode_fail:*`, `too_small:*`, ...). Read the metas, not the folder "
+          "listing, to know what you have.", ""]
+    L += ["## How the subset was chosen", "",
+          f"* **Species** = `genus + ' ' + specific epithet`. A bare epithet is not a species.",
+          f"* **Floor:** species with at least **{plan.get('min_img', 50)}** images in the whole "
+          f"catalog. This takes {f(rep.get('species_kept', plan.get('species')))} of 884,662 species "
+          f"and drops the long tail of taxa with a handful of images (about 7 % of images).",
+          f"* **Cap:** at most **{plan.get('cap', 2000)} images per species** -- the first "
+          f"{plan.get('cap', 2000)} in catalog order. The cap removes head images: uncapped, the ten "
+          f"most-photographed species would take a large share of every epoch.",
+          f"* **Substitution:** where a species' capped images sit on a server that refuses us, "
+          f"unselected images of the same species from accessible servers take their place.", ""]
+    L += ["## Image processing and quality control", "",
+          "* Longest side resized to **256 px**, re-encoded **JPEG quality 90** (~16-25 KB each).",
+          "* iNaturalist (58 % of images) is fetched at its `medium` size (500 px), not `original`: "
+          "identical output after the resize, ~10x less transfer.",
+          "* Every image is fully decoded before it counts: magic bytes, declared type, truncation, "
+          "minimum 64 px. Large JPEGs are decoded at reduced scale in the DCT domain.",
+          "* `content_hash` (SHA-1 of the decoded, resized pixels) finds exact duplicates and the "
+          "\"image unavailable\" placeholders some servers return with HTTP 200. **Deduplicate "
+          "before training.**", ""]
+    if comp:
+        L += ["## Composition of the selection", "",
+              table(comp.get("kingdom", []), ("kingdom", "images"), 8, total), "",
+              table(rep.get("species_by_kingdom", []), ("kingdom", "species"), 8), "",
+              table(comp.get("basis", []), ("basis of record", "images"), 6, total), "",
+              "`HUMAN_OBSERVATION` is mostly citizen-science photographs of living organisms; "
+              "`PRESERVED_SPECIMEN` is museum and herbarium material -- pinned insects, herbarium "
+              "sheets. They look very different and are worth separating for some uses.", "",
+              table(comp.get("class", []), ("class", "images"), 15, total), ""]
+        lp = rep.get("lepidoptera_planned", {})
+        L += [f"**Lepidoptera:** {f(lp.get('species'))} species, {f(lp.get('images'))} images.", "",
+              table(comp.get("host", []), ("largest source servers", "images"), 12, total), ""]
+    if blocked:
+        L += ["## Servers that refuse automated access", "",
+              f"{len(blocked)} servers return HTTP 403 to every request from the crawler (it "
+              "identifies itself and does not impersonate a browser). Their images are listed in "
+              "the manifest but not fetched. Contacts are the institutions' GBIF-registered "
+              "addresses.", "",
+              "| server | operator | contact | requests refused |", "|---|---|---|---:|"]
+        for h, v in sorted(blocked.items(), key=lambda kv: -kv[1].get("forbidden", 0)):
+            c = contacts.get(h, {})
+            L.append(f"| `{h}` | {c.get('operator', '?')} | {c.get('contact', '?')} | "
+                     f"{f(v.get('forbidden', 0))} |")
+        L += [""]
+    if rep:
+        L += ["## What the blocked servers cost", "",
+              f"* {f(rep.get('selected_on_blocked_hosts'))} selected images sit on them, across "
+              f"{f(rep.get('species_affected'))} species.",
+              f"* Substitution finds {f(rep.get('substitutes_found'))} replacements, leaving "
+              f"**{f(rep.get('images_still_lost'))} images** unrecoverable without access.",
+              f"* **{f(rep.get('species_lost_entirely'))} species** have no accessible image at all, "
+              f"and {f(rep.get('species_pushed_below_floor'))} more fall below the "
+              f"{plan.get('min_img', 50)}-image floor.", "",
+              "Lost species by kingdom: " + ", ".join(f"{k} {f(v)}" for k, v in
+                                                     rep.get("lost_species_by_kingdom", [])[:6]), ""]
+    L += ["## Licences -- read before redistributing", "",
+          "Every image keeps the licence its publisher gave it (mostly CC0, CC-BY and CC-BY-NC; "
+          "some datasets are more restrictive). This folder is a **research working copy**: fine "
+          "for training models, **not** something to republish wholesale. For attribution or "
+          "licence checks, look up `source_id` (the GBIF occurrence id) at "
+          "`https://api.gbif.org/v1/occurrence/<source_id>`.", ""]
+    L += ["## Reproducing or extending it", "",
+          "```",
+          "python dev/082_tol_crawler.py plan --out <manifest> --min-img 50 --cap 2000",
+          "python dev/082_tol_crawler.py split --manifest <manifest>",
+          "python dev/082_tol_crawler.py substitute --species-counts <manifest>/species_counts.json \\",
+          "       --blocked <manifest>/blocked_hosts.json --out <dir>",
+          "python dev/082_tol_crawler.py fetch --manifest <manifest> --images <images> --max-cpus 1",
+          "python dev/082_tol_crawler.py remaining --manifest <manifest>",
+          "python dev/082_tol_crawler.py describe --manifest <manifest> --out README.md",
+          "```", "",
+          "The crawl is network-bound: run it on **1 vCPU**. A 64-vCPU run once spent 58 % of the "
+          "project's CPU allocation for no speed-up -- see "
+          "`journal/2026-10-01-the-crawl-that-spent-58-percent-of-the-cpu-budget.md`.", "",
+          "**Cite** TreeOfLife-200M (doi:10.57967/hf/8980) and the source data providers. "
+          "Maintainer: Guillaume Mougeot, lepinet project.", ""]
+    Path(a.out).write_text("\n".join(L))
+    print(f"wrote {a.out} ({len(L)} lines)")
+
+# ---------------------------------------------------------------------------------------------
 
 def build_parser():
     p = argparse.ArgumentParser(description=__doc__,
@@ -917,6 +1293,20 @@ def build_parser():
                    help="row-groups fetched ahead of the consumer (bounds memory)")
     q.set_defaults(fn=stage_plan)
 
+    q = sub.add_parser("substitute", help="replace capped rows on blocked hosts with accessible ones")
+    q.add_argument("--species-counts", required=True, help="manifest/species_counts.json")
+    q.add_argument("--blocked", required=True, help="manifest/blocked_hosts.json")
+    q.add_argument("--out", required=True, help="local dir for substitute parts + report")
+    q.add_argument("--min-img", type=int, default=50)
+    q.add_argument("--cap", type=int, default=2000)
+    q.add_argument("--rows-per-part", type=int, default=50_000)
+    q.add_argument("--limit-rg", type=int, default=0, help="smoke test: first N row-groups only")
+    q.add_argument("--expect-rows", type=int, default=87_560_065,
+                   help="manifest row count the replayed selection must reproduce")
+    q.add_argument("--readers", type=int, default=16)
+    q.add_argument("--prefetch", type=int, default=32)
+    q.set_defaults(fn=stage_substitute)
+
     q = sub.add_parser("fetch", help="crawl the manifest; resumable")
     q.add_argument("--manifest", default="data/tol/manifest")
     q.add_argument("--images", required=True)
@@ -931,16 +1321,25 @@ def build_parser():
     q.add_argument("--timeout", type=float, default=60.0)
     q.add_argument("--workers", type=int, default=16, help="decode/encode threads")
     q.add_argument("--limit-hosts", type=int, default=0, help="smoke test: only the first N hosts")
-    q.add_argument("--retry-failed", action="store_true")
+    q.add_argument("--retry-failed", action="store_true", help="re-attempt every non-ok row")
+    q.add_argument("--retry-status", nargs="*", default=[],
+                   help="re-attempt only rows whose status starts with one of these, e.g. "
+                        "bad_content_type client_error")
     q.add_argument("--report-every", type=float, default=60.0)
     q.add_argument("--chunk", type=int, default=2_000,
                    help="rows streamed per batch within a part; bounds memory and live coroutines")
+    q.add_argument("--disk-threads", type=int, default=16,
+                   help="threads for file-system checks and writes (I/O-bound; not CPU)")
     q.add_argument("--max-cpus", type=int, default=8,
                    help="refuse to run on more CPUs than this (network-bound job; see stage_fetch)")
     q.add_argument("--allow-big-node", action="store_true",
                    help="override --max-cpus. Owner approval only")
     q.add_argument("--retry-blocked", action="store_true",
                    help="re-attempt hosts recorded in blocked_hosts.json (e.g. after access is granted)")
+    q.add_argument("--dead-probe", type=int, default=200,
+                   help="recent outcomes over which a host may be declared dead (404/DNS/TLS)")
+    q.add_argument("--dead-ratio", type=float, default=0.97,
+                   help="dead fraction, with zero successes in the window, that stops a host")
     q.add_argument("--block-probe", type=int, default=40,
                    help="attempts before the blocked-host circuit breaker may trip")
     q.add_argument("--block-ratio", type=float, default=0.9,
@@ -956,6 +1355,13 @@ def build_parser():
     q.add_argument("--manifest", default="data/tol/manifest")
     q.add_argument("--top", type=int, default=25)
     q.set_defaults(fn=stage_remaining)
+
+    q = sub.add_parser("describe", help="render README.md for the dataset folder")
+    q.add_argument("--manifest", required=True)
+    q.add_argument("--out", required=True)
+    q.add_argument("--status", default="", help="status.json: as_of, acquired, remaining, blocked_rows")
+    q.add_argument("--contacts", default="", help="JSON: host -> {operator, contact}")
+    q.set_defaults(fn=stage_describe)
 
     q = sub.add_parser("report", help="what we have and what failed")
     q.add_argument("--manifest", default="data/tol/manifest")
