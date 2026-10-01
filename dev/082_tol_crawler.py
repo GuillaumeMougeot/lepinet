@@ -389,6 +389,15 @@ def stage_substitute(a):
     keep = {k for k, v in counts.items() if v >= a.min_img}
     blocked = set(json.loads(Path(a.blocked).read_text()))
     out = Path(a.out); out.mkdir(parents=True, exist_ok=True)
+    # A second pass (e.g. after the crawl declares more hosts dead) must not re-emit what an
+    # earlier pass already queued. Prior substitutes still count toward each species' quota, so
+    # the arithmetic stays right; ones that landed on a host now unavailable drop out of the
+    # pool and are replaced.
+    prior: set[str] = set()
+    if a.prior:
+        for fp in Path(a.prior).glob("host=*/part-*.parquet"):
+            prior.update(pq.read_table(fp, columns=["uuid"]).column("uuid").to_pylist())
+        print(f"{len(prior):,} substitutes from the prior pass will be counted, not re-emitted")
     print(f"{len(keep):,} species at min {a.min_img} / cap {a.cap}; {len(blocked)} blocked hosts")
 
     emitted, sel_blocked, pool_ok, subs = Counter(), Counter(), Counter(), Counter()
@@ -410,7 +419,7 @@ def stage_substitute(a):
         if not rows:
             return
         d = out / f"host={slug(host)}"; d.mkdir(parents=True, exist_ok=True)
-        pq.write_table(pa.Table.from_pylist(rows), d / f"part-s{parts[host]:05d}.parquet")
+        pq.write_table(pa.Table.from_pylist(rows), d / f"part-{a.prefix}{parts[host]:05d}.parquet")
         parts[host] += 1; rows_out[host] += len(rows)
 
     def emit(host: str, row: dict):
@@ -453,6 +462,8 @@ def stage_substitute(a):
                 pool_ok[sp] += 1
                 if subs[sp] < sel_blocked[sp]:
                     subs[sp] += 1
+                    if d["uuid"][j] in prior:
+                        continue                          # queued by an earlier pass
                     emit(host, {"uuid": d["uuid"][j], "url": url, "species": sp,
                                 "genus": (d["genus"][j] or "").strip(),
                                 "family": (d["family"][j] or "").strip(),
@@ -1179,8 +1190,8 @@ def stage_describe(a):
           "```",
           "treeoflife_200m/",
           "  README.md                          this file",
-          "  images/<species>/<uuid>.jpg        one folder per species (genus_epithet, lower-case, '_' for",
-          "                                     anything else); <uuid> is TreeOfLife's image uuid",
+          "  images/<folder>/<uuid>.jpg         <uuid> is TreeOfLife's image uuid; <folder> is a LOSSY slug",
+          "                                     of the species key -- see 'Labels' below",
           "  manifest/",
           "    host=<server>/part-NNNNN.parquet      what to fetch, partitioned by source server",
           "    host=<server>/part-sNNNNN.parquet     substitutes for images on blocked servers",
@@ -1197,10 +1208,37 @@ def stage_describe(a):
           "`status == ok` means the file exists and passed every check; anything else names the "
           "failure (`http_404`, `decode_fail:*`, `too_small:*`, ...). Read the metas, not the folder "
           "listing, to know what you have.", ""]
+    counts = load("species_counts.json", {})
+    if counts:
+        kept = {k: v for k, v in counts.items() if v >= plan.get("min_img", 50)}
+        capn = lambda d: sum(min(v, plan.get("cap", 2000)) for v in d.values())
+        single = {k: v for k, v in kept.items() if " " not in k}
+        higher = {k: v for k, v in single.items() if k[:1].isupper()}
+        bare = {k: v for k, v in single.items() if not k[:1].isupper()}
+        bino = {k: v for k, v in kept.items() if " " in k}
+        tot = capn(kept) or 1
+        L += ["## Labels -- read before training", "",
+              "**Take every label from the meta's `species` column (or join `uuid` to the "
+              "TreeOfLife catalog), never from the folder name.** Two reasons:", "",
+              "1. **Folder names are a lossy slug.** Capital letters were replaced by `_`, so "
+              "`Acacia dealbata` is stored under `_cacia_dealbata/`, and 158 folders are shared by "
+              "two names that differ only in their initial (`Sedum` / `Ledum` -> `_edum/`). Image "
+              "filenames are unique uuids, so nothing is overwritten; only the folder is ambiguous. "
+              "Kept as-is for consistency across the crawl rather than renamed mid-way.",
+              "2. **Not every key is a species.** The key is `genus + ' ' + epithet` and degrades "
+              "when a field is empty in the source:", "",
+              "| key kind | keys | images | use |", "|---|---:|---:|---|",
+              f"| binomial species | {f(len(bino))} | {f(capn(bino))} ({100*capn(bino)/tot:.1f} %) | species level |",
+              f"| genus or higher only (e.g. `Megaselia`, `Sciaridae`) | {f(len(higher))} | "
+              f"{f(capn(higher))} ({100*capn(higher)/tot:.1f} %) | genus/family level only |",
+              f"| epithet without a genus (e.g. `occidentalis`) | {f(len(bare))} | "
+              f"{f(capn(bare))} ({100*capn(bare)/tot:.1f} %) | **unreliable** -- merges unrelated "
+              "genera; exclude or re-label from the catalog |", "",
+              f"So the honest species count is **{f(len(bino))}**, not {f(len(kept))}.", ""]
     L += ["## How the subset was chosen", "",
           f"* **Species** = `genus + ' ' + specific epithet`. A bare epithet is not a species.",
           f"* **Floor:** species with at least **{plan.get('min_img', 50)}** images in the whole "
-          f"catalog. This takes {f(rep.get('species_kept', plan.get('species')))} of 884,662 species "
+          f"catalog. This keeps {f(plan.get('species'))} of 884,662 species "
           f"and drops the long tail of taxa with a handful of images (about 7 % of images).",
           f"* **Cap:** at most **{plan.get('cap', 2000)} images per species** -- the first "
           f"{plan.get('cap', 2000)} in catalog order. The cap removes head images: uncapped, the ten "
@@ -1301,6 +1339,8 @@ def build_parser():
     q.add_argument("--cap", type=int, default=2000)
     q.add_argument("--rows-per-part", type=int, default=50_000)
     q.add_argument("--limit-rg", type=int, default=0, help="smoke test: first N row-groups only")
+    q.add_argument("--prior", default="", help="dir of an earlier pass's substitute parts")
+    q.add_argument("--prefix", default="s", help="part file prefix: part-<prefix>NNNNN.parquet")
     q.add_argument("--expect-rows", type=int, default=87_560_065,
                    help="manifest row count the replayed selection must reproduce")
     q.add_argument("--readers", type=int, default=16)
