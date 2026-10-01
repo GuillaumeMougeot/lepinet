@@ -32,5 +32,5 @@ max_time = "6h"
 
 [[resources]]
 type = "file"
-path = "/12347837/datasets/flemming_helsing"
+path = "/12383016/flemming_helsing"
 read_only = true

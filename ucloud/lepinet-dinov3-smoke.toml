@@ -29,5 +29,5 @@ max_time = "6h"
 
 [[resources]]
 type = "file"
-path = "/12347837/datasets/global_lepi"
+path = "/12383016/global_lepi"
 read_only = true

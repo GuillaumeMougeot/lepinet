@@ -21,5 +21,5 @@ auto_extend = "1h"
 max_time = "36h"
 [[resources]]
 type = "file"
-path = "/12347837/datasets/global_lepi"
+path = "/12383016/global_lepi"
 read_only = true
