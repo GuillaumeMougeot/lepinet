@@ -1,7 +1,10 @@
-# DIRECTIONS — the story, and what the actual bottleneck is
+# The reframe: the story, and what the actual bottleneck is
 
-**Kind:** living · **Opened:** 2026-07-29 · **Companion:** [`PLAN.md`](PLAN.md) turns these
-directions into scheduled runs.
+**Kind:** research · **Status:** **RESOLVED (frozen 2026-10-02).** Formerly the living
+`DIRECTIONS.md`, the research strategy from the July pivot: why the project moved from comparing
+heads to reliable prediction under shift, and the first open-set results (C3 among them). Its
+directions were all run; the story it argued for is now carried by `paper/DRAFT.md`, and the
+current plan is [`PLAN.md`](PLAN.md).
 
 Owner-driven. We set out to compare **heads** for hierarchical
 image classification. The results say that is *not* the interesting story. This entry records the

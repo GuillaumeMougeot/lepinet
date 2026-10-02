@@ -25,15 +25,15 @@ ROOT = Path(__file__).resolve().parent.parent
 JOURNAL = ROOT / "journal"
 
 #: Files in journal/ that are living documents: no date, kept current, never frozen.
-LIVING = {"README.md", "PLAN.md", "DIRECTIONS.md"}
+LIVING = {"README.md", "PLAN.md"}
 #: The four kinds an archival entry may declare. See CLAUDE.md for what each means.
 KINDS = {"research", "subproject", "infrastructure", "incident", "living"}
 DATED = re.compile(r"^(\d{4})-(\d{2})-(\d{2})-.+\.md$")
 
 #: Docs a newcomer or reviewer reads. The owner asked for no emoji in these; the journal is
 #: historical record and is left alone.
-STRUCTURAL = ["START-HERE.md", "README.md", "RESULTS.md", "CLAUDE.md", "DEVELOPER.md",
-              "journal/README.md", "journal/PLAN.md", "journal/DIRECTIONS.md", "paper/DRAFT.md"]
+STRUCTURAL = ["START-HERE.md", "EXPERIMENTS.md", "README.md", "RESULTS.md", "CLAUDE.md", "DEVELOPER.md",
+              "journal/README.md", "journal/PLAN.md", "paper/DRAFT.md"]
 EMOJI = re.compile("[\U0001F300-\U0001FAFF\U00002600-\U000027BF\U00002B00-\U00002BFF️]")
 
 # Skip generated/vendored trees. `data` is a symlink to machine-local storage.
@@ -92,7 +92,7 @@ def check_index_complete(fail):
 def check_links(fail):
     """Every relative markdown link and every [[wikilink]] must resolve."""
     link = re.compile(r"\[[^\]]*\]\(([^)#\s]+\.md)(?:#[^)]*)?\)")
-    wiki = re.compile(r"\[\[([0-9]{4}-[0-9]{2}-[0-9]{2}-[A-Za-z0-9._-]+|PLAN|DIRECTIONS)\]\]")
+    wiki = re.compile(r"\[\[([0-9]{4}-[0-9]{2}-[0-9]{2}-[A-Za-z0-9._-]+|PLAN)\]\]")
     for p in md_files():
         text = p.read_text()
         for target in link.findall(text):

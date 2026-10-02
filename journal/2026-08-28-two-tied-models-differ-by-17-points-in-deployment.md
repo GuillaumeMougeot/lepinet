@@ -117,7 +117,7 @@ this from the data. Section 4.9's DINOv3 row is *not* affected -- its max and ms
 
 ## Open
 
-- **Restriction plus abstention.** D1 showed a checklist concentrates false positives onto scored
+- **Restriction plus abstention.** K1 showed a checklist concentrates false positives onto scored
   classes on the probe fold; a restricted head that may also abstain should send that mass to
   abstention instead. With P5 abstaining on only 7.21 % there is room to spend.
 - **Open-set under shift** for both models. Everything above is the no-domain-shift benchmark;

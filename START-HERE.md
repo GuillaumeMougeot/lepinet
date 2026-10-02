@@ -1,192 +1,121 @@
-# Start here — a guided tour of this repository
+# Start here
 
-This is the **top of the map**. It exists so someone arriving with no context can reach any part of
-the project — the code, the results, and the reasoning — in a few deliberate steps, without having
-to guess which file matters.
+**lepinet** identifies moths and butterflies from photographs: one model predicts species, genus
+and family at once, over 12,041 species with a heavy long tail. It began as a comparison of
+hierarchical prediction heads. That comparison was a null result. A model scoring 0.93 on its own
+data scores ~0.70 on light-trap images, and in the field it constantly meets species it was never
+trained on. So the subject became **reliable prediction under domain shift**: knowing when an image
+is something new (open-set), backing off to genus or family when the species is uncertain
+(abstention), and adapting cheaply to a new camera.
 
-The project is **hierarchical fine-grained image classification**: from one photo, predict a label at
-every level of a taxonomy at once — for the reference dataset, the *species*, *genus* and *family* of
-a moth or butterfly, over ~12,000 species with a heavy long tail.
+## 1. Where things stand (2026-10-02)
 
----
+- **The experiments behind the paper are finished.** There are about 80 lettered experiments (A1
+  to P5, plus K1 and W1-W3); every one the paper uses is closed. [`EXPERIMENTS.md`](EXPERIMENTS.md) lists
+  them all with their question and result.
+- **Two models are public** on
+  [Hugging Face](https://huggingface.co/collections/gmougeot/lepinet-lepidoptera-identification-6abbc33d250430f8c67db428):
+  P5 (fine-tuned BioCLIP-2, the recommended one) and B8 (our own 198 M model).
+- **The paper** ([`paper/DRAFT.md`](paper/DRAFT.md)) contains every result, but reads as a
+  complete record rather than a paper. It still needs a scope decision, an introduction, figures and
+  verified citations. [`journal/PLAN.md`](journal/PLAN.md) has the road to submission.
+- **Running:** the TreeOfLife-200M download (W1), for a follow-up study (W3). The paper does not
+  depend on it.
 
-## 1. Pick your entry point
+## 2. What to read, in what order
 
-| If you want to… | Go to | What you'll find |
-|---|---|---|
-| **Use a trained model** *(no training, no install of this package)* | [Hugging Face collection](https://huggingface.co/collections/gmougeot/lepinet-lepidoptera-identification-6abbc33d250430f8c67db428) → [release entry](journal/2026-09-29-public-hf-release.md) | P5, B8 and B3rep5x as ONNX (fp32 / int8 for CPU / fp16 for GPU) with model cards; ten lines of `onnxruntime`, or `transformers` for P5 |
-| **Get up to speed on the vocabulary** *(logits, cosine head, margins, AUROC, marginalisation…)* | [`docs/concepts.md`](docs/concepts.md) | Every recurring term explained from the ground up, with this project's actual numbers |
-| **Understand the problem & method** | [`README.md`](README.md) | What the task is, why it's hard (fine-grained + long-tailed), and the method (per-level cosine head + square-root oversampling) |
-| **Use the package** (train / test / predict / export) | [`docs/user-guide.md`](docs/user-guide.md) | Install, the CLI (`lepinet train|test|predict|export|bundle|distill`), config reference |
-| **Change the code** | [`docs/developer-guide.md`](docs/developer-guide.md) → then [`src/lepinet/README.md`](src/lepinet/README.md) | Architecture, module-by-module design, the lessons encoded in the code |
-| **Know why a setting is what it is** *(before you change it)* | [`docs/design-decisions.md`](docs/design-decisions.md) | The ladder from 0.8297 to 0.9152, each recipe choice with what it was worth, and the things that didn't pay |
-| **See what has been tried and what it scored** | [`RESULTS.md`](RESULTS.md) | Every run, its delta vs baseline, and its test score (+ a hand-kept table of the UCloud runs) |
-| **Understand *why* decisions were made** | [`journal/README.md`](journal/README.md) | The master doc for *why*: how the project evolved in six phases, plus an index of every entry by kind |
-| **Know what is running right now** | [`journal/PLAN.md`](journal/PLAN.md) | The status board: **§1 indexes every experiment group A–T with its state**, §2 what is running, §3 the ordered backlog, §6 one line per closed group. The one file meant to be true *today* |
-| **Run experiments** | [`dev/README.md`](dev/README.md) *(if present)* / the numbered `dev/0NN_*.py` scripts | One script per experiment, importing the `lepinet` package |
-| **Run on the GPU cluster** | [`ucloud/`](ucloud/) | One TOML per job (train / eval / benchmark), plus the shared `setup-lepinet.sh` |
-| **See the phone app** | the companion repo `lepinet-app` + [`journal/2026-07-20-lepi-app-compression.md`](journal/2026-07-20-lepi-app-compression.md) | The browser PWA that consumes an exported bundle |
+**20 minutes: what the project is.**
+[`README.md`](README.md) (the problem and the method), then this page, then the "ten rows that
+carry the paper" at the top of [`EXPERIMENTS.md`](EXPERIMENTS.md).
 
-## 2. What this project has established
+**2 hours: to work on the paper.**
+In [`paper/DRAFT.md`](paper/DRAFT.md): the abstract, §1 (contributions), §4.0 (the models), §4.15
+(the synthesis), §5 and §6. Then [`journal/PLAN.md`](journal/PLAN.md). Then the journal entries
+linked from the ten rows.
 
-Each line is a result with a number, and links to the entry that argues it. Negative results are kept
-deliberately — they cost GPU time to learn and are the first thing a newcomer would otherwise repeat.
+**To run or change code.** [`docs/user-guide.md`](docs/user-guide.md) →
+[`docs/developer-guide.md`](docs/developer-guide.md) → [`src/lepinet/README.md`](src/lepinet/README.md)
+→ [`docs/design-decisions.md`](docs/design-decisions.md) (why every default is what it is) →
+[`dev/README.md`](dev/README.md) and [`ucloud/README.md`](ucloud/README.md).
 
-The list is split because the two halves answer different questions. **§2a** is what the project
-claims about the *problem* — findings that should hold on any long-tailed hierarchical dataset, and
-the substance of the paper. **§2b** is what it learned building a working system on *this* one:
-narrower, but the part that saves an engineer a week.
+**Look up when needed.** [`docs/concepts.md`](docs/concepts.md) explains the vocabulary (cosine
+head, margin, AUROC, marginalisation). [`journal/README.md`](journal/README.md) indexes every
+question ever asked. [`RESULTS.md`](RESULTS.md) holds the July local runs.
 
-### 2a. Scientific findings
+**Safe to skip.** [the July reframe](journal/2026-07-29-the-reframe-directions.md) (the strategy that led to the paper, now
+superseded by it); the app entries of 19-25 July; infrastructure and incident entries
+unless that thing breaks again. [`CLAUDE.md`](CLAUDE.md) is the AI agent's operating manual.
 
-| # | finding | evidence |
-|---|---|---|
-| 1 | **Coarse *parameters* do not help; coarse *supervision* does — and only one of those is visible in-distribution.** Every head owning genus/family layers loses in-distribution to one that does not (conditional 0.8845, autoregressive 0.69–0.73, multi-head 0.9110, single head **0.9135**). But dropping the coarse *losses* costs **2.10 pt under domain shift** while costing nothing in-distribution. The four-head comparison is [paper §4.1](paper/DRAFT.md). | [heads](journal/2026-07-16-why-was-fastai-behind-mini-trainer.md), [marginal](journal/2026-07-30-marginal-supervision.md) |
-| 2 | **One species head + marginalisation beats the multi-head at *every* level** (0.9135/0.9606/0.9739 vs 0.9110/0.9587/0.9708) — fewer parameters, and the coarse posterior is by definition the sum of the species one (**probabilistic coherence — not argmax agreement, which is not guaranteed**). **But it loses 2.1 pt under domain shift** unless the marginals are also *supervised during training*, which recovers 1.41 of it for free: **coarse supervision buys robustness, coarse parameters do not.** | [story](journal/DIRECTIONS.md), [marginal](journal/2026-07-30-marginal-supervision.md) |
-| 3 | **The margin relocates open-set signal rather than creating it — the 31-point claim was a rule comparison.** Given each head its *best* scoring rule, ArcFace × z-score leads the plain cosine head by **0.78 pt** (0.9068 vs 0.8990), not 31, and trails it by 1.0 pt on accuracy. What the margin genuinely does: it moves the signal from the distribution's *shape* (plain head's best rule is entropy) into the *magnitude* of the top score (ArcFace's is max-logit), and makes the readout choice nearly free — its five rules span 1.2 pt against the plain head's 28.4. | [retraction](journal/2026-08-06-the-arcface-open-set-claim-was-a-rule-comparison.md) |
-| 4 | **An open-set scoring rule does not transfer across model scale.** `max-logit` is the best rule at 20 M and among the worst at 198 M, where `max-softmax-probability` beats it by **+6.1 to +7.6 pt**. Reading every model with one rule made a 1.6 pt capacity penalty look like 8.8 and produced a "ranking inversion" that was largely an artifact. As a model's fit improves, open-set signal moves from the *magnitude* of the top score to its *dominance* over the rest. | [scoring rule](journal/2026-08-01-the-scoring-rule-was-the-bug.md) |
-| 4a | **Macro-F1 does not decompose over subsets, so two benchmarks on the *same images* can disagree and both be right.** F1 ties B4 on all 47,905 trap images (+0.0002) and beats it by **+2.03 pt** on a 15,200-image subset of them — because the full set weights 486 species at 1/486 and the subset weights its 368 at 1/368. Differences are only meaningful *within* a column. | [decomposition](journal/2026-08-03-macro-f1-does-not-decompose.md) |
-| 4b | **A benchmark's exclusivity has to be written down or it gets spent twice.** The trap set was *the* external benchmark since July and also the only source of unlabelled trap images; nothing recorded that those roles conflict, so self-training would have trained on its own test set and reported a higher number. Caught before running, by building the split rather than by the pipeline. | [contamination](journal/2026-08-02-the-shifted-benchmark-is-also-the-adaptation-set.md) |
-| 4c | **"Pretrained on a public archive" and "evaluated on a public archive" are the same sentence more often than anyone checks.** BioCLIP-2's training set (TreeOfLife-200M) contains **93.3 % of our species and 65.4 % of our images — including 413,865 of our 629,742 test-fold images — by exact GBIF occurrence id**, not by name match. Any in-distribution comparison against a foundation model trained on GBIF-derived data is contaminated in its favour. The usual check is *taxonomic* overlap, which is the weaker question and reassuringly answerable while the images are literally the same. | [contamination](journal/2026-08-26-bioclip2-has-seen-two-thirds-of-our-test-fold.md) |
-| 5 | **The three evaluation axes still disagree, but mildly.** With each model's best rule: A1 leads open-set (0.9068), B4 leads in-distribution (0.9216) and shift (0.7101) while giving up 1.75 pt of AUROC. In-distribution macro-F1 should not be the sole selection criterion — but the strong claim that the best in-distribution model is the *worst* deployable one did not survive scrutiny. | [inversion, corrected](journal/2026-07-31-best-model-is-not-the-best-model.md) |
-| 6 | **Domain adaptation is mostly a *classifier* problem, not a representation one.** Freezing the backbone and retraining only the classifier for 2 epochs captures **83 %** of full self-training's gain (89 % of its transfer to unseen species). Adapting to a new camera is minutes of GPU, no labels, backbone untouched. **And it works from a trunk that never saw the target domain at all** — so `domain_aug` turns out to be a *substitute* for adaptation rather than a complement (+4.75 pt alone, +0.57 pt once the classifier is adapted). Same structural answer as cRT gave for the long tail: the representation is the robust, inert end and the classifier is the cheap, swappable one. | [T2](journal/2026-08-06-adaptation-is-mostly-a-classifier-problem.md) |
-| 7 | **Unlabelled target data supplies *coverage of the input space*; its *class distribution* is a second knob, and that knob is a small-model lever.** Coverage: 0.39 % of training buys 97 % of the gain, and trading 24.6 pt of label accuracy for 740 more species buys **+4.24 pt**. Balance: at 20 M it swings results **±3.6 pt** — helping a frozen trunk (+1.51/+1.87), hurting end-to-end (−0.71/−3.62) — and at 198 M all four effects attenuate to under 1 pt. Tune it at 20 M; ignore it at deployment scale. | [iteration](journal/2026-08-08-self-training-does-not-iterate.md), [scale](journal/2026-08-10-balance-is-oversampling-and-it-does-not-scale.md) |
-| 7c | **Class centroids can *replace* a trained prototype matrix but cannot *substitute* for training one.** Swapping a trained matrix for train-set centroids at inference costs **0.29 pt**; training against EMA centroids with no matrix at all costs **4.63 pt**. Five routes to a 1 M-species head are now measured and all are dead — the honest answer is to shard the matrix and use centroids at inference. | [H4](journal/2026-08-09-can-centroids-be-trained-against.md) |
-| 7d | **Adaptation is cheap *given a task-trained representation*, and does not transfer to an arbitrary one.** A frozen BioCLIP-2 trunk (ViT-L/14, 200 M images, having seen 93 % of our species) with our identical classifier-adaptation stage reaches probe **0.5901** against **0.7515** from our own 20 M trunk — **−16.14 pt**. The deficit is 5.77 pt in-distribution and **triples under domain shift**. The claim is not "any strong encoder plus cheap classifier stages"; it is "given a representation trained on the task, the rest is cheap". | [P1](journal/2026-08-24-does-the-recipe-need-our-backbone.md) |
-| 7e | **The best representation for this task is not ours, and a frozen probe hides it.** Fine-tuned BioCLIP-2 beats our task-trained trunk on **all three axes** — in-distribution +1.25, probe +3.60, held-out species +5.25 — while *frozen* it trails by 5.77 and collapses by 16 under shift. A frozen probe can understate a representation by 7 points, and the learning rate decides whether you ever see it.** BioCLIP-2 frozen is 5.77 pt behind our task-trained baseline; **fine-tuned it is 1.25 pt ahead** — a 7.02 pt swing from unfreezing alone. Across three LR arms the span is **2.34 pt** and our own default (1e-3, tuned for an ImageNet CNN) was the *worst*, returning a plausible number 1.09 pt below baseline. A single-arm run would have concluded the opposite of the truth. | [P3](journal/2026-08-28-fine-tuned-bioclip2-beats-us-and-the-head-hurts.md) |
-| 7f | **Truncating the head of a long-tailed corpus has an interior optimum, and in-distribution accuracy points the wrong way past it.** Capping training images per species at 1,000 rather than ~2,000 costs **0.84 pt in-distribution** and buys **+1.76 probe and +2.94 held-out species** (n = 2 on both arms, ~3x the combined spread). In-distribution rises monotonically with the cap while both deployment axes peak and fall — the same shape as the self-training dose curve. | [L7](journal/2026-08-28-fine-tuned-bioclip2-beats-us-and-the-head-hurts.md) |
-| 7g | **Frozen-trunk adaptation is cheap only when the frozen trunk was trained with the head you are re-fitting** — and unfreezing scores not just better but *more reproducibly* (held-out spread 0.0021 vs 0.0374 frozen). Our 2-epoch frozen stage recovers 83 % of full self-training on *our* trunk, and loses **5.93 pt** on BioCLIP-2's, whose features are arranged for text alignment rather than for a cosine head. Unfrozen, the same stage reaches probe **0.7810** — tying our best model. The staged-recipe result is bounded to trunks trained with the same head geometry. | [P5](journal/2026-08-28-frozen-adaptation-only-works-on-your-own-trunk.md) |
-| 7h | **Two models with equal accuracy need not be equally deployable, and the gap can be enormous.** B8 and P5 tie on probe macro-F1 (0.7798 / 0.7810) and differ by **17.3 pt** on useful-answer rate under a 95 %-precision back-off policy: B8 answers 73.3 % of images, P5 answers 92.8 %. The difference is confidence calibration, not discriminative power. Under source shift that policy costs **26.7 %** abstention against **0.82 %** in-distribution, so abstention coverage measured on a held-out fold describes the easy case. | [O1](journal/2026-08-28-two-tied-models-differ-by-17-points-in-deployment.md) |
-| 7i | **A regional species checklist helps the average observation and its effect on a per-class average is a ratio.** Masking the label space to the 464-species Danish list is worth **+5.06 pt micro-accuracy** on probe and **+6.31 pt macro-F1** on held-out species, while *costing* 1.70 pt macro-F1 on probe. Restriction redirects mass onto in-checklist classes; that only costs you where the scored set is most of the checklist (probe: 368 of 464). Real deployments sit in the regime where it wins on both. | [D1](journal/2026-08-28-a-regional-checklist-helps-the-user-and-hurts-the-tail.md) |
-| 7b | **Give each arm its own best configuration, or you are comparing configurations, not methods.** Twice a headline gap collapsed once both arms were tuned: ArcFace's 31-pt open-set lead became **0.78** with each head on its own best scoring rule, and the staged recipe's 1.65-pt external deficit became **0.14** with each regime on its own best pseudo-label distribution. | [rules](journal/2026-08-06-the-arcface-open-set-claim-was-a-rule-comparison.md), [iteration](journal/2026-08-08-self-training-does-not-iterate.md) |
-| 7a | **Novelty detection is monotone in taxonomic distance, and not because unseen taxa are rare.** near 0.8527 / mid 0.9342 / far 0.9641 with the novel set taken free as everything below the 50-image floor; near **0.8717** / mid **0.9463** / far **0.9726** with 231 **common** taxa (>= 200 images) deliberately withheld. Two novel populations chosen by opposite criteria, same ordering. | [C3b](journal/2026-08-08-is-novelty-monotone-or-just-rare.md) |
-| 8 | **Self-training on unlabelled target-domain images is the largest robustness lever, and the only free one.** **+7.94 pt** on held-out trap groups for ~0 in-distribution, with the gain transferring **essentially entirely** to species the adaptation never saw — at the right dose. How much target-domain data is a sharp interior optimum at **~2 % of training**: less works nearly as well, more converts adaptation into memorisation (transfer falls 121 % → 39 % as the share rises). A 20 M model with it beats a 198 M model without. It is also the first rung requiring nobody to *name* what differs between domains — unlike augmentation, which is bounded by imagination at ~4 pt. | [B3](journal/2026-08-03-b3-self-training.md) |
-| 9 | **That trade is fixable: apply the rebalancing to the *classifier*, not the data.** cRT — train the representation on the natural distribution, then freeze it and rebalance only the classifier — recovers +1.19 pt of oversampling's in-distribution gain while scoring **+2.46 above** the fully-oversampled model under shift. The damage was in the representation all along. | [cRT](journal/2026-08-01-imbalance-methods-bench.md) |
-| 10 | **Long-tail methods trade robustness for accuracy, monotonically.** Rank four cells by how hard they push mass toward rare classes — none / √-oversampling / balanced softmax / both — and the shifted score falls at *every* step: **0.6445 > 0.6293 > 0.5726 > 0.5492** (9.5 pt spread, 0.69 pt floor), while the in-distribution column does not order at all. Rare classes carry the least transferable evidence, so up-weighting them up-weights the part that breaks first. | [imbalance bench](journal/2026-08-01-imbalance-methods-bench.md) |
-| 11 | **Domain-mimicking augmentation is a down-payment, not a fix**: three hand-named nuisances (blur, low light, JPEG) buy **+4.0 pt under shift for −0.36 in-distribution** — an 11:1 trade — yet close only **17 %** of the gap. What you can name is worth about four points. | [domain shift](journal/2026-07-30-domain-shift.md) |
-| 12 | **An angular margin degrades marginalisation, not classification.** ArcFace × z-score costs ~1 pt at species but ~1.15 pt at genus/family, because summing a posterior is calibration-dependent and a margin sharpens boundaries at calibration's expense. **Replicated across a 10× backbone scale change.** The mirror image: supervising the marginals leaves species *exactly* unchanged while lifting coarse levels +0.27/+0.39. | [compose](journal/2026-07-30-does-arcface-compose-with-marginalisation.md), [marginal](journal/2026-07-30-marginal-supervision.md) |
-| 13 | **In-distribution accuracy is near-saturated but generalisation is not**: 0.9316 in-domain → **0.6950** on an external source (~23 pt gap), and open-set AUROC falls 0.9115 → 0.7272 with it. Shift makes *known* species look unfamiliar. | [flemming](journal/2026-07-28-flemming-generalization.md), [domain shift](journal/2026-07-30-domain-shift.md) |
-| 14 | **Knowledge distillation works, but the student is the ceiling.** T=1 beats from-scratch (0.8786 vs 0.8692); a 2 pt better teacher moved the student by ~0. **KD temperature is not head-agnostic** — the textbook T=4 *hurt* (0.8546). | [bridge](journal/2026-07-25-teacher-student-app-bridge.md) |
-| 15 | **Scale pays in-distribution; for robustness, augmentation is the better buy.** ConvNeXtV2-L 0.9316 (+1.7 pt), and a DINOv3-distilled ConvNeXt matches it ~2× faster. But under shift a 20 M model with `domain_aug` beats a 198 M one without it, and the two compose better than additively (the augmentation tax vanishes at scale while its gain grows). | [bigger everything](journal/2026-07-24-bigger-everything.md), [factorial](journal/2026-08-01-capacity-x-augmentation.md) |
-| 16 | **Methodological**: an `lr_find`-style range test is invalid for a margin (it mechanically raises the loss); and a 2-D projection is the wrong picture for an angular effect (silhouette barely moves while AUROC moves 30 pt). | [directions](journal/DIRECTIONS.md) |
+## 3. The map: four projects in one repository
 
-### 2b. How the baseline was built — the engineering findings
-
-The headline model did not arrive designed; it was climbed from **0.8297 to 0.9152** one change at a
-time, and what moved it is not what one would guess. Full argument and the ladder table in
-[`docs/design-decisions.md`](docs/design-decisions.md).
-
-| # | finding | evidence |
-|---|---|---|
-| 17 | **The optimiser was never the lever.** Muon was in place at 0.8297 and stayed. What moved the number was the *schedule* (`one_cycle` over `flat_cos`, +1.2 pt), the *sampler* (√-oversampling, +2.6 pt) and *lighter* augmentation — what the model sees and for how long, not how gradients are applied. | [design decisions](docs/design-decisions.md), [ladder](journal/2026-07-16-why-was-fastai-behind-mini-trainer.md) |
-| 18 | **A mechanism that explains a result is not the same as a tested one.** √-oversampling beating logit adjustment was blamed on one shared τ spanning three level distributions. Re-run on a single-head architecture where no shared constant exists, it still loses — the explanation was a rationalisation and is retracted. The satisfying story survived four weeks unchecked. | [long tail](journal/2026-07-17-does-longtail-help.md), [bench](journal/2026-08-01-imbalance-methods-bench.md) |
-| 19 | **bf16 is not optional** for cosine heads — fp16 overflows them. The autoregressive head's "wiring bug" was this, and was misdiagnosed for days. | [fp16](journal/2026-07-18-autoregressive-fp16-instability.md) |
-| 20 | **Before hunting a bug, check both numbers mean the same thing.** A "0.92 val vs 0.83 test" fold bug did not exist: one metric averaged three taxonomic levels, the other was species-only. Like-for-like, both were 0.83. | [fastai gap](journal/2026-07-16-why-was-fastai-behind-mini-trainer.md) |
-| 21 | **Audit the eval set before believing the metric.** A port "beat" its own baseline 0.9455 vs 0.9148 — because the eval had filtered the long tail out of a *macro* average. Unfiltered: 0.9152, i.e. an exact reproduction. | [port](journal/2026-07-24-src-lepinet-baseline-port.md) |
-| 22 | **Framework attributes can lie.** fastai hardcodes `num_workers` to 1; the true value is on `fake_l`. Reading the wrong one ran evaluations at ~1 img/s instead of 898 — a ~900× slowdown first misdiagnosed as a hardware problem. | [design decisions](docs/design-decisions.md) |
-| 23 | **Deployment**: int8 cannot run in ORT-Web (no `ConvInteger` kernel) but **source-level fp16 can** (−28 % size, identical top-1); GitHub *release* assets send no CORS, so they cannot serve a browser (Hugging Face Hub can). The cosine head is ~51 % of a small model's parameters, so the bottleneck width (256) is the real size knob. | [bridge](journal/2026-07-25-teacher-student-app-bridge.md), [compression](journal/2026-07-20-lepi-app-compression.md) |
-| 24 | **A dataset's species count is only as good as its emptiest field.** Keying TreeOfLife-200M by `genus + epithet` gives 203,878 species at >= 50 images, but **19,025 of those keys are not species**: 12,915 are genus-or-higher records (`Megaselia`, even the family `Sciaridae`) and 6,110 are bare epithets with no genus, which silently merge unrelated taxa (`occidentalis` alone: 129 k images). The true count is **184,853**. Audit key composition before quoting a class count or training on it. | [blocked servers](journal/2026-10-01-what-the-blocked-servers-cost.md) |
-
-> **Where each list lives, and why.** The scientific findings (§2a) are stated formally in
-> [`paper/DRAFT.md`](paper/DRAFT.md); the engineering ones (§2b) are argued in
-> [`docs/design-decisions.md`](docs/design-decisions.md). Both appear here as one-line summaries for
-> newcomers, and *chronologically* in [`journal/README.md`](journal/README.md). Four views of one
-> truth, each with a different reader — no fifth copy.
-
-## 3. The current baseline — what to compare against
-
-**For any new experiment: `efficientnet_v2_s`, single species head, marginalisation, 5 epochs,
-sqrt-oversampling → species macro-F1 0.9135.** Config:
-[`configs/20260729_ucloud_singlehead_species_effnetv2s.yaml`](configs/20260729_ucloud_singlehead_species_effnetv2s.yaml).
-Cheap, and every architectural comparison in the project is anchored to it.
-
-There are **three different external benchmarks** and they are not interchangeable (finding 4a):
-
-| column | images | species | what it is |
+| part | what it is | where | state |
 |---|---|---|---|
-| **full trap** | 47,905 | 486 | every trap image. **Contaminated for anything trained on trap data** |
-| **probe** | 15,200 | 368 | whole (trap, night) groups held out of adaptation. The honest column |
-| **probe-HO** | 2,455 | 58 | probe restricted to species adaptation never saw. Tests *generalisation* |
+| **package** | the `lepinet` library: train, test, predict, export, bundle, distill | `src/`, `tests/`, `docs/` | stable |
+| **research** | the experiments behind the paper | `dev/` scripts, `configs/` (one YAML per run), `ucloud/` (one TOML per cluster job, ~5 per experiment), `journal/`, `paper/` | experiments closed; paper being written |
+| **release** | public models and the phone-app bridge | `dev/083_*`, [release entry](journal/2026-09-29-public-hf-release.md) | done |
+| **TreeOfLife** | the 70 M-image download for W1-W3 | `dev/082`, `dev/084`, `dev/085`, `ucloud/*tol*` | running; separate from the paper |
 
-| purpose | model | in-dist | full trap | probe | probe-HO | open-set |
-|---|---|---|---|---|---|---|
-| cheap reference | effnetv2_s, single head + marginals | **0.9135** | 0.629 | 0.627 | 0.641 | ~0.60 |
-| best in-distribution, no open-set | ConvNeXtV2-L @320, multi-head | **0.9316** | 0.7122 | — | — | — |
-| **best deployable — SHIP THIS** | **B8**: F1 minus √-oversampling, plus self-training at the 2 % dose | 0.9060 | — | **0.7798** | **0.7816** | — |
-| best in-distribution, open-set capable | F1: DINOv3-cnx-L + ArcFace × z-score + marginal supervision + trap aug | **0.9219** | 0.7103 | 0.7209 | 0.7559 | 0.8800 |
-| best robustness per parameter | **B3**: B1 + self-training on trap images (20 M) | 0.9003 | *n/a* | **0.7370** | 0.7231 | — |
-| best novelty detection | A1: effnetv2_s + ArcFace × z-score | 0.9035 | 0.6437 | — | — | **0.9068** |
-| best small robust model, no trap data | B1: A1 + `domain_aug: trap` | 0.8999 | 0.6836 | 0.6912 | 0.6974 | 0.9010 |
-| shippable student | fastvit_sa12, distilled from A2 | **0.8967** | 0.6301 | — | — | — |
+**History, not needed to work:** `archive/`, `bash/`, and `dev/000`-`dev/033` (scripts and notebooks
+from before the package existed).
 
-> **Three rules for reading this table**, each learned by getting it wrong:
->
-> 1. **Take differences within a column only.** Macro-F1 averages per-class scores *within* the set
->    it is given, so the full-trap and probe columns weight different species sets. F1 ties B4 on
->    full trap and beats it by 2 pt on probe, and both are correct (finding 4a).
-> 2. **Name the open-set rule.** AUROC is each model's *best* rule — `max-logit` at 20 M,
->    `max-softmax-probability` at 198 M, `entropy` for log-probability heads. One rule across all
->    models understated the large ones by 6–7.6 pt (finding 4).
-> 3. **Check the noise floor before believing a difference.** Measured: species **0.0000**, genus
->    0.0005, family 0.0024, full trap **0.0069**, probe **0.0041**, probe-HO **0.0052**.
+## 4. The models to compare against
 
-## 4. The 90-second version of the project's state
+| model | what it is | in-dist | probe | open-set AUROC |
+|---|---|---|---|---|
+| **cheap reference** | effnetv2_s, one species head + marginalisation, √-oversampling (`singlehead`) | 0.9135 | 0.6270 | 0.8990 |
+| **B8** | 198 M, self-training on 2 % trap images, no oversampling | 0.9060 | 0.7798 | 0.9153 |
+| **P5** (recommended) | BioCLIP-2 fine-tuned + unfrozen adaptation | 0.9113 | 0.7757 | 0.9161 |
+| best in-distribution | ConvNeXtV2-L, multi-head | **0.9316** | — | — |
 
-- A clean, fastai-only package (`src/lepinet`) reproduces the project-best baseline:
-  **species macro-F1 0.9152**.
-- Scaling up works: **ConvNeXtV2-L → 0.9316**; a DINOv3-distilled ConvNeXt matches it ~2× faster.
-  In-distribution accuracy is essentially solved.
-- **Knowledge distillation works** (`lepinet distill`): a small student beats its from-scratch
-  equivalent — but caps at ~0.88 by its own capacity, not the teacher's quality.
-- **`lepinet bundle`** turns any checkpoint into a deployable ONNX bundle, and such a bundle is
-  **plug-and-play in the companion phone app** (validated in a real browser).
-- **The open problem:** a model at **0.93 in-distribution drops to ~0.70 on external data**, and
-  real datasets contain species the model was never trained on. So the current direction is
-  *reliable prediction that knows what it doesn't know* — see
-  [`journal/DIRECTIONS.md`](journal/DIRECTIONS.md).
+*in-dist* = species macro-F1 on our held-out fold; *probe* = macro-F1 on held-out light-trap nights.
+Compare only within a column, and check the noise floor first (in-dist ~0.000; probe ~0.004
+end-to-end, ~0.012 for frozen-trunk stages). Config of the reference:
+[`configs/20260729_ucloud_singlehead_species_effnetv2s.yaml`](configs/20260729_ucloud_singlehead_species_effnetv2s.yaml).
 
-## 5. How the layers fit together
+## 5. What is established
 
-```
-START-HERE.md          <- you are here: the map
-├── CLAUDE.md          <- the operating manual for an AI agent: invariants, culture, the
-│                         documentation contract. Auto-loaded; humans may read it too.
-├── README.md          <- the problem + the method (start reading here)
-├── docs/              <- how to USE it, how to CHANGE it, and WHY it is this way
-│   ├── concepts.md         <- the vocabulary, explained from the ground up
-│   ├── user-guide.md       <- install + the CLI
-│   ├── developer-guide.md  <- architecture + how to extend it
-│   ├── design-decisions.md <- why each recipe choice is what it is, and what it was worth
-│   └── (published as a website via MkDocs; see mkdocs.yml)
-├── src/lepinet/       <- the package: the stable, tested implementation
-│   └── README.md      <- module-by-module tour
-├── dev/               <- experiments: numbered scripts that import the package
-├── configs/           <- one YAML per training run (the source of truth for a run)
-├── ucloud/            <- one TOML per cluster job
-├── paper/DRAFT.md     <- the scientific claims, stated formally
-├── journal/           <- WHY, as it happened: one entry per question, dated, negative results kept
-│   ├── README.md      <- the master doc: how the project evolved + an index by kind
-│   ├── PLAN.md        <- LIVING: the experiment-group index (A-T), what is running, the backlog
-│   └── DIRECTIONS.md  <- LIVING: the research strategy
-├── RESULTS.md         <- WHAT it scored (the numbers)
-└── tests/             <- what must keep working (runs on CPU, no dataset needed)
-```
+One line each, with the paper section and the experiments that carry it. Negative results count.
 
-**The rule of thumb:** `RESULTS.md` tells you *what* happened, `journal/` tells you *why*, `src/`
-is *how*, and `dev/` is *what we're trying next*.
+### 5a. Science
 
-## 6. Conventions worth knowing before you dig in
+| # | finding | paper | IDs |
+|---|---|---|---|
+| 1 | Hierarchy-aware heads do not help; one species head plus marginalisation matches or beats them. Coarse *supervision* (a loss on the marginals) still buys ~1.4 pt under shift. | §4.1 | singlehead, marginal, A4 |
+| 2 | In-distribution accuracy saturates near 0.93 but falls ~23 pt on trap images, and the three axes rank models differently. | §4.2, §4.10 | flemming, B4 |
+| 3 | **The spine:** interventions belong in the classifier, not the representation: rebalancing (cRT), domain adaptation (83 % from the classifier alone), the prototype matrix (centroids for 0.29 pt). | §4.15 | L4, T2, H1 |
+| 4 | Unlabelled trap images are the largest lever: self-training gives +7.94 probe at a 2 % share and beats 12,230 real labels; above 2 % adaptation becomes memorisation. | §4.11 | B3rep5x, T1 |
+| 5 | Long-tail reweighting trades shift robustness for accuracy, monotonically; cRT removes the trade; capping training at 1,000 images per species helps shift. | §4.13 | L0-L4, L7 |
+| 6 | The best open-set scoring rule changes with model scale (6-7.6 pt); one rule for all models produced a false ranking. | §4.9 | E2 |
+| 7 | The angular margin relocates open-set signal rather than creating it: +0.78 AUROC best-vs-best (an earlier "31 pt" compared rules, and is retracted). | §4.3 | A1, C3r |
+| 8 | Novelty detection improves with taxonomic distance (near < mid < far), and not because unseen taxa are rare. | §4.4 | C3, C3b |
+| 9 | Abstention under shift is expensive, and two models with equal accuracy can differ by 17 pt in useful answers: the difference is calibration. | §4.6a | O1 |
+| 10 | Two thirds of our test fold is inside BioCLIP-2's training data by GBIF occurrence id; a frozen probe understates that model by 7 pt; fine-tuned it is the better trunk, and our recipe closes the gap. | §4.14 | P1-P5 |
+| 11 | A margin damages marginalisation more than classification, through calibration; replicated at 10x scale. | §4.7 | A1, A2, A4 |
+| 12 | Augmentation that mimics trap conditions closes only 17 % of the gap. | §4.8 | B1 |
+| 13 | Measurement: macro-F1 does not decompose over subsets; noise floors depend on the training regime (identical runs 3.74 pt apart); give every arm its own best configuration. | §3.2, §5 | A5, G3b, R5b |
+| 14 | A regional checklist helps the average observation (+5 pt accuracy) and hurts per-species macro-F1 when the scored set is most of the checklist. *(Not in the paper.)* | — | K1 |
 
-- **The journal splits into living and archival.** `UPPERCASE.md` files (`PLAN`, `DIRECTIONS`) have
-  no date and are kept current; `YYYY-MM-DD-question.md` files are frozen once `RESOLVED`, and the
-  date is when the question was *opened*, so `ls journal/` reads in the order things were asked.
-- **The journal is one file per _question_, not per run** — and a hypothesis is written *before* the
-  result lands, so predictions are tested rather than rationalised. Negative results are kept on
-  purpose; they cost real GPU time to learn.
-- **Runs are cited by id** (`20260716-154156`), never by adjective.
-- **`data/` is machine-local and gitignored** — a fresh clone has no runs. `RESULTS.md` is the only
-  copy of those numbers that leaves the training box.
-- **Metrics:** the headline is **species macro-F1** (every species weighted equally, so the long tail
-  counts) on the held-out fold (`set == '0'`) over **all** species. Beware of filtering the test fold
-  — see the eval-set lesson in
-  [`journal/2026-07-24-src-lepinet-baseline-port.md`](journal/2026-07-24-src-lepinet-baseline-port.md).
+### 5b. Engineering (argued in [`docs/design-decisions.md`](docs/design-decisions.md))
+
+| # | finding |
+|---|---|
+| 15 | The baseline climbed 0.8297 → 0.9152 through the schedule, the sampler and lighter augmentation, not the optimiser. |
+| 16 | Margin heads need bf16 (fp16 overflows); fp16 is fine elsewhere. |
+| 17 | Audit the evaluation set before believing a metric: filtering rare species out of the test fold inflated a macro average by 3 pt. |
+| 18 | Framework attributes can lie: fastai's reported `num_workers` caused a ~900x slowdown first blamed on hardware. |
+| 19 | Deployment: int8 cannot run in ORT-Web, fp16 ships; the classifier head is half a small model, so its width is the size knob. |
+| 20 | 9.3 % of TreeOfLife "species" keys are not species; audit a dataset's key composition before quoting a class count. |
+| 21 | Derive stored image size from the training transform: the input crops the short side, so store the short side. |
+| 22 | UCloud jobs see the host's 256 cores; size thread pools from the cgroup quota, and cost CPU jobs before submitting them. |
+
+## 6. Conventions
+
+- **IDs.** Experiments are cited by letter-number (see [`EXPERIMENTS.md`](EXPERIMENTS.md)), July
+  local runs by timestamp (`20260716-154156`). Letters have been reused; the registry says which is
+  which.
+- **The journal** is one file per question, dated by when the question was opened, with the
+  prediction written before the result. `UPPERCASE.md` files (`PLAN`, `README`) are
+  living documents.
+- **The metric** is species macro-F1 on the held-out fold (`set == '0'`) over **all** species, so
+  the long tail counts. Never filter the test fold.
+- **`data/`** is machine-local and gitignored; a fresh clone has no runs.

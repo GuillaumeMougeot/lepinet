@@ -79,7 +79,7 @@ substituted; **~970 k lost (11 %)**; **38 species lost entirely**. Lost species 
 
 **Accept the herbarium, EOL, ALA and AntWeb losses for this project.** They are mostly specimen
 material in a domain far from field photographs of moths, and for a general backbone they are a
-minority of a large corpus. The one caveat is D2's matched-corpus comparison against BioCLIP-2,
+minority of a large corpus. The one caveat is W2's matched-corpus comparison against BioCLIP-2,
 which was trained on everything: our crawl is a strict subset, and the paper should say so.
 
 **Contact observation.org and Artsdatabanken.** Together ~5.3 M images of European and Scandinavian
@@ -178,7 +178,7 @@ the case for writing to observation.org *for Lepidoptera*; it still holds for ot
 Copied by the crawler itself: `file://` rows go through the same QC, resize and metadata as
 downloads (verified on the first 3,326, zero errors).
 
-Two cautions for D3:
+Two cautions for W3:
 
 * **152,833 of these rows are from lepinet's held-out test fold** (`global_lepi_set == '0'`). They
   are tagged and must be excluded from every training set.

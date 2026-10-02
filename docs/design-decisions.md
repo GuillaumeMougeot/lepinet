@@ -182,6 +182,11 @@ long tail from a *macro* average. With the filter removed it scored 0.9152, i.e.
 the baseline. A metric that improves when you change how it is computed has not improved.
 → [journal: 2026-07-24-src-lepinet-baseline-port](https://github.com/GuillaumeMougeot/lepinet/blob/main/journal/2026-07-24-src-lepinet-baseline-port.md)
 
+**Derive a dataset's stored image size from the training transform, not from the input size.** The
+ToL crawl stored "256" on the long side; training crops a square from the *short* side, so every
+image reached the 256 px input upsampled and the 58 M-image crawl had to be redone. Stored short
+side >= input side is the condition. → [journal: 2026-10-01-the-crawl-resized-the-wrong-side](../journal/2026-10-01-the-crawl-resized-the-wrong-side.md)
+
 **Do not re-normalise a weight matrix you did not train.** The cosine head is *supposed* to keep
 every prototype row at unit norm, so re-normalising it before use looks like a no-op. On one
 checkpoint it was not: the rows had drifted, `argmax(g_c * cos_c)` is not `argmax(cos_c)`, and a

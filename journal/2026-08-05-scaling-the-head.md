@@ -112,7 +112,7 @@ computed from the training set.
 - **This is where ArcFace × z-score pays off most, and the project already has the evidence.** The
   margin exists to make classes tight and well-separated *in angle*; that is precisely the property a
   nearest-neighbour search needs. A plain cosine head's clusters are diffuse (mean max-cos 0.144 for
-  the plain head vs 0.671 for ArcFace × z-score, [[DIRECTIONS]], the C3 stratified-OOD numbers) — kNN on
+  the plain head vs 0.671 for ArcFace × z-score, [[2026-07-29-the-reframe-directions]], the C3 stratified-OOD numbers) — kNN on
   those would be poor. **We have trained exactly the kind of embedding retrieval wants.**
 - It also generalises the open-set story for free: a novel species is one whose nearest centroid is
   far, which is the same score the project already uses.

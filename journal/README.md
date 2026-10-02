@@ -23,7 +23,7 @@ The snapshot is the only copy of those numbers that leaves the training box, and
 ordered backlog, and what is deliberately *not* being done. It is the only file here that is expected
 to be correct *today*; everything else is a record of a moment.
 
-**→ [`DIRECTIONS.md`](DIRECTIONS.md)** — the living research strategy: what the results say the real
+**→ [The July reframe](2026-07-29-the-reframe-directions.md)** — formerly the living `DIRECTIONS.md`, frozen 2026-10-02: what the results said the real
 bottleneck is, and why the project reframed around open-set reliability rather than accuracy.
 
 ---
@@ -95,7 +95,7 @@ Six phases, in order. The engineering lessons each one produced are consolidated
    **~0.70 on external data**. So the story is not heads or accuracy — it is *prediction that knows
    what it doesn't know*: open-set in image space, abstention in hierarchy space, both under domain
    shift. [[2026-07-28-flemming-generalization]] · [[2026-07-30-domain-shift]] ·
-   [[2026-07-30-marginal-supervision]] · [`DIRECTIONS.md`](DIRECTIONS.md)
+   [[2026-07-30-marginal-supervision]] · [[2026-07-29-the-reframe-directions]]
 7. **The inversion** (Jul 31) — with all three axes finally measured on one architecture family, they
    rank our models in **opposite orders**. The best in-distribution model is the worst at novelty and
    loses under shift to one a tenth its size. In-distribution macro-F1 is not merely saturated; it is
@@ -114,7 +114,6 @@ Six phases, in order. The engineering lessons each one produced are consolidated
 | file | what it is |
 |---|---|
 | [PLAN.md](PLAN.md) | Status board of runs in flight + the ordered backlog. **Read this before picking up work.** |
-| [DIRECTIONS.md](DIRECTIONS.md) | The research strategy, and why the project reframed around open-set reliability |
 
 ### Research
 
@@ -124,15 +123,16 @@ Six phases, in order. The engineering lessons each one produced are consolidated
 | [07-17](2026-07-17-does-longtail-help.md) | Do oversampling / logit adjustment push species macro-F1 past 0.8887? | RESOLVED — oversampling **0.9148, project best**; logit adjustment 0.9031, not recommended (broke genus/family) |
 | [07-24](2026-07-24-bigger-everything.md) | Does a bigger backbone beat 0.9148 and make a good distillation teacher? | RESOLVED — ConvNeXtV2-L **0.9316 (+1.68 pp)**, now the best teacher |
 | [07-28](2026-07-28-flemming-generalization.md) | Does the 0.9316 model survive an external dataset? | RESOLVED — drops to **0.6950** (~23 pp gap); family robust; motivates the OOD work |
+| [07-29](2026-07-29-the-reframe-directions.md) | What is the real bottleneck, once the head comparison is a null result? (formerly the living `DIRECTIONS.md`) | **RESOLVED, frozen 2026-10-02** -- reliable prediction under shift, not accuracy; its directions all ran and the paper now carries the story |
 | [07-30](2026-07-30-domain-shift.md) | Is domain augmentation a fix for the 23 pp gap, or a treadmill? | **B1 RESOLVED** — a down-payment: **+4.0 pt shifted for −0.36 in-dist** (11:1), but closes only 17 % of the gap. B2/B3 still open |
 | [07-30](2026-07-30-marginal-supervision.md) | Does supervising the marginals *during training* help? | RESOLVED — species **unchanged** (0.9135 → 0.9135), but genus +0.27 / family +0.39 pp. Free coarse accuracy via calibration of the sum |
 | [07-30](2026-07-30-does-arcface-compose-with-marginalisation.md) | Do single-head marginalisation and ArcFace × z-score compose? | RESOLVED — **they do not**, but A1 stands: open-set survives (AUROC 0.9068). The interference replicates at 10× scale, so it is a calibration effect, not noise |
 | [08-05](2026-08-05-scaling-the-head.md) | How to reach 1 M species without a 5 GB prototype matrix? | OPEN — options costed (low-rank, hierarchical softmax, sampled softmax, **taxonomy-structured fixed codes**, **retrieval**). Nothing run yet; the two cheapest tests are launched |
-| [10-01](2026-10-01-does-seeing-the-whole-tree-teach-a-model-what-it-does-not-know.md) | Does training on more data, including taxa outside Lepidoptera, improve open-set detection and domain-shift robustness? | **OPEN** -- a breadth x volume factorial on one architecture/recipe (arm D vs B isolates breadth at fixed volume; C vs BioCLIP-2 isolates the objective). Predicted: breadth helps shift before adaptation, far novelty more than near, and calibration (useful-answer) most. Two contamination traps specified before any run |
+| [10-01](2026-10-01-does-seeing-the-whole-tree-teach-a-model-what-it-does-not-know.md) | Does training on more data, including taxa outside Lepidoptera, improve open-set detection and domain-shift robustness -- and can one model name the trap insect's order and the moth's species? | **OPEN** -- first run (owner): plain training on the re-crawled ToL subset, seven levels kingdom to species keyed by full path, test fold excluded. Arm E and the A-D factorial kept for later. ToL audit: 584 k rows excluded, 0 real duplicates |
 | [10-01](2026-10-01-what-the-blocked-servers-cost.md) | What do the servers that refuse us cost, and can the 2,000/species cap be re-pointed at accessible ones? | **RESOLVED.** 20.1 M of 87.6 M selected images are on 9 refusing servers; substitution recovers 4.5 M. The loss is mostly herbarium plants: **89 % of Lepidoptera images survive, 38 of 19,150 species lost.** Contact observation.org and Artsdatabanken (European field photos, 17 % Lepidoptera). Also: a content-type bug discarded valid JPEGs, 3 servers are dead, and **9.3 % of "species" keys are not species** (184,853 true binomials) |
 | [08-28](2026-08-28-two-tied-models-differ-by-17-points-in-deployment.md) | What do B8 and P5 do under a 95 %-precision back-off policy? | **RESOLVED — they are not equivalent.** Tied on probe macro-F1 (0.7798 / 0.7810), they differ by **17.3 pt** on useful-answer rate: B8 answers 73.3 % of images, P5 answers 92.8 %. Abstention under shift costs 26.7 % coverage for B8 against 0.82 % in-distribution |
 | [08-28](2026-08-28-a-regional-checklist-helps-the-user-and-hurts-the-tail.md) | What is a regional species checklist worth at inference? | **RESOLVED — the two metrics disagree.** Restricting B8 to the 464-species Danish list moves **micro-accuracy +5.06 pt** and **macro-F1 -1.70 pt**; macro-F1 peaks at ~4,000 labels. Restriction concentrates false positives onto the classes being averaged over, so it helps the average observation and hurts the rare species |
-| [08-28](2026-08-28-two-directions-checklists-and-our-objective-on-tol.md) | Is a regional species checklist worth anything at inference, and does our objective build a better trunk than CLIP's? | **OPEN** — D1 restricts the label space to the 486-species Danish trap list (predicted probe 0.72-0.78 vs 0.6270). D2 found **ToL-200M hosts metadata only; ToL-10M hosts 2.0 TB of images** — and ToL-10M is the matched-corpus comparison, since BioCLIP-1 was trained on exactly it |
+| [08-28](2026-08-28-two-directions-checklists-and-our-objective-on-tol.md) | Is a regional species checklist worth anything at inference, and does our objective build a better trunk than CLIP's? | **OPEN** — K1 restricts the label space to the 486-species Danish trap list (predicted probe 0.72-0.78 vs 0.6270). W2 found **ToL-200M hosts metadata only; ToL-10M hosts 2.0 TB of images** — and ToL-10M is the matched-corpus comparison, since BioCLIP-1 was trained on exactly it |
 | [08-28](2026-08-28-frozen-adaptation-only-works-on-your-own-trunk.md) | Was P4's crossover substitution, or a frozen-readout artefact? | **RESOLVED — artefact.** Unfreezing the adaptation stage is worth **+5.93 pt** (0.7218 → 0.7810). Frozen-trunk adaptation is cheap only on a trunk trained with the same head. P5 ties our best model |
 | [08-28](2026-08-28-fine-tuned-bioclip2-beats-us-and-the-head-hurts.md) | Is BioCLIP-2 under-optimised, and was our head cut deep enough? | **RESOLVED — no and no.** Fine-tuned it beats our baseline by **+1.25 pt** (unfreezing is worth +7.02); and the head-cap sweep peaks at **1,000**, where capping harder buys +1.57 probe / +3.26 held-out |
 | [08-27](2026-08-27-tol-at-our-policy-and-the-head-scaling-problem.md) | How big is ToL-200M under our own data policy? | **RESOLVED — 88.1 M images, 203,878 species.** A min-50 floor cuts 884,662 species to 204 K, so the prototype matrix is **3.13 GB with Adam and fits** — the head-scaling problem is solved by a data policy, not an architecture |
@@ -189,6 +189,7 @@ Six phases, in order. The engineering lessons each one produced are consolidated
 
 | opened | what broke | status |
 |---|---|---|
+| [10-01](2026-10-01-the-crawl-resized-the-wrong-side.md) | The ToL crawl stored 256 px on the long side; the training input crops the short side. And a packet-dropping host froze it | **OPEN** -- re-crawl at short side 256 on the workstation (zero UCloud core-hours, ~2.3 TB); connection timeouts now feed the dead-host breaker; stall watchdog dumps stacks and restarts |
 | [10-01](2026-10-01-the-crawl-that-spent-58-percent-of-the-cpu-budget.md) | A network-bound crawler ran on 64 vCPU for 63 h | **RESOLVED.** **4,032 core-hours, 58 % of the CPU allocation**, for work needing 1-2 cores. Three guards now refuse it (pre-submit hook, CI test, runtime). Also found: UCloud reports 256 cores to `os.cpu_count()`; the blocked-host breaker had sent 1.66 M requests to institutions that refused us. Crawl resumed on 1 vCPU, corpus moved to the `datasets` drive |
 | [08-06](2026-08-06-the-cosine-head-is-not-unit-norm.md) | The cosine head's prototype rows are **not** unit-norm, though the design says they are | **OPEN** — confirmed on two checkpoints (mean 1.081 and 1.767); mechanism unknown. Accuracy numbers unaffected; the z-score calibration argument and the ArcFace round-trip may be |
 | [07-16](2026-07-16-gpu-hang.md) | The training box hard-hung overnight | RESOLVED as far as the evidence allows — hardware |

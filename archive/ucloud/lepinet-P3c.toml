@@ -1,4 +1,4 @@
-# P1a: BioCLIP-2 frozen trunk, classifier fitted on the global data. 3 epochs, head only.
+# P3c: BioCLIP-2 fully fine-tuned on the global data, lr 1e-5 (the winning arm).
 name = "lepinet-P3c"
 replicas = 1
 [application]

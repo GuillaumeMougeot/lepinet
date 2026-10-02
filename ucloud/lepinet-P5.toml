@@ -1,4 +1,4 @@
-# P1a: BioCLIP-2 frozen trunk, classifier fitted on the global data. 3 epochs, head only.
+# P5: P3c's fine-tuned BioCLIP-2 + our adaptation stage on trap pseudo-labels, trunk UNFROZEN. The shipped model.
 name = "lepinet-P5"
 replicas = 1
 [application]

@@ -1,14 +1,18 @@
 # Two directions: a regional checklist at inference, and our objective on Tree-of-Life
 
 **Kind:** research · **Status:** **OPEN (2026-08-28).** Two owner-proposed directions, scoped with
-hypotheses committed before any run. **D1** restricts the classifier's label space to a regional
-species checklist at inference. **D2** trains our cosine z-score objective on Tree-of-Life data to
+hypotheses committed before any run. **K1** restricts the classifier's label space to a regional
+species checklist at inference. **W2** trains our cosine z-score objective on Tree-of-Life data to
 ask whether the *objective*, not the data, is what a better backbone needs.
 
-A fact discovered while scoping D2 changes it substantially, and is the most useful thing in this
+> *IDs renamed 2026-10-02 to end a clash with group D: D1 -> **K1** (checklist), D2 -> **W1** (the ToL
+> download) and **W2** (our objective trained on ToL), D3 -> **W3** (training on the whole tree).*
+
+
+A fact discovered while scoping W2 changes it substantially, and is the most useful thing in this
 entry, so it is stated first.
 
-## The fact that reshapes D2: ToL-10M ships images, ToL-200M does not
+## The fact that reshapes W2: ToL-10M ships images, ToL-200M does not
 
 | repo | what is actually hosted | size |
 |---|---|---|
@@ -30,11 +34,11 @@ variable — CLIP contrastive against cosine z-score with hierarchical marginal 
 on ToL-200M instead would confound the objective with a 20x data change and answer a question we did
 not ask. The controlled experiment is the cheap one, which is not the usual direction for that trade.
 
-**Recommendation: D2 runs on ToL-10M.** The 200M crawler stays available if the 10M result justifies
+**Recommendation: W2 runs on ToL-10M.** The 200M crawler stays available if the 10M result justifies
 it, but building it first would be spending the expensive engineering before the cheap measurement
 that tells us whether to bother.
 
-### What D2 actually tests
+### What W2 actually tests
 
 The project has a strong prior *against* more source-domain data — our own factorial says scaling the
 source domain does not buy shift robustness, and §4.14 found a fine-tuned BioCLIP-2 already beats
@@ -68,7 +72,7 @@ download pipeline is the only new engineering: parallel ranged HTTP with resume,
 verification per tarball, and streaming decompression into the existing parquet+images layout. That
 is a day of work, not a week, because there is no rate limiting to design around.
 
-## D1: restrict the label space to a regional checklist
+## K1: restrict the label space to a regional checklist
 
 **The observation is the owner's and it is a good one.** Every number in the paper comes from a
 **12,041-class global head**, and no deployment looks like that. A Danish moth trap meets the ~500
@@ -133,12 +137,12 @@ held-out-species fold is scored too — the arm where it should hurt most.
 
 Two reasons. It is the only intervention in the project that requires **no training, no labels and no
 data** — a practitioner applies it in one line. And it inverts the usual framing of open-set: the
-paper spends §4.3–§4.5 asking how to *detect* taxa outside the label set, while D1 asks how much is
+paper spends §4.3–§4.5 asking how to *detect* taxa outside the label set, while K1 asks how much is
 gained by *shrinking the label set to what is actually possible*. Those are complementary halves of
 the same deployment question, and the second is much cheaper.
 
 ## Order of work
 
-1. **D1 first** — inference-only, hours not days, and it feeds the paper's own subject.
-2. **D2's download pipeline** — but for ToL-10M, and only after D1 lands, because D1 is cheap and
-   D2 is a week of wall-clock even when nothing goes wrong.
+1. **K1 first** — inference-only, hours not days, and it feeds the paper's own subject.
+2. **W2's download pipeline** — but for ToL-10M, and only after K1 lands, because K1 is cheap and
+   W2 is a week of wall-clock even when nothing goes wrong.

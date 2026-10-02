@@ -34,8 +34,9 @@ Always, in this order, before the first substantive action:
 
 1. **`journal/PLAN.md`** — the status board. What is running, what it is blocked on, what is
    deliberately not being done. This is the only file guaranteed to be about *today*.
-2. **`START-HERE.md` section 2** — the findings, one line each. Section 2a is the science, 2b is the
-   engineering. This stops you re-deriving or contradicting a paid-for result.
+2. **`START-HERE.md` section 5** — the findings, one line each. Section 5a is the science, 5b is the
+   engineering. This stops you re-deriving or contradicting a paid-for result. Experiment IDs
+   (A1, B8, P5...) are resolved in **`EXPERIMENTS.md`**; letters have been reused, so check it.
 
 Then, by task:
 
@@ -164,6 +165,7 @@ twice, one copy is a one-line summary that links to the other.
 |---|---|---|
 | `README.md` | what is the problem and the method | stays short |
 | `START-HERE.md` | where is everything, what is established | one line per finding + link; never the argument |
+| `EXPERIMENTS.md` | what was each experiment ID, what did it find | one row per ID, headline number + link; hand-kept |
 | `docs/user-guide.md` | how do I run it | how-to only |
 | `docs/developer-guide.md` | how do I change it | architecture and seams |
 | `docs/design-decisions.md` | why is the recipe this way | every default, what it was worth, what failed |
@@ -172,7 +174,7 @@ twice, one copy is a one-line summary that links to the other.
 | `paper/DRAFT.md` | what do we claim | only claims that generalise beyond this dataset |
 
 **`journal/` has two tiers.** Living documents are `UPPERCASE.md` with no date and are rewritten in
-place: `PLAN.md` (status board), `DIRECTIONS.md` (strategy), `README.md` (the master index).
+place: `PLAN.md` (status board) and `README.md` (the master index).
 Everything else is `YYYY-MM-DD-question.md`, dated by when the question was **opened**, so `ls` reads
 in the order things were asked, and frozen once `RESOLVED`. Every archival entry declares
 `**Kind:**` — `research`, `subproject`, `infrastructure`, or `incident` — and `**Status:**`.
@@ -188,7 +190,8 @@ been forgotten.
 | a run finishes | move its row in `journal/PLAN.md`; regenerate and commit `RESULTS.md` |
 | a question is answered | flip its entry to `RESOLVED` with the answer in the status line; update `journal/README.md`'s index row |
 | a new question is opened | new dated entry with `**Kind:**`, `**Status:** OPEN`, and the hypothesis *before* results; link it from `journal/README.md` |
-| a finding generalises | add a one-liner to `START-HERE.md` section 2a/2b, and a section to `paper/DRAFT.md` |
+| a new experiment ID is created | a row in `EXPERIMENTS.md`, with an unused letter; fill the result when it lands |
+| a finding generalises | add a one-liner to `START-HERE.md` section 5a/5b, and a section to `paper/DRAFT.md` |
 | a default changes | `docs/design-decisions.md`, with what it was worth |
 | a trap costs you more than an hour | `docs/design-decisions.md` section 4, or an `incident` entry if it lost a run |
 | the plan changes | `journal/PLAN.md`, including its `**Last updated:**` date |

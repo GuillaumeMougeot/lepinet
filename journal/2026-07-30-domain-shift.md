@@ -7,7 +7,7 @@ in-distribution — the best trade this project has measured on any axis. But it
 "fix" nor "treadmill": nameable nuisances are a genuine, cheap sixth of the problem, and the
 remaining five sixths are not nuisance at all. Full analysis below; the wider question stays OPEN
 because B2/B3 are untested. Feeds the same paper as
-[[DIRECTIONS]] — a new *section*, not a new project: the flemming result showed
+[[2026-07-29-the-reframe-directions]] — a new *section*, not a new project: the flemming result showed
 novelty detection degrades under shift, so robustness sits **upstream** of the open-set contribution
 rather than beside it.
 

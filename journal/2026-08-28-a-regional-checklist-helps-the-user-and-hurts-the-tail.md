@@ -1,4 +1,4 @@
-# D1: a regional checklist helps the average observation and hurts the rare species
+# K1: a regional checklist helps the average observation and hurts the rare species
 
 **Kind:** research · **Status:** **RESOLVED (2026-08-28), both folds. Two of three predictions
 falsified, and the result is better than the one predicted.** Restricting B8's label space to the
@@ -104,7 +104,7 @@ I predicted "checklist (486) on probe: 0.72-0.78, against the unrestricted 0.627
 at **0.7628, inside the range** -- and that is a coincidence, not a hit.
 
 **The prediction was written against the wrong baseline.** 0.6270 is the *baseline model's* probe
-score; D1 ran on **B8**, whose unrestricted probe is 0.7798. So I predicted a gain of roughly +13 pt
+score; K1 ran on **B8**, whose unrestricted probe is 0.7798. So I predicted a gain of roughly +13 pt
 and the truth is a loss of 1.70. Recording it as "inside the range" would be scoring the digits and
 ignoring the claim. **The prediction is falsified.**
 
