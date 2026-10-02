@@ -8,7 +8,7 @@ the finest level. Two lessons are baked in:
 * **Low-memory item access** (``lowmem=True``): the DataBlock iterates integer indices into
   fixed-width numpy arrays instead of DataFrame rows, so forked workers don't dirty a
   copy-on-write page per row read. At many workers this is the difference between fitting and
-  OOM-killing the node (``journal/archive/2026-07-17-ucloud-benchmark-oom.md``).
+  OOM-killing the node (``journal/engineering/2026-07-17-ucloud-benchmark-oom.md``).
 * **Square-root oversampling** (:func:`sample_weights`): reweight *which* rare-species images are
   seen, via fastai's ``WeightedDL`` (samples with replacement, so epoch length and LR-schedule
   timing are preserved). This was the single biggest accuracy lever (+1.7pt,

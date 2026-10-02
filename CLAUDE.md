@@ -51,13 +51,13 @@ Then, by task:
 | cluster work | `ucloud/README.md` |
 
 **Do not reconstruct project history from the conversation.** The repo self-documents precisely so
-that chat logs are not load-bearing. `dev/036_ledger.py` prints every run's config delta and score;
+that chat logs are not load-bearing. `RESULTS.md` §2 records every experiment and its score;
 `journal/` says why. Prefer them over memory, including your own.
 
 ## 3. Invariants — violating these breaks something real
 
 - **Never run `uv sync`** on the training venv. It prunes and breaks torch/torchvision. The venv is
-  hand-managed. `journal/archive/2026-07-16-venv-uv-sync-incident.md`.
+  hand-managed. `journal/engineering/2026-07-16-venv-uv-sync-incident.md`.
 - **bf16 for any margin head; fp16 elsewhere is what the project actually does.** The compressed
   form of this rule used to read "bf16, never fp16" and that is *false*: 63 of 115 configs set
   `precision: fp16`, including the headline baseline. The true rule is narrower — the cosine head
@@ -67,13 +67,13 @@ that chat logs are not load-bearing. `dev/036_ledger.py` prints every run's conf
   accurate version; corrected 2026-08-28 after the paper was found asserting the wrong one.
 - **Never filter the test fold.** `--min-img-per-spc` on evaluation silently drops the tail out of a
   *macro* average and inflates the number by ~3 points. If a score jumps, audit the eval set before
-  celebrating. `journal/archive/2026-07-24-src-lepinet-baseline-port.md`.
+  celebrating. `journal/engineering/2026-07-24-src-lepinet-baseline-port.md`.
 - **`ucloud q` only advances when a tick *succeeds*.** Without one, `auto_extend` is inert and
   `--after` jobs never launch, while `ucloud q ls` still looks healthy. A cron entry exists, so the
   check is not "is it scheduled" but **"is it working"**: `tail ~/.ucloud-tick.log`. On
   2026-08-30 the UCloud refresh token expired, every tick since has failed, and a 40-hour crawl was
   terminated mid-run because nothing extended it. Fix: the owner runs `ucloud login` with a fresh
-  browser token. `journal/archive/2026-07-30-ucloud-queue-daemon.md`.
+  browser token. `journal/engineering/2026-07-30-ucloud-queue-daemon.md`.
 - **CPU core-hours are scarcer than GPU hours. Compute the cost before submitting any CPU job.**
   Worst case = vCPU x `max_time` (or `hours` without `auto_extend`); put that number in the message
   to the owner. On 2026-08-28 a network-bound crawler ran on 64 vCPU for 63 h and spent **4,032
@@ -82,19 +82,18 @@ that chat logs are not load-bearing. `dev/036_ledger.py` prints every run's conf
   hook in `.claude/settings.json` blocks `ucloud q submit` / `jobs create`, a CI test checks every
   committed spec, and the crawler refuses an oversized node at runtime. Over 8 vCPU or 300 worst-case
   core-hours needs `# budget-approved: <who/when/why>` in the spec, and only the owner grants it.
-  `journal/archive/2026-10-01-the-crawl-that-spent-58-percent-of-the-cpu-budget.md`.
+  `journal/engineering/2026-10-01-the-crawl-that-spent-58-percent-of-the-cpu-budget.md`.
 - **Inside a UCloud job, `os.cpu_count()` reports the host's 256 cores, not your allocation.** So
   does the affinity mask; only `/sys/fs/cgroup/cpu.max` is right. Anything that sizes a thread pool
   from `os.cpu_count()` (pyarrow, torch intra-op, BLAS) oversubscribes the job's real CPUs. Read the
   cgroup quota -- `effective_cpus()` in `dev/082_tol_crawler.py` -- and pin pools to it.
-- **`data/` is a symlink to machine-local storage and is gitignored.** A clone elsewhere has no runs.
-  `RESULTS.md` section 3 is generated but **tracked**, because it is the only copy of those numbers
-  that leaves the training box.
+- **`data/` is a symlink to machine-local storage and is gitignored.** A clone elsewhere has no runs,
+  so every result must be written into `RESULTS.md` §2: it is the only copy that leaves the box.
 - **Read UCloud job logs, not job status.** A job reports SUCCESS while the script inside exits 1.
 - **Change one factor per run.** The largest jump in the project's history (+4.7 pt) bundled three
   changes and is permanently unattributable. That mistake is preserved in the ladder as a warning.
 - **Work on `main`** unless the owner asks otherwise, and never commit or push unless asked.
-- **No emoji** in structural docs. Enforced by `dev/060_doc_health.py`.
+- **No emoji** in structural docs. Enforced by `tests/test_doc_health.py`.
 
 ## 4. How this project thinks
 
@@ -188,13 +187,13 @@ twice, one copy is a one-line summary that links to the other.
 | `docs/developer-guide.md` | how do I change it | architecture and seams |
 | `docs/design-decisions.md` | why is the recipe this way | every default, what it was worth, what failed |
 | `journal/` | why, as it happened | one file per question; reasoning and dead ends |
-| `RESULTS.md` | what is established, and what each experiment ID found | §1 one line per finding; §2 one row per ID + link; §3 generated by `dev/036_ledger.py --snapshot`, never hand-edited |
+| `RESULTS.md` | what is established, and what each experiment ID found | §1 one line per finding; §2 one row per ID + link; §3 the frozen July ledger |
 | `paper/DRAFT.md` | what do we claim | only claims that generalise beyond this dataset |
 
 **`journal/`** holds `README.md` (the index) and one `YYYY-MM-DD-question.md` per question, dated by
 when it was **opened**, so `ls` reads in the order things were asked, and frozen once `RESOLVED`.
 Research entries sit in `journal/`; subproject, infrastructure and incident entries in
-`journal/archive/`. Every archival entry declares
+`journal/engineering/`. Every archival entry declares
 `**Kind:**` — `research`, `subproject`, `infrastructure`, or `incident` — and `**Status:**`.
 
 ### What to update, and when
@@ -205,7 +204,7 @@ been forgotten.
 
 | when this happens | do this, in the same session |
 |---|---|
-| a run finishes | move its row in `PLAN.md`; add its result to `RESULTS.md` §2 (and regenerate §3 for local runs) |
+| a run finishes | move its row in `PLAN.md`; add its result to `RESULTS.md` §2 |
 | a question is answered | flip its entry to `RESOLVED` with the answer in the status line; update `journal/README.md`'s index row |
 | a new question is opened | new dated entry with `**Kind:**`, `**Status:** OPEN`, and the hypothesis *before* results; link it from `journal/README.md` |
 | a new experiment ID is created | a row in `RESULTS.md` §2, with an unused letter; fill the result when it lands |
@@ -213,11 +212,11 @@ been forgotten.
 | a default changes | `docs/design-decisions.md`, with what it was worth |
 | a trap costs you more than an hour | `docs/design-decisions.md` section 4, or an `incident` entry if it lost a run |
 | the plan changes | `PLAN.md`, including its `**Last updated:**` date |
-| anything is renamed or moved | run `python dev/060_doc_health.py` before committing |
+| anything is renamed or moved | run `python tests/test_doc_health.py` before committing |
 
 ### The check that makes this survive
 
-`python dev/060_doc_health.py` (also `tests/test_doc_health.py`, so CI enforces it) verifies what a
+`python tests/test_doc_health.py` (a pytest file too, so CI enforces it) verifies what a
 machine can: journal naming, `Kind`/`Status` headers, index completeness, every relative link and
 wikilink resolving, no emoji in structural docs, and — the one that catches real drift — that
 `PLAN.md`'s `Last updated` is not older than the newest journal entry. Run it before committing

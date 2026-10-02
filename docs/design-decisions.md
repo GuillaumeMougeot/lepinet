@@ -95,7 +95,7 @@ until precision was changed. This was diagnosed as a wiring bug for some time be
 surfaced.
 
 bf16 is the package default and there is no good reason to leave it.
-→ [journal: 2026-07-18-autoregressive-fp16-instability](https://github.com/GuillaumeMougeot/lepinet/blob/main/journal/archive/2026-07-18-autoregressive-fp16-instability.md)
+→ [journal: 2026-07-18-autoregressive-fp16-instability](https://github.com/GuillaumeMougeot/lepinet/blob/main/journal/engineering/2026-07-18-autoregressive-fp16-instability.md)
 
 ### Augmentation: light beats heavy
 
@@ -122,7 +122,7 @@ why a raw cosine is a poor logit in high dimension — is a scientific claim and
 The width was measured: **128 → 0.8843, 256 → 0.9002, 512 → 0.9058** at 5 epochs. 256 is the shipped
 default for the small models because it is the knee — 512 buys 0.56 pt for double the head, and the
 head is ~51 % of a small model's parameters, which is the whole reason the phone app was feasible.
-→ [journal: 2026-07-20-lepi-app-compression](https://github.com/GuillaumeMougeot/lepinet/blob/main/journal/archive/2026-07-20-lepi-app-compression.md)
+→ [journal: 2026-07-20-lepi-app-compression](https://github.com/GuillaumeMougeot/lepinet/blob/main/journal/engineering/2026-07-20-lepi-app-compression.md)
 
 ### Coarse levels: marginalise, don't add heads
 
@@ -180,12 +180,12 @@ Like-for-like, both were 0.83. → [journal: 2026-07-16-why-was-fastai-behind-mi
 0.9148 baseline — a suspiciously large win. The eval had passed `--min-img-per-spc 50`, dropping the
 long tail from a *macro* average. With the filter removed it scored 0.9152, i.e. exactly reproducing
 the baseline. A metric that improves when you change how it is computed has not improved.
-→ [journal: 2026-07-24-src-lepinet-baseline-port](https://github.com/GuillaumeMougeot/lepinet/blob/main/journal/archive/2026-07-24-src-lepinet-baseline-port.md)
+→ [journal: 2026-07-24-src-lepinet-baseline-port](https://github.com/GuillaumeMougeot/lepinet/blob/main/journal/engineering/2026-07-24-src-lepinet-baseline-port.md)
 
 **Derive a dataset's stored image size from the training transform, not from the input size.** The
 ToL crawl stored "256" on the long side; training crops a square from the *short* side, so every
 image reached the 256 px input upsampled and the 58 M-image crawl had to be redone. Stored short
-side >= input side is the condition. → [journal: 2026-10-01-the-crawl-resized-the-wrong-side](../journal/archive/2026-10-01-the-crawl-resized-the-wrong-side.md)
+side >= input side is the condition. → [journal: 2026-10-01-the-crawl-resized-the-wrong-side](https://github.com/GuillaumeMougeot/lepinet/blob/main/journal/engineering/2026-10-01-the-crawl-resized-the-wrong-side.md)
 
 **Do not re-normalise a weight matrix you did not train.** The cosine head is *supposed* to keep
 every prototype row at unit norm, so re-normalising it before use looks like a no-op. On one
@@ -244,7 +244,7 @@ Two design rules from that rebuild are still in force:
   experiment adds an entry rather than editing the package, so the default recipe cannot drift out
   from under a published number.
 
-→ [journal: 2026-07-24-src-lepinet-baseline-port](https://github.com/GuillaumeMougeot/lepinet/blob/main/journal/archive/2026-07-24-src-lepinet-baseline-port.md)
+→ [journal: 2026-07-24-src-lepinet-baseline-port](https://github.com/GuillaumeMougeot/lepinet/blob/main/journal/engineering/2026-07-24-src-lepinet-baseline-port.md)
 
 ---
 

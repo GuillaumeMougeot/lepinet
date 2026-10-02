@@ -18,7 +18,7 @@ Raw `logits_<level>` are kept under their app names, so a release graph also dro
     python dev/083_hf_release.py thresholds --out rel/p5
     python dev/083_hf_release.py upload  --out rel/p5 --repo gmougeot/lepinet-bioclip2-vitl14
 
-Reasoning and measured numbers: journal/archive/2026-09-29-public-hf-release.md.
+Reasoning and measured numbers: journal/engineering/2026-09-29-public-hf-release.md.
 """
 from __future__ import annotations
 

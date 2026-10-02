@@ -7,12 +7,12 @@ measures and links its journal entry; the experiment IDs are resolved in
 [`../RESULTS.md`](../RESULTS.md) section 2.
 
 Scripts from before the package existed (`000`-`044`: the multilabel era, the `028`/`030`/`032`
-trainer, the app-compression tools) are in [`../archive/dev/`](../archive/dev/), kept as a record.
-`036_ledger.py` stayed: it still generates `RESULTS.md`.
+trainer and its run ledger, the app-compression tools) are in [`../archive/dev/`](../archive/dev/),
+kept as a record. Long-term tooling does not live here: the documentation check is
+`tests/test_doc_health.py`, the CPU budget guard is `ucloud/budget_check.py`.
 
 | script | what it is | IDs |
 |---|---|---|
-| `036_ledger.py` | prints every local run's config delta and score; `--snapshot` writes `RESULTS.md` | phase 0 |
 | `047_build_names.py` | the app's `names.json` from a bundle's taxonomy | release |
 | `048`, `049` | eval parquets for the two trap datasets (`flemming_helsing`, `flemming`) | |
 | `050_hierarchical_heads.py` | hierarchical, autoregressive and marginal-ArcFace heads, registered into `HEAD_REGISTRY` | A4, heads |
@@ -22,7 +22,6 @@ trainer, the app-compression tools) are in [`../archive/dev/`](../archive/dev/),
 | `055`-`057` | ArcFace margin search: range test and short grid, **both invalid** (journalled) | |
 | `058_rank_abstention.py` | back off to genus/family: coverage and precision per rank | C1 |
 | `059_hierarchical_ood.py` | open-set split by taxonomic distance (near/mid/far) | C3 |
-| `060_doc_health.py` | **not an experiment**: documentation checks, also run in CI | |
 | `061_ood_scoring_rules.py` | five open-set scoring rules in one pass | E2, O1 |
 | `063_balanced_softmax.py` | balanced softmax as a callback | L1, L2 |
 | `064_flemming_groups.py` | leak-free (trap, night) splits: `adapt`, `probe`, `probe-HO` | B3 |

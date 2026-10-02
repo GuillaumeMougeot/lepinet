@@ -12,7 +12,9 @@ import aiohttp
 
 _spec = importlib.util.spec_from_file_location(
     "tol", Path(__file__).resolve().parents[1] / "dev" / "082_tol_crawler.py")
-tol = importlib.util.module_from_spec(_spec); sys.modules["tol"] = tol; _spec.loader.exec_module(tol)
+tol = importlib.util.module_from_spec(_spec)
+sys.modules["tol"] = tol
+_spec.loader.exec_module(tol)
 
 
 class _Content:

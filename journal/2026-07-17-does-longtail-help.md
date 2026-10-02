@@ -75,7 +75,7 @@ and the next lever is epochs, not sampling.
 ## Caveat on this comparison
 
 The venv was damaged and repaired on the day these runs launched (see
-[2026-07-16-venv-uv-sync-incident.md](archive/2026-07-16-venv-uv-sync-incident.md)). torch/torchvision/
+[2026-07-16-venv-uv-sync-incident.md](engineering/2026-07-16-venv-uv-sync-incident.md)). torch/torchvision/
 fastcore/fastprogress were restored to their exact prior versions, but `numpy`, `pillow`,
 `pyarrow`, `fsspec` and `typing_extensions` may sit at versions the 0.8887 baseline did not
 use, and the replaced versions were not recorded. pillow in particular touches image decoding.

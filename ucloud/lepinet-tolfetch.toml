@@ -4,7 +4,7 @@
 # starves the 256 px square-crop training input; the re-crawl at short side 256 runs on the
 # workstation (/data/au761367/tol256s, zero UCloud core-hours) and is uploaded afterwards. This spec
 # is kept as the UCloud fallback and now writes images_s256/, so it can never mix the two sizes.
-# journal/archive/2026-10-01-the-crawl-resized-the-wrong-side.md
+# journal/engineering/2026-10-01-the-crawl-resized-the-wrong-side.md
 #
 # CPU BUDGET -- read before changing the product or max_time.
 #   The first crawl (2026-08-28) ran on 64 vCPU for 63 h: 4,032 core-hours, 58 % of the project's

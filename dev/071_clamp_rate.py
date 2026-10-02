@@ -2,7 +2,7 @@
 
 `cosine_to_zscore` clamps its input to +-(1 - 1e-7) before `acos`. That is a no-op *if* the
 prototype rows are unit-norm, because then the input is a genuine cosine. They are not
-(`journal/archive/2026-08-06-the-cosine-head-is-not-unit-norm.md`): measured row norms reach 1.71 on the
+(`journal/engineering/2026-08-06-the-cosine-head-is-not-unit-norm.md`): measured row norms reach 1.71 on the
 ArcFace checkpoint and 2.37 on the plain one, so scores can exceed 1 and saturate.
 
 This measures the consequence, which bounds how much of the paper's calibration argument is

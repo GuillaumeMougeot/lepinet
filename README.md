@@ -47,7 +47,7 @@ Four projects share this repository.
 | **release** | public models and the phone-app bridge | `dev/083_*` | done |
 | **TreeOfLife** | the 70 M-image download for W1-W3 | `dev/082`, `dev/084`, `dev/085`, `ucloud/*tol*` | running |
 
-`archive/` holds what is no longer used (early scripts, finished job specs); `journal/archive/`
+`archive/` holds what is no longer used (early scripts, finished job specs); `journal/engineering/`
 holds the non-research journal entries (side projects, cluster work, incidents).
 
 ## 4. The models to compare against

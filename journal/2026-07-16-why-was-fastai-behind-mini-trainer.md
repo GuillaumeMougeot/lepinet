@@ -96,7 +96,7 @@ Winning recipe: efficientnet_v2_s, independent heads, Muon, `one_cycle`, `warmup
 Config: `configs/20260715_heads_global_independent_muon_onecycle_10ep.yaml`.
 
 This run also survived a mid-training machine hang (see
-[2026-07-16-gpu-hang.md](archive/2026-07-16-gpu-hang.md)) via dev/030's `resume_checkpoint` /
+[2026-07-16-gpu-hang.md](engineering/2026-07-16-gpu-hang.md)) via dev/030's `resume_checkpoint` /
 `resume_epochs_done` + `fit_resume`, which rebuild the original LR curve and continue from the
 exact fractional position rather than restarting the anneal.
 

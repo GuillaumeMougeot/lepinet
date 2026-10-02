@@ -7,7 +7,7 @@ so `ls` shows the order things were asked. An entry is frozen once `RESOLVED`. E
 
 You do not read the journal front to back. Start from a finding in [`../RESULTS.md`](../RESULTS.md)
 and follow its link here. Research entries are in this folder; side projects, cluster work and
-incidents are in [`archive/`](archive/). The plan is [`../PLAN.md`](../PLAN.md).
+incidents are in [`engineering/`](engineering/). The plan is [`../PLAN.md`](../PLAN.md).
 
 ## Research
 
@@ -55,28 +55,28 @@ incidents are in [`archive/`](archive/). The plan is [`../PLAN.md`](../PLAN.md).
 | [10-01](2026-10-01-what-the-blocked-servers-cost.md) | What do servers that refuse us cost? (W1) | 23 % of the selection, mostly herbaria; 89 % of Lepidoptera survive |
 | [10-01](2026-10-01-does-seeing-the-whole-tree-teach-a-model-what-it-does-not-know.md) | Does training on the whole tree help open-set and shift? (W3) | **OPEN**, waits for the download |
 
-## Archive: side projects, cluster work, incidents
+## Engineering: side projects, cluster work, incidents
 
 | opened | kind | what |
 |---|---|---|
-| [07-16](archive/2026-07-16-gpu-hang.md) | incident | the training box hard-hung overnight (hardware) |
-| [07-16](archive/2026-07-16-venv-uv-sync-incident.md) | incident | `uv sync` broke torch: never run it here |
-| [07-17](archive/2026-07-17-ucloud-benchmark-oom.md) | infrastructure | UCloud jobs OOM-ing: dataloader workers |
-| [07-18](archive/2026-07-18-ucloud-throughput.md) | infrastructure | making the B200 fast: decode-bound |
-| [07-18](archive/2026-07-18-autoregressive-fp16-instability.md) | incident | the autoregressive head trained broken: fp16 overflow |
-| [07-19](archive/2026-07-19-lepi-app.md) | subproject | can the model become an offline phone app? |
-| [07-20](archive/2026-07-20-lepi-app-claude.md) | subproject | the app plan: size budget and decisions |
-| [07-20](archive/2026-07-20-lepi-app-compression.md) | subproject | export, quantisation and calibration for a browser |
-| [07-23](archive/2026-07-23-lepi-app-HANDOFF.md) | subproject | app handoff snapshot |
-| [07-24](archive/2026-07-24-src-lepinet-baseline-port.md) | subproject | the clean `src/lepinet` package reproduces 0.9148 |
-| [07-25](archive/2026-07-25-teacher-student-app-bridge.md) | subproject | distillation and the one-command bundle (A3, A6, D2) |
-| [07-28](archive/2026-07-28-landscape-and-plan.md) | subproject | the July plan, superseded by `PLAN.md` |
-| [07-30](archive/2026-07-30-ucloud-queue-daemon.md) | incident | the UCloud queue only advances when something ticks it |
-| [08-06](archive/2026-08-06-the-cosine-head-is-not-unit-norm.md) | incident | the cosine head's rows are not unit-norm (no accuracy effect) |
-| [08-24](archive/2026-08-24-three-week-report.md) | infrastructure | the report for 2-24 August: predictions scored, corrections |
-| [08-24](archive/2026-08-24-work-storage-degraded.md) | incident | training stalled: `/work` read latency collapsed |
-| [08-28](archive/2026-08-28-what-the-paper-is-still-missing.md) | infrastructure | paper audit: eight wrong numbers fixed |
-| [09-29](archive/2026-09-29-public-hf-release.md) | subproject | public release of P5, B8, B3rep5x on Hugging Face |
-| [09-30](archive/2026-09-30-full-fold-and-p5-resize.md) | subproject | P5's published preprocessing fixed |
-| [10-01](archive/2026-10-01-the-crawl-that-spent-58-percent-of-the-cpu-budget.md) | incident | a crawler spent 58 % of the CPU budget |
-| [10-01](archive/2026-10-01-the-crawl-resized-the-wrong-side.md) | incident | the ToL crawl stored the wrong side; a deadlock froze it (**OPEN**: re-crawl running) |
+| [07-16](engineering/2026-07-16-gpu-hang.md) | incident | the training box hard-hung overnight (hardware) |
+| [07-16](engineering/2026-07-16-venv-uv-sync-incident.md) | incident | `uv sync` broke torch: never run it here |
+| [07-17](engineering/2026-07-17-ucloud-benchmark-oom.md) | infrastructure | UCloud jobs OOM-ing: dataloader workers |
+| [07-18](engineering/2026-07-18-ucloud-throughput.md) | infrastructure | making the B200 fast: decode-bound |
+| [07-18](engineering/2026-07-18-autoregressive-fp16-instability.md) | incident | the autoregressive head trained broken: fp16 overflow |
+| [07-19](engineering/2026-07-19-lepi-app.md) | subproject | can the model become an offline phone app? |
+| [07-20](engineering/2026-07-20-lepi-app-claude.md) | subproject | the app plan: size budget and decisions |
+| [07-20](engineering/2026-07-20-lepi-app-compression.md) | subproject | export, quantisation and calibration for a browser |
+| [07-23](engineering/2026-07-23-lepi-app-HANDOFF.md) | subproject | app handoff snapshot |
+| [07-24](engineering/2026-07-24-src-lepinet-baseline-port.md) | subproject | the clean `src/lepinet` package reproduces 0.9148 |
+| [07-25](engineering/2026-07-25-teacher-student-app-bridge.md) | subproject | distillation and the one-command bundle (A3, A6, D2) |
+| [07-28](engineering/2026-07-28-landscape-and-plan.md) | subproject | the July plan, superseded by `PLAN.md` |
+| [07-30](engineering/2026-07-30-ucloud-queue-daemon.md) | incident | the UCloud queue only advances when something ticks it |
+| [08-06](engineering/2026-08-06-the-cosine-head-is-not-unit-norm.md) | incident | the cosine head's rows are not unit-norm (no accuracy effect) |
+| [08-24](engineering/2026-08-24-three-week-report.md) | infrastructure | the report for 2-24 August: predictions scored, corrections |
+| [08-24](engineering/2026-08-24-work-storage-degraded.md) | incident | training stalled: `/work` read latency collapsed |
+| [08-28](engineering/2026-08-28-what-the-paper-is-still-missing.md) | infrastructure | paper audit: eight wrong numbers fixed |
+| [09-29](engineering/2026-09-29-public-hf-release.md) | subproject | public release of P5, B8, B3rep5x on Hugging Face |
+| [09-30](engineering/2026-09-30-full-fold-and-p5-resize.md) | subproject | P5's published preprocessing fixed |
+| [10-01](engineering/2026-10-01-the-crawl-that-spent-58-percent-of-the-cpu-budget.md) | incident | a crawler spent 58 % of the CPU budget |
+| [10-01](engineering/2026-10-01-the-crawl-resized-the-wrong-side.md) | incident | the ToL crawl stored the wrong side; a deadlock froze it (**OPEN**: re-crawl running) |

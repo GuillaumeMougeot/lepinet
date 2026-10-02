@@ -2,7 +2,7 @@
 
 The YAML schema is unchanged from ``dev/030`` (``version`` + ``desc`` + a ``train:`` block) so
 existing configs keep working, with two differences: the package **defaults precision to bf16**
-(``journal/archive/2026-07-18-autoregressive-fp16-instability.md``) and it **rejects the long-tail knobs that
+(``journal/engineering/2026-07-18-autoregressive-fp16-instability.md``) and it **rejects the long-tail knobs that
 lost** (``logit_adjust_tau``, ``class_reg_strength``) rather than silently carrying dead options —
 those live on as ``dev/`` experiments (``journal/2026-07-17-does-longtail-help.md``).
 """
