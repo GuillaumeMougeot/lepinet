@@ -146,6 +146,8 @@ MAGIC = ((b"\xff\xd8\xff", "jpeg"), (b"\x89PNG\r\n\x1a\n", "png"), (b"GIF8", "gi
          (b"RIFF", "webp"), (b"II*\x00", "tiff"), (b"MM\x00*", "tiff"), (b"BM", "bmp"))
 
 STATUS_OK = "ok"
+MAX_ASPECT = 4                        # fit="short": long side capped at MAX_ASPECT x --size
+STALL_EXIT = 75                       # the watchdog's exit code; the job's run loop restarts on it
 SKIPPED_BLOCKED = "skipped_blocked"   # never recorded: the row stays unattempted
 
 
@@ -629,7 +631,7 @@ class HostBudget:
             self.blocked, self.reason = True, "forbidden"
 
 
-def verify_and_encode(body: bytes, size: int, quality: int, min_dim: int):
+def verify_and_encode(body: bytes, size: int, quality: int, min_dim: int, fit: str = "short"):
     """Decode fully, reject junk, resize, re-encode as JPEG. Runs on a worker thread.
 
     A *full* decode rather than ``Image.verify()``: verify() checks the header and misses truncated
@@ -673,10 +675,19 @@ def verify_and_encode(body: bytes, size: int, quality: int, min_dim: int):
         img = img.convert("RGB")
     elif img.mode == "L":
         img = img.convert("RGB")
+    # fit="short": the short side becomes `size`, because training takes a *square* crop of the
+    # short side and resizes it to the 256 px model input -- a stored image with a 256 px short
+    # side feeds that input at full detail. The first crawl used fit="long" (long side 256, so
+    # 256x192 for a 4:3 photo): every image then reached the model upsampled 1.33x, softer than our
+    # own 512 px Lepidoptera, and the crawl had to be redone. Extreme aspect ratios (panoramas,
+    # herbarium strips) are capped at 4x `size` on the long side to bound storage.
     w, h = img.size
-    if max(w, h) > size:
+    if fit == "short":
+        scale = min(size / min(w, h), MAX_ASPECT * size / max(w, h))
+    else:
         scale = size / max(w, h)
-        img = img.resize((max(1, int(w * scale)), max(1, int(h * scale))),
+    if scale < 1:
+        img = img.resize((max(1, round(w * scale)), max(1, round(h * scale))),
                          Image.Resampling.LANCZOS)
     buf = io.BytesIO()
     img.save(buf, format="JPEG", quality=quality, optimize=True)
@@ -762,12 +773,24 @@ class Fetcher:
     async def _fetch_one(self, session, row, b: HostBudget, state: dict):
         import aiohttp
         if row["url"].startswith("file://"):
-            return await self._read_local(row["url"][len("file://"):], b, state)
+            path = row["url"][len("file://"):]
+            if self.a.file_root:
+                path = path.replace("/work/global_lepi", self.a.file_root.rstrip("/"), 1)
+            return await self._read_local(path, b, state)
         # Try the cheap size variant first; fall back to the catalog URL if it is missing.
         alt = variant_url(row["url"], self.a.variant)
         urls = [alt, row["url"]] if alt else [row["url"]]
         url = urls[0]
         for attempt in range(self.a.attempts):
+            # Never wait for a host slot while holding a memory slot. A body that failed mid-stream
+            # (ClientPayloadError, ServerDisconnectedError, a read timeout) used to retry from here
+            # still holding its memory slot, while requests holding host slots waited for a memory
+            # slot: once every memory slot belonged to a retrier, a lock-order deadlock. That was
+            # the "stall" -- every counter frozen, threads idle -- on UCloud within minutes (16
+            # slots) and every 1-3 h on the workstation (64). The failed body is discarded anyway.
+            if state["mem"]:
+                self.inflight.release()
+                state["mem"] = False
             await b.acquire()
             # Re-check AFTER the semaphore, immediately before the request leaves. Every row of a
             # chunk is scheduled at once and passes any earlier check while the breaker is still
@@ -831,8 +854,20 @@ class Fetcher:
                     body = b"".join(chunks)
                     del chunks
                     b.on_success()
+            except aiohttp.ConnectionTimeoutError:
+                # Could not even connect. Before 2026-10-01 this fell into the TimeoutError branch
+                # below and counted as *throttling*, which never feeds a breaker: a host that
+                # silently drops our packets (sweetgum.nybg.org's port 80, 2.23 M rows) was retried
+                # forever, 4 x (15 s connect timeout + 5 s cooldown) per row at concurrency 1 --
+                # about a row a minute, indefinitely. It is evidence the host is gone, like DNS/TLS.
+                b.stats["exc_ConnectionTimeoutError"] += 1
+                b.on_error(dead="connect_timeout", probe=self.a.dead_probe, ratio=self.a.dead_ratio)
+                if b.blocked or attempt == self.a.attempts - 1:
+                    return None, "client_error:ConnectionTimeoutError", None
+                await asyncio.sleep(2 ** attempt + random.random())
+                continue
             except asyncio.TimeoutError:
-                b.on_throttle()                # a timeout from a small host is usually overload
+                b.on_throttle()                # a slow response from a small host is usually overload
                 continue
             except aiohttp.ClientError as e:
                 b.stats[f"exc_{type(e).__name__}"] += 1
@@ -852,7 +887,8 @@ class Fetcher:
             if len(body) > self.a.max_bytes:
                 return None, f"too_large:{len(body)}", None
             jpg, status, meta = await asyncio.get_running_loop().run_in_executor(
-                self.pool, verify_and_encode, body, self.a.size, self.a.quality, self.a.min_dim)
+                self.pool, verify_and_encode, body, self.a.size, self.a.quality, self.a.min_dim,
+            self.a.fit)
             if jpg is None:
                 return None, status, None
             return jpg, STATUS_OK, meta
@@ -879,7 +915,8 @@ class Fetcher:
         finally:
             b.release()
         jpg, status, meta = await loop.run_in_executor(
-            self.pool, verify_and_encode, body, self.a.size, self.a.quality, self.a.min_dim)
+            self.pool, verify_and_encode, body, self.a.size, self.a.quality, self.a.min_dim,
+            self.a.fit)
         return (jpg, STATUS_OK, meta) if jpg is not None else (None, status, None)
 
     async def run_part(self, session, part: Path, host: str):
@@ -1023,14 +1060,53 @@ class Fetcher:
                         await self.run_part(session, p, host)
 
             reporter = asyncio.create_task(self.report_loop())
-            await asyncio.gather(*(host_worker(h, ps) for h, ps in by_host.items()))
+            # Largest hosts first. Hosts take `--max-active-hosts` slots in this order, and in
+            # name order the 32 slots went to small hosts at politeness cap 4 while
+            # inaturalist-open-data (cap 256, ~70 % of all rows) queued behind them: 75 img/s on a
+            # re-crawl whose bulk can run several times faster.
+            order = sorted(by_host.items(), key=lambda kv: -len(kv[1]))
+            await asyncio.gather(*(host_worker(h, ps) for h, ps in order))
             reporter.cancel()
         self.summary()
 
     async def report_loop(self):
+        last, since = None, time.monotonic()
         while True:
             await asyncio.sleep(self.a.report_every)
             self.summary()
+            progress = (self.totals["total"], self.totals["already_on_disk"])
+            if progress != last:
+                last, since = progress, time.monotonic()
+            elif self.a.stall_minutes and time.monotonic() - since > 60 * self.a.stall_minutes:
+                self.stall_exit(time.monotonic() - since)
+
+    def stall_exit(self, idle: float):
+        """No row attempted and none recovered for `--stall-minutes`: dump where everything is
+        waiting, then exit with STALL_EXIT so the job's run loop restarts the crawl.
+
+        Twice the 1 vCPU crawl froze within minutes of its cgroup memory reaching memory.max --
+        the event loop alive (reports kept printing), every counter frozen, for hours, with no
+        error. Without SSH into the job there was nothing to look at. The thread stacks say whether
+        the decode worker or the disk pool is stuck and in what; the semaphore and per-host counts
+        say whether coroutines are waiting on slots. Restarting is safe: finished parts are skipped
+        by their metas and finished images by the on-disk check."""
+        import faulthandler
+        import sys
+        print(f"STALL: no progress for {idle/60:.0f} min | inflight slots free "
+              f"{self.inflight._value}/{self.a.max_inflight} | {cgroup_memory()}", flush=True)
+        held = ((b.host, b.cur - b._sem._value) for b in self.budgets.values())
+        busy = sorted((h for h in held if h[1] > 0), key=lambda x: -x[1])
+        print(f"  host slots held (host, n): {busy[:12]}", flush=True)
+        tasks = Counter()
+        for t in asyncio.all_tasks():
+            f = t.get_stack(limit=1)
+            tasks[f"{t.get_coro().__qualname__} @ {f[-1].f_code.co_name}:{f[-1].f_lineno}"
+                  if f else t.get_coro().__qualname__] += 1
+        for k, v in tasks.most_common(12):
+            print(f"  {v:5d} tasks  {k}", flush=True)
+        faulthandler.dump_traceback(file=sys.stdout, all_threads=True)
+        sys.stdout.flush()
+        os._exit(STALL_EXIT)
 
     def summary(self):
         dt = time.monotonic() - self.t0
@@ -1493,7 +1569,14 @@ def build_parser():
     q = sub.add_parser("fetch", help="crawl the manifest; resumable")
     q.add_argument("--manifest", default="data/tol/manifest")
     q.add_argument("--images", required=True)
-    q.add_argument("--size", type=int, default=256, help="longest side, px")
+    q.add_argument("--size", type=int, default=256,
+                   help="target side, px; which side is set by --fit")
+    q.add_argument("--fit", choices=["short", "long"], default="short",
+                   help="short: short side = --size (matches the square-crop training input); "
+                        "long: long side = --size (the first crawl's mistake, kept to reproduce it)")
+    q.add_argument("--file-root", default="",
+                   help="rewrite file:///work/global_lepi/ urls to this local directory, for "
+                        "running the crawl outside UCloud")
     q.add_argument("--quality", type=int, default=90)
     q.add_argument("--variant", default="medium", choices=["original", "large", "medium", "small"],
                    help="iNaturalist size variant to request (58 %% of the corpus). 'medium' is "
@@ -1513,6 +1596,9 @@ def build_parser():
                    help="re-attempt only rows whose status starts with one of these, e.g. "
                         "bad_content_type client_error")
     q.add_argument("--report-every", type=float, default=60.0)
+    q.add_argument("--stall-minutes", type=float, default=15.0,
+                   help="exit with code 75 (after dumping thread stacks) if nothing progresses this "
+                        "long; 0 disables. Wrap the command in a loop that restarts on 75")
     q.add_argument("--chunk", type=int, default=500,
                    help="rows streamed per batch within a part; bounds memory and live coroutines")
     q.add_argument("--disk-threads", type=int, default=16,
