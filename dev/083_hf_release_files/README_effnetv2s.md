@@ -231,7 +231,7 @@ For comparison, the project's EfficientNetV2-S baseline, trained without the tra
      for evaluation are excluded.
 
 Full recipe, ablations and every number: [the lepinet repository](https://github.com/GuillaumeMougeot/lepinet),
-starting at `START-HERE.md`. The configuration is `configs/20260804_B3rep5x_effnetv2s.yaml`.
+starting at its README. The configuration is `configs/20260804_B3rep5x_effnetv2s.yaml`.
 
 ## Limitations
 

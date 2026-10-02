@@ -8,7 +8,7 @@ and thresholds ship separately).
 Unlike ``dev/040``, this uses **``dynamo=False``** (the legacy TorchScript exporter) and needs **no
 lazy-cache warm-up**: the clean :class:`~lepinet.heads.IndependentHead` has no data-dependent
 control flow (no ``masks`` / ``_weight_bias`` on the forward path), so it traces directly. That is a
-concrete payoff of the simplification (``journal/2026-07-24-src-lepinet-baseline-port.md``, D4).
+concrete payoff of the simplification (``journal/archive/2026-07-24-src-lepinet-baseline-port.md``, D4).
 
 :func:`marginalize` computes coarser-level probabilities from the finest level
 (``P(genus) = Σ P(species∈genus)``) — export-only, used when shipping a species-only head.

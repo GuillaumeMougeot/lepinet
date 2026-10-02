@@ -232,7 +232,7 @@ small, up-sampled crops (median shorter side 157 px).
    trap nights used for evaluation are excluded.
 
 Full recipe and every number: [the lepinet repository](https://github.com/GuillaumeMougeot/lepinet),
-starting at `START-HERE.md`. The configuration is `configs/20260804_B8_best_at_2pct_dinov3cnxl.yaml`.
+starting at its README. The configuration is `configs/20260804_B8_best_at_2pct_dinov3cnxl.yaml`.
 
 ## Limitations
 

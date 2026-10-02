@@ -101,6 +101,6 @@ state, and last-known looks exactly like current.**
 
 The expired 12-epoch run was **not** restarted as-is. It trained the *old* multi-head architecture,
 which the single-head + marginalisation result has superseded, so its number would have landed on a
-baseline no longer in use — precisely the hygiene failure [`PLAN.md`](PLAN.md) exists to prevent. The
+baseline no longer in use — precisely the hygiene failure [`PLAN.md`](../../PLAN.md) exists to prevent. The
 longer-schedule question (B0) is better asked once A2 lands, as 12 epochs of **A2's** configuration,
 where the comparison against A2-at-6-epochs isolates exactly one factor.

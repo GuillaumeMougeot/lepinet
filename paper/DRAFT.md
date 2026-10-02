@@ -4,7 +4,7 @@
 in [`../journal/`](../journal/). Sections marked _(pending)_ await runs that are in flight.
 
 Audited against the journal on 2026-08-28
-([`../journal/2026-08-28-what-the-paper-is-still-missing.md`](../journal/2026-08-28-what-the-paper-is-still-missing.md));
+([`../journal/archive/2026-08-28-what-the-paper-is-still-missing.md`](../journal/archive/2026-08-28-what-the-paper-is-still-missing.md));
 §4.13 (long-tail rebalancing) and §4.14 (foundation models and benchmark contamination) were written
 in that pass, and all six unresolved section placeholders now point somewhere. **Remaining for the
 authors:** fact-check the `[VERIFY]` citations in §1b and the reference list, redraw `fig4`

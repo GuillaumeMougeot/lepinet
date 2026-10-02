@@ -1,6 +1,6 @@
 # Landscape & plan — where lepinet is, and the ordered work ahead
 
-**Kind:** subproject · **Status:** **SUPERSEDED (2026-07-30) by [`PLAN.md`](PLAN.md)** — the backlog
+**Kind:** subproject · **Status:** **SUPERSEDED (2026-07-30) by [`PLAN.md`](../../PLAN.md)** — the backlog
 here has been executed or folded forward. Kept because its Q1–Q6 answers (export vs bundle, the
 scaling rationale, distillation modularity, TTA status, ArcFace-for-OOD, Diataxis) and its execution
 log are the reasoning behind decisions still in force; the *ordering* is what went stale.

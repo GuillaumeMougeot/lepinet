@@ -19,8 +19,8 @@ records, not tools.
 
 | | |
 |---|---|
-| [`configs/`](configs/) | 16 YAMLs — the multilabel train/test configs. |
-| [`bash/`](bash/) | 10 launchers — SLURM submissions for the GPU24 cluster. |
+| [`configs/`](configs/) | 16 YAMLs — the multilabel train/test configs; plus `README-2026-07.md`, the July `configs/README.md`. |
+| [`bash/`](bash/) | SLURM launchers of the multilabel era, plus (archived 2026-10-02) the July shell launchers for the `dev/028`/`030` trainer; their README is `bash/README-2026-07.md`. |
 | [`dev/`](dev/) | archived 2026-10-02: `dev/000`-`044`, the multilabel era, the `028`/`030`/`032` trainer and the app-compression tools that depended on it, all superseded by `src/lepinet`. The old `dev/README.md` is `dev/README-2026-07.md`. |
 | [`ucloud/`](ucloud/) | archived 2026-10-02: the job specs of every finished experiment (~300). Paths inside (`local = ".."`, `script = ...`) are relative to `ucloud/`, so copy a spec back there to re-run it. The old `ucloud/README.md`, with its list of cluster gotchas, is `ucloud/README-2026-07.md`. |
 

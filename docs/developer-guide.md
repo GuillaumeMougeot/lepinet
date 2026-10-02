@@ -2,7 +2,7 @@
 
 This is the clean, `mini_trainer`-free reimplementation of the pipeline that grew up in `dev/`.
 The design intent, decisions, and reasoning live in
-[`journal/2026-07-24-src-lepinet-baseline-port.md`](https://github.com/GuillaumeMougeot/lepinet/blob/main/journal/2026-07-24-src-lepinet-baseline-port.md);
+[`journal/archive/2026-07-24-src-lepinet-baseline-port.md`](https://github.com/GuillaumeMougeot/lepinet/blob/main/journal/archive/2026-07-24-src-lepinet-baseline-port.md);
 this guide is the practical map for working in the package.
 
 ## The guarantee

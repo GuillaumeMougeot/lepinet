@@ -1,145 +1,107 @@
 # lepinet
 
-**Hierarchical fine-grained image classification.** Given a photo, predict a label at every level
-of a taxonomy at once — for the reference dataset, the *species*, its *genus*, and its *family* of
-moth or butterfly — over ~12,000 species with a heavy long tail (half the species have fewer than
-200 images). The package is generic in the number and names of the levels: any fine→coarse label
-hierarchy works.
+**lepinet** identifies moths and butterflies from photographs: one model predicts species, genus
+and family at once, over 12,041 species with a heavy long tail. It began as a comparison of
+hierarchical prediction heads. That comparison was a null result. A model scoring 0.93 on its own
+data scores ~0.70 on light-trap images, and in the field it constantly meets species it was never
+trained on. So the subject became **reliable prediction under domain shift**: knowing when an image
+is something new (open-set), backing off to genus or family when the species is uncertain
+(abstention), and adapting cheaply to a new camera.
 
-Two things make this hard, and shape the whole design:
+**Just want to identify moths?** The models are public and run with `onnxruntime` alone:
+[`lepinet-bioclip2-vitl14`](https://huggingface.co/gmougeot/lepinet-bioclip2-vitl14) (P5,
+recommended), [`lepinet-dinov3-convnextl`](https://huggingface.co/gmougeot/lepinet-dinov3-convnextl)
+(B8) and [`lepinet-effnetv2s`](https://huggingface.co/gmougeot/lepinet-effnetv2s) (small, fast).
 
-- **Fine-grained.** Neighbouring species differ by subtle wing-pattern detail, so the model needs
-  high-resolution local texture, not just global shape.
-- **Long-tailed.** Most images belong to a few common species; thousands of rare species have a
-  handful each. The headline metric is therefore **macro-F1** (every species weighted equally, so
-  the tail counts), and the training rebalances toward rare classes.
+## 1. Where things stand
 
-The method: a shared image backbone feeds a **cosine classification head** — L2-normalised class
-prototypes scored by angle — trained with square-root class oversampling. Coarser ranks are obtained
-by **marginalising the species posterior** rather than from separate heads, which measures better and
-are probabilistically coherent with it (the coarse posterior *is* the sum of the species one). On the reference Lepidoptera dataset this reaches **species
-macro-F1 0.9135** (0.9316 with a larger backbone). An optional **ArcFace × z-score** variant makes the
-model able to flag species it was never trained on (open-set AUROC 0.601 → 0.9115). See
-[The method](#the-method).
+- **The experiments behind the paper are finished.** About 80 lettered experiments (A1 to P5, plus
+  K1 and W1-W3); every one the paper uses is closed. [`RESULTS.md`](RESULTS.md) states what they
+  established and lists every one.
+- **The paper** ([`paper/DRAFT.md`](paper/DRAFT.md)) contains every result but reads as a complete
+  record rather than a paper. It needs a scope decision, an introduction, figures and verified
+  citations. [`PLAN.md`](PLAN.md) is the road to submission and the one file about *today*.
+- **Running:** the TreeOfLife-200M download (W1), for a follow-up study (W3). The paper does not
+  depend on it.
 
-> **New to this repository?** [`START-HERE.md`](START-HERE.md) is a guided map of everything —
-> code, results, and the reasoning behind them.
->
-> **Just want to identify moths?** The trained models are public on Hugging Face, and run with
-> `onnxruntime` alone, with no need to install this package:
-> [`gmougeot/lepinet-bioclip2-vitl14`](https://huggingface.co/gmougeot/lepinet-bioclip2-vitl14)
-> (recommended; also loads with `transformers`),
-> [`gmougeot/lepinet-dinov3-convnextl`](https://huggingface.co/gmougeot/lepinet-dinov3-convnextl)
-> (mid-size) and [`gmougeot/lepinet-effnetv2s`](https://huggingface.co/gmougeot/lepinet-effnetv2s)
-> (small, fast). How they were chosen and packaged: [the release entry](journal/2026-09-29-public-hf-release.md).
+## 2. What to read
 
-**Docs:** [user guide](docs/user-guide.md) · [developer guide](docs/developer-guide.md) ·
-[design journal](journal/2026-07-24-src-lepinet-baseline-port.md)
+| time | read |
+|---|---|
+| **20 minutes** | this page, then [`RESULTS.md`](RESULTS.md) section 1 (the findings, one line each) and "the ten rows that carry the paper" |
+| **2 hours**, to work on the paper | in [`paper/DRAFT.md`](paper/DRAFT.md): abstract, §1, §4.0, §4.15, §5, §6; then [`PLAN.md`](PLAN.md); then the journal entries linked from the ten rows |
+| **to run or change code** | [`docs/user-guide.md`](docs/user-guide.md), [`docs/developer-guide.md`](docs/developer-guide.md), [`docs/design-decisions.md`](docs/design-decisions.md) (why every default is what it is) |
+| **look up when needed** | [`docs/concepts.md`](docs/concepts.md) (vocabulary), [`journal/README.md`](journal/README.md) (index of every question) |
 
-## Install
+[`CLAUDE.md`](CLAUDE.md) is the AI agent's operating manual: invariants, project culture, and the
+owner's standing rules. Humans can skip it.
+
+## 3. The map
+
+Four projects share this repository.
+
+| part | what it is | where | state |
+|---|---|---|---|
+| **package** | the `lepinet` library: train, test, predict, export, bundle, distill | `src/`, `tests/`, `docs/` | stable |
+| **research** | the experiments behind the paper | `dev/` (one script per experiment), `configs/` (one YAML per run), `ucloud/` (cluster jobs), `journal/` (one entry per question), `paper/` | experiments closed; paper being written |
+| **release** | public models and the phone-app bridge | `dev/083_*` | done |
+| **TreeOfLife** | the 70 M-image download for W1-W3 | `dev/082`, `dev/084`, `dev/085`, `ucloud/*tol*` | running |
+
+`archive/` holds what is no longer used (early scripts, finished job specs); `journal/archive/`
+holds the non-research journal entries (side projects, cluster work, incidents).
+
+## 4. The models to compare against
+
+| model | what it is | in-dist | probe | open-set AUROC |
+|---|---|---|---|---|
+| **cheap reference** | effnetv2_s, one species head + marginalisation, √-oversampling | 0.9135 | 0.6270 | 0.8990 |
+| **B8** | 198 M, self-training on 2 % trap images, no oversampling | 0.9060 | 0.7798 | 0.9153 |
+| **P5** (recommended) | BioCLIP-2 fine-tuned + unfrozen adaptation | 0.9113 | 0.7757 | 0.9161 |
+| best in-distribution | ConvNeXtV2-L, multi-head | **0.9316** | — | — |
+
+*in-dist* = species macro-F1 on our held-out fold, over all species; *probe* = macro-F1 on
+held-out light-trap nights. Compare only within a column, and check the noise floor (in-dist
+~0.000; probe ~0.004, or ~0.012 for frozen-trunk stages). Reference config:
+[`configs/20260729_ucloud_singlehead_species_effnetv2s.yaml`](configs/20260729_ucloud_singlehead_species_effnetv2s.yaml).
+
+## 5. The method, briefly
+
+- A backbone feeds a **cosine classification head**: classes are normalised prototypes scored by
+  angle. This suits fine-grained classes and the long tail.
+- **One species head; coarser ranks by marginalisation**, `P(genus) = Σ P(species in genus)`.
+  Separate genus and family heads did not help; a loss on the marginals does help under shift.
+- **Square-root oversampling** of rare species during training, the largest single lever on
+  macro-F1 in-distribution. Under shift it is better applied to the classifier only (cRT).
+- **Self-training** on unlabelled trap images (about 2 % of training) is the largest robustness
+  lever; **adapting only the classifier** recovers most of it in minutes.
+- Muon (backbone) + AdamW (head), one-cycle schedule. Margin heads (ArcFace) need bf16.
+
+The reasoning and numbers behind each choice: [`docs/design-decisions.md`](docs/design-decisions.md).
+
+## 6. Install and run
 
 ```bash
-uv pip install -e .              # library + CLI
-uv pip install -e ".[export]"    # + ONNX export (onnx, onnxruntime)
-uv pip install -e ".[timm]"      # + timm backbones
-uv sync --group dev              # + dev tooling (pytest, ruff, mkdocs)
-```
-
-> The training venv is hand-managed and reproducible from `pyproject.toml` + `uv.lock` (the
-> `torch==2.12.1+cu130` build for the Blackwell GPU comes from the pinned PyTorch index). See the
-> developer guide for how the dev environment is defined and how `dev/` scripts pull their extra
-> dependencies.
-
-## Quickstart
-
-Config-driven (the source of truth) or programmatic — both do the same thing.
-
-```bash
-lepinet train   --config configs/20260716_heads_global_independent_muon_5ep_oversample.yaml
-lepinet test    --model 'data/global/models/*oversample*/*.pt' \
-                --parquet data/global/<meta>.parquet --img-dir data/global/images \
-                --out-dir data/global/preds --test-set 0
+uv pip install -e .              # library + CLI   (".[export]" for ONNX, ".[timm]" for timm backbones)
+lepinet train   --config configs/20260729_ucloud_singlehead_species_effnetv2s.yaml
+lepinet test    --model 'data/global/models/<run>/*.pt' --parquet <meta>.parquet \
+                --img-dir data/global/images --out-dir data/global/preds --test-set 0
 lepinet predict --model model.pt photo.jpg --topk 5
 lepinet export  --model model.pt --out-dir artifact/ --img-size 256
+pytest -q                        # CPU tests, no data needed
 ```
 
-```python
-from lepinet import TrainConfig, train, evaluate, predict, export_onnx
-train(TrainConfig(parquet_path="...", img_dir="...", out_dir="...",
-                  model_name="run1", model_arch_name="efficientnet_v2_s", oversample_power=0.5))
-```
+The training venv on the workstation is hand-managed: **never run `uv sync` on it**. Full CLI and
+config reference: [`docs/user-guide.md`](docs/user-guide.md).
 
-## What it does
+## 7. Conventions
 
-| stage | what you get |
-|---|---|
-| **train** | the winning recipe: efficientnet_v2_s, cosine independent head, Muon + one-cycle, warmup, grad-clip, square-root oversampling, bf16 |
-| **test** | native per-level macro-F1 / micro-accuracy report (+ `predictions.csv` in `mini_metrics` format for interop) |
-| **predict** | single-image / folder inference with test-time augmentation |
-| **export** | browser-ready ONNX (normalization baked in, raw logits) + `taxonomy.json` for the companion PWA |
-
-## The method
-
-Each design choice answers one of the two difficulties above.
-
-- **Cosine head.** The backbone produces one embedding; a small bottleneck projects it, then classes
-  are L2-normalised prototypes scored by *cosine similarity* (angle to the nearest prototype), not an
-  unbounded dot product. Normalising both sides tightens intra-class / widens inter-class angles —
-  what helps most on fine-grained classes and on the tail, where a plain linear layer over-fits the
-  few examples it sees.
-- **Marginalisation instead of coarse heads.** `P(genus) = Σ P(species ∈ genus)`, applied up the
-  taxonomy. Measured *better* than separately trained genus/family heads (+0.7 pp genus, +3.1 pp
-  family) and probabilistically coherent — the coarse posterior is by definition the sum of the species one, unlike independent heads, which contradict each other on 1.81 % of images.
-  The head is still N-level generic; you simply do not need the extra levels.
-- **ArcFace × z-score (optional, `head: arcface`).** An angular margin composed with the z-score
-  transform. Costs ~0.4 pt of accuracy and takes open-set detection of unseen species from
-  near-chance (AUROC 0.601) to 0.9115 — see the [paper draft](paper/DRAFT.md) for the derivation.
-- **Square-root oversampling** (`oversample_power 0.5`). Sampling rare classes more often — but at
-  the square root of the inverse frequency, not the full inverse — lifts tail recall without
-  drowning the common classes. This is the single biggest lever on macro-F1 in the experiment
-  ladder (+1.7 pt over no oversampling).
-- **Muon (backbone) + AdamW (head), one-cycle** with a short warmup and gradient clipping — the
-  optimiser/schedule combination that trains this head stably in a few epochs.
-- **bf16** throughout: enough exponent range for the cosine head (and for margin losses like
-  ArcFace, a planned extension) without the fp16 overflow that NaNs them.
-
-Reference recipe: efficientnet_v2_s · single species head · 460→256 px · batch 64 · 5 epochs · light
-aug → **0.9135**. This is the baseline new experiments are compared against
-([`RESULTS.md`](RESULTS.md)). The full ladder that led to each choice — including the things that
-*did not* work — is in [`journal/`](journal/); [`START-HERE.md`](START-HERE.md) lists the findings.
-
-> **Provenance.** This is a from-scratch **fastai-only** reimplementation of an earlier
-> `mini_trainer`/`mini_metrics`-based pipeline; it reproduces that pipeline's best result with no
-> dependency on it (a `mini_metrics`-format `predictions.csv` is still emitted for interop). That
-> lineage explains some naming in the design journal but is not something a user needs to care
-> about — the package stands alone.
-
-## Repository layout
-
-```
-src/lepinet/     the package (see docs/developer-guide.md for the module map)
-configs/         training / evaluation YAML configs
-tests/           unit + end-to-end tests
-docs/            user & developer guides (published to GitHub Pages)
-dev/             the numbered lab-notebook — frozen experiment record; new work imports lepinet
-journal/         the reasoning behind every experiment (READ FIRST: journal/README.md)
-RESULTS.md       the results table (generated by dev/036_ledger.py)
-```
-
-`dev/` stays as the historical record; it is not packaged. New experiments `import lepinet`
-instead of the numbered scripts.
-
-## Development
-
-```bash
-pytest -q                        # unit + synthetic end-to-end tests (CPU, no data needed)
-ruff check src/lepinet tests     # lint
-mkdocs serve                     # preview the docs site
-```
-
-CI (GitHub Actions) runs lint + unit + a self-contained end-to-end test (train a dummy model on a
-generated dataset, then eval / predict / export). Docs deploy to GitHub Pages on push to `main`.
-
-## License
+- **IDs.** Experiments are cited by letter-number (resolved in [`RESULTS.md`](RESULTS.md) section 2),
+  July local runs by timestamp (`20260716-154156`). Some letters were reused; the registry says
+  which is which.
+- **The journal** is one file per question, dated by when it was opened, with the prediction written
+  before the result.
+- **The metric** is species macro-F1 on the held-out fold (`set == '0'`) over **all** species, so
+  the tail counts. Never filter the test fold.
+- **`data/`** is machine-local and gitignored; a fresh clone has no runs.
 
 GPL. See [`LICENSE`](LICENSE).

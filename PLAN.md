@@ -3,13 +3,13 @@
 **Kind:** living · **Last updated:** 2026-10-02 · **Supersedes:** [[2026-07-28-landscape-and-plan]]
 
 The one file in `journal/` meant to be true *today*. Every experiment ID is resolved in
-[`../EXPERIMENTS.md`](../EXPERIMENTS.md); the reasoning lives in the linked journal entries. Earlier
+[`RESULTS.md`](RESULTS.md); the reasoning lives in the linked journal entries. Earlier
 versions of this file (the August status boards, the rules for the owner's absence) are in its git
 history.
 
 ## 1. The goal: a submittable paper
 
-Every experiment the paper uses is closed. What stands between [`../paper/DRAFT.md`](../paper/DRAFT.md)
+Every experiment the paper uses is closed. What stands between [`../paper/DRAFT.md`](paper/DRAFT.md)
 and a submission is scoping and writing, plus two evaluation-only runs. No new training is needed.
 
 | # | step | who | state |
@@ -55,6 +55,6 @@ and a submission is scoping and writing, plus two evaluation-only runs. No new t
 ## 6. How to run things
 
 Cluster rules (CPU budget, the queue tick, logs over status, one image-heavy job at a time) are in
-[`../ucloud/README.md`](../ucloud/README.md). **Scale discipline (owner):** test a new mechanism at
+[`../ucloud/README.md`](ucloud/README.md). **Scale discipline (owner):** test a new mechanism at
 20 M; promote to 198 M once, when the recipe stops moving. Costs: ~1,100 img/s at 20 M, ~480 img/s
 at 198 M; a 5-epoch 20 M run is ~6.4 h.

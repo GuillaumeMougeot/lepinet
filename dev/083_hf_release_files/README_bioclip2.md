@@ -277,7 +277,7 @@ the project's in-house EfficientNetV2-S baseline scores 0.6270.
    robustness to trap imagery. The trap nights used for evaluation are excluded.
 
 Full recipe, ablations and every number: [the lepinet repository](https://github.com/GuillaumeMougeot/lepinet),
-starting at `START-HERE.md`. The configuration is `configs/20260828_P5_bioclip2_adapted_unfrozen.yaml`.
+starting at its README. The configuration is `configs/20260828_P5_bioclip2_adapted_unfrozen.yaml`.
 
 ## Limitations
 

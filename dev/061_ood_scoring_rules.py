@@ -107,7 +107,7 @@ def all_scores(model, dls, df, device, num_workers=32, raw_scores=False):
         if raw_scores:
             # Pre-clamp scores: the head emits Z(clamp(cos)), and `cosine_to_zscore` pins everything
             # outside [-1,1] to one value. On the plain head that is 67 % of all logits
-            # (journal/2026-08-06-the-cosine-head-is-not-unit-norm.md), which flattens the tail the
+            # (journal/archive/2026-08-06-the-cosine-head-is-not-unit-norm.md), which flattens the tail the
             # shape-based rules read. This recomputes the score the head would have had without the
             # clamp, to test whether the transform -- not the embedding -- is what destroys novelty
             # detection there.

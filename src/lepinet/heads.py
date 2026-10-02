@@ -273,7 +273,7 @@ class PooledHead(nn.Module):
     ``hidden`` output can overflow fp16 → ``inf`` → ``normalize(inf) = NaN`` (the classic
     ArcFace/cosine-margin instability). Forcing the head to fp32 under autocast avoids it while
     the backbone keeps the AMP speedup. This is why bf16 is the package default and why fp16 is
-    still safe here (``journal/2026-07-18-autoregressive-fp16-instability.md``). Head-agnostic: it
+    still safe here (``journal/archive/2026-07-18-autoregressive-fp16-instability.md``). Head-agnostic: it
     only pools and hands off, so any head in :data:`HEAD_REGISTRY` works behind it.
     """
 

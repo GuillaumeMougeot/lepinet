@@ -1,6 +1,6 @@
 # Scaling to a million species: options for a head that does not fit
 
-**Kind:** research · **Status:** OPEN (2026-08-05), **ideas only, nothing run.** Owner's framing: the
+**Kind:** research · **Status:** **RESOLVED (2026-08-24): all five routes to a trained 1 M-class head are dead (H1-H4, low-rank); centroids replace the matrix at inference for 0.29 pt, and a 50-image floor makes the matrix fit.** *(Status updated 2026-10-02; the entry below was written as OPEN on 2026-08-05.)* Owner's framing: the
 Tree-of-Life 200M dataset has ~1 M species, and a 1280 × 1M prototype matrix is 1.28 B parameters —
 5 GB in fp32, larger than the backbone, and the obvious fix (sharding across GPUs) is a tax on every
 future experiment. What can be done that *exploits* the ArcFace × z-score work rather than

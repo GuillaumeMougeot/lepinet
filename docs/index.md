@@ -17,7 +17,7 @@ prototypes, scored by angle) trained with square-root class oversampling; coarse
 dataset this reaches **species macro-F1 0.9135** (0.9316 with a larger backbone), and an optional
 **ArcFace × z-score** head lets the model flag species it has never seen (open-set AUROC 0.9115).
 The [developer guide](developer-guide.md) explains *why* each piece is there; the repository's
-`START-HERE.md` lists what the project has established, with links to the evidence.
+`RESULTS.md` lists what the project has established, with links to the evidence.
 
 !!! note "Provenance"
     `lepinet` is a from-scratch **fastai-only** reimplementation of an earlier

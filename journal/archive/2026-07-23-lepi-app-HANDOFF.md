@@ -2,7 +2,7 @@
 
 **Kind:** subproject · **Status:** snapshot, frozen at 2026-07-23. Accurate as of that date and not
 maintained since — the app has moved on (models now live on Hugging Face Hub, not in the repo). For
-current state read [`PLAN.md`](PLAN.md); this is kept as the self-contained resume document it was
+current state read [`PLAN.md`](../../PLAN.md); this is kept as the self-contained resume document it was
 written to be.
 
 **Date:** 2026-07-23 · **Purpose:** everything a developer (or a fresh Claude session) needs to

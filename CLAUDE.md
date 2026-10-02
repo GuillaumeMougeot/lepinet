@@ -32,11 +32,11 @@ in-distribution accuracy, you are working on the solved part.
 
 Always, in this order, before the first substantive action:
 
-1. **`journal/PLAN.md`** — the status board. What is running, what it is blocked on, what is
+1. **`PLAN.md`** — the status board. What is running, what it is blocked on, what is
    deliberately not being done. This is the only file guaranteed to be about *today*.
-2. **`START-HERE.md` section 5** — the findings, one line each. Section 5a is the science, 5b is the
-   engineering. This stops you re-deriving or contradicting a paid-for result. Experiment IDs
-   (A1, B8, P5...) are resolved in **`EXPERIMENTS.md`**; letters have been reused, so check it.
+2. **`RESULTS.md` section 1** — the findings, one line each (1a science, 1b engineering). This stops
+   you re-deriving or contradicting a paid-for result. Section 2 resolves every experiment ID (A1,
+   B8, P5...); letters have been reused, so check it.
 
 Then, by task:
 
@@ -44,7 +44,7 @@ Then, by task:
 |---|---|
 | explain the method to a non-specialist | `docs/concepts.md` — the vocabulary, ground up |
 | change training behaviour | `docs/design-decisions.md` — every default has a measured reason |
-| change the package | `docs/developer-guide.md`, then `src/lepinet/README.md` |
+| change the package | `docs/developer-guide.md` (module map, seams, traps) |
 | run an experiment | `dev/README.md`, and the journal entry for the nearest prior question |
 | write about results | `paper/DRAFT.md` for claims, `RESULTS.md` for numbers |
 | understand a decision | `journal/README.md` — index by kind, chronological by open date |
@@ -57,7 +57,7 @@ that chat logs are not load-bearing. `dev/036_ledger.py` prints every run's conf
 ## 3. Invariants — violating these breaks something real
 
 - **Never run `uv sync`** on the training venv. It prunes and breaks torch/torchvision. The venv is
-  hand-managed. `journal/2026-07-16-venv-uv-sync-incident.md`.
+  hand-managed. `journal/archive/2026-07-16-venv-uv-sync-incident.md`.
 - **bf16 for any margin head; fp16 elsewhere is what the project actually does.** The compressed
   form of this rule used to read "bf16, never fp16" and that is *false*: 63 of 115 configs set
   `precision: fp16`, including the headline baseline. The true rule is narrower — the cosine head
@@ -67,13 +67,13 @@ that chat logs are not load-bearing. `dev/036_ledger.py` prints every run's conf
   accurate version; corrected 2026-08-28 after the paper was found asserting the wrong one.
 - **Never filter the test fold.** `--min-img-per-spc` on evaluation silently drops the tail out of a
   *macro* average and inflates the number by ~3 points. If a score jumps, audit the eval set before
-  celebrating. `journal/2026-07-24-src-lepinet-baseline-port.md`.
+  celebrating. `journal/archive/2026-07-24-src-lepinet-baseline-port.md`.
 - **`ucloud q` only advances when a tick *succeeds*.** Without one, `auto_extend` is inert and
   `--after` jobs never launch, while `ucloud q ls` still looks healthy. A cron entry exists, so the
   check is not "is it scheduled" but **"is it working"**: `tail ~/.ucloud-tick.log`. On
   2026-08-30 the UCloud refresh token expired, every tick since has failed, and a 40-hour crawl was
   terminated mid-run because nothing extended it. Fix: the owner runs `ucloud login` with a fresh
-  browser token. `journal/2026-07-30-ucloud-queue-daemon.md`.
+  browser token. `journal/archive/2026-07-30-ucloud-queue-daemon.md`.
 - **CPU core-hours are scarcer than GPU hours. Compute the cost before submitting any CPU job.**
   Worst case = vCPU x `max_time` (or `hours` without `auto_extend`); put that number in the message
   to the owner. On 2026-08-28 a network-bound crawler ran on 64 vCPU for 63 h and spent **4,032
@@ -82,14 +82,14 @@ that chat logs are not load-bearing. `dev/036_ledger.py` prints every run's conf
   hook in `.claude/settings.json` blocks `ucloud q submit` / `jobs create`, a CI test checks every
   committed spec, and the crawler refuses an oversized node at runtime. Over 8 vCPU or 300 worst-case
   core-hours needs `# budget-approved: <who/when/why>` in the spec, and only the owner grants it.
-  `journal/2026-10-01-the-crawl-that-spent-58-percent-of-the-cpu-budget.md`.
+  `journal/archive/2026-10-01-the-crawl-that-spent-58-percent-of-the-cpu-budget.md`.
 - **Inside a UCloud job, `os.cpu_count()` reports the host's 256 cores, not your allocation.** So
   does the affinity mask; only `/sys/fs/cgroup/cpu.max` is right. Anything that sizes a thread pool
   from `os.cpu_count()` (pyarrow, torch intra-op, BLAS) oversubscribes the job's real CPUs. Read the
   cgroup quota -- `effective_cpus()` in `dev/082_tol_crawler.py` -- and pin pools to it.
 - **`data/` is a symlink to machine-local storage and is gitignored.** A clone elsewhere has no runs.
-  `RESULTS.md` is generated but **tracked**, because it is the only copy of those numbers that leaves
-  the training box.
+  `RESULTS.md` section 3 is generated but **tracked**, because it is the only copy of those numbers
+  that leaves the training box.
 - **Read UCloud job logs, not job status.** A job reports SUCCESS while the script inside exits 1.
 - **Change one factor per run.** The largest jump in the project's history (+4.7 pt) bundled three
   changes and is permanently unattributable. That mistake is preserved in the ladder as a warning.
@@ -145,7 +145,7 @@ number. Follow this pattern for anything new that is opt-in.
 Stated preferences, from repeated instruction. Treat as standing orders.
 
 - **Journal everything.** Said more often than anything else. A session that produces results and no
-  journal entry has not finished. `DEVELOPER.md` is the owner's own statement of this.
+  journal entry has not finished. The owner's own statement is the first rule below.
 - **Plan and discuss before coding** on anything sizeable. The owner asks to "step back and redraw
   the landscape" and expects reasoning, alternatives and a recommendation — not a survey.
 - **Report reasoning, not just outcomes.** What was surprising, what it means, what it changes.
@@ -155,28 +155,46 @@ Stated preferences, from repeated instruction. Treat as standing orders.
 - **The paper matters.** Findings should be journalled in a form that can become `paper/DRAFT.md`.
 - **Surface your own mistakes plainly.** Several corrections in this project came from the owner
   spotting an implausible number. Say "this was a genuine mistake" and what caused it.
+- **Fewer, shorter documents.** The owner found the repo daunting (2026-10-02) and asked for it to
+  be pruned: one front door (`README.md`), one status file, one results file. Before adding a new
+  top-level or folder-level document, put the content in an existing one.
+
+### The owner's standing rules, in the owner's words
+
+Formerly `DEVELOPER.md`; authoritative. Where the layout has since changed, the intent stands:
+"README files in subfolders journal and dev" are `journal/README.md` and `dev/README.md`, and
+results go in `RESULTS.md`.
+
+> 0. take note of all README in each subfolders to understand the projects and how to code within it.
+> 1. journal everything. Use journal folder to write markdown report about your experiments. Use README files in subfolders journal and dev to register what files in the subfolder are. Use RESULTS.md to report what the trained model folders are. Always consider that you will handout your work to someone else. Take the freedom to write additional documents if needed. Structural doc (README.md, DEV.md, HANDOUT.md etc.) must stay succint while journal or sub-doc can be more verbose.
+> 2. use uv and local venv. (currently broken when uv sync and one day this must be fixed)
+> 3. use config files to start training.
+> 4. use archive folder and its subfolder to store outdated files.
+> 5. the main dataset is data/global but it is 5.6 million images, so use smaller datasets to run tests.
+> 6. for compute, either use local GPU, if free, for tests or short training and ucloud-api for bigger training.
+>
+> note: this project has a little sister for using model in a PWA: lepinet-app
 
 ## 6. The documentation contract
 
-Six layers, each with one job and one owner. **No fact lives in two layers.** If content must appear
+Each layer has one job and one owner. **No fact lives in two layers.** If content must appear
 twice, one copy is a one-line summary that links to the other.
 
 | layer | question | rule |
 |---|---|---|
-| `README.md` | what is the problem and the method | stays short |
-| `START-HERE.md` | where is everything, what is established | one line per finding + link; never the argument |
-| `EXPERIMENTS.md` | what was each experiment ID, what did it find | one row per ID, headline number + link; hand-kept |
+| `README.md` | what it is, where things stand, what to read, where everything is | the front door; stays short |
+| `PLAN.md` | what are we doing now | the only file about today; `Last updated` must move with the work |
 | `docs/user-guide.md` | how do I run it | how-to only |
 | `docs/developer-guide.md` | how do I change it | architecture and seams |
 | `docs/design-decisions.md` | why is the recipe this way | every default, what it was worth, what failed |
 | `journal/` | why, as it happened | one file per question; reasoning and dead ends |
-| `RESULTS.md` | what scored what | generated by `dev/036_ledger.py --snapshot`; never hand-edited |
+| `RESULTS.md` | what is established, and what each experiment ID found | §1 one line per finding; §2 one row per ID + link; §3 generated by `dev/036_ledger.py --snapshot`, never hand-edited |
 | `paper/DRAFT.md` | what do we claim | only claims that generalise beyond this dataset |
 
-**`journal/` has two tiers.** Living documents are `UPPERCASE.md` with no date and are rewritten in
-place: `PLAN.md` (status board) and `README.md` (the master index).
-Everything else is `YYYY-MM-DD-question.md`, dated by when the question was **opened**, so `ls` reads
-in the order things were asked, and frozen once `RESOLVED`. Every archival entry declares
+**`journal/`** holds `README.md` (the index) and one `YYYY-MM-DD-question.md` per question, dated by
+when it was **opened**, so `ls` reads in the order things were asked, and frozen once `RESOLVED`.
+Research entries sit in `journal/`; subproject, infrastructure and incident entries in
+`journal/archive/`. Every archival entry declares
 `**Kind:**` — `research`, `subproject`, `infrastructure`, or `incident` — and `**Status:**`.
 
 ### What to update, and when
@@ -187,14 +205,14 @@ been forgotten.
 
 | when this happens | do this, in the same session |
 |---|---|
-| a run finishes | move its row in `journal/PLAN.md`; regenerate and commit `RESULTS.md` |
+| a run finishes | move its row in `PLAN.md`; add its result to `RESULTS.md` §2 (and regenerate §3 for local runs) |
 | a question is answered | flip its entry to `RESOLVED` with the answer in the status line; update `journal/README.md`'s index row |
 | a new question is opened | new dated entry with `**Kind:**`, `**Status:** OPEN`, and the hypothesis *before* results; link it from `journal/README.md` |
-| a new experiment ID is created | a row in `EXPERIMENTS.md`, with an unused letter; fill the result when it lands |
-| a finding generalises | add a one-liner to `START-HERE.md` section 5a/5b, and a section to `paper/DRAFT.md` |
+| a new experiment ID is created | a row in `RESULTS.md` §2, with an unused letter; fill the result when it lands |
+| a finding generalises | add a one-liner to `RESULTS.md` §1, and a section to `paper/DRAFT.md` |
 | a default changes | `docs/design-decisions.md`, with what it was worth |
 | a trap costs you more than an hour | `docs/design-decisions.md` section 4, or an `incident` entry if it lost a run |
-| the plan changes | `journal/PLAN.md`, including its `**Last updated:**` date |
+| the plan changes | `PLAN.md`, including its `**Last updated:**` date |
 | anything is renamed or moved | run `python dev/060_doc_health.py` before committing |
 
 ### The check that makes this survive
@@ -218,7 +236,7 @@ already holding the context that makes the edit correct.
 
 **Periodic, and rare:** a full re-read is worth doing when the project changes shape — a research
 pivot, a major refactor, a new subsystem — not on a schedule. The owner can trigger one by asking to
-"refresh CLAUDE.md"; the procedure is: read `journal/PLAN.md` and every journal entry newer than this
+"refresh CLAUDE.md"; the procedure is: read `PLAN.md` and every journal entry newer than this
 file's last revision, reconcile sections 1, 3, 4 and 5 against them, delete anything superseded, and
 run the doc-health check. Deletion is the part that gets skipped and matters most: an operating
 manual that only accretes becomes a document nobody reads.
@@ -229,5 +247,5 @@ status update to this file, you want `PLAN.md` instead.
 
 ---
 
-**Last revised:** 2026-07-30 · **Reconciled against:** `journal/PLAN.md` and all journal entries
+**Last revised:** 2026-07-30 · **Reconciled against:** `PLAN.md` and all journal entries
 through 2026-07-30.

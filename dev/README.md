@@ -4,7 +4,7 @@ One script per experiment, numbered in the order the ideas came. They import the
 ([`../src/lepinet/`](../src/lepinet/)) and register anything new through its registries
 (`HEAD_REGISTRY`, `DOMAIN_AUG_REGISTRY`) instead of editing it. Each script's docstring says what it
 measures and links its journal entry; the experiment IDs are resolved in
-[`../EXPERIMENTS.md`](../EXPERIMENTS.md).
+[`../RESULTS.md`](../RESULTS.md) section 2.
 
 Scripts from before the package existed (`000`-`044`: the multilabel era, the `028`/`030`/`032`
 trainer, the app-compression tools) are in [`../archive/dev/`](../archive/dev/), kept as a record.

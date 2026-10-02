@@ -1,6 +1,6 @@
 # Benchmarking imbalanced-learning methods properly (the long-tail reopening)
 
-**Kind:** research · **Status:** OPEN (2026-08-01), design written before any run. Prompted by the
+**Kind:** research · **Status:** **RESOLVED (2026-08-06): long-tail reweighting trades shift robustness for accuracy monotonically, and cRT (rebalance the classifier only) removes the trade.** *(Status updated 2026-10-02; written as OPEN on 2026-08-01.)* Prompted by the
 owner asking whether **balanced softmax** and similar imbalance methods deserve a benchmark, since
 only oversampling and logit adjustment were ever tried.
 

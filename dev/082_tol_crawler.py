@@ -1526,7 +1526,7 @@ def stage_describe(a):
           "```", "",
           "The crawl is network-bound: run it on **1 vCPU**. A 64-vCPU run once spent 58 % of the "
           "project's CPU allocation for no speed-up -- see "
-          "`journal/2026-10-01-the-crawl-that-spent-58-percent-of-the-cpu-budget.md`.", "",
+          "`journal/archive/2026-10-01-the-crawl-that-spent-58-percent-of-the-cpu-budget.md`.", "",
           "**Cite** TreeOfLife-200M (doi:10.57967/hf/8980) and the source data providers. "
           "Maintainer: Guillaume Mougeot, lepinet project.", ""]
     Path(a.out).write_text("\n".join(L))

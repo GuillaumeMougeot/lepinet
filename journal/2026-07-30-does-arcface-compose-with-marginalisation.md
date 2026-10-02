@@ -13,7 +13,7 @@ single-head result was measured **without** ArcFace. The recommended architectur
 coarse levels by marginalisation, ArcFace × z-score geometry — had therefore **never been trained**,
 and every claim about it was an inference across two separate experiments. A1 is that training run.
 
-**Committed prediction** ([`PLAN.md`](PLAN.md)): *"A1 ≈ 0.906–0.915 F1 with AUROC ≥ 0.90 — the two
+**Committed prediction** ([`PLAN.md`](../PLAN.md)): *"A1 ≈ 0.906–0.915 F1 with AUROC ≥ 0.90 — the two
 effects are mechanistically independent (one changes which heads exist, the other the logit
 geometry), so they should compose."*
 

@@ -1,7 +1,7 @@
 """Machine-checked documentation hygiene — so drift is *detected*, not remembered.
 
-This repository carries an unusual amount of prose: a journal, a paper draft, a guided map, three
-docs pages, a results snapshot. That is deliberate (see `CLAUDE.md`), but prose rots silently —
+This repository carries an unusual amount of prose: a journal, a paper draft, the README, the
+results registry, the docs pages. That is deliberate (see `CLAUDE.md`), but prose rots silently —
 a renamed file breaks twenty links, a finished run leaves `PLAN.md` describing a world that no
 longer exists, a new journal entry never reaches the index.
 
@@ -23,17 +23,21 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 JOURNAL = ROOT / "journal"
+#: Journal entries that are not research (subprojects, infrastructure, incidents) live here.
+JOURNAL_ARCHIVE = JOURNAL / "archive"
+#: The status board, the one file meant to be true today. At the repo root since 2026-10-02.
+PLAN = ROOT / "PLAN.md"
 
 #: Files in journal/ that are living documents: no date, kept current, never frozen.
-LIVING = {"README.md", "PLAN.md"}
+LIVING = {"README.md"}
 #: The four kinds an archival entry may declare. See CLAUDE.md for what each means.
 KINDS = {"research", "subproject", "infrastructure", "incident", "living"}
 DATED = re.compile(r"^(\d{4})-(\d{2})-(\d{2})-.+\.md$")
 
 #: Docs a newcomer or reviewer reads. The owner asked for no emoji in these; the journal is
 #: historical record and is left alone.
-STRUCTURAL = ["START-HERE.md", "EXPERIMENTS.md", "README.md", "RESULTS.md", "CLAUDE.md", "DEVELOPER.md",
-              "journal/README.md", "journal/PLAN.md", "paper/DRAFT.md"]
+STRUCTURAL = ["README.md", "PLAN.md", "RESULTS.md", "CLAUDE.md", "journal/README.md",
+              "paper/DRAFT.md"]
 EMOJI = re.compile("[\U0001F300-\U0001FAFF\U00002600-\U000027BF\U00002B00-\U00002BFF️]")
 
 # Skip generated/vendored trees. `data` is a symlink to machine-local storage.
@@ -42,13 +46,15 @@ SKIP = {".git", ".venv", "node_modules", "__pycache__", ".pytest_cache", ".ruff_
 
 
 def md_files() -> list[Path]:
+    # `archive` is skipped only at the top level: journal/archive/ holds live, linked entries.
     return [p for p in ROOT.rglob("*.md")
-            if not any(part in SKIP for part in p.relative_to(ROOT).parts)]
+            if p.relative_to(ROOT).parts[0] != "archive"
+            and not any(part in SKIP - {"archive"} for part in p.relative_to(ROOT).parts)]
 
 
 def journal_entries() -> tuple[list[Path], list[Path]]:
     """(living, archival) — the two tiers, split by naming convention."""
-    files = sorted(p for p in JOURNAL.glob("*.md"))
+    files = sorted([*JOURNAL.glob("*.md"), *JOURNAL_ARCHIVE.glob("*.md")])
     return ([p for p in files if p.name in LIVING],
             [p for p in files if p.name not in LIVING])
 
@@ -101,7 +107,11 @@ def check_links(fail):
             if not (p.parent / target).resolve().exists():
                 fail(f"{p.relative_to(ROOT)}: broken link -> {target}")
         for name in wiki.findall(text):
-            if not (JOURNAL / f"{name}.md").exists():
+            if name == "PLAN":
+                if not PLAN.exists():
+                    fail(f"{p.relative_to(ROOT)}: broken wikilink -> [[PLAN]]")
+                continue
+            if not any((d / f"{name}.md").exists() for d in (JOURNAL, JOURNAL_ARCHIVE)):
                 fail(f"{p.relative_to(ROOT)}: broken wikilink -> [[{name}]]")
 
 
@@ -123,20 +133,20 @@ def check_plan_is_current(fail):
     the status board was not updated. It cannot prove PLAN.md is right -- only that it has been
     touched since the most recent thing that could have invalidated it.
     """
-    plan = JOURNAL / "PLAN.md"
+    plan = PLAN
     if not plan.exists():
-        fail("journal/PLAN.md is missing -- it is the entry point for 'where are we'.")
+        fail("PLAN.md is missing -- it is the entry point for 'where are we'.")
         return
     m = re.search(r"\*\*Last updated:\*\*\s*(\d{4}-\d{2}-\d{2})", plan.read_text())
     if not m:
-        fail("journal/PLAN.md: no '**Last updated:** YYYY-MM-DD' in the header.")
+        fail("PLAN.md: no '**Last updated:** YYYY-MM-DD' in the header.")
         return
     updated = date.fromisoformat(m.group(1))
     _, archival = journal_entries()
     newest = max((date(*map(int, DATED.match(p.name).groups()))
                   for p in archival if DATED.match(p.name)), default=updated)
     if newest > updated:
-        fail(f"journal/PLAN.md last updated {updated}, but journal entries exist from {newest}. "
+        fail(f"PLAN.md last updated {updated}, but journal entries exist from {newest}. "
              f"Work landed without the status board moving.")
 
 
