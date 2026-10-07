@@ -15,13 +15,13 @@ One line each, with the paper section and the experiments (section 2) that carry
 |---|---|---|---|
 | 1 | Hierarchy-aware heads do not help; one species head plus marginalisation matches or beats them. Coarse *supervision* (a loss on the marginals) still buys ~1.4 pt under shift. | §4.1 | singlehead, marginal, A4 |
 | 2 | In-distribution accuracy saturates near 0.93 but falls ~23 pt on trap images, and the three axes rank models differently. | §4.2, §4.10 | flemming, B4 |
-| 3 | **The spine:** interventions belong in the classifier, not the representation: rebalancing (cRT), domain adaptation (83 % from the classifier alone), the prototype matrix (centroids for 0.29 pt). | §4.15 | L4, T2, H1 |
+| 3 | **The spine:** interventions belong in the classifier, not the representation: rebalancing (cRT), domain adaptation (83 % from the classifier alone), the prototype matrix (centroids for 0.29 pt, for the margin head; 3.7 pt for the plain head). | §4.15 | L4, T2, H1 |
 | 4 | Unlabelled trap images are the largest lever: self-training gives +7.94 probe at a 2 % share and beats 12,230 real labels; above 2 % adaptation becomes memorisation. | §4.11 | B3rep5x, T1 |
 | 5 | Long-tail reweighting trades shift robustness for accuracy, monotonically; cRT removes the trade; capping training at 1,000 images per species helps shift. | §4.13 | L0-L4, L7 |
 | 6 | The best open-set scoring rule changes with model scale (6-7.6 pt); one rule for all models produced a false ranking. | §4.9 | E2 |
 | 7 | The angular margin relocates open-set signal rather than creating it: +0.78 AUROC best-vs-best (an earlier "31 pt" compared rules, and is retracted). | §4.3 | A1, C3r |
 | 8 | Novelty detection improves with taxonomic distance (near < mid < far), and not because unseen taxa are rare. | §4.4 | C3, C3b |
-| 9 | Abstention under shift is expensive, and two models with equal accuracy can differ by 17 pt in useful answers: the difference is calibration. | §4.6a | O1 |
+| 9 | Abstention under shift is expensive (13-19 % vs 0.8 % in-distribution), and a back-off policy yields a composition, not a score: tied B8 and P5 trade species answers (74.7 vs 66.0 %) for answers at any rank (77.2 vs 83.3 %). A margin head needs a temperature first: in float32 its softmax saturates and the species rank becomes unusable. | §4.6a | O1, O3 |
 | 10 | Two thirds of our test fold is inside BioCLIP-2's training data by GBIF occurrence id; a frozen probe understates that model by 7 pt; fine-tuned it is the better trunk, and our recipe closes the gap. | §4.14 | P1-P5 |
 | 11 | A margin damages marginalisation more than classification, through calibration; replicated at 10x scale. | §4.7 | A1, A2, A4 |
 | 12 | Augmentation that mimics trap conditions closes only 17 % of the gap. | §4.8 | B1 |
@@ -207,15 +207,16 @@ distance), **E2** (scoring rules do not transfer across scale), **L4** (cRT), **
 | P2 | centroids instead of a classifier | not run | |
 | P3a / b / **c** | fine-tune it, lr 1e-3 / 1e-4 / **1e-5** | clean fold 0.8912 / 0.9025 / **0.9146** (+1.25 over ours); P3c probe 0.6630, probe-HO 0.6937 | [P3](journal/2026-08-28-fine-tuned-bioclip2-beats-us-and-the-head-hurts.md) |
 | P4 / P4b | P3c + frozen adaptation | probe 0.7199 / 0.7218 — below our recipe | same |
-| **P5** | P3c + **unfrozen** adaptation | in-dist 0.9113, probe **0.7810**, probe-HO 0.7806 — ties B8; **public on Hugging Face, the recommended model** | [P5](journal/2026-08-28-frozen-adaptation-only-works-on-your-own-trunk.md) |
+| **P5** | P3c + **unfrozen** adaptation | in-dist 0.9113, probe **0.7810**, probe-HO 0.7806 — ties B8; **public on Hugging Face** | [P5](journal/2026-08-28-frozen-adaptation-only-works-on-your-own-trunk.md) |
 | P5b | repeat of P5 | 0.7703 / 0.7827; P5 n = 2: probe 0.7757 ± 0.0054 | same |
 
 ### O — deployment behaviour of the shipped models
 
 | ID | question | result | where |
 |---|---|---|---|
-| **O1** | B8 vs P5 under a 95 %-precision back-off policy | tied on accuracy, **17.3 pt apart on useful answers** (73.3 % vs 92.8 % answered); best open-set rule is entropy for both | [O1](journal/2026-08-28-two-tied-models-differ-by-17-points-in-deployment.md) |
+| **O1** | B8 vs P5 under a 95 %-precision back-off policy | reported 17.3 pt apart on "useful answers"; **superseded by O3** (rank-blind metric, fitted in-sample, B8 saturated). Best open-set rule is entropy for both | [O1](journal/2026-08-28-two-tied-models-differ-by-17-points-in-deployment.md) |
 | O2 | open-set as the number of enrolled taxa grows to 204 K | not run | [PLAN](PLAN.md) |
+| **O3** | is O1's gap a model property or a readout artefact? | neither: the metric was rank-blind. Held-out nights, calibrated B8 vs P5: correct at species **74.7 vs 66.0 %**, at any rank **77.2 vs 83.3 %**; raw B8 (69.7 % of softmax values exactly 1.0) answers 0 % at species | [O3](journal/2026-10-02-is-the-deployment-gap-a-readout-artefact.md) |
 
 ### K and W — directions opened 2026-08-28 (first named D1-D3)
 

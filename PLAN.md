@@ -17,9 +17,11 @@ and a submission is scoping and writing, plus two evaluation-only runs. No new t
 | 1 | **Choose the scope and the venue.** The draft makes 9 contributions over 16 results sections, at 13 k words. Proposed spine: *interventions belong in the classifier* (§4.15) + *the evaluation protocol* (three axes, scoring rules, contamination) + *self-training* (§4.11); the margin analysis (§4.3, §4.7) and head scaling (§4.12) go to an appendix; TreeOfLife (W1-W3) becomes a second paper | owner | open |
 | 2 | Restructure §4 to ~6 sections; rewrite the abstract; write the §1 introduction (still an outline) | agent, after 1 | — |
 | 3 | Re-score §4.5 with each head's own scoring rule; measure open-set *under shift* for B8 and P5 (§6 says it is unmeasured) | GPU, eval only | — |
-| 4 | Figures: only 1 of 5 is referenced in the text; `fig4` scores both heads with max-logit (the retracted comparison) and must be redrawn | agent | — |
+| 4 | Figures: six, in the text with captions (`dev/074_figures.py`); building them corrected §4.6a (the B8/P5 gap), §4.12 and §4.14.1 | agent | **done 2026-10-02** |
 | 5 | Verify every citation in §1b and the reference list (all written from memory) | owner | open |
 | 6 | Final consistency pass: every number against its journal entry | agent | — |
+| 7 | The P5 model card on Hugging Face still says "+17.3 pt useful-answer rate" and "ship this"; O3 found that claim rank-blind. Reword, and decide whether the repo recommends one model | owner | open |
+| 8 | `rules-A2.json` on the drive was overwritten on 2026-08-03 by a run reporting a different head; the paper's §4.9 row comes from the 2026-08-01 file. Re-run A2's rules to confirm | GPU, eval only | open |
 
 ## 2. Running now
 

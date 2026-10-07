@@ -10,8 +10,8 @@ is something new (open-set), backing off to genus or family when the species is 
 
 **Just want to identify moths?** The models are public and run with `onnxruntime` alone:
 [`lepinet-bioclip2-vitl14`](https://huggingface.co/gmougeot/lepinet-bioclip2-vitl14) (P5,
-recommended), [`lepinet-dinov3-convnextl`](https://huggingface.co/gmougeot/lepinet-dinov3-convnextl)
-(B8) and [`lepinet-effnetv2s`](https://huggingface.co/gmougeot/lepinet-effnetv2s) (small, fast).
+answers most often), [`lepinet-dinov3-convnextl`](https://huggingface.co/gmougeot/lepinet-dinov3-convnextl)
+(B8, names the species most often) and [`lepinet-effnetv2s`](https://huggingface.co/gmougeot/lepinet-effnetv2s) (small, fast).
 
 ## 1. Where things stand
 
@@ -56,7 +56,7 @@ holds the non-research journal entries (side projects, cluster work, incidents).
 |---|---|---|---|---|
 | **cheap reference** | effnetv2_s, one species head + marginalisation, √-oversampling | 0.9135 | 0.6270 | 0.8990 |
 | **B8** | 198 M, self-training on 2 % trap images, no oversampling | 0.9060 | 0.7798 | 0.9153 |
-| **P5** (recommended) | BioCLIP-2 fine-tuned + unfrozen adaptation | 0.9113 | 0.7757 | 0.9161 |
+| **P5** | BioCLIP-2 fine-tuned + unfrozen adaptation | 0.9113 | 0.7757 | 0.9161 |
 | best in-distribution | ConvNeXtV2-L, multi-head | **0.9316** | — | — |
 
 *in-dist* = species macro-F1 on our held-out fold, over all species; *probe* = macro-F1 on
