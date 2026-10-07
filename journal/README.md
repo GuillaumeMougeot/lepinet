@@ -53,7 +53,7 @@ incidents are in [`engineering/`](engineering/). The plan is [`../PLAN.md`](../P
 | [08-28](2026-08-28-a-regional-checklist-helps-the-user-and-hurts-the-tail.md) | What is a regional checklist worth? (K1) | +5 pt accuracy, −1.7 pt macro-F1 on probe |
 | [08-28](2026-08-28-two-tied-models-differ-by-17-points-in-deployment.md) | B8 vs P5 under abstention (O1) | Tied on accuracy, 17 pt apart on useful answers |
 | [10-01](2026-10-01-what-the-blocked-servers-cost.md) | What do servers that refuse us cost? (W1) | 23 % of the selection, mostly herbaria; 89 % of Lepidoptera survive |
-| [10-02](2026-10-02-is-the-deployment-gap-a-readout-artefact.md) | Is B8 vs P5's 17-pt deployment gap real? (O3) | No: a rank-blind metric. B8 names the species more often, P5 answers more often |
+| [10-02](2026-10-02-is-the-deployment-gap-a-readout-artefact.md) | Is B8 vs P5's 17-pt deployment gap real? (O3) | No: a rank-blind metric. B8 names the species more often (74.7 vs 67.4 %), P5 answers more often (86.4 vs 77.2 %) |
 | [10-01](2026-10-01-does-seeing-the-whole-tree-teach-a-model-what-it-does-not-know.md) | Does training on the whole tree help open-set and shift? (W3) | **OPEN**, waits for the download |
 
 ## Engineering: side projects, cluster work, incidents

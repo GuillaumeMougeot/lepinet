@@ -21,7 +21,7 @@ One line each, with the paper section and the experiments (section 2) that carry
 | 6 | The best open-set scoring rule changes with model scale (6-7.6 pt); one rule for all models produced a false ranking. | §4.9 | E2 |
 | 7 | The angular margin relocates open-set signal rather than creating it: +0.78 AUROC best-vs-best (an earlier "31 pt" compared rules, and is retracted). | §4.3 | A1, C3r |
 | 8 | Novelty detection improves with taxonomic distance (near < mid < far), and not because unseen taxa are rare. | §4.4 | C3, C3b |
-| 9 | Abstention under shift is expensive (13-19 % vs 0.8 % in-distribution), and a back-off policy yields a composition, not a score: tied B8 and P5 trade species answers (74.7 vs 66.0 %) for answers at any rank (77.2 vs 83.3 %). A margin head needs a temperature first: in float32 its softmax saturates and the species rank becomes unusable. | §4.6a | O1, O3 |
+| 9 | Abstention under shift is expensive (13-19 % vs 0.8 % in-distribution), and a back-off policy yields a composition, not a score: tied B8 and P5 trade species answers (74.7 vs 67.4 %) for answers at any rank (77.2 vs 86.4 %). A margin head needs a temperature first: in float32 its softmax saturates and the species rank becomes unusable. | §4.6a | O1, O3 |
 | 10 | Two thirds of our test fold is inside BioCLIP-2's training data by GBIF occurrence id; a frozen probe understates that model by 7 pt; fine-tuned it is the better trunk, and our recipe closes the gap. | §4.14 | P1-P5 |
 | 11 | A margin damages marginalisation more than classification, through calibration; replicated at 10x scale. | §4.7 | A1, A2, A4 |
 | 12 | Augmentation that mimics trap conditions closes only 17 % of the gap. | §4.8 | B1 |
@@ -216,7 +216,7 @@ distance), **E2** (scoring rules do not transfer across scale), **L4** (cRT), **
 |---|---|---|---|
 | **O1** | B8 vs P5 under a 95 %-precision back-off policy | reported 17.3 pt apart on "useful answers"; **superseded by O3** (rank-blind metric, fitted in-sample, B8 saturated). Best open-set rule is entropy for both | [O1](journal/2026-08-28-two-tied-models-differ-by-17-points-in-deployment.md) |
 | O2 | open-set as the number of enrolled taxa grows to 204 K | not run | [PLAN](PLAN.md) |
-| **O3** | is O1's gap a model property or a readout artefact? | neither: the metric was rank-blind. Held-out nights, calibrated B8 vs P5: correct at species **74.7 vs 66.0 %**, at any rank **77.2 vs 83.3 %**; raw B8 (69.7 % of softmax values exactly 1.0) answers 0 % at species | [O3](journal/2026-10-02-is-the-deployment-gap-a-readout-artefact.md) |
+| **O3** | is O1's gap a model property or a readout artefact? | neither: the metric was rank-blind. Held-out nights, published models, B8 / P5 / B3rep5x: correct at species **74.7 / 67.4 / 72.9 %**, at any rank **77.2 / 86.4 / 85.8 %**; raw B8 (69.7 % of softmax values exactly 1.0) answers 0 % at species | [O3](journal/2026-10-02-is-the-deployment-gap-a-readout-artefact.md) |
 
 ### K and W — directions opened 2026-08-28 (first named D1-D3)
 

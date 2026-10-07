@@ -2,8 +2,9 @@
 
 **Kind:** research · **Status:** **RESOLVED (2026-10-02): neither — the metric was rank-blind.**
 "Useful answers" counts a correct genus answer the same as a correct species answer. Calibrated and
-measured on held-out trap nights, **B8 names the species correctly on 74.7 % of images against P5's
-66.0 %, while P5 gives *some* correct answer on 83.3 % against B8's 77.2 %**. Neither dominates, and
+measured on held-out trap nights with the published models, **B8 names the species correctly on
+74.7 % of images against P5's 67.4 %, while P5 gives *some* correct answer on 86.4 % against B8's
+77.2 %** (numbers corrected 2026-10-07, see the last section). Neither dominates, and
 uncalibrated B8 answers almost everything at genus and "wins" at 87.1 %. O1's "P5 is 17 pt more
 deployable, because of calibration" does not survive; the paper's §4.6a and P5-first recommendation
 need rewriting. Original framing: O1 found B8 and P5 tied on probe macro-F1
@@ -80,4 +81,25 @@ because the three arms answer at different ranks.
   "+17.3 pt useful-answer rate" (on Hugging Face, so the owner decides). The release entry already
   had the 6-point version and the same rank-blind metric.
 * **For the figure:** the honest picture is the stacked composition per model, not a bar of "useful".
+
+## Correction (2026-10-07): the first run used the pre-fix P5
+
+The table above used `data/hf_release/p5/`, the P5 export from before the 2026-09-30 preprocessing
+fix; the published model is `p5v2`. A genuine mistake, caught when its numbers did not match the
+published P5 card. Re-run with the published files (`dev/086` now reads `p5v2`), adding the small
+model:
+
+| held-out trap nights, 95 % target | species | genus | family | abstain | **correct at species** | **correct at any rank** |
+|---|---|---|---|---|---|---|
+| B8, T = 1.91 | 78.3 % | 0 % | 2.6 % | 19.0 % | **74.7 %** | 77.2 % |
+| P5 (`p5v2`) | 70.0 % | 5.6 % | 14.3 % | 10.1 % | **67.4 %** | **86.4 %** |
+| B3rep5x, T = 1.70 | 76.4 % | 0 % | 13.6 % | 10.0 % | **72.9 %** | 85.8 % |
+
+The conclusion holds and the sizes change: B8 leads at species by 7.3 points (not 8.7) and P5 at any
+rank by 9.2 (not 6.1). The 20 M model is second on both. P5's species AURC 0.034, ECE 0.083.
+
+**Cards (2026-10-07, owner's decision: present the trade-off, recommend none).** All three Hugging
+Face cards gained a "Which lepinet model?" section with the table above; the P5 card's "recommended"
+paragraph, the B8 card's "Prefer the BioCLIP-2 model" and "confidence is its weak point", and the
+collection notes were rewritten to match. Templates in `dev/083_hf_release_files/` carry the same text.
 

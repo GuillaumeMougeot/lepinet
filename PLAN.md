@@ -1,6 +1,6 @@
 # PLAN — what we are doing now
 
-**Kind:** living · **Last updated:** 2026-10-02 · **Supersedes:** [[2026-07-28-landscape-and-plan]]
+**Kind:** living · **Last updated:** 2026-10-07 · **Supersedes:** [[2026-07-28-landscape-and-plan]]
 
 The one file in `journal/` meant to be true *today*. Every experiment ID is resolved in
 [`RESULTS.md`](RESULTS.md); the reasoning lives in the linked journal entries. Earlier
@@ -20,14 +20,14 @@ and a submission is scoping and writing, plus two evaluation-only runs. No new t
 | 4 | Figures: six, in the text with captions (`dev/074_figures.py`); building them corrected §4.6a (the B8/P5 gap), §4.12 and §4.14.1 | agent | **done 2026-10-02** |
 | 5 | Verify every citation in §1b and the reference list (all written from memory) | owner | open |
 | 6 | Final consistency pass: every number against its journal entry | agent | — |
-| 7 | The P5 model card on Hugging Face still says "+17.3 pt useful-answer rate" and "ship this"; O3 found that claim rank-blind. Reword, and decide whether the repo recommends one model | owner | open |
+| 7 | Model cards and collection notes present the trade-off instead of recommending P5 (owner's call, 2026-10-07) | agent | **done** |
 | 8 | `rules-A2.json` on the drive was overwritten on 2026-08-03 by a run reporting a different head; the paper's §4.9 row comes from the 2026-08-01 file. Re-run A2's rules to confirm | GPU, eval only | open |
 
 ## 2. Running now
 
 | ID | what | state | next |
 |---|---|---|---|
-| **W1** | TreeOfLife-200M download at **short side 256**, on the workstation (`/data/au761367/tol256s/`, `crawl.log`; cores 0-5, nice 10; zero UCloud core-hours) | 8.6 M of ~70 M images on 2026-10-02, ~560 img/s; the stall was a lock-order deadlock, fixed and tested ([[2026-10-01-the-crawl-resized-the-wrong-side]]) | after it ends: upload and unpack on UCloud (1 vCPU), fallback copies for the 580 k images from servers that now refuse us, a substitution pass for newly blocked hosts, re-run the audit (`dev/085`) |
+| **W1** | TreeOfLife-200M download at **short side 256**, on the workstation (`/data/au761367/tol256s/`, `crawl.log`; cores 0-5, nice 10; zero UCloud core-hours) | **2026-10-07: 63.26 M images done (2.0 TB)**; 2.08 M rows left on 7 slow servers at ~8.5 img/s (~3 days); no stall since the deadlock fix. 75 servers marked unreachable (28.3 M rows): probed, Harvard and Flickr had tripped on transient errors and run again in `retry1/` (cores 6-7); ecdysis.org refuses (403), the rest still time out | when both finish: a last pass over the main manifest (records the retry images from disk), upload and unpack on UCloud (1 vCPU), substitution pass for the unreachable servers, re-run the audit (`dev/085`) |
 
 ## 3. Backlog, in order
 

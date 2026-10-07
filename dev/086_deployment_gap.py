@@ -9,7 +9,7 @@ confidences. Writes paper/figures/fig4_deployment.json for the paper figure.
 
     python dev/086_deployment_gap.py
 Inputs: data/paper_figs/B8-probe-predictions.csv (UCloud: ucloud_preds/B8-probe/...),
-data/hf_release/{b8,p5}/eval_probe.parquet. journal/2026-10-02-is-the-deployment-gap-a-readout-artefact.md
+data/hf_release/{b8,p5v2,b3}/eval_probe.parquet. journal/2026-10-02-is-the-deployment-gap-a-readout-artefact.md
 """
 from __future__ import annotations
 
@@ -79,7 +79,10 @@ def main():
     arms = {
         "B8, T = 1 (O1's readout)": from_lepinet_csv(ROOT / "data/paper_figs/B8-probe-predictions.csv"),
         "B8, T = 1.91 (published)": pd.read_parquet(ROOT / "data/hf_release/b8/eval_probe.parquet"),
-        "P5 (published, T = 1)": pd.read_parquet(ROOT / "data/hf_release/p5/eval_probe.parquet"),
+        # p5v2 is the published P5 (2026-09-30: resize fixed inside the graph); p5/ is the earlier
+        # export and must not be used for the published model's numbers.
+        "P5 (published, T = 1)": pd.read_parquet(ROOT / "data/hf_release/p5v2/eval_probe.parquet"),
+        "B3rep5x (published, T = 1.70)": pd.read_parquet(ROOT / "data/hf_release/b3/eval_probe.parquet"),
     }
     out = {}
     for name, res in arms.items():

@@ -332,7 +332,7 @@ The sections below each vary one factor. For orientation, the models the paper r
 | A1 | baseline + ArcFace × z-score | 0.9035 | 0.6437 | — | 0.9068 | — |
 | best in-distribution | ConvNeXtV2-L @320, multi-head | **0.9316** | — | — | — | — |
 | **B8** (ours) | 198 M, no √-oversampling, self-training at the 2 % dose, T = 1.91 | 0.9060 | **0.7798** | 0.7816 | 0.9153 | **74.7 %** / 77.2 % |
-| **P5** | BioCLIP-2 fine-tuned + unfrozen adaptation | 0.9113 | 0.7757 | 0.7817 | **0.9161** | 66.0 % / **83.3 %** |
+| **P5** | BioCLIP-2 fine-tuned + unfrozen adaptation | 0.9113 | 0.7757 | 0.7817 | **0.9161** | 67.4 % / **86.4 %** |
 | shippable student | fastvit_sa12, distilled | 0.8967 | — | — | — | — |
 
 **B8 and P5 tie on accuracy** (§4.14.4; P5 probe/held-out are means of two draws, spread 0.0107 and
@@ -579,14 +579,16 @@ the species confidence. B8 is shown with its raw confidences (T = 1) and with th
 in-distribution validation data (T = 1.91), which the published model carries.
 
 The policy of §4.6 costs 0.82 % abstention in-distribution. Repeated on held-out trap nights it
-costs 13-19 % (Figure 4a). A back-off policy that looks free on a held-out fold withholds an answer
+costs 10-19 % (Figure 4a). A back-off policy that looks free on a held-out fold withholds an answer
 on a large share of images from a different camera, so abstention measured in-distribution reports
 the easy case.
 
 **The two recommended models answer differently, and neither dominates.** B8 and P5 are tied on probe
 macro-F1 (0.7798 vs 0.7810). Under the policy, calibrated B8 names the species correctly on **74.7 %**
-of trap images and P5 on **66.0 %**; P5 backs off more often and gives *some* correct answer (species,
-genus or family) on **83.3 %** against B8's **77.2 %**. Which is better depends on what a genus or
+of trap images and P5 on **67.4 %**; P5 backs off more often and gives *some* correct answer (species,
+genus or family) on **86.4 %** against B8's **77.2 %**. The 20 M EfficientNetV2-S model (B3rep5x) sits
+between them on both counts (72.9 % and 85.8 %); differences under about a point are within the
+variation between the two halves of trap nights. Which is better depends on what a genus or
 family answer is worth to the user. A single "useful-answer rate" that counts a family answer like a
 species answer hides the trade, and an earlier version of this analysis, scored that way and fitted
 in-sample, reported a 17.3-point advantage for P5 that does not survive.
@@ -597,8 +599,8 @@ the flat start of the grey curve). No threshold can reach the target inside that
 moves the images to genus instead: with raw confidences B8 answers **no** images at species and 86 %
 at genus. Dividing the logits by a temperature fitted on in-distribution validation data removes the
 saturation (0 % ties) and restores 78 % species answers. The ranking quality underneath barely
-differs between the models (species AURC 0.036 for calibrated B8, 0.037 for P5) and neither is
-well calibrated on trap images (ECE 0.073 and 0.087, Figure 4c); what differed was a numerical
+differs between the models (species AURC 0.036 for calibrated B8, 0.034 for P5) and neither is
+well calibrated on trap images (ECE 0.073 and 0.083, Figure 4c); what differed was a numerical
 property of the readout.
 
 The practical consequences: **report a back-off policy's composition, not one number**, and fit a

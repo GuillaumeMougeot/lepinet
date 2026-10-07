@@ -25,10 +25,10 @@ family are computed from the species probabilities.
 
 This is the **small** model of the [lepinet](https://github.com/GuillaumeMougeot/lepinet) project:
 37 M parameters (a 20 M backbone plus the 12,041-class classifier), fast enough for a laptop CPU or an
-edge device. It is about 2 points of species macro-F1 behind the project's best model
-([`gmougeot/lepinet-bioclip2-vitl14`](https://huggingface.co/gmougeot/lepinet-bioclip2-vitl14),
-9× larger): 0.765 vs 0.783 on light-trap images, 0.899 vs 0.921 on ordinary photos. Use the large
-one when accuracy matters more than speed.
+edge device. It is about 2 points of species macro-F1 behind the two larger released models (0.765 vs 0.777 and
+0.783 on light-trap images; 0.899 vs 0.906 and 0.921 on ordinary photos), and close to the best of
+them under a back-off policy; see [Which lepinet model?](#which-lepinet-model). Use a large one when
+accuracy matters more than speed.
 
 | | |
 |---|---|
@@ -37,7 +37,33 @@ one when accuracy matters more than speed.
 | **Output** | species, genus and family probabilities, calibrated species logits, a 1280-d embedding |
 | **Format** | ONNX fp32 (149 MB) or fp16 (109 MB, same predictions). Runs with `onnxruntime` alone |
 | **Licence** | CC-BY-NC-4.0 (non-commercial; see [Licence](#licence)) |
-| **Other sizes** | [`lepinet-effnetv2s`](https://huggingface.co/gmougeot/lepinet-effnetv2s) (37 M, fast on CPU) · [`lepinet-dinov3-convnextl`](https://huggingface.co/gmougeot/lepinet-dinov3-convnextl) (217 M) · [`lepinet-bioclip2-vitl14`](https://huggingface.co/gmougeot/lepinet-bioclip2-vitl14) (321 M, recommended); all in [one collection](https://huggingface.co/collections/gmougeot/lepinet-lepidoptera-identification-6abbc33d250430f8c67db428) |
+| **Other sizes** | [`lepinet-effnetv2s`](https://huggingface.co/gmougeot/lepinet-effnetv2s) (37 M, fast on CPU) · [`lepinet-dinov3-convnextl`](https://huggingface.co/gmougeot/lepinet-dinov3-convnextl) (217 M) · [`lepinet-bioclip2-vitl14`](https://huggingface.co/gmougeot/lepinet-bioclip2-vitl14) (321 M); all in [one collection](https://huggingface.co/collections/gmougeot/lepinet-lepidoptera-identification-6abbc33d250430f8c67db428) |
+
+## Which lepinet model?
+
+The three released models are about equally accurate on light-trap images (species macro-F1 0.783,
+0.777 and 0.765) but answer differently when they are allowed to back off to genus or family. Under
+the same 95 %-precision back-off policy, with thresholds fitted on half of the held-out light-trap
+nights and measured on the other half:
+
+| model | size | correct at species | correct at any rank | no answer |
+|---|---|---|---|---|
+| [`lepinet-bioclip2-vitl14`](https://huggingface.co/gmougeot/lepinet-bioclip2-vitl14) | 321 M | 67.4 % | **86.4 %** | 10.1 % |
+| [`lepinet-dinov3-convnextl`](https://huggingface.co/gmougeot/lepinet-dinov3-convnextl) | 217 M | **74.7 %** | 77.2 % | 19.0 % |
+| [`lepinet-effnetv2s`](https://huggingface.co/gmougeot/lepinet-effnetv2s) | 37 M | 72.9 % | 85.8 % | 10.0 % |
+
+- To get the **species name** as often as possible, the DINOv3 model names it most often at 95 %
+  precision, and answers "unknown" more often.
+- If a **genus or family** answer is useful, the BioCLIP-2 model gives some correct answer most
+  often, because it backs off more.
+- The **small** model is close to the best on both and runs on a laptop CPU.
+- On **ordinary photos** the BioCLIP-2 model is the most accurate (species macro-F1 0.921, against
+  0.906 and 0.899 over the full GBIF test fold).
+
+Differences of about a point are within the variation between the two halves of the nights. An
+earlier comparison reported a 17-point advantage for the BioCLIP-2 model; it counted a family answer
+like a species answer, fitted thresholds in-sample and used the DINOv3 model's uncalibrated
+probabilities ([analysis](https://github.com/GuillaumeMougeot/lepinet/blob/main/journal/2026-10-02-is-the-deployment-gap-a-readout-artefact.md)).
 
 ## Quick start
 
