@@ -66,7 +66,7 @@ slot**, while the requests holding host slots waited for a memory slot. Once eve
 belonged to a retrier, nothing could move. With UCloud's 16 slots that took minutes -- which is why
 both UCloud stalls hit within ~20 minutes of start, and why the "memory.max" coincidence looked like
 a cause. Fix: release the memory slot at the top of every attempt (the failed body is discarded
-anyway). `tests/test_tol_crawler_deadlock.py` reproduces it with one slot of each kind and two
+anyway). `tests/test_tol_crawler.py` reproduces it with one slot of each kind and two
 rows whose first body read fails: it times out without the fix and passes with it. After the
 restart: **559 img/s**, CPU-bound on the 6 pinned cores.
 
@@ -88,3 +88,31 @@ restart: **559 img/s**, CPU-bound on the 6 pinned cores.
 * **UCloud spec:** `ucloud/lepinet-tolfetch.toml` is kept as a fallback and now writes `images_s256/`,
   so it can never mix the two sizes in one directory. Job 12409366 (stalled, long side) should be
   terminated; it has been burning an idle core-hour per hour.
+
+## The retry of tripped servers (2026-10-07 to 10-09)
+
+By 2026-10-07, 75 servers had tripped the breaker, 55 of them since 1 October and several within
+the same second, which looked like a blip on our side. Probed by hand: `data.huh.harvard.edu` and
+`live.staticflickr.com` answered again, `ecdysis.org` still returned 403. A second crawl
+(`tol256s/retry1/`: a manifest of symlinks to those three hosts' parts, the same `images/`, cores 6-7)
+re-ran them.
+
+* **ecdysis.org:** 40 requests, 40 x 403. Written off.
+* **Harvard:** 56,652 images in 47 h, **0.39 img/s**: the files are 30+ MB herbarium scans at 4
+  connections, so ~362 k remaining rows would have taken ~11 days. Stopped on the owner's call
+  (2026-10-09) and added to `retry1/manifest/blocked_hosts.json` with reason `slow`; its remaining
+  rows join the substitution pass.
+* **Flickr:** 480,376 images (of ~782 k rows) at 2.7-4 img/s under constant 429s. After the restart
+  that dropped Harvard, every request got 429, including a single `curl` from this machine
+  (CloudFront `FunctionGeneratedResponse`), so the block is per IP, not per connection. The crawler
+  kept sending ~3 requests/s into it, so it was stopped too. ~300 k rows remain. **Lesson:** the
+  budget halves on 429 but never drops below one connection, and a 429 without `Retry-After` is
+  retried at once; a host that answers *only* 429 for minutes should pause the host for an hour, not
+  keep one slot hammering it. Retry Flickr after a cool-down, probing with one `curl` first.
+* **Fixed 2026-10-09** (`HostBudget.acquire` / `on_throttle`, `tests/test_tol_crawler.py`): the
+  pause is now checked after a request takes its slot, so queued requests wait it out too; it
+  doubles from 5 s to an hour while the 429s continue (in-flight answers do not escalate it twice);
+  a 429/503 no longer spends one of the row's attempts, which had been writing rows off as
+  `exhausted_attempts` during a block; and a host throttled for 6 h with no success is blocked as
+  `throttled`, leaving its parts resumable for `--retry-blocked`. The running main crawl keeps the
+  old code until its next restart.

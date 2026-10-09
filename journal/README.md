@@ -55,6 +55,7 @@ incidents are in [`engineering/`](engineering/). The plan is [`../PLAN.md`](../P
 | [10-01](2026-10-01-what-the-blocked-servers-cost.md) | What do servers that refuse us cost? (W1) | 23 % of the selection, mostly herbaria; 89 % of Lepidoptera survive |
 | [10-02](2026-10-02-is-the-deployment-gap-a-readout-artefact.md) | Is B8 vs P5's 17-pt deployment gap real? (O3) | No: a rank-blind metric. B8 names the species more often (74.7 vs 67.4 %), P5 answers more often (86.4 vs 77.2 %) |
 | [10-01](2026-10-01-does-seeing-the-whole-tree-teach-a-model-what-it-does-not-know.md) | Does training on the whole tree help open-set and shift? (W3) | **OPEN**, waits for the download |
+| [10-09](2026-10-09-two-organisms-in-one-picture.md) | Two organisms in one picture, single labels: what should a whole-tree model say? (S1) | **OPEN**, design; the duplicates are FathomNet frames and label conflicts |
 
 ## Engineering: side projects, cluster work, incidents
 

@@ -227,6 +227,13 @@ distance), **E2** (scoring rules do not transfer across scale), **L4** (cRT), **
 | W2 | train our objective on ToL-10M vs BioCLIP-1 | not started | [D2](journal/2026-08-28-two-directions-checklists-and-our-objective-on-tol.md) |
 | W3 | does training on the whole tree of life help open-set and shift? | designed; waits for W1 | [D3](journal/2026-10-01-does-seeing-the-whole-tree-teach-a-model-what-it-does-not-know.md) |
 
+### S — several organisms in one picture (opened 2026-10-09)
+
+| ID | question | status / result | where |
+|---|---|---|---|
+| S1a | do our open-set scores flag a two-organism image as novel? Synthetic composites, published B8 and P5; per-location logits | designed | [S1](journal/2026-10-09-two-organisms-in-one-picture.md) |
+| S1b | the same on the W3 model, with moth-on-plant, FathomNet frames and hand-checked photos; fixes W3's readout | after W3 | same |
+
 ## 3. July local runs (frozen)
 
 Generated on 2026-08-28 by the July run ledger (now `archive/dev/036_ledger.py`), which read run folders in the layout of the `dev/030` trainer on the workstation. Runs since then were on UCloud and are recorded in section 2.

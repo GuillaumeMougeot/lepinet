@@ -139,6 +139,9 @@ HOST_CAPS: dict[str, int] = {
 DEFAULT_CAP = 4          # unknown institutional host
 MIN_CAP = 1
 START_FRACTION = 0.25    # begin at a quarter of the ceiling and earn the rest
+THROTTLE_PAUSE_MIN = 5.0         # first pause after a 429/503, seconds; doubles while they continue
+THROTTLE_PAUSE_MAX = 3600.0      # ... up to an hour
+THROTTLE_GIVE_UP_S = 6 * 3600.0  # throttled this long with no success: block the host, retry later
 
 VALID_CT = {"image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp",
             "image/tiff", "image/bmp"}
@@ -543,7 +546,9 @@ class HostBudget:
     cooldown_until: float = 0.0
     stats: Counter = field(default_factory=Counter)
     blocked: bool = False
-    reason: str = ""                             # "forbidden" or "dead:<kind>" once tripped
+    reason: str = ""                             # "forbidden", "dead:<kind>", "throttled"...
+    throttle_streak: int = 0                     # pauses since the last success
+    throttled_since: float = 0.0
     window: list = field(default_factory=list)   # recent outcomes: "S" ok, "F" 403, "D" dead, "O" other
 
     def __post_init__(self):
@@ -552,9 +557,13 @@ class HostBudget:
         self._slack = 0            # extra permits owed back when we shrink
 
     async def acquire(self):
-        if self.cooldown_until > time.monotonic():
-            await asyncio.sleep(self.cooldown_until - time.monotonic())
+        # The pause is checked AFTER the slot is taken. Checked only before, it did not hold:
+        # every queued request had already passed the check and was waiting on the semaphore, so
+        # after a 429 the next one left as soon as the slot freed. Flickr, 2026-10-09: ~3 requests/s
+        # into a per-IP 429 block, at concurrency 1.
         await self._sem.acquire()
+        while (wait := self.cooldown_until - time.monotonic()) > 0:
+            await asyncio.sleep(wait)
 
     def release(self):
         # When we have shrunk, swallow permits instead of releasing them until the debt is paid.
@@ -572,18 +581,39 @@ class HostBudget:
         self._observe("S")
         self.stats["ok"] += 1
         self.ok_streak += 1
+        self.throttle_streak = 0
         if self.ok_streak >= self.grow_after and self.cur < self.cap:
             self.ok_streak = 0
             self.cur += 1
             self._sem.release()          # hand out one more permit
 
-    def on_throttle(self, retry_after: float | None = None):
+    def on_throttle(self, retry_after: float | None = None, escalate: bool = True):
+        """A 429/503 (``escalate``) or a slow response (not). Halve the budget and pause the host.
+
+        A server that keeps saying 429 gets an exponentially longer pause (5 s, 10 s, ... 1 h), and
+        after ``THROTTLE_GIVE_UP_S`` without a success it is blocked as ``throttled``, so the part
+        stays resumable instead of its rows being spent. Responses to requests sent before the
+        current pause began arrive during it and do not escalate it again: eight in-flight
+        requests answered 429 together are one signal, not eight.
+        """
         self.stats["throttled"] += 1
         self.ok_streak = 0
         shrink = self.cur - max(MIN_CAP, self.cur // 2)
         self.cur -= shrink
         self._slack += shrink
-        self.cooldown_until = time.monotonic() + (retry_after if retry_after else 5.0)
+        now = time.monotonic()
+        if not escalate:
+            pause = THROTTLE_PAUSE_MIN
+        elif now < self.cooldown_until:
+            return
+        else:
+            if self.throttle_streak == 0:
+                self.throttled_since = now
+            self.throttle_streak += 1
+            pause = min(THROTTLE_PAUSE_MAX, THROTTLE_PAUSE_MIN * 2 ** (self.throttle_streak - 1))
+            if now - self.throttled_since >= THROTTLE_GIVE_UP_S and not self.blocked:
+                self.blocked, self.reason = True, "throttled"
+        self.cooldown_until = max(self.cooldown_until, now + max(pause, retry_after or 0.0))
 
     def on_error(self, dead: str = "", probe: int = 200, ratio: float = 0.97):
         """An error. `dead` names a kind that means the resource or server is gone (http_404,
@@ -734,7 +764,8 @@ class Fetcher:
         tmp.write_text(json.dumps(self.known_blocked, indent=2, sort_keys=True))
         os.replace(tmp, self.blocked_path)
         why = ("ask the institution for access rather than retrying" if b.reason == "forbidden"
-               else "the server or its images are gone")
+               else "it rate-limited us for hours; retry it later with --retry-blocked"
+               if b.reason == "throttled" else "the server or its images are gone")
         print(f"  [stopped] {b.host} ({b.reason}): {b.stats['forbidden']:,} forbidden, "
               f"{b.stats['error']:,} errors, {b.stats['ok']:,} ok -- recorded in "
               f"{self.blocked_path.name}; {why}.", flush=True)
@@ -781,7 +812,9 @@ class Fetcher:
         alt = variant_url(row["url"], self.a.variant)
         urls = [alt, row["url"]] if alt else [row["url"]]
         url = urls[0]
-        for attempt in range(self.a.attempts):
+        attempt = -1
+        while attempt + 1 < self.a.attempts:
+            attempt += 1
             # Never wait for a host slot while holding a memory slot. A body that failed mid-stream
             # (ClientPayloadError, ServerDisconnectedError, a read timeout) used to retry from here
             # still holding its memory slot, while requests holding host slots waited for a memory
@@ -804,6 +837,10 @@ class Fetcher:
                     if r.status in (429, 503):
                         ra = r.headers.get("Retry-After")
                         b.on_throttle(float(ra) if ra and ra.isdigit() else None)
+                        # The host's pause, not this row's failure: retry without spending an
+                        # attempt. Spending them wrote rows off as exhausted_attempts during a
+                        # block; the host's give-up breaker is what ends a block that never lifts.
+                        attempt -= 1
                         continue
                     if r.status >= 400:
                         if r.status == 404 and len(urls) > 1 and url == urls[0]:
@@ -867,7 +904,7 @@ class Fetcher:
                 await asyncio.sleep(2 ** attempt + random.random())
                 continue
             except asyncio.TimeoutError:
-                b.on_throttle()                # a slow response from a small host is usually overload
+                b.on_throttle(escalate=False)  # a slow response from a small host is usually overload
                 continue
             except aiohttp.ClientError as e:
                 b.stats[f"exc_{type(e).__name__}"] += 1

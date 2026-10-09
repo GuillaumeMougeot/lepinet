@@ -1,6 +1,6 @@
 # PLAN — what we are doing now
 
-**Kind:** living · **Last updated:** 2026-10-07 · **Supersedes:** [[2026-07-28-landscape-and-plan]]
+**Kind:** living · **Last updated:** 2026-10-09 · **Supersedes:** [[2026-07-28-landscape-and-plan]]
 
 The one file in `journal/` meant to be true *today*. Every experiment ID is resolved in
 [`RESULTS.md`](RESULTS.md); the reasoning lives in the linked journal entries. Earlier
@@ -27,13 +27,14 @@ and a submission is scoping and writing, plus two evaluation-only runs. No new t
 
 | ID | what | state | next |
 |---|---|---|---|
-| **W1** | TreeOfLife-200M download at **short side 256**, on the workstation (`/data/au761367/tol256s/`, `crawl.log`; cores 0-5, nice 10; zero UCloud core-hours) | **2026-10-07: 63.26 M images done (2.0 TB)**; 2.08 M rows left on 7 slow servers at ~8.5 img/s (~3 days); no stall since the deadlock fix. 75 servers marked unreachable (28.3 M rows): probed, Harvard and Flickr had tripped on transient errors and run again in `retry1/` (cores 6-7); ecdysis.org refuses (403), the rest still time out | when both finish: a last pass over the main manifest (records the retry images from disk), upload and unpack on UCloud (1 vCPU), substitution pass for the unreachable servers, re-run the audit (`dev/085`) |
+| **W1** | TreeOfLife-200M download at **short side 256**, on the workstation (`/data/au761367/tol256s/`, `crawl.log`; cores 0-5, nice 10; zero UCloud core-hours) | **2026-10-09: 63.87 M images done (2.0 TB)**; ~1.1 M rows left on 4 slow servers (unimus 0.75 M, corral.tacc 0.23 M, NHM 0.14 M, was.tacc 0.03 M) at ~7 img/s (~2 days). 76 servers unreachable (cch2.org added). `retry1/`: Flickr got 480 k images then a per-IP 429 block (stopped; ~300 k rows left, retry after a cool-down); Harvard stopped by the owner at 0.39 img/s (57 k done, ~362 k to substitution); ecdysis.org refuses (403) | when the main crawl finishes: a last pass over the main manifest (records the retry images from disk), upload and unpack on UCloud (1 vCPU), substitution pass for the unreachable servers, re-run the audit (`dev/085`) |
 
 ## 3. Backlog, in order
 
 | ID | work | cost | why |
 |---|---|---|---|
 | W3 | training parquets for the ToL run: join the catalog by uuid, seven levels keyed by full path, check the hierarchy is a tree, drop the audit's 584 k excluded rows; then the 20 M run | GPU, after W1 | the owner's question: does seeing the whole tree help open-set and shift? Also gives a trap order classifier. [[2026-10-01-does-seeing-the-whole-tree-teach-a-model-what-it-does-not-know]] |
+| S1a | two organisms in one picture: composites (moth on moth, moth on trap background) through B8 and P5; does the open-set score flag them as novel? Per-location logits as a readout | workstation GPU, hours | the owner's question (2026-10-09); also decides how W3 is read out (whole tree vs subtree). [[2026-10-09-two-organisms-in-one-picture]] |
 | W2 | our objective trained on ToL-10M, compared with BioCLIP-1 on the same data | ~2.5 h/epoch | isolates the objective from the data. [[2026-08-28-two-directions-checklists-and-our-objective-on-tol]] |
 | O2 | open-set as enrolled taxa grow from 12 K to 204 K, on cached ToL embeddings | 1 GPU, no download | does the scoring-rule result hold across class count too? |
 | K1+ | regional checklist **plus** abstention | eval only | should recover the tail damage K1 measured |
