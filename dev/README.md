@@ -44,6 +44,7 @@ kept as a record. Long-term tooling does not live here: the documentation check 
 | `085_tol_audit.py` | duplicates and test-fold leakage in the ToL subset | W1 |
 | `086_deployment_gap.py` | B8 / P5 / B3rep5x under the 95 %-precision back-off policy | O3 |
 | `087_tol_upload.py` | pack the ToL images into 2 GB tar shards and upload them to UCloud | W1 |
+| `088_trap_split_twins.py` | does the trap adapt/probe split leak individual moths across nights? pixel-level twin scan + re-scoring | B3, T1 |
 
 **Conventions.** Never `uv sync` or `uv run` (the venv is hand-managed); use `.venv/bin/python`
 from the repo root.

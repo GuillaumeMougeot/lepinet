@@ -168,10 +168,13 @@ def fig3_dose():
 
     # (a) share of training that is pseudo-labelled trap images. 2026-08-04-replication-sweep
     ax = axs[0]; panel(ax, "a")
-    share = [0, 0.39, 2.0, 6.1, 10.0]
+    # Rows of training (sets 2-9 after the 50-image floor, 5,039,220 real rows) that are pseudo-
+    # labelled: 1x / 11x / 27x / 58x of 12,230 images. Until 2026-10-12 this axis read 0.39 / 2 / 6.1
+    # / 10, nominal targets computed against the whole parquet (test fold included).
+    share = [0, 0.24, 2.6, 6.2, 12.3]
     probe = [0.6912, 0.7354, 0.7706, 0.7370, 0.7159]
     ho = [0.6974, 0.7508, 0.7704, 0.7231, 0.7042]
-    ind = {0: 0.8999, 2.0: 0.9003, 6.1: 0.9003}          # B1, B3rep5x, B3
+    ind = {0: 0.8999, 2.6: 0.9003, 6.2: 0.9003}          # B1, B3rep5x, B3
     xs = list(range(len(share)))
     ax.plot(xs, [(v - probe[0]) * 100 for v in probe], "-o", color=ORANGE, ms=4, lw=1.5, label="probe")
     ax.plot(xs, [(v - ho[0]) * 100 for v in ho], "-s", color=AQUA, ms=4, lw=1.5, label="probe-HO")

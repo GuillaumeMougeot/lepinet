@@ -55,7 +55,7 @@ holds the non-research journal entries (side projects, cluster work, incidents).
 | model | what it is | in-dist | probe | open-set AUROC |
 |---|---|---|---|---|
 | **cheap reference** | effnetv2_s, one species head + marginalisation, √-oversampling | 0.9135 | 0.6270 | 0.8990 |
-| **B8** | 198 M, self-training on 2 % trap images, no oversampling | 0.9060 | 0.7798 | 0.9153 |
+| **B8** | 198 M, self-training on 2.6 % trap images, no oversampling | 0.9060 | 0.7798 | 0.9153 |
 | **P5** | BioCLIP-2 fine-tuned + unfrozen adaptation | 0.9113 | 0.7757 | 0.9161 |
 | best in-distribution | ConvNeXtV2-L, multi-head | **0.9316** | — | — |
 
@@ -72,7 +72,7 @@ held-out light-trap nights. Compare only within a column, and check the noise fl
   Separate genus and family heads did not help; a loss on the marginals does help under shift.
 - **Square-root oversampling** of rare species during training, the largest single lever on
   macro-F1 in-distribution. Under shift it is better applied to the classifier only (cRT).
-- **Self-training** on unlabelled trap images (about 2 % of training) is the largest robustness
+- **Self-training** on unlabelled trap images (about 2.6 % of training rows) is the largest robustness
   lever; **adapting only the classifier** recovers most of it in minutes.
 - Muon (backbone) + AdamW (head), one-cycle schedule. Margin heads (ArcFace) need bf16.
 

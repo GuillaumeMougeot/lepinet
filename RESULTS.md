@@ -16,7 +16,7 @@ One line each, with the paper section and the experiments (section 2) that carry
 | 1 | Hierarchy-aware heads do not help; one species head plus marginalisation matches or beats them. Coarse *supervision* (a loss on the marginals) still buys ~1.4 pt under shift. | §4.1 | singlehead, marginal, A4 |
 | 2 | In-distribution accuracy saturates near 0.93 but falls ~23 pt on trap images, and the three axes rank models differently. | §4.2, §4.10 | flemming, B4 |
 | 3 | **The spine:** interventions belong in the classifier, not the representation: rebalancing (cRT), domain adaptation (83 % from the classifier alone), the prototype matrix (centroids for 0.29 pt, for the margin head; 3.7 pt for the plain head). | §4.15 | L4, T2, H1 |
-| 4 | Unlabelled trap images are the largest lever: self-training gives +7.94 probe at a 2 % share and beats 12,230 real labels; above 2 % adaptation becomes memorisation. | §4.11 | B3rep5x, T1 |
+| 4 | Unlabelled trap images are the largest lever: self-training gives +7.94 probe at a 2.6 % share of training rows with no target labels; above it adaptation becomes memorisation (shares relabelled 2026-10-12: the old 0.39 / 2 / 6 / 10 % were computed against the whole table). At equal dose 12,230 real labels are 2.14 pt better (an earlier "beats 12,230 real labels" compared doses, and is retracted; T1rep runs the dose-matched arm). | §4.11 | B3rep5x, T1, T1rep |
 | 5 | Long-tail reweighting trades shift robustness for accuracy, monotonically; cRT removes the trade; capping training at 1,000 images per species helps shift. | §4.13 | L0-L4, L7 |
 | 6 | The best open-set scoring rule changes with model scale (6-7.6 pt); one rule for all models produced a false ranking. | §4.9 | E2 |
 | 7 | The angular margin relocates open-set signal rather than creating it: +0.78 AUROC best-vs-best (an earlier "31 pt" compared rules, and is retracted). | §4.3 | A1, C3r |
@@ -104,11 +104,11 @@ distance), **E2** (scoring rules do not transfer across scale), **L4** (cRT), **
 | **B1** | does trap-like augmentation close the gap? | A1 + blur / low light / JPEG | full trap 0.6836 (+4.0 for −0.36 in-dist); probe 0.6912; closes 17 % of the gap | [domain shift](journal/2026-07-30-domain-shift.md) |
 | B2 | background suppression | — | never run; retired after T2b | [F2](journal/2026-08-06-f2-capstone.md) |
 | **B3** | self-training on unlabelled trap images | B1 + pseudo-labelled trap images at 6.1 % of training | probe **0.7370** (+4.58), in-dist unchanged | [B3](journal/2026-08-03-b3-self-training.md) |
-| B3rep1x / **5x** / 26x | how much trap data? | share 0.39 % / **2 %** / 10 % | probe 0.7354 / **0.7706** / 0.7159 — sharp optimum at 2 %; shipped as B3rep5x | [sweep](journal/2026-08-04-replication-sweep.md) |
+| B3rep1x / **5x** / 26x | how much trap data? | actually 1x / **11x** / 58x: share of training rows 0.24 % / **2.6 %** / 12.3 % (formerly labelled 0.39 / 2 / 10 %) | probe 0.7354 / **0.7706** / 0.7159 — sharp optimum at 2.6 %; shipped as B3rep5x | [sweep](journal/2026-08-04-replication-sweep.md) |
 | B4 | capacity x augmentation | A2 + augmentation, 198 M | in-dist 0.9216, full trap **0.7101**, AUROC 0.8132 | [2x2](journal/2026-08-01-capacity-x-augmentation.md) |
-| B6 | self-training at 198 M | F1 + self-training at 6 % | 0.9225 / probe 0.7699 / probe-HO 0.7422 | [sweep](journal/2026-08-04-replication-sweep.md) |
+| B6 | self-training at 198 M | F1 + self-training at 6.2 % (27x) | 0.9225 / probe 0.7699 / probe-HO 0.7422 | [sweep](journal/2026-08-04-replication-sweep.md) |
 | B7 | drop oversampling too | B6 − oversampling | 0.9050 / 0.7796 / 0.7712 | [imbalance](journal/2026-08-01-imbalance-methods-bench.md) |
-| **B8** | B7 at the 2 % optimum | share 2 % | 0.9060 / **0.7798** / **0.7816** — best of our own models; **public on Hugging Face** | [sweep](journal/2026-08-04-replication-sweep.md) |
+| **B8** | B7 at the 2.6 % optimum | share 2.6 % (11x) | 0.9060 / **0.7798** / **0.7816** — best of our own models; **public on Hugging Face** | [sweep](journal/2026-08-04-replication-sweep.md) |
 | B9 | balanced pseudo-labels, end-to-end, 20 M | balanced replication | probe 0.7635 — prediction falsified | [iteration](journal/2026-08-08-self-training-does-not-iterate.md) |
 | B10 | the same at 198 M | balanced replication | probe 0.7800 — ties B8 | [balance](journal/2026-08-10-balance-is-oversampling-and-it-does-not-scale.md) |
 
@@ -190,11 +190,12 @@ distance), **E2** (scoring rules do not transfer across scale), **L4** (cRT), **
 | R5 | no gate, balanced | 0.7692 / 0.7781 | same |
 | R5b | repeat of R5 | 0.7573: frozen-stage probe spread is **0.0119**, 3x the old floor | [noise floor](journal/2026-08-27-the-noise-floor-does-not-transfer-across-training-regimes.md) |
 
-### T — what labels would have bought, and where adaptation happens (closed)
+### T — what labels would have bought, and where adaptation happens (T1rep running)
 
 | ID | question | result | where |
 |---|---|---|---|
-| T1 (lab500 / 2500 / 12230) | real trap labels instead of pseudo-labels | 12,230 real labels: probe 0.7568 — **below** self-training at 2 % (0.7706) | [labels](journal/2026-08-05-label-budget.md) |
+| T1 (lab500 / 2500 / 12230) | real trap labels instead of pseudo-labels, each image once | 12,230 real labels: probe 0.7568, **+2.14 over 12,230 pseudo-labels at the same 1x dose** (0.7354). Not comparable with self-training at 11x (0.7706): different dose | [labels](journal/2026-08-05-label-budget.md) |
+| T1rep | the 12,230 real labels at 11x, the dose of B3rep5x | *running (job 12420216); predicted probe 0.78-0.79* | same |
 | **T2** | adapt only the classifier, trunk frozen, 2 epochs | probe 0.7572 / probe-HO 0.7621: **83 %** of self-training's gain | [T2](journal/2026-08-06-adaptation-is-mostly-a-classifier-problem.md) |
 | T2b | the same from a trunk with no trap augmentation | 0.7515 — the features were already good | same |
 

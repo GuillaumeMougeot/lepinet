@@ -1,0 +1,26 @@
+# T1rep scored on the trap `probe` split (whole (trap, night) groups training never touches).
+# Same command as lab12230-probe and B3rep5x-probe, so the three numbers compare directly.
+name = "lepinet-T1rep-probe"
+replicas = 1
+[application]
+name = "pytorch-te"
+version = "26.05"
+[product]
+id = "gpu-nvidia-b200-1-gpu"
+category = "gpu-nvidia-b200"
+provider = "ucloud"
+[time_allocation]
+hours = 3
+[sync]
+local = ".."
+remote = "/12347837/repos/lepinet"
+[setup]
+script = "setup-lepinet.sh"
+run = "lepinet test --model '/work/lepinet/data/ucloud_models/*-lepinet-lab12230rep11x-effnetv2s-ucloud/*.pt' --parquet /work/lepinet/data/flemming/splits/flemming_probe.parquet --img-dir /work/flemming/images --out-dir /work/lepinet/data/ucloud_preds/T1rep-probe --test-set 0 --min-img-per-spc 0 --img-size 256 --aug-img-size 460 --batch-size 128 --num-workers 32 --no-drop-unknown-species"
+[schedule]
+auto_extend = "1h"
+max_time = "6h"
+[[resources]]
+type = "file"
+path = "/12347837/datasets/flemming"
+read_only = true

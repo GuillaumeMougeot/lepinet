@@ -1,0 +1,49 @@
+# T1rep: the 12,230 REAL trap labels at the same dose as the shipped self-training run.
+#
+# Why: the paper said self-training "beats 12,230 human labels" (0.7706 vs 0.7568). But the
+# self-training arm (B3rep5x) had its 12,230 pseudo-labelled images replicated 11x to ~2 % of
+# the parquet, its best of four doses, while the real-label arm (T1, lab12230) went in once.
+# At equal dose (1x) real labels led by 2.14 pt. This arm gives the real labels the same 11x,
+# so the comparison is dose-matched. Everything else is lab12230's config exactly; the label
+# set is labels_12230.parquet (dev/067, round-robin over all 1,304 adapt groups).
+# Prediction (committed 2026-10-12, before the run): probe 0.78-0.79, i.e. real labels beat
+# self-training at equal dose. Falsified if probe <= 0.7747 (0.7706 + one 0.0041 floor).
+version: 1.0
+desc: lepinet-lab12230rep11x-effnetv2s-ucloud
+train:
+  parquet_path: /work/lepinet/data/flemming/splits/combined_lab12230_rep11x.parquet
+  img_dir: /work/global_lepi/images
+  out_dir: /work/lepinet/data/ucloud_models
+  fold: '1'
+  min_img_per_spc: 50
+  num_workers: 256
+  model_name: lepinet-lab12230rep11x-effnetv2s-ucloud
+  model_arch_name: efficientnet_v2_s
+  head: arcface
+  nb_epochs: 5
+  base_lr: 0.001
+  batch_size: 64
+  aug_img_size: 460
+  img_size: 256
+  optimizer: muon
+  fp16: true
+  precision: bf16
+  schedule: one_cycle
+  warmup_epochs: 0.5
+  grad_clip: 5.0
+  oversample_power: 0.5
+  family_filter: []
+  aug_kwargs:
+    max_warp: 0.0
+    max_lighting: 0.0
+    p_lighting: 0.0
+    flip_vert: true
+    max_rotate: 15.0
+    max_zoom: 1.1
+  levels:
+  - speciesKey
+  arcface_zscore: true
+  arcface_scale: 30.0
+  arcface_margin:
+  - 0.3
+  domain_aug: trap

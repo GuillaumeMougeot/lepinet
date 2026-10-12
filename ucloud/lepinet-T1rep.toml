@@ -1,0 +1,35 @@
+# T1rep: the 12,230 real trap labels replicated 11x, the dose of the shipped self-training run
+# (B3rep5x), so "self-training vs human labels" is compared at equal dose. The merge step is
+# lab12230-prep's with --target-frac 0.02 (B3rep5x's), and it stops unless that gives 11x.
+# journal/2026-08-05-label-budget.md, "Correction (2026-10-12)".
+name = "lepinet-T1rep"
+replicas = 1
+[application]
+name = "pytorch-te"
+version = "26.05"
+[product]
+id = "gpu-nvidia-b200-1-gpu"
+category = "gpu-nvidia-b200"
+provider = "ucloud"
+[time_allocation]
+hours = 10
+[sync]
+local = ".."
+remote = "/12347837/repos/lepinet"
+[setup]
+script = "setup-lepinet.sh"
+run = "python dev/066_combine_pseudo.py --global-parquet /work/global_lepi/0032836-250426092105405_processing_metadata_postprocessed_quality_filtered.parquet --pseudo-parquet /work/lepinet/data/flemming/splits/labels_12230.parquet --out /work/lepinet/data/flemming/splits/combined_lab12230_rep11x.parquet --levels speciesKey,genusKey,familyKey --min-img-per-spc 50 --target-frac 0.02 && python -c \"import json,sys; s=json.load(open('/work/lepinet/data/flemming/splits/combined_lab12230_rep11x.parquet.summary.json')); sys.exit(0 if s['replication']==11 else 'replication is %s, not 11' % s['replication'])\" && lepinet train -c configs/20261012_T1rep_lab12230rep11x_effnetv2s.yaml"
+[schedule]
+auto_extend = "3h"
+max_time = "40h"
+[[resources]]
+type = "file"
+path = "/12383016/global_lepi"
+read_only = true
+
+# The combined parquet points at trap images via ../../flemming/images/..., so that tree must be
+# mounted for training too.
+[[resources]]
+type = "file"
+path = "/12347837/datasets/flemming"
+read_only = true

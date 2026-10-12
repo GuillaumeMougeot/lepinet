@@ -30,8 +30,8 @@ open-set scoring rule changes with model capacity, a 6–7.6 point effect that i
 ranking of our own. Both inversions are invisible to the standard protocol, which evaluates on a
 held-out fold of the training distribution. Third, and most usefully, **unlabelled** target-domain
 images are the strongest lever we find:
-self-training on machine-generated labels beats 12,230 human labels, costs nothing in-distribution,
-and lets a 20 M model outperform a 198 M one — with a sharp interior optimum in the *share* of target
+self-training gains 7.9 points on held-out trap nights without a single target label, costs
+nothing in-distribution, and lets a 20 M model outperform a 198 M one — with a sharp interior optimum in the *share* of target
 data, beyond which adaptation silently becomes memorisation. We also show that an **additive angular
 margin composed with a dimension-aware z-score transform** does not so much improve novelty detection
 as **relocate its signal**: given each head its own best scoring rule the margin is worth 0.78 points
@@ -331,7 +331,7 @@ The sections below each vary one factor. For orientation, the models the paper r
 | baseline | effnetv2_s, single head + marginals, √-oversampling | 0.9135 | 0.6270 | 0.6412 | 0.8990 | — |
 | A1 | baseline + ArcFace × z-score | 0.9035 | 0.6437 | — | 0.9068 | — |
 | best in-distribution | ConvNeXtV2-L @320, multi-head | **0.9316** | — | — | — | — |
-| **B8** (ours) | 198 M, no √-oversampling, self-training at the 2 % dose, T = 1.91 | 0.9060 | **0.7798** | 0.7816 | 0.9153 | **74.7 %** / 77.2 % |
+| **B8** (ours) | 198 M, no √-oversampling, self-training at the 2.6 % dose, T = 1.91 | 0.9060 | **0.7798** | 0.7816 | 0.9153 | **74.7 %** / 77.2 % |
 | **P5** | BioCLIP-2 fine-tuned + unfrozen adaptation | 0.9113 | 0.7757 | 0.7817 | **0.9161** | 67.4 % / **86.4 %** |
 | shippable student | fastvit_sa12, distilled | 0.8967 | — | — | — | — |
 
@@ -735,7 +735,7 @@ downstream comparison until it was checked directly.
 
 **Figure 5.** In-distribution accuracy points the wrong way. Change in points against a reference,
 on one axis. **(a)** Share of training that is pseudo-labelled trap images (reference: none): both
-shifted metrics peak sharply at 2 % while in-distribution does not move. **(b)** Maximum training
+shifted metrics peak sharply at 2.6 % while in-distribution does not move. **(b)** Maximum training
 images per species (reference: our ~2,000): in-distribution rises with the cap, the shifted metrics
 peak at 1,000 (§4.13.1). **(c)** How hard the training reweights toward rare species (reference:
 none): accuracy under shift falls at every step, while in-distribution does not order (§4.13).
@@ -750,6 +750,11 @@ night)** — nights running midday-to-midday, since moths fly across midnight �
 set (27,230 images) and a **probe** set (15,200) that no training run touches. Fifteen percent of
 species are withheld from adaptation entirely, giving a **held-out-species** subset (2,455 images,
 58 taxa) that separates domain adaptation from specialisation on the taxa being adapted to.
+Grouping by night is necessary: 35 % of crops have a pixel-identical twin elsewhere in their night.
+It is also nearly sufficient: a moth can stay on the sheet into the next night, and 13 of the
+15,200 probe crops have such a twin in the adaptation set; removing them changes no probe score
+by more than 0.0003. Adaptation and probe share traps and seasons, so what is measured is
+adaptation to capture *conditions*, not transfer to a new site.
 
 **Noise floors are reported per training regime, and this is not a formality.** Retraining one
 configuration unchanged and scoring the repeat gives:
@@ -777,33 +782,46 @@ benchmark — is large enough to swallow most differences reported at that scale
 | hand-named nuisance augmentation (§4.8) | — | — | — |
 | 500 real target labels | — | 0.7060 | — |
 | 2,500 real target labels | — | 0.7196 | — |
-| 12,230 real target labels | — | 0.7568 | — |
-| **self-training, 12,230 pseudo-labels** | **0.9003** | **0.7706** | **0.7704** |
+| 12,230 real target labels, each image once | — | 0.7568 | — |
+| 12,230 real target labels, replicated 11× | — | *running (T1rep)* | — |
+| self-training, 12,230 pseudo-labels, each image once | — | 0.7354 | 0.7508 |
+| **self-training, 12,230 pseudo-labels, replicated 11×** | **0.9003** | **0.7706** | **0.7704** |
 
-**Self-training on machine-generated labels beats 12,230 human labels** (0.7706 vs 0.7568) and costs
-nothing in-distribution (+0.04, inside the 0.0000 floor). At matched size and share, real labels *are*
-better than 98.15 %-accurate pseudo-labels by 2.14 points — label quality is not free — but the
-label-free method has a hyperparameter the labelled one cannot exploit as cheaply, which is the
-subject of the next paragraph.
+**Self-training gains 7.94 points on the probe set without a single target label** (0.6912 →
+0.7706), the gain reaches species the adaptation never saw (held-out 0.7704), and it costs nothing
+in-distribution (+0.04, inside the 0.0000 floor). **It is not a substitute for labels at equal
+dose:** with each image seen once, the 12,230 real labels score 2.14 points above the 12,230
+pseudo-labels (0.7568 vs 0.7354). That gap is an upper bound on the price of label noise, because
+the two arms also differ in *which* images they hold: the real labels were drawn evenly over every
+capture night, the pseudo-labels are the images the teacher was most confident about (98.15 %
+correct), which are the easier ones. The replicated real-label arm, which gives human labels the same
+dose as the shipped self-training run, is running; an earlier version of this paper compared
+self-training at its best dose with real labels at one dose and reported that machine labels "beat"
+human ones, which that comparison cannot show.
 
 **There is a sharp interior optimum in the *share* of target data, and it is low.** Replicating the
-pseudo-labelled images to a target fraction of the training set:
+12,230 pseudo-labelled images *k* times. The share is of training rows (5.04 M real); because of the
+√-oversampling of §4.13 the share of samples actually drawn is lower, and both are given:
 
-| share of training | probe | held-out species | fraction of gain transferring |
-|---|---|---|---|
-| 0.39 % (no replication) | 0.7354 | 0.7508 | 121 % |
-| **2 %** | **0.7706** | **0.7704** | **92 %** |
-| 6 % | 0.7370 | 0.7231 | 56 % |
-| 10 % | 0.7159 | 0.7042 | 39 % |
+| replication | share of training rows | share of samples drawn | probe | held-out species | fraction of gain transferring |
+|---|---|---|---|---|---|
+| 1× | 0.24 % | 0.15 % | 0.7354 | 0.7508 | 121 % |
+| **11×** | **2.6 %** | **1.1 %** | **0.7706** | **0.7704** | **92 %** |
+| 27× | 6.2 % | 2.1 % | 0.7370 | 0.7231 | 56 % |
+| 58× | 12.3 % | 3.6 % | 0.7159 | 0.7042 | 39 % |
 
-Two things here are, to our knowledge, unreported. First, **0.39 % of training — one image in 250 —
-already buys 97 % of the gain**: what unlabelled target data supplies is not gradient volume but
-coverage of a region of input space the source distribution never visits, and a handful of samples
-suffices to mark that region. Second, **the fraction of the gain that transfers to classes the
-adaptation never saw falls monotonically with the share**, from 121 % to 39 %. Over-replication does
-not merely stop helping; it converts domain adaptation into memorisation of the specific images.
-At 2 % the probe and held-out-species scores are equal (0.7706, 0.7704) — the gain transfers
-entirely, with no memorisation signature.
+Two things here are, to our knowledge, unreported. First, **0.24 % of training rows — about one
+sample in 650 — already buys more than half the gain** (+4.42 of +7.94 points): unlabelled target
+data supplies coverage of a region of input space the source distribution never visits, and a small
+number of samples goes a long way toward marking it. Second, **the fraction of the gain that
+transfers to classes the adaptation never saw falls monotonically with the share**, from 121 % to
+39 %. Over-replication does not merely stop helping; it converts domain adaptation into memorisation
+of the specific images. At 11× the probe and held-out-species scores are equal (0.7706, 0.7704) —
+the gain transfers entirely, with no memorisation signature.
+
+*(An earlier version labelled these arms 0.39 / 2 / 6 / 10 %: nominal targets computed against the
+whole metadata table, test fold included, rather than against the training rows. It also said the
+1× arm bought "97 % of the gain", which compared it with the 27× arm rather than the optimum.)*
 
 **Adaptation dominates capacity.** A 20 M model with unlabelled target data (0.7706) beats a 198 M
 model without it (0.7209) on the probe benchmark. They are complementary rather than substitutes —
@@ -812,7 +830,7 @@ unseen *taxa* while adaptation buys generalisation to unseen *conditions* — an
 also removing the resampling of §4.13, gives the best model we obtain: **probe 0.7798, held-out
 0.7816**.
 
-*(The dose effect is itself capacity-dependent: moving from 6 % to 2 % is worth 3.36 points at 20 M
+*(The dose effect is itself capacity-dependent: moving from 6.2 % to 2.6 % is worth 3.36 points at 20 M
 and 0.02 at 198 M. A larger model can memorise the replicated images and fit everything else, so the
 probe cost disappears — but the transfer cost does not, and the held-out gap remains at 1.04 points.)*
 
@@ -1229,8 +1247,8 @@ external accuracy, and open-set detection separately, because they disagree — 
 of them across different evaluation sets.
 
 **What we do not claim.** That the classifier/representation split generalises beyond fine-grained
-recognition under source shift; that self-training's advantage over labels survives at much larger
-label budgets (it is still rising at 12,230); that the angular margin is not worth its cost — we show
+recognition under source shift; that self-training matches hand labels — at equal dose, 12,230
+real labels lead by 2.14 points, and the return on labels is still rising at that budget; that the angular margin is not worth its cost — we show
 only that its cost and benefit are both about one point, and that its real advantage is insensitivity
 to the readout rather than a better score; or that our recipe would beat a foundation model given
 comparable pretraining data. On the contrary: §4.14 finds the better representation is not ours, and

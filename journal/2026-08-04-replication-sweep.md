@@ -6,6 +6,14 @@ The curve peaks at **2 %** (**probe 0.7706**, the project best) and falls away o
 *transfer* to unseen species falls monotonically with replication, from 121 % at 1× to 39 % at 26 % —
 so replication converts adaptation into specialisation. B3's 13× sits on the wrong side of both.
 
+> **Correction (2026-10-12).** The share labels below are nominal: `--target-frac` was computed
+> against the whole metadata table (test fold included), and the replication counts were not the
+> names. Against the 5.04 M training rows the arms are **1x / 11x / 27x / 58x = 0.24 / 2.6 / 6.2 /
+> 12.3 %** of rows (0.15 / 1.1 / 2.1 / 3.6 % of samples drawn under sqrt-oversampling). And the 1x
+> arm buys 97 % of the *27x* arm's gain but 56 % of the optimum's (+4.42 of +7.94), so "essentially
+> all of B3's gain" is true only of B3 as it then stood. Ordering and conclusions unchanged; the
+> paper, RESULTS and Figure 5 carry the corrected labels. [[2026-08-05-label-budget]]
+
 ## Result
 
 B3's config, four values of the pseudo-row share. Nothing else differs.
