@@ -155,5 +155,38 @@ images) and 4,921 fewer than ten. 34,887 are Lepidoptera. They are low-resolutio
 (a 3:2 photo is ~256 x 170, so the short side is upsampled 1.5x at training time), so they should
 enter W3 flagged (`res = long256`), usable as a fallback for rare species and excludable in an
 ablation, not mixed silently. Two other uses: their metas are the only record of what those
-servers held, and the substitution pass should look here before looking for other sources. The
-old directory stays until W3's parquets are built.
+servers held, and the substitution pass should look here before looking for other sources.
+**Owner's decision (same day): use only the short-side copies; ignore the low-resolution ones.**
+The old directory (1.05 TB) is therefore a candidate for deletion, which needs the owner's
+explicit go-ahead.
+
+## Storage, the format for training, and the last retry (2026-10-12)
+
+**UCloud storage is nearly full: 5,849 of 6,144 GB used**, so the 2.03 TB upload cannot fit. It
+was paused after 28 shards (56 GB). Known contents: the old long-side crawl 1.05 TB, `global_lepi`
+~0.5 TB; the remaining ~4.3 TB is elsewhere in the project (member folders, `models`, `ami`) and the
+CLI cannot size folders. Deleting the old crawl would leave ~1.35 TB, still short of 2.03 TB (a cap
+of 1,000 images per species, which L7 found helps under shift, makes it 1.57 TB). The quota
+display was not updated live during the upload.
+
+**Training storage: the tar shards plus an index, not WebDataset and not an unpack.** The recipe
+draws rows with sqrt-frequency weights (`WeightedDL`), so the loader needs random access by row.
+WebDataset streams shards in order: weighted sampling and the audit's exclusions fight it, and our
+shards are species-contiguous, so its shuffle buffer would see a few species at a time. Unpacking
+writes 64 M files to a network file system (the `/work` latency incident was small-file reads),
+needs an unpack job and a second copy during it. Instead `dev/087` writes
+`s256/index/shard-N.parquet` (path, offset, size) for every shard, and reading an image is one
+`pread` from a 2 GB file; `JpegBytesDataset` changes from `open(path)` to `pread(shard, offset,
+size)`. Verified: the index built by re-taring a shard's list equals the index of the uploaded
+shard (62,281 members), and 200 of 200 random `pread`s equal the local files. Throughput is
+unmeasured on UCloud storage; the need is ~1,100 random 31 KB reads/s at 20 M parameters.
+
+**Final, gentle retry of the blocked servers.** A 3-request probe (one at a time, 5 s apart) of all
+77: 10 served real full-resolution images again (biodiversity.bt, botanydb, cch2, Harvard, ecdysis,
+Flickr, Naturalis, n2t, rdu.unc.edu.ar, corral.tacc); five answered 200 with a page instead of an
+image (bot challenges at BGBM and Zobodat, CyVerse's "unblock me", Senckenberg's search page) and
+the rest still refuse, time out, 404 or fail DNS/TLS. `retry3/` re-runs the nine fast ones (Harvard
+excluded as slow) with `--host-cap 2` (new option: a ceiling on every host's concurrency) and a
+hard 72 h deadline, after which whatever is left is given up. Within five minutes ecdysis (40 x 403)
+and Naturalis (488 ok, then 403) blocked again and their breakers stopped them. The Unimus retry was
+stopped (owner: give up on slow servers).

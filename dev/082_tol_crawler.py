@@ -781,7 +781,10 @@ class Fetcher:
         Hosts are now resolved from the URLs in the manifest, which cannot drift from reality.
         """
         if host not in self.budgets:
-            self.budgets[host] = HostBudget(host, HOST_CAPS.get(host, DEFAULT_CAP))
+            cap = HOST_CAPS.get(host, DEFAULT_CAP)
+            if getattr(self.a, "host_cap", 0):
+                cap = min(cap, self.a.host_cap)
+            self.budgets[host] = HostBudget(host, cap)
         return self.budgets[host]
 
     async def fetch_one(self, session, row, b: HostBudget):
@@ -1644,6 +1647,9 @@ def build_parser():
                    help="refuse to run on more CPUs than this (network-bound job; see stage_fetch)")
     q.add_argument("--allow-big-node", action="store_true",
                    help="override --max-cpus. Owner approval only")
+    q.add_argument("--host-cap", type=int, default=0,
+                   help="ceiling on every host's concurrency (0: the per-host table); for a gentle "
+                        "retry of servers that once blocked us")
     q.add_argument("--retry-blocked", action="store_true",
                    help="re-attempt hosts recorded in blocked_hosts.json (e.g. after access is granted)")
     q.add_argument("--dead-probe", type=int, default=200,

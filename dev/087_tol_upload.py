@@ -6,12 +6,21 @@ uploads, and each batch is deleted once uploaded. A ledger makes the run resumab
 
     python dev/087_tol_upload.py list     # walk images/ once -> files.tsv (path, bytes)
     python dev/087_tol_upload.py plan     # cut files.tsv into shard lists of --shard-gb
-    python dev/087_tol_upload.py run      # pack + upload every shard not in the ledger
+    python dev/087_tol_upload.py run      # pack + index + upload every shard not in the ledger
+    python dev/087_tol_upload.py index    # (re)build the index of shards uploaded before it existed
 
 Remote layout: <remote>/shards/b<NNN>/shard-<NNNNN>.tar, at most 100 shards per folder because
 `ucloud files ls` shows only the first 250 entries of a folder; <remote>/lists/ holds each
-shard's file list, which is also its index. Images added later (the retry crawls) go up as extra
-shards: `list --since files.tsv` lists only files not already planned.
+shard's file list. Images added later (the retry crawls) go up as extra shards: `list --since
+files.tsv` lists only files not already planned.
+
+**The shards are the training storage, not just the transport.** <remote>/index/shard-N.parquet
+gives every member's (path, offset, size), so a loader reads one image with a single positioned
+read from a large file: random access, which the recipe's weighted (sqrt-oversampled) sampler
+needs and a streaming WebDataset reader does not give; no 64 M-file unpack, no second copy. The
+tars stay standard, so `tar -x` or WebDataset remain possible later. Offsets depend only on the
+member names and sizes, so re-taring the same list reproduces them (`index`, verified against a
+downloaded shard).
 
 Runs on the workstation: tar is one core per shard and the upload is network-bound, so it needs
 no UCloud CPU at all.
@@ -24,6 +33,9 @@ import shutil
 import subprocess
 import threading
 from pathlib import Path
+
+import pyarrow as pa
+import pyarrow.parquet as pq
 
 IMAGES = "/data/au761367/tol256s/images"
 WORK = "/data/au761367/tol256s/upload"
@@ -71,6 +83,44 @@ def cmd_plan(a):
     print(f"shards {start:05d}-{k - 1:05d} planned in {lists}")
 
 
+def index_tar(fileobj, out: Path):
+    """(path, offset, size) of every member's data, from a tar read as a stream."""
+    import tarfile
+    paths, offs, sizes = [], [], []
+    with tarfile.open(fileobj=fileobj, mode="r|") as t:
+        for m in t:
+            if m.isfile():
+                paths.append(m.name)
+                offs.append(m.offset_data)
+                sizes.append(m.size)
+    pq.write_table(pa.table({"path": paths, "offset": pa.array(offs, pa.int64()),
+                             "size": pa.array(sizes, pa.int32())}), out)
+    return len(paths)
+
+
+def cmd_index(a):
+    work = Path(a.work)
+    (work / "index").mkdir(exist_ok=True)
+    ledger = work / "uploaded.txt"
+    done = ledger.read_text().split() if ledger.exists() else []
+    subprocess.run(["ucloud", "files", "mkdir", f"{a.remote}/index"], capture_output=True)
+    for stem in done:
+        out = work / "index" / f"{stem}.parquet"
+        if out.exists():
+            continue
+        p = subprocess.Popen(["tar", "-cf", "-", "-C", a.images, "--no-recursion", "-T",
+                              str(work / "lists" / f"{stem}.txt")], stdout=subprocess.PIPE)
+        n = index_tar(p.stdout, out)
+        if p.wait():
+            out.unlink()
+            raise RuntimeError(f"tar failed for {stem}")
+        r = subprocess.run(["ucloud", "files", "upload", str(out), f"{a.remote}/index"],
+                           capture_output=True, text=True)
+        if r.returncode:
+            raise RuntimeError(r.stderr[-300:])
+        print(f"{stem}: {n:,} members indexed", flush=True)
+
+
 def cmd_run(a):
     work = Path(a.work)
     lists = sorted((work / "lists").glob("shard-*.txt"))
@@ -89,7 +139,9 @@ def cmd_run(a):
     print(f"{len(done)} shards uploaded, {len(todo)} to go in {len(batches)} batches", flush=True)
     # The folder must exist: a *file* uploaded to a missing path becomes a file of that name, so
     # without this every list overwrote one file called `lists` (first run, 2026-10-12).
-    subprocess.run(["ucloud", "files", "mkdir", f"{a.remote}/lists"], capture_output=True)
+    for sub in ("lists", "index"):
+        subprocess.run(["ucloud", "files", "mkdir", f"{a.remote}/{sub}"], capture_output=True)
+    (work / "index").mkdir(exist_ok=True)
     q: queue.Queue = queue.Queue(maxsize=1)           # one batch packed ahead of the upload
 
     def pack():
@@ -103,6 +155,9 @@ def cmd_run(a):
             if any(pr.wait() for pr in procs):
                 q.put(RuntimeError(f"tar failed in {d}"))
                 return
+            for p in batch:
+                with open(d / f"{p.stem}.tar", "rb") as f:
+                    index_tar(f, work / "index" / f"{p.stem}.parquet")
             q.put((d, batch))
         q.put(None)
 
@@ -124,6 +179,8 @@ def cmd_run(a):
         for p in batch:
             subprocess.run(["ucloud", "files", "upload", str(p), f"{a.remote}/lists"],
                            capture_output=True, check=True)
+            subprocess.run(["ucloud", "files", "upload", str(work / "index" / f"{p.stem}.parquet"),
+                            f"{a.remote}/index"], capture_output=True, check=True)
         with open(ledger, "a") as f:
             f.write("".join(p.stem + "\n" for p in batch))
         shutil.rmtree(d)
@@ -146,6 +203,9 @@ def main():
     q.add_argument("--remote", default=REMOTE)
     q.add_argument("--batch", type=int, default=4, help="shards packed in parallel")
     q.set_defaults(fn=cmd_run)
+    q = sub.add_parser("index")
+    q.add_argument("--remote", default=REMOTE)
+    q.set_defaults(fn=cmd_index)
     a = ap.parse_args()
     a.fn(a)
 
