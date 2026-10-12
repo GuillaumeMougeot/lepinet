@@ -1,6 +1,6 @@
 # PLAN — what we are doing now
 
-**Kind:** living · **Last updated:** 2026-10-09 · **Supersedes:** [[2026-07-28-landscape-and-plan]]
+**Kind:** living · **Last updated:** 2026-10-12 · **Supersedes:** [[2026-07-28-landscape-and-plan]]
 
 The one file in `journal/` meant to be true *today*. Every experiment ID is resolved in
 [`RESULTS.md`](RESULTS.md); the reasoning lives in the linked journal entries. Earlier
@@ -27,7 +27,7 @@ and a submission is scoping and writing, plus two evaluation-only runs. No new t
 
 | ID | what | state | next |
 |---|---|---|---|
-| **W1** | TreeOfLife-200M download at **short side 256**, on the workstation (`/data/au761367/tol256s/`, `crawl.log`; cores 0-5, nice 10; zero UCloud core-hours) | **2026-10-09: 63.87 M images done (2.0 TB)**; ~1.1 M rows left on 4 slow servers (unimus 0.75 M, corral.tacc 0.23 M, NHM 0.14 M, was.tacc 0.03 M) at ~7 img/s (~2 days). 76 servers unreachable (cch2.org added). `retry1/`: Flickr got 480 k images then a per-IP 429 block (stopped; ~300 k rows left, retry after a cool-down); Harvard stopped by the owner at 0.39 img/s (57 k done, ~362 k to substitution); ecdysis.org refuses (403) | when the main crawl finishes: a last pass over the main manifest (records the retry images from disk), upload and unpack on UCloud (1 vCPU), substitution pass for the unreachable servers, re-run the audit (`dev/085`) |
+| **W1** | TreeOfLife-200M download at **short side 256**, on the workstation (`/data/au761367/tol256s/`, `crawl.log`; cores 0-5, nice 10; zero UCloud core-hours) | **Main crawl finished 2026-10-10: 64.16 M images ok**, plus ~0.54 M from `retry1/` (Flickr 480 k, Harvard 57 k). 77 servers blocked (28.8 M rows); 326 k gone (404); Harvard's 214 k scans over 25 MB rejected. `www.unimus.no`'s 715 k rows (herbarium sheets, no Lepidoptera) were written off as exhausted_attempts by the old 429 handling; re-running in `retry2/` (cores 6-7) with the fix, but the server allows ~1 request/s, so 8+ days: not waited for | **uploading** (`dev/087`, tar shards to `/12383016/treeoflife_200m/s256/`, ~8-15 h); then: merge `retry1/` metas into the manifest and upload it, unpack or read shards directly (1 vCPU), add the 1.37 M old-only long-side images as a flagged fallback (1,016 species exist only there), substitution pass, re-run the audit (`dev/085`) |
 
 ## 3. Backlog, in order
 

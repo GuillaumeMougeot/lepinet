@@ -116,3 +116,44 @@ re-ran them.
   `exhausted_attempts` during a block; and a host throttled for 6 h with no success is blocked as
   `throttled`, leaving its parts resumable for `--retry-blocked`. The running main crawl keeps the
   old code until its next restart.
+
+## The main crawl finished (2026-10-10)
+
+**64,158,207 images ok**, plus ~0.54 M fetched by `retry1/` into the same `images/`. The last
+host, `web.corral.tacc.utexas.edu`, stopped answering: the watchdog fired on 2026-10-10 (a real lack
+of progress, not the deadlock: all 64 memory slots were free), and after the restart the dead-host
+breaker blocked it within an hour; exit 0 at 19:56. Final row accounting: 77 servers blocked (28.8 M
+rows unattempted), 325,838 x 404, 221,771 too large (214,447 of them Harvard scans over 25 MB),
+747,347 exhausted_attempts.
+
+**715,006 of the exhausted rows are `www.unimus.no`, and they are the throttle bug's cost.** The
+server answered ~2.9 M requests with 429/503, and each one spent one of a row's four attempts. A
+hand probe on 2026-10-12 got images back (4 MB herbarium sheets, 0.5 s each) interleaved with 429s
+at ~1 request/s. `retry2/` re-runs them with the fixed handling (`--retry-status
+exhausted_attempts`, metas copied, to be merged back). At the server's rate this takes 8+ days,
+and the fixed crawler reaches only ~0.2 img/s because it pauses at least 5 s after every 429. A
+fixed request interval would do better, but the rows are all plants (Poales, Asterales, mosses; no
+Lepidoptera), so it is not worth more engineering. The upload does not wait for them.
+
+## The upload, and what the old long-side crawl is still worth (2026-10-12)
+
+**Upload.** `dev/087_tol_upload.py`: a `find` over `images/` (one directory at a time, so species
+stay contiguous) -> 2 GB uncompressed tar shards -> `/12383016/treeoflife_200m/s256/shards/bNNN/`
+(100 per folder, since `ucloud files ls` shows only 250 entries), each shard's file list in
+`s256/lists/` as its index. Batches of 4 are packed while the previous batch uploads and deleted
+after it, so disk stays bounded; a ledger makes it resumable. Measured: one 2 GB file uploads at
+~36 MB/s, so a batch goes up in one parallel call (`ucloud files upload <dir> <folder>` puts the
+directory's *contents* in the folder). Zero UCloud CPU. Images the retry crawls add later go up as
+extra shards (`list --since`).
+
+**The old crawl on UCloud (`treeoflife_200m/images/`, long side 256) is still useful.** Compared
+row by row with the new crawl (old snapshot of 2026-10-01: 58.28 M ok; new: 64.65 M ok including
+`retry1/`), **1,370,118 images exist only in the old copy**, almost all from servers that have
+since blocked us or vanished: iDigBio 443 k, cch2 301 k, botanydb 157 k, ecdysis 143 k, Naturalis
+137 k. They cover 99,720 species, **1,016 of which have no image at all in the new crawl** (43 k
+images) and 4,921 fewer than ten. 34,887 are Lepidoptera. They are low-resolution for our input
+(a 3:2 photo is ~256 x 170, so the short side is upsampled 1.5x at training time), so they should
+enter W3 flagged (`res = long256`), usable as a fallback for rare species and excludable in an
+ablation, not mixed silently. Two other uses: their metas are the only record of what those
+servers held, and the substitution pass should look here before looking for other sources. The
+old directory stays until W3's parquets are built.

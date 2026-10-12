@@ -42,6 +42,8 @@ kept as a record. Long-term tooling does not live here: the documentation check 
 | `083_hf_release.py` (+ `083_hf_release_files/`) | public Hugging Face release | release |
 | `084_tol_globallepi_fill.py` | complete ToL Lepidoptera from our own download | W1 |
 | `085_tol_audit.py` | duplicates and test-fold leakage in the ToL subset | W1 |
+| `086_deployment_gap.py` | B8 / P5 / B3rep5x under the 95 %-precision back-off policy | O3 |
+| `087_tol_upload.py` | pack the ToL images into 2 GB tar shards and upload them to UCloud | W1 |
 
 **Conventions.** Never `uv sync` or `uv run` (the venv is hand-managed); use `.venv/bin/python`
 from the repo root.
