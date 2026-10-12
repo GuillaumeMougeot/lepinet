@@ -127,6 +127,10 @@ def cmd_run(a):
     ledger = work / "uploaded.txt"
     done = set(ledger.read_text().split()) if ledger.exists() else set()
     todo = [p for p in lists if p.stem not in done]
+    if a.max_shards:
+        # A ceiling, so a run cannot fill the project's shared quota: when UCloud storage is full,
+        # every member's jobs fail to write, not just ours.
+        todo = todo[:max(0, a.max_shards - len(done))]
     # A batch never straddles a remote folder, so it uploads in one parallel call:
     # `ucloud files upload <dir> <folder>` puts the dir's *contents* into <folder>.
     folder_of = {p: f"{a.remote}/shards/b{int(p.stem.split('-')[1]) // 100:03d}" for p in todo}
@@ -202,6 +206,8 @@ def main():
     q = sub.add_parser("run")
     q.add_argument("--remote", default=REMOTE)
     q.add_argument("--batch", type=int, default=4, help="shards packed in parallel")
+    q.add_argument("--max-shards", type=int, default=0,
+                   help="stop once this many shards are uploaded in total (0: all); ~2 GB each")
     q.set_defaults(fn=cmd_run)
     q = sub.add_parser("index")
     q.add_argument("--remote", default=REMOTE)

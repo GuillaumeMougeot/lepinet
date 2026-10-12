@@ -157,8 +157,8 @@ enter W3 flagged (`res = long256`), usable as a fallback for rare species and ex
 ablation, not mixed silently. Two other uses: their metas are the only record of what those
 servers held, and the substitution pass should look here before looking for other sources.
 **Owner's decision (same day): use only the short-side copies; ignore the low-resolution ones.**
-The old directory (1.05 TB) is therefore a candidate for deletion, which needs the owner's
-explicit go-ahead.
+The old `images/` (1.05 TB) was moved to the `datasets` drive's Trash on the owner's go-ahead
+(2026-10-12); `manifest/` (its metas and the audit outputs) is kept.
 
 ## Storage, the format for training, and the last retry (2026-10-12)
 
