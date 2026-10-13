@@ -30,8 +30,9 @@ open-set scoring rule changes with model capacity, a 6–7.6 point effect that i
 ranking of our own. Both inversions are invisible to the standard protocol, which evaluates on a
 held-out fold of the training distribution. Third, and most usefully, **unlabelled** target-domain
 images are the strongest lever we find:
-self-training gains 7.9 points on held-out trap nights without a single target label, costs
-nothing in-distribution, and lets a 20 M model outperform a 198 M one — with a sharp interior optimum in the *share* of target
+self-training gains 7.9 points on held-out trap nights without a single target label (89 % of what
+hand-labelling the same images buys, and unlike hand labels at that dose it keeps its gain on species
+nobody labelled), costs nothing in-distribution, and lets a 20 M model outperform a 198 M one — with a sharp interior optimum in the *share* of target
 data, beyond which adaptation silently becomes memorisation. We also show that an **additive angular
 margin composed with a dimension-aware z-score transform** does not so much improve novelty detection
 as **relocate its signal**: given each head its own best scoring rule the margin is worth 0.78 points
@@ -754,7 +755,23 @@ Grouping by night is necessary: 35 % of crops have a pixel-identical twin elsewh
 It is also nearly sufficient: a moth can stay on the sheet into the next night, and 13 of the
 15,200 probe crops have such a twin in the adaptation set; removing them changes no probe score
 by more than 0.0003. Adaptation and probe share traps and seasons, so what is measured is
-adaptation to capture *conditions*, not transfer to a new site.
+adaptation to capture *conditions* at known traps.
+
+**The gain is mostly specific to the traps it was trained on.** We repeated the shipped run with
+every pseudo-label of one site removed (three folds: four traps each), and with one trap removed
+(twelve folds), each fold at the same share. Every probe crop is then scored by the fold that never
+saw its site (or trap). With a site held out, probe macro-F1 is 0.7105: 23 % of the gain, against
+0.6923 with no trap data and 0.7719 with the site's other nights in training (all three recomputed
+on identical crops). Accuracy tells a different story: it keeps 79-97 % of its gain per site. With
+one trap held out and its three neighbours in training (7 of 12 folds so far), the gain kept is
+56 % in macro-F1 and 99 % in accuracy. The widespread species carry the accuracy, and for them
+nothing is lost: species pseudo-labelled at a neighbouring trap are recognised at the held-out trap
+as well as at their own (macro recall 0.855 vs 0.859). The macro-F1 gain lives in the tail, and the
+tail is local. That includes species never pseudo-labelled anywhere: self-training lifts their
+recall by 8.4 points and a held-out-trap fold keeps 2.5. Part of what we called condition
+adaptation is adaptation to *a trap*: its sheet, its camera, its light. Operationally this costs
+little, because the recipe needs no labels and a new trap's own images are free. It should be run
+per deployment, not once and shipped.
 
 **Noise floors are reported per training regime, and this is not a formality.** Retraining one
 configuration unchanged and scoring the repeat gives:
@@ -780,10 +797,10 @@ benchmark — is large enough to swallow most differences reported at that scale
 |---|---|---|---|
 | none | 0.8999 | 0.6912 | 0.6974 |
 | hand-named nuisance augmentation (§4.8) | — | — | — |
-| 500 real target labels | — | 0.7060 | — |
-| 2,500 real target labels | — | 0.7196 | — |
-| 12,230 real target labels, each image once | — | 0.7568 | — |
-| 12,230 real target labels, replicated 11× | — | *running (T1rep)* | — |
+| 500 real target labels | — | 0.7060 | 0.7505 |
+| 2,500 real target labels | — | 0.7196 | 0.6970 |
+| 12,230 real target labels, each image once | — | 0.7568 | 0.7518 |
+| 12,230 real target labels, replicated 11× | — | **0.7807** | 0.7007 |
 | self-training, 12,230 pseudo-labels, each image once | — | 0.7354 | 0.7508 |
 | **self-training, 12,230 pseudo-labels, replicated 11×** | **0.9003** | **0.7706** | **0.7704** |
 
@@ -794,10 +811,25 @@ dose:** with each image seen once, the 12,230 real labels score 2.14 points abov
 pseudo-labels (0.7568 vs 0.7354). That gap is an upper bound on the price of label noise, because
 the two arms also differ in *which* images they hold: the real labels were drawn evenly over every
 capture night, the pseudo-labels are the images the teacher was most confident about (98.15 %
-correct), which are the easier ones. The replicated real-label arm, which gives human labels the same
-dose as the shipped self-training run, is running; an earlier version of this paper compared
-self-training at its best dose with real labels at one dose and reported that machine labels "beat"
-human ones, which that comparison cannot show.
+correct), which are the easier ones. At the self-training dose (11×) the real labels lead by 1.01 (0.7807 vs
+0.7706): self-training gets 89 % of the way to 12,230 hand labels without one. An earlier version of
+this paper compared self-training at its best dose with real labels at one dose and reported that
+machine labels "beat" human ones, which that comparison cannot show.
+
+**Replicated hand labels close the world; self-training does not.** The held-out-species column
+tells the other half. Replicated 11×, the real labels keep almost none of their gain on species
+outside the label set (0.7007, against 0.6974 with no adaptation and 0.7704 for self-training at the
+same dose). Taken alone that column is erratic for the labelled arms: it swings five points between
+500 and 2,500 labels. What is not erratic is where the held-out species' errors go. The share
+landing in a species that *was* labelled at the traps rises monotonically with the label budget:
+6 % with none, then 9, 26, 59 and **91 %** for 500, 2,500, 12,230 and 12,230 × 11. The replicated
+arm is the best model we trained on the species it was given (0.957 accuracy on the other probe
+crops, against 0.858 for self-training). It has learned that anything on a trap sheet is one of
+those species, so a moth outside the label set gets one of their names. Self-training sits at 42 %.
+Its gate keeps only images the teacher is sure of, which plausibly leaves the look-alikes of
+unlabelled species out (untested). So at equal dose, hand labels buy one point on the species they
+cover and cost seven on the species they do not. For a deployment that meets unknown species, which
+is the setting of this paper, that trade runs the wrong way.
 
 **There is a sharp interior optimum in the *share* of target data, and it is low.** Replicating the
 12,230 pseudo-labelled images *k* times. The share is of training rows (5.04 M real); because of the
@@ -1247,8 +1279,10 @@ external accuracy, and open-set detection separately, because they disagree — 
 of them across different evaluation sets.
 
 **What we do not claim.** That the classifier/representation split generalises beyond fine-grained
-recognition under source shift; that self-training matches hand labels — at equal dose, 12,230
-real labels lead by 2.14 points, and the return on labels is still rising at that budget; that the angular margin is not worth its cost — we show
+recognition under source shift; that self-training matches hand labels — at equal dose 12,230
+real labels lead by 2.14 points at one pass and 1.01 at the self-training dose, though at that dose they
+give up the gain on unlabelled species; that the adaptation transfers to a new site without its own
+images (§4.11: a held-out site keeps 23 % of the macro-F1 gain); that the angular margin is not worth its cost — we show
 only that its cost and benefit are both about one point, and that its real advantage is insensitivity
 to the readout rather than a better score; or that our recipe would beat a foundation model given
 comparable pretraining data. On the contrary: §4.14 finds the better representation is not ours, and

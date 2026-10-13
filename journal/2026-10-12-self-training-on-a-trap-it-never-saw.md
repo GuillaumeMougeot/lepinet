@@ -1,7 +1,9 @@
 # Does self-training help at a trap, or a site, it never saw? (X1, X2)
 
-**Kind:** research · **Status:** **OPEN (2026-10-12)**: 15 runs submitted; hypotheses committed
-below before any result.
+**Kind:** research · **Status:** **OPEN (2026-10-13)**: X2 complete, X1 7 of 12 folds in (OH4,
+SS1-4 running). So far: **accuracy transfers, macro-F1 mostly does not.** A held-out trap or site
+keeps 79-99 % of the accuracy gain but only 23-56 % of the macro-F1 gain. H2 is falsified, H1 is
+heading that way.
 
 ## The question (the owner's, 2026-10-12)
 
@@ -74,6 +76,71 @@ about 10 h each, about 150 GPU-hours, no CPU core-hours. Each job trains, scores
 its 0.5 GB combined parquet and preprocessing cache. Predictions:
 `data/ucloud_preds/holdout-<fold>-probe/`.
 
-## Result
+## Result (interim, 2026-10-13)
 
-*Pending.*
+**X2, leave-one-site-out, complete** (15,200 probe crops, pooled; recomputed macro-F1, so B1 and
+B3rep5x read 0.6923 / 0.7719 here):
+
+| | probe | held-out species |
+|---|---|---|
+| B1, no trap data | 0.6923 | 0.6974 |
+| **held-out site (X2)** | **0.7105** | **0.7363** |
+| B3rep5x, held-out night | 0.7719 | 0.7704 |
+
+| site | pseudo-labels (fold keeps) | crops | B1 | X2 | B3rep5x | macro-F1 gain kept | accuracy gain kept |
+|---|---|---|---|---|---|---|---|
+| LV | 6,596 (5,634, 23x) | 7,749 | 0.6898 | 0.7179 | 0.7833 | 30 % | 97 % |
+| OH | 2,071 (10,159, 13x) | 2,771 | 0.6824 | 0.7200 | 0.7605 | 48 % | 90 % |
+| SS | 3,563 (8,667) | 4,680 | 0.7039 | 0.7273 | 0.7519 | 49 % | 79 % |
+
+**X1, leave-one-trap-out, interim** (folds LV1-4 and OH1-3: 9,743 crops):
+
+| | probe | held-out species | accuracy |
+|---|---|---|---|
+| B1 | 0.6842 | 0.6590 | 0.648 |
+| X2, held-out site | 0.7017 | 0.7095 | 0.824 |
+| **X1, held-out trap** | **0.7322** | **0.6935** | **0.831** |
+| B3rep5x | 0.7699 | 0.7386 | 0.833 |
+
+**Where the macro-F1 goes.** Probe crops are split by whether their species is pseudo-labelled at
+some *other* trap, so that the held-out-trap fold still sees it. The cells are macro recall over
+species, on the 9,743 X1 crops:
+
+| species in the crop | crops / species | B1 | B3rep5x | X1 | X2 |
+|---|---|---|---|---|---|
+| pseudo-labelled at other traps | 7,683 / 199 | 0.709 | 0.859 | **0.855** | 0.821 |
+| pseudo-labelled only at this trap | 134 / 27 | 0.761 | 0.890 | 0.774 | 0.774 |
+| never pseudo-labelled | 1,895 / 101 | 0.529 | 0.613 | 0.554 | 0.554 |
+
+* **Common, widespread species carry the accuracy, and for them nothing is lost.** A species
+  pseudo-labelled at a neighbouring trap is recognised at the held-out trap as well as at its own:
+  0.855 vs 0.859.
+* **The macro-F1 gain lives in the tail, and the tail is local.** Species pseudo-labelled only at
+  the held-out trap lose most of their gain. The surprise is species *never* pseudo-labelled
+  anywhere: B3rep5x lifts them +8.4 and the held-out-trap fold keeps only +2.5. Self-training's
+  help to species it never labelled, the "condition adaptation" of §4.11, is largely specific to
+  the trap whose images it trained on: the sheet, the camera, the light. It is not a general
+  museum → trap shift.
+* **Errors spread.** The fold models scatter their errors over more species (464 distinct wrong
+  labels vs 400), and more of them go to species never recorded at that trap (57 % vs 50 %).
+
+**Hypotheses so far.**
+
+* H1 (X1 pooled 0.755-0.770): interim **0.7322**, i.e. 56 % of the gain. Below the 0.745 line set
+  for rewording §4.11. Falsified unless the five SS/OH4 folds land far above the rest.
+* H2 (X2 0.730-0.760): **0.7105, falsified**. A new site keeps 23 % of the macro-F1 gain.
+* H3 (B1 < X2 <= X1 <= B3rep5x per trap): holds pooled. Per trap it holds in 6 of 7 cells. LV1 is
+  the exception: X1 and X2 both beat B3rep5x there (0.80 / 0.78 vs 0.78). Per-trap cells score
+  only the species present at that trap, so they ignore false positives onto absent species and
+  read higher than pooled.
+* H4 (held-out species gain as much as the rest): mixed. Under X2 held-out species keep 53 % of
+  their gain, more than the 23 % overall. Under X1 interim they keep 43 %.
+* The site-LV dose confound (23x) did not make LV an outlier in accuracy (97 % kept). Its
+  macro-F1 retention (30 %) is the lowest of the three sites, but not by enough to justify the
+  11x control yet.
+
+**What it changes, pending the last five folds.** §4.11's "adapts to capture conditions" needs a
+qualifier. Self-training on a trap's own unlabelled images adapts the model to *that trap*. The
+widespread species transfer to a new trap; the gain on rare and unlabelled species mostly does not.
+Operationally that is good news, because the recipe needs no labels and a new trap's own images
+are free: run it per deployment. It is not a model one adapts once and ships to new sites.

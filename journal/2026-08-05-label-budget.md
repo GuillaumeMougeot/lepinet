@@ -1,11 +1,11 @@
 # T1: what real labels would have bought — and why the answer favours using none
 
-**Kind:** research · **Status:** **REOPENED (2026-10-12): the headline below is retracted.** At
-equal dose real labels beat 98 %-accurate pseudo-labels by **+2.14 pt**. The claim that
-"self-training at its own best setting beats 12,230 real labels" (0.7706 vs 0.7568) compared
-self-training at 11x with real labels at 1x: different doses. The dose-matched arm (T1rep) is
-running; see *Correction* at the end. The held-out-species column is **not interpretable at this
-sample size** and that is itself a finding (unchanged).
+**Kind:** research · **Status:** **RESOLVED (2026-10-13).** The August headline ("self-training beats
+12,230 real labels") compared doses and is retracted. At equal dose real labels win on probe:
+**+2.14 at 1x, +1.01 at 11x** (T1rep 0.7807 vs 0.7706; self-training gets 89 % of the way with no
+labels). But replicated real labels give back the gain on species outside the label set (held-out
+**0.7007** vs 0.7704): the more trap labels, the more unseen species are absorbed into the labelled
+fauna. See *Correction* and *T1rep result* at the end.
 
 ## Result
 
@@ -127,3 +127,45 @@ replication better.
 5,039,220 rows, so 12,230 rows are ~0.24 % (not 0.39 % of "~3.1 M") and 134,530 are ~2.6 % (not 2 %:
 `--target-frac` is computed against the whole parquet, test fold included). The ordering and the
 interior optimum are unaffected; the numbers quoted in §4.11 need relabelling.
+
+## T1rep result (2026-10-13): the prediction holds, and the held-out column says something after all
+
+| arm (each 12,230 images unless stated) | dose | probe | held-out species | accuracy, other probe crops | held-out errors landing in the trap fauna |
+|---|---|---|---|---|---|
+| B1, no target data | — | 0.6912 | 0.6974 | 0.673 | 6 % |
+| lab500 (500 images) | 1x | 0.7060 | 0.7505 | 0.757 | 9 % |
+| lab2500 (2,500 images) | 1x | 0.7196 | 0.6970 | 0.826 | 26 % |
+| lab12230, real | 1x | 0.7568 | 0.7518 | 0.908 | 59 % |
+| **T1rep, real** | **11x** | **0.7807** | **0.7007** | **0.957** | **91 %** |
+| B3rep5x, self-training | 11x | 0.7706 | 0.7704 | 0.858 | 42 % |
+
+Probe and held-out are the official metrics. The last two columns are recomputed from
+`predictions.csv` (known-label rows). "Trap fauna" is the 352 species in `labels_12230`, i.e. what
+`adapt` contains. Held-out species are absent from `adapt` by construction.
+
+**Scoring the prediction.** Committed: probe 0.78-0.79, falsified at <= 0.7747. Actual **0.7807**:
+confirmed. Real labels gained +2.39 from the 11x dose (pseudo-labels +3.52). Self-training at its
+dose reaches (0.7706 - 0.6912) / (0.7807 - 0.6912) = **89 %** of the real-label gain on probe,
+without a label.
+
+**What the prediction did not cover.** T1rep's held-out-species score is 0.7007: +0.3 over no
+adaptation, while self-training at the same dose keeps +7.3. The section above calls this column
+uninterpretable for labelled arms, and taken alone it still is: it swings 5 points between lab500
+and lab2500. The last column is not erratic, though. As trap labels grow (500 → 2,500 → 12,230 →
+12,230 x 11), the share of held-out-species errors that land in a labelled trap species rises
+monotonically: 9 → 26 → 59 → 91 %. T1rep is the best model in the project on the species it was
+given (0.957 accuracy on the other probe crops) and treats the trap fauna as a closed world. A moth
+outside the label set gets one of the labelled names. That is the failure this project is about
+(§1 of CLAUDE.md: knowing what it does not know).
+
+Self-training sits at 42 % at the same dose. A likely reason, not tested: the gate keeps only the
+teacher's confident images, so look-alikes of unlabelled species are rarely pseudo-labelled. The
+real arm's round-robin draw includes hard crops, and 11x replication teaches "anything like this on
+a trap sheet is X".
+
+**What it changes.** "Labels beat pseudo-labels" and "self-training transfers better to unseen
+species" are both true at this dose. Which is better depends on whether the deployment meets species
+outside the label set, and real deployments do. The fair statement for the paper: *at equal dose,
+real labels score 1.0 point higher on the species they cover; self-training keeps 7 points more on
+species nobody labelled.* One run per arm. The held-out column carries single-run noise of at least
+0.0052. The absorption trend is the more robust evidence, because it is monotone over five arms.

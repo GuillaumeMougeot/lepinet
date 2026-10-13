@@ -32,7 +32,7 @@ incidents are in [`engineering/`](engineering/). The plan is [`../PLAN.md`](../P
 | [08-03](2026-08-03-macro-f1-does-not-decompose.md) | Why do two benchmarks on the same images disagree? | Macro-F1 does not decompose over subsets |
 | [08-03](2026-08-03-b3-self-training.md) | Does self-training on trap images help? (B3) | Yes, the largest lever: +4.58 probe |
 | [08-04](2026-08-04-replication-sweep.md) | How much trap data? (B3rep) | Optimum at 11x, 2.6 % of training rows (labelled "2 %" until 2026-10-12): probe 0.7706 |
-| [08-05](2026-08-05-label-budget.md) | What would real labels have bought? (T1) | +2.14 pt over pseudo-labels at equal dose; "beats real labels" retracted 2026-10-12 (compared doses); T1rep running |
+| [08-05](2026-08-05-label-budget.md) | What would real labels have bought? (T1) | **RESOLVED** 2026-10-13: real labels lead by +2.14 at 1x and +1.01 at 11x (T1rep), but replicated they give up the gain on unseen species (0.7007 vs 0.7704; 91 % of those errors land in the labelled fauna); "beats real labels" retracted |
 | [08-05](2026-08-05-scaling-the-head.md) | How to reach 1 M species? (H) | No trained head works; centroids at inference, plus a data floor |
 | [08-06](2026-08-06-adaptation-is-mostly-a-classifier-problem.md) | Does adaptation need the representation? (T2) | No: the classifier alone gets 83 % |
 | [08-06](2026-08-06-the-arcface-open-set-claim-was-a-rule-comparison.md) | Is the 31-pt open-set gain real? | No, retracted: 0.78 pt best-vs-best |
@@ -57,7 +57,7 @@ incidents are in [`engineering/`](engineering/). The plan is [`../PLAN.md`](../P
 | [10-01](2026-10-01-does-seeing-the-whole-tree-teach-a-model-what-it-does-not-know.md) | Does training on the whole tree help open-set and shift? (W3) | **OPEN**, waits for the download |
 | [10-09](2026-10-09-two-organisms-in-one-picture.md) | Two organisms in one picture, single labels: what should a whole-tree model say? (S1) | **OPEN**, design; the duplicates are FathomNet frames and label conflicts |
 | [10-12](2026-10-12-do-trap-moths-leak-across-nights.md) | Does the trap adapt/probe split leak individual moths across nights? | Barely: 13 of 15,200 probe crops (one moth that stayed on the sheet); macro-F1 moves by <= 0.0003 |
-| [10-12](2026-10-12-self-training-on-a-trap-it-never-saw.md) | Does self-training help at a trap, or a site, it never saw? (X1, X2) | **OPEN**, 15 runs submitted; predictions committed |
+| [10-12](2026-10-12-self-training-on-a-trap-it-never-saw.md) | Does self-training help at a trap, or a site, it never saw? (X1, X2) | **OPEN**; interim: accuracy transfers to a new trap or site, macro-F1 mostly does not (site keeps 23 %, trap 56 % on 7 of 12 folds) |
 
 ## Engineering: side projects, cluster work, incidents
 
