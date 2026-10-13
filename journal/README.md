@@ -57,7 +57,7 @@ incidents are in [`engineering/`](engineering/). The plan is [`../PLAN.md`](../P
 | [10-01](2026-10-01-does-seeing-the-whole-tree-teach-a-model-what-it-does-not-know.md) | Does training on the whole tree help open-set and shift? (W3) | **OPEN**, waits for the download |
 | [10-09](2026-10-09-two-organisms-in-one-picture.md) | Two organisms in one picture, single labels: what should a whole-tree model say? (S1) | **OPEN**, design; the duplicates are FathomNet frames and label conflicts |
 | [10-12](2026-10-12-do-trap-moths-leak-across-nights.md) | Does the trap adapt/probe split leak individual moths across nights? | Barely: 13 of 15,200 probe crops (one moth that stayed on the sheet); macro-F1 moves by <= 0.0003 |
-| [10-12](2026-10-12-self-training-on-a-trap-it-never-saw.md) | Does self-training help at a trap, or a site, it never saw? (X1, X2) | **OPEN**; interim: accuracy transfers to a new trap or site, macro-F1 mostly does not (site keeps 23 %, trap 56 % on 7 of 12 folds) |
+| [10-12](2026-10-12-self-training-on-a-trap-it-never-saw.md) | Does self-training help at a trap, or a site, it never saw? (X1, X2) | **RESOLVED** 2026-10-13: accuracy transfers to a new trap (all of the gain), the rare tail does not (macro-F1 keeps 64 %, a new site 23 %); held-out species keep 81 % |
 
 ## Engineering: side projects, cluster work, incidents
 

@@ -757,21 +757,21 @@ It is also nearly sufficient: a moth can stay on the sheet into the next night, 
 by more than 0.0003. Adaptation and probe share traps and seasons, so what is measured is
 adaptation to capture *conditions* at known traps.
 
-**The gain is mostly specific to the traps it was trained on.** We repeated the shipped run with
-every pseudo-label of one site removed (three folds: four traps each), and with one trap removed
-(twelve folds), each fold at the same share. Every probe crop is then scored by the fold that never
-saw its site (or trap). With a site held out, probe macro-F1 is 0.7105: 23 % of the gain, against
-0.6923 with no trap data and 0.7719 with the site's other nights in training (all three recomputed
-on identical crops). Accuracy tells a different story: it keeps 79-97 % of its gain per site. With
-one trap held out and its three neighbours in training (7 of 12 folds so far), the gain kept is
-56 % in macro-F1 and 99 % in accuracy. The widespread species carry the accuracy, and for them
-nothing is lost: species pseudo-labelled at a neighbouring trap are recognised at the held-out trap
-as well as at their own (macro recall 0.855 vs 0.859). The macro-F1 gain lives in the tail, and the
-tail is local. That includes species never pseudo-labelled anywhere: self-training lifts their
-recall by 8.4 points and a held-out-trap fold keeps 2.5. Part of what we called condition
-adaptation is adaptation to *a trap*: its sheet, its camera, its light. Operationally this costs
-little, because the recipe needs no labels and a new trap's own images are free. It should be run
-per deployment, not once and shipped.
+**Accuracy transfers to a new trap; the tail does not.** We repeated the shipped run with every
+pseudo-label of one trap removed (twelve folds), and of one site's four traps (three folds), each
+fold at the same share. Every probe crop is then scored by the fold that never saw its trap (or
+site); all numbers here are recomputed on identical crops. With its trap held out, a crop is
+classified as accurately as with only its night held out (0.836 vs 0.835), but probe macro-F1 keeps
+64 % of the gain (0.7430, against 0.6923 with no trap data and 0.7719). With the whole site held out
+it keeps 23 % (0.7105). The loss sits in the rare tail. Species pseudo-labelled at a neighbouring
+trap are recognised at the held-out trap at least as well as at their own (macro recall 0.868 vs
+0.856). The held-out species, which nobody pseudo-labelled, keep 81 % of their recall gain: the
+condition adaptation is real. Two small groups lose the gain. The first is the 33 species
+pseudo-labelled only at the held-out trap. The second is the 80 rare species that never passed the
+confidence gate: self-training lifts their recall 7.4 points at a known trap and not at all at a new
+one. Part of what self-training learns is *a trap*, plausibly its species mix. Operationally this
+costs little, because the recipe needs no labels and a new trap's own images are free. It should be
+run per deployment, not once and shipped.
 
 **Noise floors are reported per training regime, and this is not a formality.** Retraining one
 configuration unchanged and scoring the repeat gives:
@@ -1282,7 +1282,7 @@ of them across different evaluation sets.
 recognition under source shift; that self-training matches hand labels — at equal dose 12,230
 real labels lead by 2.14 points at one pass and 1.01 at the self-training dose, though at that dose they
 give up the gain on unlabelled species; that the adaptation transfers to a new site without its own
-images (§4.11: a held-out site keeps 23 % of the macro-F1 gain); that the angular margin is not worth its cost — we show
+images (§4.11: a held-out trap keeps 64 % of the macro-F1 gain, a held-out site 23 %); that the angular margin is not worth its cost — we show
 only that its cost and benefit are both about one point, and that its real advantage is insensitivity
 to the readout rather than a better score; or that our recipe would beat a foundation model given
 comparable pretraining data. On the contrary: §4.14 finds the better representation is not ours, and

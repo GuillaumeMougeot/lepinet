@@ -1,9 +1,12 @@
 # Does self-training help at a trap, or a site, it never saw? (X1, X2)
 
-**Kind:** research · **Status:** **OPEN (2026-10-13)**: X2 complete, X1 7 of 12 folds in (OH4,
-SS1-4 running). So far: **accuracy transfers, macro-F1 mostly does not.** A held-out trap or site
-keeps 79-99 % of the accuracy gain but only 23-56 % of the macro-F1 gain. H2 is falsified, H1 is
-heading that way.
+**Kind:** research · **Status:** **RESOLVED (2026-10-13).** **Accuracy transfers to a new trap;
+the tail does not.** With its trap held out, a probe crop is classified as accurately as with only
+its night held out (0.836 vs 0.835). Macro-F1 keeps 64 % of the gain (X1 0.7430, against B1 0.6923
+and B3rep5x 0.7719), and only 23 % with the whole site held out (X2 0.7105). Held-out species keep
+78 % (X1) and 53 % (X2). The loss sits in the rare tail: species pseudo-labelled only at the
+held-out trap, and rare species that never passed the gate (their +7.4 recall at a known trap is
+-1.2 at a new one). H1 and H2 are falsified, H3 holds in 7 of 12 traps, H4 holds.
 
 ## The question (the owner's, 2026-10-12)
 
@@ -76,71 +79,87 @@ about 10 h each, about 150 GPU-hours, no CPU core-hours. Each job trains, scores
 its 0.5 GB combined parquet and preprocessing cache. Predictions:
 `data/ucloud_preds/holdout-<fold>-probe/`.
 
-## Result (interim, 2026-10-13)
+## Result (2026-10-13, all 15 folds)
 
-**X2, leave-one-site-out, complete** (15,200 probe crops, pooled; recomputed macro-F1, so B1 and
-B3rep5x read 0.6923 / 0.7719 here):
+All numbers are recomputed from `predictions.csv` with one function (known-label rows), on the same
+15,200 probe crops. That function reads B1 0.6923 and B3rep5x 0.7719, against official 0.6912 and
+0.7706.
 
-| | probe | held-out species |
-|---|---|---|
-| B1, no trap data | 0.6923 | 0.6974 |
-| **held-out site (X2)** | **0.7105** | **0.7363** |
-| B3rep5x, held-out night | 0.7719 | 0.7704 |
-
-| site | pseudo-labels (fold keeps) | crops | B1 | X2 | B3rep5x | macro-F1 gain kept | accuracy gain kept |
-|---|---|---|---|---|---|---|---|
-| LV | 6,596 (5,634, 23x) | 7,749 | 0.6898 | 0.7179 | 0.7833 | 30 % | 97 % |
-| OH | 2,071 (10,159, 13x) | 2,771 | 0.6824 | 0.7200 | 0.7605 | 48 % | 90 % |
-| SS | 3,563 (8,667) | 4,680 | 0.7039 | 0.7273 | 0.7519 | 49 % | 79 % |
-
-**X1, leave-one-trap-out, interim** (folds LV1-4 and OH1-3: 9,743 crops):
-
-| | probe | held-out species | accuracy |
-|---|---|---|---|
-| B1 | 0.6842 | 0.6590 | 0.648 |
-| X2, held-out site | 0.7017 | 0.7095 | 0.824 |
-| **X1, held-out trap** | **0.7322** | **0.6935** | **0.831** |
-| B3rep5x | 0.7699 | 0.7386 | 0.833 |
-
-**Where the macro-F1 goes.** Probe crops are split by whether their species is pseudo-labelled at
-some *other* trap, so that the held-out-trap fold still sees it. The cells are macro recall over
-species, on the 9,743 X1 crops:
-
-| species in the crop | crops / species | B1 | B3rep5x | X1 | X2 |
+| | probe macro-F1 | held-out species | accuracy | macro-F1 gain kept | accuracy gain kept |
 |---|---|---|---|---|---|
-| pseudo-labelled at other traps | 7,683 / 199 | 0.709 | 0.859 | **0.855** | 0.821 |
-| pseudo-labelled only at this trap | 134 / 27 | 0.761 | 0.890 | 0.774 | 0.774 |
-| never pseudo-labelled | 1,895 / 101 | 0.529 | 0.613 | 0.554 | 0.554 |
+| B1, no trap data | 0.6923 | 0.6974 | 0.657 | — | — |
+| **X2, held-out site** | **0.7105** | 0.7363 | — | 23 % | 79-97 % per site |
+| **X1, held-out trap** | **0.7430** | 0.7540 | 0.836 | **64 %** | **101 %** |
+| B3rep5x, held-out night | 0.7719 | 0.7704 | 0.835 | 100 % | 100 % |
 
-* **Common, widespread species carry the accuracy, and for them nothing is lost.** A species
-  pseudo-labelled at a neighbouring trap is recognised at the held-out trap as well as at its own:
-  0.855 vs 0.859.
-* **The macro-F1 gain lives in the tail, and the tail is local.** Species pseudo-labelled only at
-  the held-out trap lose most of their gain. The surprise is species *never* pseudo-labelled
-  anywhere: B3rep5x lifts them +8.4 and the held-out-trap fold keeps only +2.5. Self-training's
-  help to species it never labelled, the "condition adaptation" of §4.11, is largely specific to
-  the trap whose images it trained on: the sheet, the camera, the light. It is not a general
-  museum → trap shift.
-* **Errors spread.** The fold models scatter their errors over more species (464 distinct wrong
-  labels vs 400), and more of them go to species never recorded at that trap (57 % vs 50 %).
+Per site:
 
-**Hypotheses so far.**
+| site | pseudo-labels (X2 fold keeps) | crops | B1 | X2 | X1 | B3rep5x | X2 kept | X1 kept |
+|---|---|---|---|---|---|---|---|---|
+| LV | 6,596 (5,634, 23x) | 7,749 | 0.6898 | 0.7179 | 0.7478 | 0.7833 | 30 % | 62 % |
+| OH | 2,071 (10,159, 13x) | 2,771 | 0.6824 | 0.7200 | 0.7455 | 0.7605 | 48 % | 81 % |
+| SS | 3,563 (8,667) | 4,680 | 0.7039 | 0.7273 | 0.7431 | 0.7519 | 49 % | 82 % |
 
-* H1 (X1 pooled 0.755-0.770): interim **0.7322**, i.e. 56 % of the gain. Below the 0.745 line set
-  for rewording §4.11. Falsified unless the five SS/OH4 folds land far above the rest.
-* H2 (X2 0.730-0.760): **0.7105, falsified**. A new site keeps 23 % of the macro-F1 gain.
-* H3 (B1 < X2 <= X1 <= B3rep5x per trap): holds pooled. Per trap it holds in 6 of 7 cells. LV1 is
-  the exception: X1 and X2 both beat B3rep5x there (0.80 / 0.78 vs 0.78). Per-trap cells score
-  only the species present at that trap, so they ignore false positives onto absent species and
-  read higher than pooled.
-* H4 (held-out species gain as much as the rest): mixed. Under X2 held-out species keep 53 % of
-  their gain, more than the 23 % overall. Under X1 interim they keep 43 %.
-* The site-LV dose confound (23x) did not make LV an outlier in accuracy (97 % kept). Its
-  macro-F1 retention (30 %) is the lowest of the three sites, but not by enough to justify the
-  11x control yet.
+Per trap (`dev/089 pool`). These cells count only the species present at that trap, so they ignore
+false positives onto absent species and read higher than the pooled score.
 
-**What it changes, pending the last five folds.** §4.11's "adapts to capture conditions" needs a
-qualifier. Self-training on a trap's own unlabelled images adapts the model to *that trap*. The
-widespread species transfer to a new trap; the gain on rare and unlabelled species mostly does not.
-Operationally that is good news, because the recipe needs no labels and a new trap's own images
-are free: run it per deployment. It is not a model one adapts once and ships to new sites.
+| trap | B1 | X2 | X1 | B3rep5x |
+|---|---|---|---|---|
+| LV1 | 0.6920 | 0.7836 | 0.8006 | 0.7773 |
+| LV2 | 0.7401 | 0.7747 | 0.7993 | 0.8289 |
+| LV3 | 0.7301 | 0.7854 | 0.8066 | 0.8173 |
+| LV4 | 0.6726 | 0.7166 | 0.7517 | 0.7713 |
+| OH1 | 0.6744 | 0.7593 | 0.7787 | 0.8090 |
+| OH2 | 0.6617 | 0.7112 | 0.7279 | 0.7782 |
+| OH3 | 0.6939 | 0.7492 | 0.7620 | 0.7820 |
+| OH4 | 0.7057 | 0.7717 | 0.8085 | 0.7859 |
+| SS1 | 0.7619 | 0.8011 | 0.8195 | 0.8356 |
+| SS2 | 0.7146 | 0.7734 | 0.8048 | 0.7969 |
+| SS3 | 0.5948 | 0.7138 | 0.6734 | 0.7227 |
+| SS4 | 0.7565 | 0.8177 | 0.8615 | 0.8292 |
+
+**Where the macro-F1 goes** (macro recall over species, all 15,200 crops):
+
+| species in the crop | crops / species | B1 | B3rep5x | X1 | X1 gain kept |
+|---|---|---|---|---|---|
+| pseudo-labelled at some *other* trap | 11,901 / 219 | 0.718 | 0.856 | **0.868** | 109 % |
+| pseudo-labelled only at the held-out trap | 165 / 33 | 0.734 | 0.891 | 0.772 | 24 % |
+| held-out species (never pseudo-labelled, by design) | 2,398 / 57 | 0.627 | 0.722 | 0.704 | 81 % |
+| rare, never passed the gate, not held out | 927 / 80 | 0.518 | 0.592 | 0.506 | **0 %** |
+
+* **The widespread species carry the accuracy, and for them nothing is lost.** A species
+  pseudo-labelled at a neighbouring trap is recognised at the held-out trap at least as well as at
+  its own.
+* **The macro-F1 loss is the rare tail, and the tail is local.** Two small groups lose their gain.
+  The first is species pseudo-labelled only at the held-out trap, which is expected. The second is
+  the surprise: rare species that never passed the confidence gate. Self-training lifts their
+  recall 7.4 points at a known trap and not at all at a new one. That part of the gain came from the
+  trap's own unlabelled images, not from transferable condition adaptation. Plausibly it is the
+  trap's species mix, learned from its pseudo-labels, steering confusions between look-alikes.
+  This is untested.
+* **Condition adaptation is real for the held-out species.** They keep 81 % of their recall gain at
+  a new trap. They were withheld from adaptation by design (dev/064), so this is the cleanest test
+  of transfer to species nobody pseudo-labelled.
+* **A new site costs more than a new trap.** Neighbours at the same site supply much of what a
+  held-out trap would have contributed. LV, the site with half of the pseudo-labels, loses most in
+  both splits.
+
+**Hypotheses.**
+
+* H1 (X1 0.755-0.770): **0.7430, falsified**. It is 0.002 below the 0.745 line set for rewording
+  §4.11, inside one noise floor of it. The reword was made anyway, because accuracy and macro-F1
+  tell different stories and the paper must say which one transfers.
+* H2 (X2 0.730-0.760): **0.7105, falsified**.
+* H3 (B1 < X2 <= X1 <= B3rep5x per trap): B1 is lowest at all 12 traps, and X2 <= X1 at 11 (SS3 is
+  the exception). X1 beats B3rep5x at 4 traps (LV1, OH4, SS2, SS4), which is single-run, per-trap
+  noise. The full ordering holds at 7 of 12.
+* H4 (held-out species gain about as much as the rest): **holds, and more**. They keep 78 % (X1)
+  and 53 % (X2) of their macro-F1 gain, against 64 % and 23 % overall.
+* The site-LV dose confound (23x): LV also loses most in X1, where it runs at the normal 12x. So
+  site, not dose, is the better explanation. The 11x control is not needed.
+
+**What it changes.** §4.11 now says self-training adapts the model to the traps whose images it
+used. The widespread species and the held-out species transfer to a new trap. The rare tail mostly
+does not, and a new site keeps less than a new trap. Operationally this costs little: the recipe
+needs no labels, and a new trap's own images are free, so it should be run per deployment, not once
+and shipped.

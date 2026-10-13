@@ -1,0 +1,29 @@
+# Follow-up to lepinet-storage-audit: the two drives it never reached before its 6 h ran out
+# (Member Files: AsgerSvenning#4565 and datasets). One du walk per top-level folder, 8 in parallel
+# (metadata-bound, not CPU-bound), each streaming its lines as subtrees complete, so a timeout
+# still leaves every finished subtree in the log.
+# CPU budget: 1 vCPU x 10 h, no auto_extend = 10 core-hours worst case.
+name = "lepinet-storage-audit2"
+replicas = 1
+[application]
+name = "pytorch-te"
+version = "26.05"
+[product]
+id = "cpu-amd-zen5-1-vcpu"
+category = "cpu-amd-zen5"
+provider = "ucloud"
+[time_allocation]
+hours = 10
+[sync]
+local = ".."
+remote = "/12347837/repos/lepinet"
+[setup]
+run = "for d in /work/*/; do echo \"=== drive $d\"; ls -d \"$d\"*/ \"$d\"*/*/ 2>/dev/null; done; ls -d /work/*/*/*/ | grep -v '^/work/lepinet/' | xargs -P 8 -I{} sh -c 'du -b --max-depth=1 \"{}\" 2>/dev/null | awk -F\"\\t\" \"{printf \\\"%9.1f GB  %s\\n\\\", \\$1/1e9, \\$2; fflush()}\"'; echo '=== top-level files'; find /work/*/ -maxdepth 2 -type f -size +1G -printf '%s %p\\n' 2>/dev/null; echo '=== done'"
+[[resources]]
+type = "file"
+path = "/12348329"
+read_only = true
+[[resources]]
+type = "file"
+path = "/12383016"
+read_only = true
