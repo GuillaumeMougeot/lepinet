@@ -199,6 +199,13 @@ distance), **E2** (scoring rules do not transfer across scale), **L4** (cRT), **
 | **T2** | adapt only the classifier, trunk frozen, 2 epochs | probe 0.7572 / probe-HO 0.7621: **83 %** of self-training's gain | [T2](journal/2026-08-06-adaptation-is-mostly-a-classifier-problem.md) |
 | T2b | the same from a trunk with no trap augmentation | 0.7515 — the features were already good | same |
 
+### X — does self-training transfer to a trap or site it never saw? (running)
+
+| ID | question | result | where |
+|---|---|---|---|
+| X1 | B3rep5x with one trap's pseudo-labels removed, 12 folds; probe crops pooled from the fold that never saw their trap | *running; predicted 0.755-0.770* | [hold-out](journal/2026-10-12-self-training-on-a-trap-it-never-saw.md) |
+| X2 | the same with one site's four traps removed (LV, OH, SS), 3 folds | *running; predicted 0.730-0.760* | same |
+
 ### P — foundation model (BioCLIP-2) as the trunk (closed)
 
 | ID | question | result | where |
