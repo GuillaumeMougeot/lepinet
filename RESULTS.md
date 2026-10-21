@@ -206,6 +206,12 @@ distance), **E2** (scoring rules do not transfer across scale), **L4** (cRT), **
 | X1 | B3rep5x with one trap's pseudo-labels removed, 12 folds; probe crops pooled from the fold that never saw their trap | pooled **0.7430** (B1 0.6923, B3rep5x 0.7719, recomputed on the same 15,200 crops): **64 %** of the macro-F1 gain, predicted 0.755-0.770, falsified. Accuracy keeps all of it (0.836 vs 0.835). Held-out species 0.7540 (78 %). Per site kept 62 / 81 / 82 % (LV / OH / SS). Lost: species pseudo-labelled only at that trap (24 % kept), rare species that never passed the gate (0 %). Models `lepinet-holdout-<trap>-effnetv2s-ucloud`, preds `holdout-<trap>-probe` | [hold-out](journal/2026-10-12-self-training-on-a-trap-it-never-saw.md) |
 | X2 | the same with one site's four traps removed (LV, OH, SS), 3 folds | all 3 folds, all 15,200 probe crops: pooled **0.7105** (B1 0.6923, B3rep5x 0.7719; 23 % of the gain; predicted 0.730-0.760, **falsified**). Held-out species 0.7363 (53 % of their gain). Per site, macro-F1 keeps 30 / 48 / 49 % (LV / OH / SS), accuracy 97 / 90 / 79 %. site-LV ran at 23x, but LV also loses most in X1 at the normal dose: site, not dose; no 11x control needed | same | same |
 
+### U — self-training on European traps (opened 2026-10-21)
+
+| ID | question | result | where |
+|---|---|---|---|
+| U1-U4 | pseudo-labels from EU traps (teacher B8, unique images, no Danish probe traps): natural vs balanced at 2.6 %, then a share sweep, then plus the Danish set | not run | [EU traps](journal/2026-10-21-self-training-on-european-traps.md) |
+
 ### P — foundation model (BioCLIP-2) as the trunk (closed)
 
 | ID | question | result | where |

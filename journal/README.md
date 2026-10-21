@@ -58,6 +58,7 @@ incidents are in [`engineering/`](engineering/). The plan is [`../PLAN.md`](../P
 | [10-09](2026-10-09-two-organisms-in-one-picture.md) | Two organisms in one picture, single labels: what should a whole-tree model say? (S1) | **OPEN**, design; the duplicates are FathomNet frames and label conflicts |
 | [10-12](2026-10-12-do-trap-moths-leak-across-nights.md) | Does the trap adapt/probe split leak individual moths across nights? | Barely: 13 of 15,200 probe crops (one moth that stayed on the sheet); macro-F1 moves by <= 0.0003 |
 | [10-12](2026-10-12-self-training-on-a-trap-it-never-saw.md) | Does self-training help at a trap, or a site, it never saw? (X1, X2) | **RESOLVED** 2026-10-13: accuracy transfers to a new trap (all of the gain), the rare tail does not (macro-F1 keeps 64 %, a new site 23 %); held-out species keep 81 % |
+| [10-21](2026-10-21-self-training-on-european-traps.md) | Does self-training on traps across Europe beat our Danish traps? (U) | **OPEN**, design; waits for the crop pool |
 
 ## Engineering: side projects, cluster work, incidents
 
