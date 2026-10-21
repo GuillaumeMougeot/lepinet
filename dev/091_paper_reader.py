@@ -4,7 +4,7 @@ The owner reads one paragraph, table or figure at a time in a published Artifact
 note, and moves on. Reviews are stored in the artifact's database (`reviews/<item id>`); the agent
 reads them, applies them to DRAFT.md, then rebuilds and republishes the page.
 
-    python dev/090_paper_reader.py build      # DRAFT.md -> data/paper_reader/index.html (+ items.json)
+    python dev/091_paper_reader.py build      # DRAFT.md -> data/paper_reader/index.html (+ items.json)
 
 Item ids survive edits: a rebuilt item keeps the id of the most similar item of the same section in
 the previous items.json, so a review stays attached to its paragraph after the text changes.
