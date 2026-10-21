@@ -44,8 +44,9 @@ kept as a record. Long-term tooling does not live here: the documentation check 
 | `085_tol_audit.py` | duplicates and test-fold leakage in the ToL subset | W1 |
 | `086_deployment_gap.py` | B8 / P5 / B3rep5x under the 95 %-precision back-off policy | O3 |
 | `087_tol_upload.py` | pack the ToL images into 2 GB tar shards and upload them to UCloud | W1 |
-| `088_trap_split_twins.py` | does the trap adapt/probe split leak individual moths across nights? pixel-level twin scan + re-scoring | B3, T1 |
-| `089_trap_holdout.py` | self-training with a trap or site held out: per-fold data and config (in the job), the 15 job specs, pooled scoring | X1, X2 |
+| `088_trap_split_twins.py` | do individual moths leak across the adapt/probe split? pixel-level twin scan | B3, T1 |
+| `089_trap_holdout.py` | self-training with a trap or site held out: fold data, job specs, pooled scoring | X1, X2 |
+| `090_paper_reader.py` (+ `.html`) | Paper Desk: cuts `paper/DRAFT.md` into reading items by priority, one HTML page; reviews come back through the artifact database | paper |
 
 **Conventions.** Never `uv sync` or `uv run` (the venv is hand-managed); use `.venv/bin/python`
 from the repo root.

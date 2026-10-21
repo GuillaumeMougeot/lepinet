@@ -58,7 +58,7 @@ confident species predictions, not a correct implementation.
 
 ## How this got into the paper
 
-The phrase entered in [[2026-07-20-lepi-app-claude]] as an informal argument for why the app could
+The phrase entered in [2026-07-20-lepi-app-claude](../archive/journal/engineering/2026-07-20-lepi-app-claude.md) as an informal argument for why the app could
 drop the coarse heads, was carried into `dev/042`'s docstring when that experiment confirmed the
 *accuracy* claim it sat next to, and propagated from there. **The accuracy claim was tested; the
 consistency claim never was** — it read like a definition rather than a result, so nothing in this

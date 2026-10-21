@@ -1,9 +1,7 @@
 # CLAUDE.md — operating manual for an agent working on lepinet
 
-You are reading this because it is loaded automatically at the start of every session in this
-repository. It is written for you, not for a human. Its job is to make a cold start behave like a
-warm one: what this project is, how it thinks, what is true right now, what must never be done, and
-what you owe the documentation before you finish.
+Loaded at the start of every session, written for you, not a human: what this project is, how it
+thinks, what must never be done, and what you owe the documentation before you finish.
 
 **This file is a router, not an encyclopedia.** It holds only what is (a) not derivable from the
 code, and (b) needed to avoid a mistake. Depth lives in the files it points at. Do not copy content
@@ -58,13 +56,11 @@ that chat logs are not load-bearing. `RESULTS.md` §2 records every experiment a
 
 - **Never run `uv sync`** on the training venv. It prunes and breaks torch/torchvision. The venv is
   hand-managed. `journal/engineering/2026-07-16-venv-uv-sync-incident.md`.
-- **bf16 for any margin head; fp16 elsewhere is what the project actually does.** The compressed
-  form of this rule used to read "bf16, never fp16" and that is *false*: 63 of 115 configs set
-  `precision: fp16`, including the headline baseline. The true rule is narrower — the cosine head
+- **bf16 for any margin head; fp16 elsewhere is what the project actually does** ("bf16, never
+  fp16" is *false*: 63 of 115 configs set fp16, the headline baseline among them). The cosine head
   overflows in fp16 unless forced to fp32 in an adapter (which `lepinet` does), and **ArcFace with a
   positive margin overflows anyway**, so every margin run is bf16 and `config.py` warns on the
-  combination. A head that "trains broken" is still this. `docs/design-decisions.md` has the
-  accurate version; corrected 2026-08-28 after the paper was found asserting the wrong one.
+  combination. A head that "trains broken" is still this. `docs/design-decisions.md`.
 - **Never filter the test fold.** `--min-img-per-spc` on evaluation silently drops the tail out of a
   *macro* average and inflates the number by ~3 points. If a score jumps, audit the eval set before
   celebrating. `journal/engineering/2026-07-24-src-lepinet-baseline-port.md`.
@@ -187,7 +183,7 @@ twice, one copy is a one-line summary that links to the other.
 | `docs/developer-guide.md` | how do I change it | architecture and seams |
 | `docs/design-decisions.md` | why is the recipe this way | every default, what it was worth, what failed |
 | `journal/` | why, as it happened | one file per question; reasoning and dead ends |
-| `RESULTS.md` | what is established, and what each experiment ID found | §1 one line per finding; §2 one row per ID + link; §3 the frozen July ledger |
+| `RESULTS.md` | what is established, and what each experiment ID found | §1 one line per finding; §2 one row per ID + link |
 | `paper/DRAFT.md` | what do we claim | only claims that generalise beyond this dataset |
 
 **`journal/`** holds `README.md` (the index) and one `YYYY-MM-DD-question.md` per question, dated by

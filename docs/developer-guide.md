@@ -109,7 +109,7 @@ tests + the synthetic end-to-end test.
 
 Parity is by **retraining** (the clean head cannot load the old mini_trainer checkpoint by design).
 The local GPU is currently unusable (driver fault), so the run goes to UCloud (see `../ucloud-api`):
-sync the repo, `uv sync`, then `lepinet train -c
+sync the repo, run `ucloud/setup-lepinet.sh`, then `lepinet train -c
 configs/20260716_heads_global_independent_muon_5ep_oversample.yaml` on a B200, and
 `lepinet test --test-set 0` on a B200-MIG. Expect species macro-F1 **0.9148 ± ~0.2pt**. The package
 defaults to `bf16`; add `precision: fp16` to match the original run exactly (both should land within
@@ -131,29 +131,23 @@ These cost real time; each is guarded by a comment and usually a regression test
 
 ## The lessons encoded (don't re-learn them)
 
-Each is a scar from a `dev/` investigation; the journal has the full story.
+The recipe-level lessons (schedule, oversampling, precision, Muon, rejected methods) are in
+[design decisions](design-decisions.md). Two that live only in the code:
 
-1. **bf16, not fp16, by default** — fp16 overflows the cosine head to NaN; the head is forced fp32
-   regardless. `[[2026-07-18-autoregressive-fp16-instability]]`
-2. **Under-annealing was the biggest optimisation lever** — `one_cycle` ≫ `flat_cos`.
-   **Oversampling was the biggest data lever** — +1.7pt. `[[2026-07-16-why-was-fastai-behind-mini-trainer]]`,
-   `[[2026-07-17-does-longtail-help]]`
-3. **Muon needs LR-only scheduling and an unfrozen model** (it re-partitions param groups).
-4. **The dataloader's memory is the image-decode pipeline (~1.2 GB/worker)**, guarded on cgroup
+1. **The dataloader's memory is the image-decode pipeline (~1.2 GB/worker)**, guarded on cgroup
    *anon*, not `memory.current`. `[[2026-07-17-ucloud-benchmark-oom]]`
-5. **Derive the hierarchy from the training df, not a hierarchy.csv** — a stale file silently
+2. **Derive the hierarchy from the training df, not a hierarchy.csv**: a stale file silently
    truncates the class set.
-6. **Class-distribution regularization and uniform-tau logit adjustment both lost** — rejected by
-   `TrainConfig`. `[[2026-07-17-does-longtail-help]]`
 
 ## Environment
 
-The venv is **reproducible from `pyproject.toml` + `uv.lock`** — `uv sync` now works (it used to
-break the hand-managed venv because the old pyproject didn't declare the full dependency set or the
-CUDA-13 torch index; `[[2026-07-16-venv-uv-sync-incident]]` is the historical context, now resolved):
+**Never run `uv sync` on the workstation's training venv**: it is hand-managed and `uv sync` prunes
+torch/torchvision (`[[2026-07-16-venv-uv-sync-incident]]`). Install into it with `uv pip install -e .`.
+A fresh environment (a UCloud job, a new machine) can be built from `pyproject.toml` + `uv.lock`;
+`ucloud/setup-lepinet.sh` runs `uv sync --frozen` there:
 
 ```bash
-uv sync --all-extras                              # library + export + timm + dev tooling
+uv sync --all-extras                              # fresh environment only, never the workstation venv
 uv pip install -r dev/requirements-experiments.txt  # mini_trainer / mini_metrics, for dev/ scripts only
 ```
 

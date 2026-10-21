@@ -23,6 +23,7 @@ records, not tools.
 | [`bash/`](bash/) | SLURM launchers of the multilabel era, plus (archived 2026-10-02) the July shell launchers for the `dev/028`/`030` trainer; their README is `bash/README-2026-07.md`. |
 | [`dev/`](dev/) | archived 2026-10-02: `dev/000`-`044`, the multilabel era, the `028`/`030`/`032` trainer and the app-compression tools that depended on it, all superseded by `src/lepinet`. The old `dev/README.md` is `dev/README-2026-07.md`. |
 | [`ucloud/`](ucloud/) | archived 2026-10-02: the job specs of every finished experiment (~300). Paths inside (`local = ".."`, `script = ...`) are relative to `ucloud/`, so copy a spec back there to re-run it. The old `ucloud/README.md`, with its list of cluster gotchas, is `ucloud/README-2026-07.md`. |
+| [`journal/`](journal/) | archived 2026-10-21: six engineering entries no live document needs — the lepi-app proposal, plan and handoff (`2026-07-19`, `07-20-lepi-app-claude`, `07-23`; the app has its own repo, lepinet-app), the July plan superseded by `PLAN.md` (`07-28-landscape-and-plan`), the August absence report (`08-24-three-week-report`) and the 2026-08-28 paper audit. Links inside them are not rewritten. |
 
 Current work: [`../dev/`](../dev/), [`../ucloud/`](../ucloud/). The story of what replaced
 the multilabel era: [`../journal/2026-07-16-why-was-fastai-behind-mini-trainer.md`](../journal/2026-07-16-why-was-fastai-behind-mini-trainer.md).

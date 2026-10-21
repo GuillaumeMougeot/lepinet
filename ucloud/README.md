@@ -22,6 +22,8 @@ relative to `ucloud/`).
 - **The queue only advances when a tick succeeds.** `auto_extend` and `--after` do nothing without
   one; cron runs it. Check it is *working*: `tail ~/.ucloud-tick.log`.
 - **Read job logs, not job status.** A job reports SUCCESS while the script inside exits 1.
+  `ucloud jobs logs` takes the spec file, not the job id.
+- **A spec with `[setup] run` needs a `[sync]` block**: the generated script is stored in the synced folder.
 - **Inside a job, `os.cpu_count()` says 256.** Size thread pools from `/sys/fs/cgroup/cpu.max`.
 - **Run one image-heavy job at a time**: concurrent jobs collapsed `/work` read throughput once.
 - **Mount `flemming` for any self-training job**: the pseudo-label parquet reaches trap images

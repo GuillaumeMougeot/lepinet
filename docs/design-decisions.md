@@ -1,16 +1,8 @@
 # Design decisions — why the recipe looks like this
 
-The [user guide](user-guide.md) says *how* to run lepinet and the [developer guide](developer-guide.md)
-says *how* the code is arranged. This page is the third thing: **why each choice is what it is, and
-what it was worth in points.**
-
-Nothing here is a preference. Every line below is the residue of a run that was paid for, and each
-links to the journal entry that argues it. It is written for the person who is about to change one
-of these settings and deserves to know what happened last time.
-
-The scientific claims — the ones that generalise beyond this dataset — are in
-[`paper/DRAFT.md`](https://github.com/GuillaumeMougeot/lepinet/blob/main/paper/DRAFT.md). This page
-is the engineering complement: how a working baseline was actually constructed.
+**Why each default is what it is, and what it was worth in points**, for whoever is about to change
+one. How to run: [user guide](user-guide.md); how the code is arranged: [developer guide](developer-guide.md);
+claims that generalise: [`paper/DRAFT.md`](https://github.com/GuillaumeMougeot/lepinet/blob/main/paper/DRAFT.md).
 
 ---
 
@@ -87,14 +79,13 @@ genera and 102 families. It was wrong for two of the three.
 The transferable rule: in a hierarchy, **prefer interventions that do not require one shared constant
 to be correct at every level at once.** → [journal: 2026-07-17-does-longtail-help](https://github.com/GuillaumeMougeot/lepinet/blob/main/journal/2026-07-17-does-longtail-help.md)
 
-### Precision: bf16, always
+### Precision: fp16 with an fp32 head, bf16 for any margin
 
-fp16 overflows the cosine head. The 0.9148 run survived fp16 only because the head was forced to
-fp32 inside an adapter; the autoregressive head, which has no such protection, trained visibly broken
-until precision was changed. This was diagnosed as a wiring bug for some time before the real cause
-surfaced.
-
-bf16 is the package default and there is no good reason to leave it.
+Most configs (63 of 115, the headline baseline among them) run fp16 autocast with the cosine head
+forced to fp32 inside an adapter; without that the head overflows, and the autoregressive head
+trained visibly broken (first diagnosed as a wiring bug). **ArcFace with a positive margin overflows
+in fp16 even with the adapter**, so every margin run is bf16 and `config.py` warns on the
+combination. The package default is bf16.
 → [journal: 2026-07-18-autoregressive-fp16-instability](https://github.com/GuillaumeMougeot/lepinet/blob/main/journal/engineering/2026-07-18-autoregressive-fp16-instability.md)
 
 ### Augmentation: light beats heavy

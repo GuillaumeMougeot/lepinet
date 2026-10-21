@@ -57,7 +57,7 @@ different questions.)
    next external set.
 
 Predictions + tables: `data/ucloud_preds/flemming-cnxv2l/`. Companion: [[2026-07-24-bigger-everything]]
-(the teacher), [[2026-07-28-landscape-and-plan]] (the plan this feeds).
+(the teacher), [2026-07-28-landscape-and-plan](../archive/journal/engineering/2026-07-28-landscape-and-plan.md) (the plan this feeds).
 
 ## Follow-ups launched (2026-07-28)
 

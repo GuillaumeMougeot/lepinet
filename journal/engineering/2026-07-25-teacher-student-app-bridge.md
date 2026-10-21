@@ -71,7 +71,7 @@ Built the teacher→student half of the bridge (planned `dev/045`, never written
 
 - **`DistillLoss`** (`loss.py`): `total = (1-α)·CE(student, labels) + α·Σ_level T²·KL(softmax(student/T)
   ‖ softmax(teacher/T))`. KD per level (fine→coarse), matching the N-level head. Honors the framing
-  from [[2026-07-19-lepi-app]]: distillation is the student's *training method*, not a post-hoc
+  from [2026-07-19-lepi-app](../../archive/journal/engineering/2026-07-19-lepi-app.md): distillation is the student's *training method*, not a post-hoc
   compressor — the teacher's soft posterior over 12 k species carries the hierarchy + tail structure
   the hard labels can't. `T²` keeps the KD gradient scale comparable to CE.
 - **`DistillCallback`** (`callbacks.py`): runs the **frozen teacher in fp32, no-grad**, on each
@@ -87,7 +87,7 @@ Built the teacher→student half of the bridge (planned `dev/045`, never written
 - **Validated GPU-free**: 5 unit tests (KD=0 when teacher==student; α=0 ⇒ pure CE; KD differentiable;
   mixup guard) + a synthetic **e2e distill** (train teacher → distil student → checkpoint). 40 tests
   green, ruff clean. Unlabelled-data soft targets (train the student on more images than are
-  labelled) remain a future lever, per [[2026-07-19-lepi-app]].
+  labelled) remain a future lever, per [2026-07-19-lepi-app](../../archive/journal/engineering/2026-07-19-lepi-app.md).
 
 **First runs (mock teacher = the 5ep effnetv2_s milestone):** distil into a small
 `tf_efficientnetv2_b0` + 256-bottleneck (the shippable size), vs a from-scratch b0 **control** — the

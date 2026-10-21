@@ -1,12 +1,7 @@
 # Concepts — the vocabulary this project keeps using
 
-Written for someone who knows the *problem* well but not the deep-learning jargon the rest of these
-documents lean on. Every term below appears in `RESULTS.md`, the journal or the paper, and each is
-explained with the actual numbers from this project rather than in the abstract.
-
-Sections 1–9 are the **method** and build on each other — read them in order the first time.
-Sections 10–14 are reference: the **training**, **data**, **evaluation**, **shipping** and
-**experiment-design** vocabulary, each entry standalone.
+For someone who knows the *problem* but not the deep-learning jargon, with this project's own
+numbers. Sections 1-9 are the method and build on each other; 10-14 are standalone reference entries.
 
 | | |
 |---|---|
@@ -143,7 +138,7 @@ novel, and has one very concrete reading:
 > **AUROC is the probability that a randomly chosen novel image gets a higher novelty score than a
 > randomly chosen known one.** 0.5 is a coin flip. 1.0 is perfect.
 
-So 0.601 (the plain cosine head) means barely better than guessing; 0.9068 means genuinely usable.
+Our plain cosine head scores 0.899 with its best rule and 0.626 with its worst, so the rule matters.
 
 **The scoring rule matters more than expected.** Two candidates:
 
@@ -239,25 +234,10 @@ Two families of fix, both in this repo's history:
   classes. **Balanced softmax** adds $\log n_j$ to each logit during training, which is exactly
   **logit adjustment** at $\tau = 1$ (the two names describe the same formula).
 
-**The finding worth carrying.** Rank four models by how hard they push probability mass toward rare
-classes and the *shifted* score falls at every step, while the in-distribution score does not order
-at all:
-
-| tail up-weighting | in-distribution | shifted |
-|---|---|---|
-| none | 0.8949 | **0.6445** |
-| √-oversampling (softened) | **0.9135** | 0.6293 |
-| balanced softmax (full) | 0.8970 | 0.5726 |
-| both | 0.8689 | 0.5492 |
-
-Rare classes have the least evidence behind them, so what a model learns from 43 photographs is
-disproportionately about *those photographs* — one photographer, one background, one camera.
-Up-weighting them up-weights exactly the least transferable part of the signal. In-distribution this
-is invisible, because the test fold shares the same artefacts.
-
-The micro-accuracy column shows it directly: normally macro < micro (rare species are harder), but
-for the balanced-softmax models the sign **flips** — the model does relatively *better* on rare
-species than common ones, i.e. it has stopped helping the tail and started over-predicting it.
+**The finding worth carrying.** The harder a method pushes probability toward rare classes, the
+lower the *shifted* score, while the in-distribution score does not order at all (paper §4.13).
+What a model learns from 43 photographs is mostly about *those photographs*, so up-weighting them
+up-weights the least transferable signal.
 
 ---
 
@@ -300,9 +280,9 @@ number.**
 
 **fp16 / bf16 / mixed precision.** Training in 16-bit instead of 32-bit numbers, for speed and
 memory. The two 16-bit formats differ in what they sacrifice: **fp16** keeps precision and loses
-*range*; **bf16** keeps range and loses precision. The cosine head produces large intermediate
-values, so it **overflows in fp16** and trains visibly broken. bf16 is mandatory here, and this is an
-invariant, not a preference.
+*range*; **bf16** keeps range and loses precision. Most runs use fp16 with the cosine head
+forced to fp32; heads with an ArcFace margin overflow even so and always run in bf16
+([design decisions](design-decisions.md)).
 
 **Gradient clipping.** Cap the size of a weight update so one strange batch cannot wreck the model.
 
@@ -355,10 +335,6 @@ average. Costs inference time, buys a little accuracy.
 **F1** is their harmonic mean — it can only be high if both are, so it cannot be gamed by always
 guessing, or never guessing.
 
-**Macro vs micro.** **Macro** averages the per-species F1 with every species weighted equally;
-**micro** effectively weights by image count. With a long tail these differ enormously, and macro is
-the honest one — under micro, a handful of common moths can hide thousands of rare-species failures.
-
 **Calibration.** Whether a stated confidence means what it says: of the predictions made at "80 %
 confident", are ~80 % right? A model can be highly *accurate* and badly *calibrated*. This matters
 here more than usual, because marginalisation **sums** probabilities — summing badly-calibrated
@@ -369,9 +345,6 @@ turn out to be calibration effects rather than accuracy ones.
 is the fraction of images it does answer. The interesting operating point here is *rank* abstention:
 back off from species to genus to family rather than refusing outright, so the user still gets
 something useful.
-
-**AUROC.** See §6 — the probability a random novel image scores as more novel than a random known
-one.
 
 ## 13. Shipping a model
 
@@ -405,10 +378,8 @@ change was worth +0.97 of it, leaving distillation +0.44.
 find out whether they help each other, cancel, or double-count. Used for capacity × augmentation
 (they compose better than additively) and oversampling × balanced softmax.
 
-**Noise floor / seed.** Retrain an identical configuration and the score moves a little; that
-movement is the floor below which a difference means nothing. A **seed** fixes the random choices so
-a run can be reproduced exactly — this project sets none, which is precisely what made the floor
-measurable. Measured: **0.0000** species, 0.0005 genus, 0.0024 family, **~0.006** shifted.
+**Seed.** Fixes the random choices so a run reproduces exactly. This project sets none, which is
+what made the noise floor (§8) measurable.
 
 **Falsification line.** A number written down *before* the run, at which the hypothesis would be
 declared wrong. The journal convention here; it is what stops a result being rationalised after the

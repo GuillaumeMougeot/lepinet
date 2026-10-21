@@ -1,0 +1,40 @@
+# July local runs (frozen)
+
+Moved from `RESULTS.md` §3 on 2026-10-21. The runs it lists that matter are cited by run id in `RESULTS.md` §2, Phase 0.
+
+Generated on 2026-08-28 by the July run ledger (now `archive/dev/036_ledger.py`), which read run folders in the layout of the `dev/030` trainer on the workstation. Runs since then were on UCloud and are recorded in section 2.
+
+Generated 2026-08-28 13:44 from `data/global/{models,preds}`, which is gitignored machine-local storage — this file is the only copy of this table that leaves the training box.
+
+`delta` is the config keys differing from the baseline, i.e. what the run was testing. F1 is **species (level 0) macro-F1**: `val` from the run's own CSV, `test` from mini_metrics on the held-out fold (`set == '0'`). Reasoning behind these numbers lives in [`journal/`](journal/).
+
+Baseline: `20260712-072542-heads-global-independent-muon-effnetv2s`
+
+| run | model | ep | delta vs baseline | val F1 | test F1 | status |
+|---|---|---|---|---|---|---|
+| `20260723-042430` | backbone-effnetv2b2-h256-5ep-oversample | 5 | aug_kwargs.*(6) grad_clip=5.0 hidden=256 logit_adjust_tau=0.0 model_arch_name=tf_efficientnetv2_b2 oversample_power=0.5 schedule=one_cycle warmup_epochs=0.5 | 0.8815 | **0.8871** | done |
+| `20260722-203133` | backbone-fastvit_t12-h256-5ep-oversample | 5 | aug_kwargs.*(6) grad_clip=5.0 hidden=256 logit_adjust_tau=0.0 model_arch_name=fastvit_t12 oversample_power=0.5 schedule=one_cycle warmup_epochs=0.5 | 0.8726 | **0.8800** | done |
+| `20260722-203101` | backbone-mnv4_medium-h256-5ep-oversample | 0 | aug_kwargs.*(6) grad_clip=5.0 hidden=256 logit_adjust_tau=0.0 model_arch_name=mobilenetv4_conv_medium oversample_power=0.5 schedule=one_cycle warmup_epochs=0.5 | — | — | died |
+| `20260722-142848` | backbone-repvit_m1_1-h256-5ep-oversample | 5 | aug_kwargs.*(6) grad_clip=5.0 hidden=256 logit_adjust_tau=0.0 model_arch_name=repvit_m1_1 oversample_power=0.5 schedule=one_cycle warmup_epochs=0.5 | 0.8743 | **0.8811** | done |
+| `20260722-060901` | backbone-fastvit_sa12-h256-5ep-oversample | 5 | aug_kwargs.*(6) grad_clip=5.0 hidden=256 logit_adjust_tau=0.0 model_arch_name=fastvit_sa12 oversample_power=0.5 schedule=one_cycle warmup_epochs=0.5 | 0.8866 | **0.8920** | done |
+| `20260722-004645` | backbone-effnetv2b0-h256-5ep-oversample | 5 | aug_kwargs.*(6) grad_clip=5.0 hidden=256 logit_adjust_tau=0.0 model_arch_name=tf_efficientnetv2_b0 oversample_power=0.5 schedule=one_cycle warmup_epochs=0.5 | 0.8701 | **0.8760** | done |
+| `20260721-161210` | bottleneck-128-5ep-oversample-effnetv2s | 5 | aug_kwargs.*(6) grad_clip=5.0 hidden=128 logit_adjust_tau=0.0 oversample_power=0.5 schedule=one_cycle warmup_epochs=0.5 | 0.8757 | **0.8843** | done |
+| `20260721-074537` | bottleneck-512-5ep-oversample-effnetv2s | 5 | aug_kwargs.*(6) grad_clip=5.0 hidden=512 logit_adjust_tau=0.0 oversample_power=0.5 schedule=one_cycle warmup_epochs=0.5 | 0.9017 | **0.9058** | done |
+| `20260720-200830` | bottleneck-256-5ep-oversample-effnetv2s | 5 | aug_kwargs.*(6) grad_clip=5.0 hidden=256 logit_adjust_tau=0.0 oversample_power=0.5 schedule=one_cycle warmup_epochs=0.5 | 0.8959 | **0.9002** | done |
+| `20260718-121017` | heads-global-autoregressive-bf16-10ep-oversample-local-effnetv2s | 4 | aug_kwargs.*(6) grad_clip=5.0 head=autoregressive logit_adjust_tau=0.0 nb_epochs=10 oversample_power=0.5 precision=bf16 schedule=one_cycle warmup_epochs=0.5 | 0.7310 | — | died |
+| `20260718-101317` | heads-global-autoregressive-bf16-fam9717-effnetv2s | 2 | aug_kwargs.*(6) family_filter=['9717'] grad_clip=5.0 head=autoregressive logit_adjust_tau=0.0 nb_epochs=2 oversample_power=0.5 precision=bf16 schedule=one_cycle warmup_epochs=0.5 | 0.6930 | — | done |
+| `20260716-234247` | heads-global-independent-muon-5ep-logitadjust-effnetv2s | 5 | aug_kwargs.*(6) grad_clip=5.0 logit_adjust_tau=1.0 oversample_power=0.0 schedule=one_cycle warmup_epochs=0.5 | 0.8925 | **0.9031** | done |
+| `20260716-154156` | heads-global-independent-muon-5ep-oversample-effnetv2s | 5 | aug_kwargs.*(6) grad_clip=5.0 logit_adjust_tau=0.0 oversample_power=0.5 schedule=one_cycle warmup_epochs=0.5 | 0.9096 | **0.9148** | done |
+| `20260716-105029` | heads-global-independent-muon-onecycle-10ep-effnetv2s-resume | 2 | aug_kwargs.*(6) grad_clip=5.0 nb_epochs=10 schedule=one_cycle warmup_epochs=0.5 | 0.8977 | **0.8976** | done |
+| `20260715-073321` | heads-global-independent-muon-onecycle-10ep-effnetv2s | 8 | aug_kwargs.*(6) grad_clip=5.0 nb_epochs=10 schedule=one_cycle warmup_epochs=0.5 | 0.8815 | — | died |
+| `20260714-194321` | heads-global-independent-muon-onecycle-reg-effnetv2s | 5 | aug_kwargs.*(6) class_reg_strength=0.001 grad_clip=5.0 schedule=one_cycle warmup_epochs=0.5 | 0.8860 | — | done |
+| `20260714-072404` | heads-global-independent-muon-onecycle-effnetv2s | 5 | aug_kwargs.*(6) grad_clip=5.0 schedule=one_cycle warmup_epochs=0.5 | 0.8880 | **0.8887** | done |
+| `20260713-164456` | heads-global-independent-muon-warmup-effnetv2s | 5 | aug_kwargs.*(6) grad_clip=5.0 warmup_epochs=0.5 | 0.8752 | **0.8769** | done |
+| `20260712-184230` | heads-global-hierarchical-muon-effnetv2s | 5 | head=hierarchical | — | — | done |
+| `20260712-072542` | heads-global-independent-muon-effnetv2s | 5 | (baseline) | — | **0.8297** | done |
+| `20260711-154103` | multihead-v4-global-effnetv2s | 5 | decoder_nhead=unset decoder_num_layers=unset head=unset optimizer=unset precision=unset | — | — | done |
+| `20260710-175046` | multihead-v4-global-effnetv2s | 5 | decoder_nhead=unset decoder_num_layers=unset head=unset optimizer=unset precision=unset schedule=one_cycle | — | — | done |
+| `20260710-093034` | heads-global-hierarchical-effnetv2s | 1 | freeze_epochs=1 head=hierarchical nb_epochs=4 optimizer=adam schedule=fine_tune | — | — | done |
+| `20260710-085450` | heads-global-independent-effnetv2s | 1 | freeze_epochs=1 nb_epochs=4 optimizer=adam schedule=fine_tune | — | — | done |
+
+**Best test species macro-F1: 0.9148** (`20260716-154156` heads-global-independent-muon-5ep-oversample-effnetv2s, micro-acc 0.9476)

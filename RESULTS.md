@@ -1,9 +1,8 @@
 # Results
 
-What the project has established, every experiment behind it, and the raw table of the July local
-runs. Section 1 is the short version; section 2 resolves any experiment ID (A1, B8, P5...) and is
-where new results go; section 3 is a frozen table of the July local runs. The reasoning behind
-every number is in the linked [`journal/`](journal/README.md) entries.
+Section 1 is what the project has established; section 2 resolves every experiment ID (A1, B8,
+P5...) and is where new results go. The reasoning is in the linked [`journal/`](journal/README.md)
+entries. The July local-run table is in [`archive/RESULTS-july-local-runs.md`](archive/RESULTS-july-local-runs.md).
 
 ## 1. What is established
 
@@ -16,12 +15,12 @@ One line each, with the paper section and the experiments (section 2) that carry
 | 1 | Hierarchy-aware heads do not help; one species head plus marginalisation matches or beats them. Coarse *supervision* (a loss on the marginals) still buys ~1.4 pt under shift. | §4.1 | singlehead, marginal, A4 |
 | 2 | In-distribution accuracy saturates near 0.93 but falls ~23 pt on trap images, and the three axes rank models differently. | §4.2, §4.10 | flemming, B4 |
 | 3 | **The spine:** interventions belong in the classifier, not the representation: rebalancing (cRT), domain adaptation (83 % from the classifier alone), the prototype matrix (centroids for 0.29 pt, for the margin head; 3.7 pt for the plain head). | §4.15 | L4, T2, H1 |
-| 4 | Unlabelled trap images are the largest lever: self-training gives +7.94 probe at a 2.6 % share of training rows with no target labels; above it adaptation becomes memorisation (shares relabelled 2026-10-12: the old 0.39 / 2 / 6 / 10 % were computed against the whole table). Real labels at the same dose score higher on probe (T1rep 0.7807, +1.01; self-training gets 89 % of the way) but give back the gain on species outside the label set (held-out 0.7007 vs 0.7704): the more trap labels, the more unseen species are absorbed into the labelled fauna (6 / 9 / 26 / 59 / 91 % of their errors). Accuracy transfers to a trap it never saw, the tail does not: with the trap held out, accuracy keeps all of the gain and macro-F1 64 % (a whole site: 23 %); held-out species keep 81 % of their recall gain, rare never-gated species none (X1, X2). | §4.11 | B3rep5x, T1, T1rep, X1, X2 |
+| 4 | Unlabelled trap images are the largest lever: +7.94 probe from self-training at 2.6 % of training rows, no target labels; more becomes memorisation. Real labels at the same dose score +1.01 but lose the gain on unseen species (91 % of their errors land in the labelled fauna). At a new trap accuracy keeps all the gain, macro-F1 64 % (new site 23 %). | §4.11 | B3rep5x, T1, T1rep, X1, X2 |
 | 5 | Long-tail reweighting trades shift robustness for accuracy, monotonically; cRT removes the trade; capping training at 1,000 images per species helps shift. | §4.13 | L0-L4, L7 |
 | 6 | The best open-set scoring rule changes with model scale (6-7.6 pt); one rule for all models produced a false ranking. | §4.9 | E2 |
 | 7 | The angular margin relocates open-set signal rather than creating it: +0.78 AUROC best-vs-best (an earlier "31 pt" compared rules, and is retracted). | §4.3 | A1, C3r |
 | 8 | Novelty detection improves with taxonomic distance (near < mid < far), and not because unseen taxa are rare. | §4.4 | C3, C3b |
-| 9 | Abstention under shift is expensive (13-19 % vs 0.8 % in-distribution), and a back-off policy yields a composition, not a score: tied B8 and P5 trade species answers (74.7 vs 67.4 %) for answers at any rank (77.2 vs 86.4 %). A margin head needs a temperature first: in float32 its softmax saturates and the species rank becomes unusable. | §4.6a | O1, O3 |
+| 9 | Abstention under shift is expensive (13-19 % vs 0.8 % in-distribution) and yields a composition, not a score: tied B8 and P5 trade species answers (74.7 vs 67.4 %) for answers at any rank (77.2 vs 86.4 %). A margin head needs a temperature first. | §4.6a | O1, O3 |
 | 10 | Two thirds of our test fold is inside BioCLIP-2's training data by GBIF occurrence id; a frozen probe understates that model by 7 pt; fine-tuned it is the better trunk, and our recipe closes the gap. | §4.14 | P1-P5 |
 | 11 | A margin damages marginalisation more than classification, through calibration; replicated at 10x scale. | §4.7 | A1, A2, A4 |
 | 12 | Augmentation that mimics trap conditions closes only 17 % of the gap. | §4.8 | B1 |
@@ -45,19 +44,16 @@ One line each, with the paper section and the experiments (section 2) that carry
 
 **Columns.** *in-dist* = species macro-F1 on the held-out fold of our own data. *probe* = macro-F1 on
 held-out trap nights (the honest domain-shift benchmark). *probe-HO* = probe restricted to species
-the adaptation never saw. *full trap* = all 47,905 trap images (used before `probe` existed, on
-2026-08-02; not comparable with probe). *AUROC* = open-set detection of unseen species, with each
+the adaptation never saw. *full trap* = all 47,905 trap images (before `probe` existed; not
+comparable with it). *AUROC* = open-set detection of unseen species, with each
 model's best scoring rule. Differences only mean something **within** a column. Noise floors:
 in-dist ~0.000, probe ~0.004 end-to-end but ~0.012 for frozen-trunk stages, so a probe difference
 under ~1.5 pt between staged runs is not a result.
 
-> **Letters were reused before this registry existed.** The July app roadmap used A1-A4, B1-B3,
-> C1-C4 and D1-D8 for app phases; the package-port entry used D1-D3 for design decisions; the
-> domain-shift entry used H1-H4 for hypotheses; W3's design uses "arms A-E" internally. None of
-> those are the experiments below. The 2026-08-28 directions were first called D1-D3, clashing with
-> group D, and were renamed **K1** and **W1-W3** on 2026-10-02 (old names survive in UCloud output
-> paths such as `ucloud_preds/D1-probe`). New experiments take an unused letter and get a row here
-> when they are opened.
+> **Letters were reused before this registry existed** (app phases A-D, design decisions D1-D3,
+> hypotheses H1-H4, W3's arms A-E); those are not the experiments below. The 2026-08-28 directions
+> D1-D3 became **K1** and **W1-W3** (old names survive in paths such as `ucloud_preds/D1-probe`).
+> New experiments take an unused letter.
 
 ### The ten rows that carry the paper
 
@@ -195,7 +191,7 @@ distance), **E2** (scoring rules do not transfer across scale), **L4** (cRT), **
 | ID | question | result | where |
 |---|---|---|---|
 | T1 (lab500 / 2500 / 12230) | real trap labels instead of pseudo-labels, each image once | 12,230 real labels: probe 0.7568, **+2.14 over 12,230 pseudo-labels at the same 1x dose** (0.7354). Not comparable with self-training at 11x (0.7706): different dose | [labels](journal/2026-08-05-label-budget.md) |
-| T1rep | the 12,230 real labels at 11x, the dose of B3rep5x | probe **0.7807** (predicted 0.78-0.79: confirmed), +1.01 over self-training at the same dose; held-out species **0.7007**, 7.0 below self-training and +0.3 over no adaptation: 91 % of its held-out-species errors land in the labelled trap fauna (self-training 42 %). `lepinet-lab12230rep11x-effnetv2s-ucloud`, preds `T1rep-probe`, `T1rep-probeho` | same |
+| T1rep | the 12,230 real labels at 11x, the dose of B3rep5x | probe **0.7807** (predicted 0.78-0.79), +1.01 over self-training; held-out species **0.7007** (self-training 0.7704): 91 % of its held-out-species errors land in the labelled fauna (self-training 42 %). Preds `T1rep-probe`, `T1rep-probeho` | same |
 | **T2** | adapt only the classifier, trunk frozen, 2 epochs | probe 0.7572 / probe-HO 0.7621: **83 %** of self-training's gain | [T2](journal/2026-08-06-adaptation-is-mostly-a-classifier-problem.md) |
 | T2b | the same from a trunk with no trap augmentation | 0.7515 — the features were already good | same |
 
@@ -203,8 +199,8 @@ distance), **E2** (scoring rules do not transfer across scale), **L4** (cRT), **
 
 | ID | question | result | where |
 |---|---|---|---|
-| X1 | B3rep5x with one trap's pseudo-labels removed, 12 folds; probe crops pooled from the fold that never saw their trap | pooled **0.7430** (B1 0.6923, B3rep5x 0.7719, recomputed on the same 15,200 crops): **64 %** of the macro-F1 gain, predicted 0.755-0.770, falsified. Accuracy keeps all of it (0.836 vs 0.835). Held-out species 0.7540 (78 %). Per site kept 62 / 81 / 82 % (LV / OH / SS). Lost: species pseudo-labelled only at that trap (24 % kept), rare species that never passed the gate (0 %). Models `lepinet-holdout-<trap>-effnetv2s-ucloud`, preds `holdout-<trap>-probe` | [hold-out](journal/2026-10-12-self-training-on-a-trap-it-never-saw.md) |
-| X2 | the same with one site's four traps removed (LV, OH, SS), 3 folds | all 3 folds, all 15,200 probe crops: pooled **0.7105** (B1 0.6923, B3rep5x 0.7719; 23 % of the gain; predicted 0.730-0.760, **falsified**). Held-out species 0.7363 (53 % of their gain). Per site, macro-F1 keeps 30 / 48 / 49 % (LV / OH / SS), accuracy 97 / 90 / 79 %. site-LV ran at 23x, but LV also loses most in X1 at the normal dose: site, not dose; no 11x control needed | same | same |
+| X1 | B3rep5x minus one trap's pseudo-labels, 12 folds; each probe crop scored by the fold that never saw its trap | pooled **0.7430** (B1 0.6923, B3rep5x 0.7719, same crops): **64 %** of the gain; predicted 0.755-0.770, falsified. Accuracy keeps all (0.836 vs 0.835); held-out species 78 %. Lost: species pseudo-labelled only there (24 % kept), rare never-gated species (0 %). Preds `holdout-<trap>-probe` | [hold-out](journal/2026-10-12-self-training-on-a-trap-it-never-saw.md) |
+| X2 | the same, one site's four traps removed, 3 folds | pooled **0.7105** (23 % of the gain; predicted 0.730-0.760, falsified); held-out species 0.7363 (53 %). Per site macro-F1 keeps 30 / 48 / 49 %, accuracy 97 / 90 / 79 % (LV / OH / SS) | same |
 
 ### U — self-training on European traps (opened 2026-10-21)
 
@@ -247,42 +243,3 @@ distance), **E2** (scoring rules do not transfer across scale), **L4** (cRT), **
 |---|---|---|---|
 | S1a | do our open-set scores flag a two-organism image as novel? Synthetic composites, published B8 and P5; per-location logits | designed | [S1](journal/2026-10-09-two-organisms-in-one-picture.md) |
 | S1b | the same on the W3 model, with moth-on-plant, FathomNet frames and hand-checked photos; fixes W3's readout | after W3 | same |
-
-## 3. July local runs (frozen)
-
-Generated on 2026-08-28 by the July run ledger (now `archive/dev/036_ledger.py`), which read run folders in the layout of the `dev/030` trainer on the workstation. Runs since then were on UCloud and are recorded in section 2.
-
-Generated 2026-08-28 13:44 from `data/global/{models,preds}`, which is gitignored machine-local storage — this file is the only copy of this table that leaves the training box.
-
-`delta` is the config keys differing from the baseline, i.e. what the run was testing. F1 is **species (level 0) macro-F1**: `val` from the run's own CSV, `test` from mini_metrics on the held-out fold (`set == '0'`). Reasoning behind these numbers lives in [`journal/`](journal/).
-
-Baseline: `20260712-072542-heads-global-independent-muon-effnetv2s`
-
-| run | model | ep | delta vs baseline | val F1 | test F1 | status |
-|---|---|---|---|---|---|---|
-| `20260723-042430` | backbone-effnetv2b2-h256-5ep-oversample | 5 | aug_kwargs.*(6) grad_clip=5.0 hidden=256 logit_adjust_tau=0.0 model_arch_name=tf_efficientnetv2_b2 oversample_power=0.5 schedule=one_cycle warmup_epochs=0.5 | 0.8815 | **0.8871** | done |
-| `20260722-203133` | backbone-fastvit_t12-h256-5ep-oversample | 5 | aug_kwargs.*(6) grad_clip=5.0 hidden=256 logit_adjust_tau=0.0 model_arch_name=fastvit_t12 oversample_power=0.5 schedule=one_cycle warmup_epochs=0.5 | 0.8726 | **0.8800** | done |
-| `20260722-203101` | backbone-mnv4_medium-h256-5ep-oversample | 0 | aug_kwargs.*(6) grad_clip=5.0 hidden=256 logit_adjust_tau=0.0 model_arch_name=mobilenetv4_conv_medium oversample_power=0.5 schedule=one_cycle warmup_epochs=0.5 | — | — | died |
-| `20260722-142848` | backbone-repvit_m1_1-h256-5ep-oversample | 5 | aug_kwargs.*(6) grad_clip=5.0 hidden=256 logit_adjust_tau=0.0 model_arch_name=repvit_m1_1 oversample_power=0.5 schedule=one_cycle warmup_epochs=0.5 | 0.8743 | **0.8811** | done |
-| `20260722-060901` | backbone-fastvit_sa12-h256-5ep-oversample | 5 | aug_kwargs.*(6) grad_clip=5.0 hidden=256 logit_adjust_tau=0.0 model_arch_name=fastvit_sa12 oversample_power=0.5 schedule=one_cycle warmup_epochs=0.5 | 0.8866 | **0.8920** | done |
-| `20260722-004645` | backbone-effnetv2b0-h256-5ep-oversample | 5 | aug_kwargs.*(6) grad_clip=5.0 hidden=256 logit_adjust_tau=0.0 model_arch_name=tf_efficientnetv2_b0 oversample_power=0.5 schedule=one_cycle warmup_epochs=0.5 | 0.8701 | **0.8760** | done |
-| `20260721-161210` | bottleneck-128-5ep-oversample-effnetv2s | 5 | aug_kwargs.*(6) grad_clip=5.0 hidden=128 logit_adjust_tau=0.0 oversample_power=0.5 schedule=one_cycle warmup_epochs=0.5 | 0.8757 | **0.8843** | done |
-| `20260721-074537` | bottleneck-512-5ep-oversample-effnetv2s | 5 | aug_kwargs.*(6) grad_clip=5.0 hidden=512 logit_adjust_tau=0.0 oversample_power=0.5 schedule=one_cycle warmup_epochs=0.5 | 0.9017 | **0.9058** | done |
-| `20260720-200830` | bottleneck-256-5ep-oversample-effnetv2s | 5 | aug_kwargs.*(6) grad_clip=5.0 hidden=256 logit_adjust_tau=0.0 oversample_power=0.5 schedule=one_cycle warmup_epochs=0.5 | 0.8959 | **0.9002** | done |
-| `20260718-121017` | heads-global-autoregressive-bf16-10ep-oversample-local-effnetv2s | 4 | aug_kwargs.*(6) grad_clip=5.0 head=autoregressive logit_adjust_tau=0.0 nb_epochs=10 oversample_power=0.5 precision=bf16 schedule=one_cycle warmup_epochs=0.5 | 0.7310 | — | died |
-| `20260718-101317` | heads-global-autoregressive-bf16-fam9717-effnetv2s | 2 | aug_kwargs.*(6) family_filter=['9717'] grad_clip=5.0 head=autoregressive logit_adjust_tau=0.0 nb_epochs=2 oversample_power=0.5 precision=bf16 schedule=one_cycle warmup_epochs=0.5 | 0.6930 | — | done |
-| `20260716-234247` | heads-global-independent-muon-5ep-logitadjust-effnetv2s | 5 | aug_kwargs.*(6) grad_clip=5.0 logit_adjust_tau=1.0 oversample_power=0.0 schedule=one_cycle warmup_epochs=0.5 | 0.8925 | **0.9031** | done |
-| `20260716-154156` | heads-global-independent-muon-5ep-oversample-effnetv2s | 5 | aug_kwargs.*(6) grad_clip=5.0 logit_adjust_tau=0.0 oversample_power=0.5 schedule=one_cycle warmup_epochs=0.5 | 0.9096 | **0.9148** | done |
-| `20260716-105029` | heads-global-independent-muon-onecycle-10ep-effnetv2s-resume | 2 | aug_kwargs.*(6) grad_clip=5.0 nb_epochs=10 schedule=one_cycle warmup_epochs=0.5 | 0.8977 | **0.8976** | done |
-| `20260715-073321` | heads-global-independent-muon-onecycle-10ep-effnetv2s | 8 | aug_kwargs.*(6) grad_clip=5.0 nb_epochs=10 schedule=one_cycle warmup_epochs=0.5 | 0.8815 | — | died |
-| `20260714-194321` | heads-global-independent-muon-onecycle-reg-effnetv2s | 5 | aug_kwargs.*(6) class_reg_strength=0.001 grad_clip=5.0 schedule=one_cycle warmup_epochs=0.5 | 0.8860 | — | done |
-| `20260714-072404` | heads-global-independent-muon-onecycle-effnetv2s | 5 | aug_kwargs.*(6) grad_clip=5.0 schedule=one_cycle warmup_epochs=0.5 | 0.8880 | **0.8887** | done |
-| `20260713-164456` | heads-global-independent-muon-warmup-effnetv2s | 5 | aug_kwargs.*(6) grad_clip=5.0 warmup_epochs=0.5 | 0.8752 | **0.8769** | done |
-| `20260712-184230` | heads-global-hierarchical-muon-effnetv2s | 5 | head=hierarchical | — | — | done |
-| `20260712-072542` | heads-global-independent-muon-effnetv2s | 5 | (baseline) | — | **0.8297** | done |
-| `20260711-154103` | multihead-v4-global-effnetv2s | 5 | decoder_nhead=unset decoder_num_layers=unset head=unset optimizer=unset precision=unset | — | — | done |
-| `20260710-175046` | multihead-v4-global-effnetv2s | 5 | decoder_nhead=unset decoder_num_layers=unset head=unset optimizer=unset precision=unset schedule=one_cycle | — | — | done |
-| `20260710-093034` | heads-global-hierarchical-effnetv2s | 1 | freeze_epochs=1 head=hierarchical nb_epochs=4 optimizer=adam schedule=fine_tune | — | — | done |
-| `20260710-085450` | heads-global-independent-effnetv2s | 1 | freeze_epochs=1 nb_epochs=4 optimizer=adam schedule=fine_tune | — | — | done |
-
-**Best test species macro-F1: 0.9148** (`20260716-154156` heads-global-independent-muon-5ep-oversample-effnetv2s, micro-acc 0.9476)

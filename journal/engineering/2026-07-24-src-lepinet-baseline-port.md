@@ -6,7 +6,7 @@ scratch: **species macro-F1 0.9152 vs 0.9148** on the byte-identical eval set (a
 optimal threshold; see the Train-parity section). This 5ep run is now the project's **milestone
 baseline** to compare future models against. `dev/` continues as the experiment space, but now
 imports the **`lepinet` package** rather than `dev/028/030/034`. Companion in spirit to
-[[2026-07-20-lepi-app-claude]]: this document is the *how* — module layout, what to keep vs cut, the
+[2026-07-20-lepi-app-claude](../../archive/journal/engineering/2026-07-20-lepi-app-claude.md): this document is the *how* — module layout, what to keep vs cut, the
 sequencing, and the decisions that had to be right before code was written. Written 2026-07-24.
 
 **Goal in one line:** reproduce the project-best **0.9148 test species macro-F1**
@@ -241,7 +241,7 @@ The package must not paint experiments into a corner. Seams to leave open:
 - **New heads.** `build_head(name, …)` keeps a registry; the baseline registers only
   `"independent"`. A `dev/` script can register a tiny-ViT head or re-add
   hierarchical/autoregressive *without touching the package* (the C2 sweep already wants tiny
-  ViTs, [[2026-07-20-lepi-app-claude]] §7). Keep `PooledHead` head-agnostic (it just pools to
+  ViTs, [2026-07-20-lepi-app-claude](../../archive/journal/engineering/2026-07-20-lepi-app-claude.md) §7). Keep `PooledHead` head-agnostic (it just pools to
   `[N, nf]` and hands off).
 - **mini_trainer compatibility.** Because `IndependentHead` keeps the persistent buffer names
   (D1), a checkpoint can still be *cross-loaded* both ways during the transition — useful for
@@ -255,7 +255,7 @@ The package must not paint experiments into a corner. Seams to leave open:
   off the baseline forward.
 - **Backbone/bottleneck sweeps.** `resolve_arch` already routes timm names; `hidden:int`
   already bottlenecks. These stay first-class config knobs, so the C1/C2 sweeps
-  ([[2026-07-20-lepi-app-claude]]) run through `lepinet` unchanged.
+  ([2026-07-20-lepi-app-claude](../../archive/journal/engineering/2026-07-20-lepi-app-claude.md)) run through `lepinet` unchanged.
 
 ---
 
@@ -267,7 +267,7 @@ Kept deliberately separate so it does not leak scope into §5:
   **cutmix/mixup** (the winning recipe deliberately used *light* aug for a 5-epoch budget;
   mixup pays at longer budgets). Ensemble over the CV folds if it earns its inference cost.
 - **Knowledge distillation** from the large teacher into small students — the core of the app's
-  size budget ([[2026-07-20-lepi-app-claude]] Phase C). The package should make "train teacher →
+  size budget ([2026-07-20-lepi-app-claude](../../archive/journal/engineering/2026-07-20-lepi-app-claude.md) Phase C). The package should make "train teacher →
   distil student → export student" a straight line.
 - **Generalization beyond Lepidoptera.** Nothing in the head or loop is moth-specific except the
   `speciesKey/genusKey/familyKey` column names and the 3-level assumption. A later rename could
@@ -476,6 +476,6 @@ free package reproduces the project-best baseline from scratch.
   [[2026-07-24-bigger-everything]], the doc/comment reframe, the app artifact path, distillation.
 - The **"bigger everything" teacher run** → [[2026-07-24-bigger-everything]] (queued this session).
 - The app artifact path (calibration/thresholds, quantization, the versioned bundle) — the whole
-  [[2026-07-20-lepi-app-claude]] Phase B/C on the new package.
+  [2026-07-20-lepi-app-claude](../../archive/journal/engineering/2026-07-20-lepi-app-claude.md) Phase B/C on the new package.
 - CutMix for multi-target heads (MixUp done; CutMix's `before_batch` also indexes the target tuple).
 - Distillation (teacher→small student) and the geographic prior remain future levers.

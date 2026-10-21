@@ -31,8 +31,8 @@ incidents are in [`engineering/`](engineering/). The plan is [`../PLAN.md`](../P
 | [08-02](2026-08-02-f1-flagship.md) | Does composing every win at 198 M beat B4? (F1) | No; identical on species and shift |
 | [08-03](2026-08-03-macro-f1-does-not-decompose.md) | Why do two benchmarks on the same images disagree? | Macro-F1 does not decompose over subsets |
 | [08-03](2026-08-03-b3-self-training.md) | Does self-training on trap images help? (B3) | Yes, the largest lever: +4.58 probe |
-| [08-04](2026-08-04-replication-sweep.md) | How much trap data? (B3rep) | Optimum at 11x, 2.6 % of training rows (labelled "2 %" until 2026-10-12): probe 0.7706 |
-| [08-05](2026-08-05-label-budget.md) | What would real labels have bought? (T1) | **RESOLVED** 2026-10-13: real labels lead by +2.14 at 1x and +1.01 at 11x (T1rep), but replicated they give up the gain on unseen species (0.7007 vs 0.7704; 91 % of those errors land in the labelled fauna); "beats real labels" retracted |
+| [08-04](2026-08-04-replication-sweep.md) | How much trap data? (B3rep) | Optimum at 11x, 2.6 % of training rows: probe 0.7706 |
+| [08-05](2026-08-05-label-budget.md) | What would real labels have bought? (T1) | +2.14 at 1x, +1.01 at 11x, but replicated they lose the gain on unseen species |
 | [08-05](2026-08-05-scaling-the-head.md) | How to reach 1 M species? (H) | No trained head works; centroids at inference, plus a data floor |
 | [08-06](2026-08-06-adaptation-is-mostly-a-classifier-problem.md) | Does adaptation need the representation? (T2) | No: the classifier alone gets 83 % |
 | [08-06](2026-08-06-the-arcface-open-set-claim-was-a-rule-comparison.md) | Is the 31-pt open-set gain real? | No, retracted: 0.78 pt best-vs-best |
@@ -52,12 +52,12 @@ incidents are in [`engineering/`](engineering/). The plan is [`../PLAN.md`](../P
 | [08-28](2026-08-28-two-directions-checklists-and-our-objective-on-tol.md) | Checklists at inference; our objective on TreeOfLife (K1, W1, W2) | Design; K1 resolved separately, W open |
 | [08-28](2026-08-28-a-regional-checklist-helps-the-user-and-hurts-the-tail.md) | What is a regional checklist worth? (K1) | +5 pt accuracy, −1.7 pt macro-F1 on probe |
 | [08-28](2026-08-28-two-tied-models-differ-by-17-points-in-deployment.md) | B8 vs P5 under abstention (O1) | Tied on accuracy, 17 pt apart on useful answers |
-| [10-01](2026-10-01-what-the-blocked-servers-cost.md) | What do servers that refuse us cost? (W1) | 23 % of the selection, mostly herbaria; 89 % of Lepidoptera survive |
-| [10-02](2026-10-02-is-the-deployment-gap-a-readout-artefact.md) | Is B8 vs P5's 17-pt deployment gap real? (O3) | No: a rank-blind metric. B8 names the species more often (74.7 vs 67.4 %), P5 answers more often (86.4 vs 77.2 %) |
+| [10-01](2026-10-01-what-the-blocked-servers-cost.md) | What do servers that refuse us cost? (W1) | 23 % of the selection, mostly herbaria |
+| [10-02](2026-10-02-is-the-deployment-gap-a-readout-artefact.md) | Is B8 vs P5's 17-pt deployment gap real? (O3) | No: a rank-blind metric; B8 names species more often, P5 answers more often |
 | [10-01](2026-10-01-does-seeing-the-whole-tree-teach-a-model-what-it-does-not-know.md) | Does training on the whole tree help open-set and shift? (W3) | **OPEN**, waits for the download |
-| [10-09](2026-10-09-two-organisms-in-one-picture.md) | Two organisms in one picture, single labels: what should a whole-tree model say? (S1) | **OPEN**, design; the duplicates are FathomNet frames and label conflicts |
-| [10-12](2026-10-12-do-trap-moths-leak-across-nights.md) | Does the trap adapt/probe split leak individual moths across nights? | Barely: 13 of 15,200 probe crops (one moth that stayed on the sheet); macro-F1 moves by <= 0.0003 |
-| [10-12](2026-10-12-self-training-on-a-trap-it-never-saw.md) | Does self-training help at a trap, or a site, it never saw? (X1, X2) | **RESOLVED** 2026-10-13: accuracy transfers to a new trap (all of the gain), the rare tail does not (macro-F1 keeps 64 %, a new site 23 %); held-out species keep 81 % |
+| [10-09](2026-10-09-two-organisms-in-one-picture.md) | Two organisms in one picture: what should a whole-tree model say? (S1) | **OPEN**, design |
+| [10-12](2026-10-12-do-trap-moths-leak-across-nights.md) | Does the trap adapt/probe split leak individual moths across nights? | Barely: 13 of 15,200 probe crops; macro-F1 moves <= 0.0003 |
+| [10-12](2026-10-12-self-training-on-a-trap-it-never-saw.md) | Does self-training help at a trap, or a site, it never saw? (X1, X2) | Accuracy transfers to a new trap, the rare tail does not (macro-F1 keeps 64 %, a new site 23 %) |
 | [10-21](2026-10-21-self-training-on-european-traps.md) | Does self-training on traps across Europe beat our Danish traps? (U) | **OPEN**, design; waits for the crop pool |
 
 ## Engineering: side projects, cluster work, incidents
@@ -69,18 +69,12 @@ incidents are in [`engineering/`](engineering/). The plan is [`../PLAN.md`](../P
 | [07-17](engineering/2026-07-17-ucloud-benchmark-oom.md) | infrastructure | UCloud jobs OOM-ing: dataloader workers |
 | [07-18](engineering/2026-07-18-ucloud-throughput.md) | infrastructure | making the B200 fast: decode-bound |
 | [07-18](engineering/2026-07-18-autoregressive-fp16-instability.md) | incident | the autoregressive head trained broken: fp16 overflow |
-| [07-19](engineering/2026-07-19-lepi-app.md) | subproject | can the model become an offline phone app? |
-| [07-20](engineering/2026-07-20-lepi-app-claude.md) | subproject | the app plan: size budget and decisions |
 | [07-20](engineering/2026-07-20-lepi-app-compression.md) | subproject | export, quantisation and calibration for a browser |
-| [07-23](engineering/2026-07-23-lepi-app-HANDOFF.md) | subproject | app handoff snapshot |
 | [07-24](engineering/2026-07-24-src-lepinet-baseline-port.md) | subproject | the clean `src/lepinet` package reproduces 0.9148 |
 | [07-25](engineering/2026-07-25-teacher-student-app-bridge.md) | subproject | distillation and the one-command bundle (A3, A6, D2) |
-| [07-28](engineering/2026-07-28-landscape-and-plan.md) | subproject | the July plan, superseded by `PLAN.md` |
 | [07-30](engineering/2026-07-30-ucloud-queue-daemon.md) | incident | the UCloud queue only advances when something ticks it |
 | [08-06](engineering/2026-08-06-the-cosine-head-is-not-unit-norm.md) | incident | the cosine head's rows are not unit-norm (no accuracy effect) |
-| [08-24](engineering/2026-08-24-three-week-report.md) | infrastructure | the report for 2-24 August: predictions scored, corrections |
 | [08-24](engineering/2026-08-24-work-storage-degraded.md) | incident | training stalled: `/work` read latency collapsed |
-| [08-28](engineering/2026-08-28-what-the-paper-is-still-missing.md) | infrastructure | paper audit: eight wrong numbers fixed |
 | [09-29](engineering/2026-09-29-public-hf-release.md) | subproject | public release of P5, B8, B3rep5x on Hugging Face |
 | [09-30](engineering/2026-09-30-full-fold-and-p5-resize.md) | subproject | P5's published preprocessing fixed |
 | [10-01](engineering/2026-10-01-the-crawl-that-spent-58-percent-of-the-cpu-budget.md) | incident | a crawler spent 58 % of the CPU budget |

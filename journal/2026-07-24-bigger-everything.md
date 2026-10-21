@@ -9,7 +9,7 @@ eval artifact, landing in the predicted +1–3 pt range. It is now the project's
 First scaling run of the
 clean `src/lepinet` package: a larger, cutting-edge backbone at higher resolution, bigger batch,
 more epochs, richer augmentation and MixUp, trained on a UCloud B200. Queued 2026-07-24.
-Companion to [[2026-07-24-src-lepinet-baseline-port]] (the package) and [[2026-07-20-lepi-app-claude]]
+Companion to [[2026-07-24-src-lepinet-baseline-port]] (the package) and [2026-07-20-lepi-app-claude](../archive/journal/engineering/2026-07-20-lepi-app-claude.md)
 (§7: bigger everything → distill into small students).
 
 ## The question
@@ -21,7 +21,7 @@ this run tests at once:
    schedule and stronger regularisation should push species macro-F1 above 0.9148 — the tail
    (53 % of species < 200 images, [[2026-07-17-does-longtail-help]]) is where a bigger model + richer
    aug + MixUp should pay.
-2. **Is it a good teacher?** The app needs a small model (≤ 8 MB, [[2026-07-20-lepi-app-claude]]).
+2. **Is it a good teacher?** The app needs a small model (≤ 8 MB, [2026-07-20-lepi-app-claude](../archive/journal/engineering/2026-07-20-lepi-app-claude.md)).
    The plan is teacher → knowledge distillation → student. A stronger teacher raises the student's
    ceiling, so this run is step one of that pipeline, not just a bigger number.
 
@@ -106,7 +106,7 @@ epoch, not an epoch-0 caching artifact). Two separable things:
 
 ## Scaling rationale — why 6 epochs, moderate aug, and not "full blast" (2026-07-28)
 
-Recorded because the sequencing was deliberate, not timid (full argument in [[2026-07-28-landscape-and-plan]]):
+Recorded because the sequencing was deliberate, not timid (full argument in [2026-07-28-landscape-and-plan](../archive/journal/engineering/2026-07-28-landscape-and-plan.md)):
 
 - **6 epochs** = a one-day wall-clock budget (~3 h/epoch), an explicit first guess. The result was
   **not under-annealed** (macro *and* micro rose, tail levels most), so it sufficed to answer "does

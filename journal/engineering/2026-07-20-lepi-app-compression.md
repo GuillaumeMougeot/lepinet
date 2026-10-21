@@ -15,8 +15,8 @@ as not-clearly-better). C3 distillation deferred (not needed for v1). **C4 bundl
 > figures below are on the easy subset and are being re-measured on the full fold. C-phase uses
 > `dev/032` directly, so its numbers are already on the full fold and comparable to 0.9148.
 
-Plan and decisions: [`2026-07-20-lepi-app-claude.md`](2026-07-20-lepi-app-claude.md).
-Proposal + review: [`2026-07-19-lepi-app.md`](2026-07-19-lepi-app.md).
+Plan and decisions: [`2026-07-20-lepi-app-claude.md`](../../archive/journal/engineering/2026-07-20-lepi-app-claude.md).
+Proposal + review: [`2026-07-19-lepi-app.md`](../../archive/journal/engineering/2026-07-19-lepi-app.md).
 Scripts: `dev/040`–`dev/044`.
 
 > **Read the caveat in "What these numbers are not" before quoting any figure here.** Every

@@ -1,33 +1,29 @@
 # PLAN — what we are doing now
 
-**Kind:** living · **Last updated:** 2026-10-21 · **Supersedes:** [[2026-07-28-landscape-and-plan]]
+**Kind:** living · **Last updated:** 2026-10-21 · **Supersedes:** [2026-07-28-landscape-and-plan](archive/journal/engineering/2026-07-28-landscape-and-plan.md)
 
-The one file in `journal/` meant to be true *today*. Every experiment ID is resolved in
-[`RESULTS.md`](RESULTS.md); the reasoning lives in the linked journal entries. Earlier
-versions of this file (the August status boards, the rules for the owner's absence) are in its git
-history.
+The one file about *today*. Experiment IDs resolve in [`RESULTS.md`](RESULTS.md); reasons are in
+the linked journal entries; older versions of this file are in git history.
 
 ## 1. The goal: a submittable paper
 
-Every experiment the paper uses is closed. What stands between [`../paper/DRAFT.md`](paper/DRAFT.md)
-and a submission is scoping and writing, plus two evaluation-only runs. No new training is needed.
+Every experiment [`paper/DRAFT.md`](paper/DRAFT.md) uses is closed. What remains is scoping, writing
+and two evaluation-only runs.
 
 | # | step | who | state |
 |---|---|---|---|
-| 1 | **Choose the scope and the venue.** The draft makes 9 contributions over 16 results sections, at 13 k words. Proposed spine: *interventions belong in the classifier* (§4.15) + *the evaluation protocol* (three axes, scoring rules, contamination) + *self-training* (§4.11); the margin analysis (§4.3, §4.7) and head scaling (§4.12) go to an appendix; TreeOfLife (W1-W3) becomes a second paper | owner | open |
-| 2 | Restructure §4 to ~6 sections; rewrite the abstract; write the §1 introduction (still an outline) | agent, after 1 | — |
-| 3 | Re-score §4.5 with each head's own scoring rule; measure open-set *under shift* for B8 and P5 (§6 says it is unmeasured) | GPU, eval only | — |
-| 4 | Figures: six, in the text with captions (`dev/074_figures.py`); building them corrected §4.6a (the B8/P5 gap), §4.12 and §4.14.1 | agent | **done 2026-10-02** |
-| 5 | Verify every citation in §1b and the reference list (all written from memory) | owner | open |
-| 6 | Final consistency pass: every number against its journal entry | agent | — |
-| 7 | Model cards and collection notes present the trade-off instead of recommending P5 (owner's call, 2026-10-07) | agent | **done** |
-| 8 | `rules-A2.json` on the drive was overwritten on 2026-08-03 by a run reporting a different head; the paper's §4.9 row comes from the 2026-08-01 file. Re-run A2's rules to confirm | GPU, eval only | open |
+| 1 | **Choose the scope and venue.** 9 contributions, 16 results sections, 13 k words. Proposed spine: classifier-stage interventions (§4.15) + the evaluation protocol (three axes, scoring rules, contamination) + self-training (§4.11); margin (§4.3, §4.7) and head scaling (§4.12) to an appendix; TreeOfLife (W1-W3) a second paper | owner | open |
+| 2 | Restructure §4 to ~6 sections; rewrite the abstract; write §1 (still an outline) | agent, after 1 | — |
+| 3 | Re-score §4.5 with each head's own rule; measure open-set under shift for B8 and P5 | GPU, eval only | — |
+| 4 | Verify every citation in §1b and the references (written from memory) | owner | open |
+| 5 | Consistency pass: every number against its journal entry | agent | — |
+| 6 | Re-run A2's scoring rules: `rules-A2.json` was overwritten on 2026-08-03; §4.9 uses the 2026-08-01 file | GPU, eval only | open |
 
 ## 2. Running now
 
 | ID | what | state | next |
 |---|---|---|---|
-| **W1** | TreeOfLife-200M download at **short side 256**, on the workstation (`/data/au761367/tol256s/`, `crawl.log`; cores 0-5, nice 10; zero UCloud core-hours) | **Main crawl finished 2026-10-10: 64.16 M images ok**, plus ~0.54 M from `retry1/` (Flickr 480 k, Harvard 57 k). 77 servers blocked (28.8 M rows); 326 k gone (404); Harvard's 214 k scans over 25 MB rejected. `www.unimus.no`'s 715 k rows (herbarium sheets, no Lepidoptera) were written off as exhausted_attempts by the old 429 handling; re-running in `retry2/` (cores 6-7) with the fix, but the server allows ~1 request/s, so 8+ days: not waited for | **upload paused on storage** (28 of 1,048 shards up, ~1.9 GB each, ~1.95 TB to go). The quota now reads **4,866 / 6,144 GB (1,278 GB free, 2026-10-13)** after the old crawl was deleted, so about 550 more shards fit with 200 GB headroom; the rest needs ~0.7 TB more. Final gentle retry of 9 unblocked servers in `retry3/` (72 h cap). Then: resume `dev/087 run`, merge `retry1/`/`retry3/` metas, upload the manifest, audit (`dev/085`). Training reads the shards through `s256/index/` (no unpack) |
+| **W1** | TreeOfLife-200M at short side 256, on the workstation (`/data/au761367/tol256s/`; zero UCloud core-hours) | crawl done: 64.16 M images plus ~0.54 M retried ([crawl](journal/engineering/2026-10-01-the-crawl-resized-the-wrong-side.md)); `retry3/` (9 servers, 72 h cap) | **upload paused on storage**: 28 of 1,048 shards up; ~550 more fit, the rest needs ~0.7 TB. Then merge `retry1/`/`retry3/` metas, upload the manifest, audit (`dev/085`) |
 
 ## 3. Backlog, in order
 
@@ -48,7 +44,7 @@ and a submission is scoping and writing, plus two evaluation-only runs. No new t
 - **Re-tuning the ArcFace margin**: two cheap proxies failed for principled reasons; the margin is worth ~0.8 pt.
 - **The autoregressive head**: lost by 20 pt.
 - **Uniform sampled softmax, low-rank or proxy-free heads for 1 M species**: all measured dead (H2-H4); a 50-image floor makes the matrix fit instead.
-- **Re-litigating staged vs end-to-end**: a tie at 198 M once the noise floor was measured (G3b); frozen as "capacity-dependent".
+- **Re-litigating staged vs end-to-end**: a tie at 198 M once the noise floor was measured (G3b).
 
 ## 5. Caveats to carry
 
@@ -58,7 +54,6 @@ and a submission is scoping and writing, plus two evaluation-only runs. No new t
 
 ## 6. How to run things
 
-Cluster rules (CPU budget, the queue tick, logs over status, one image-heavy job at a time) are in
-[`../ucloud/README.md`](ucloud/README.md). **Scale discipline (owner):** test a new mechanism at
+Cluster rules are in [`ucloud/README.md`](ucloud/README.md). **Scale discipline (owner):** test a new mechanism at
 20 M; promote to 198 M once, when the recipe stops moving. Costs: ~1,100 img/s at 20 M, ~480 img/s
 at 198 M; a 5-epoch 20 M run is ~6.4 h.

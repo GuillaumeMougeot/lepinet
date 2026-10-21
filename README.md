@@ -15,40 +15,34 @@ answers most often), [`lepinet-dinov3-convnextl`](https://huggingface.co/gmougeo
 
 ## 1. Where things stand
 
-- **The experiments behind the paper are finished.** About 80 lettered experiments (A1 to P5, plus
-  K1 and W1-W3); every one the paper uses is closed. [`RESULTS.md`](RESULTS.md) states what they
-  established and lists every one.
-- **The paper** ([`paper/DRAFT.md`](paper/DRAFT.md)) contains every result but reads as a complete
-  record rather than a paper. It needs a scope decision, an introduction, figures and verified
-  citations. [`PLAN.md`](PLAN.md) is the road to submission and the one file about *today*.
-- **Running:** the TreeOfLife-200M download (W1), for a follow-up study (W3). The paper does not
-  depend on it.
+- **Experiments behind the paper: finished.** About 80 lettered experiments, all resolved in
+  [`RESULTS.md`](RESULTS.md).
+- **Paper** ([`paper/DRAFT.md`](paper/DRAFT.md)): every result is in; it needs a scope decision, an
+  introduction and verified citations. [`PLAN.md`](PLAN.md) is the road to submission.
+- **Running:** the TreeOfLife-200M download (W1) for a follow-up study. The paper does not depend on it.
 
 ## 2. What to read
 
 | time | read |
 |---|---|
-| **20 minutes** | this page, then [`RESULTS.md`](RESULTS.md) section 1 (the findings, one line each) and "the ten rows that carry the paper" |
-| **2 hours**, to work on the paper | in [`paper/DRAFT.md`](paper/DRAFT.md): abstract, §1, §4.0, §4.15, §5, §6; then [`PLAN.md`](PLAN.md); then the journal entries linked from the ten rows |
-| **to run or change code** | [`docs/user-guide.md`](docs/user-guide.md), [`docs/developer-guide.md`](docs/developer-guide.md), [`docs/design-decisions.md`](docs/design-decisions.md) (why every default is what it is) |
-| **look up when needed** | [`docs/concepts.md`](docs/concepts.md) (vocabulary), [`journal/README.md`](journal/README.md) (index of every question) |
+| **20 minutes** | this page, then [`RESULTS.md`](RESULTS.md) section 1 and "the ten rows that carry the paper" |
+| **2 hours**, for the paper | [`paper/DRAFT.md`](paper/DRAFT.md): abstract, §1, §4.0, §4.15, §5, §6; then [`PLAN.md`](PLAN.md) |
+| **to run or change code** | [`docs/user-guide.md`](docs/user-guide.md), [`docs/developer-guide.md`](docs/developer-guide.md), [`docs/design-decisions.md`](docs/design-decisions.md) |
+| **look up** | [`docs/concepts.md`](docs/concepts.md) (vocabulary), [`journal/README.md`](journal/README.md) (every question) |
 
-[`CLAUDE.md`](CLAUDE.md) is the AI agent's operating manual: invariants, project culture, and the
-owner's standing rules. Humans can skip it.
+[`CLAUDE.md`](CLAUDE.md) is the AI agent's operating manual; humans can skip it.
 
 ## 3. The map
 
-Four projects share this repository.
-
-| part | what it is | where | state |
+| part | what | where | state |
 |---|---|---|---|
 | **package** | the `lepinet` library: train, test, predict, export, bundle, distill | `src/`, `tests/`, `docs/` | stable |
-| **research** | the experiments behind the paper | `dev/` (one script per experiment), `configs/` (one YAML per run), `ucloud/` (cluster jobs), `journal/` (one entry per question), `paper/` | experiments closed; paper being written |
+| **research** | the experiments behind the paper | `dev/` (one script per experiment), `configs/`, `ucloud/` (cluster jobs), `journal/`, `paper/` | closed; paper being written |
 | **release** | public models and the phone-app bridge | `dev/083_*` | done |
-| **TreeOfLife** | the 70 M-image download for W1-W3 | `dev/082`, `dev/084`, `dev/085`, `ucloud/*tol*` | running |
+| **TreeOfLife** | the 70 M-image download for W1-W3 | `dev/082`, `dev/084`, `dev/085`, `dev/087` | running |
 
-`archive/` holds what is no longer used (early scripts, finished job specs); `journal/engineering/`
-holds the non-research journal entries (side projects, cluster work, incidents).
+`archive/` holds what is no longer used; `journal/engineering/` holds side projects, cluster work and
+incidents.
 
 ## 4. The models to compare against
 
@@ -66,17 +60,11 @@ held-out light-trap nights. Compare only within a column, and check the noise fl
 
 ## 5. The method, briefly
 
-- A backbone feeds a **cosine classification head**: classes are normalised prototypes scored by
-  angle. This suits fine-grained classes and the long tail.
-- **One species head; coarser ranks by marginalisation**, `P(genus) = Σ P(species in genus)`.
-  Separate genus and family heads did not help; a loss on the marginals does help under shift.
-- **Square-root oversampling** of rare species during training, the largest single lever on
-  macro-F1 in-distribution. Under shift it is better applied to the classifier only (cRT).
-- **Self-training** on unlabelled trap images (about 2.6 % of training rows) is the largest robustness
-  lever; **adapting only the classifier** recovers most of it in minutes.
-- Muon (backbone) + AdamW (head), one-cycle schedule. Margin heads (ArcFace) need bf16.
-
-The reasoning and numbers behind each choice: [`docs/design-decisions.md`](docs/design-decisions.md).
+A backbone feeds a **cosine classification head**; genus and family come from **marginalising** the
+species posterior; rare species are **square-root oversampled** (better applied to the classifier
+only under shift); **self-training** on unlabelled trap images is the largest robustness lever, and
+adapting only the classifier recovers most of it. Why each default is what it is:
+[`docs/design-decisions.md`](docs/design-decisions.md).
 
 ## 6. Install and run
 
@@ -95,11 +83,9 @@ config reference: [`docs/user-guide.md`](docs/user-guide.md).
 
 ## 7. Conventions
 
-- **IDs.** Experiments are cited by letter-number (resolved in [`RESULTS.md`](RESULTS.md) section 2),
-  July local runs by timestamp (`20260716-154156`). Some letters were reused; the registry says
-  which is which.
-- **The journal** is one file per question, dated by when it was opened, with the prediction written
-  before the result.
+- **IDs.** Experiments by letter-number ([`RESULTS.md`](RESULTS.md) section 2), July local runs by
+  timestamp (`20260716-154156`).
+- **The journal**: one file per question, dated when opened, prediction written before the result.
 - **The metric** is species macro-F1 on the held-out fold (`set == '0'`) over **all** species, so
   the tail counts. Never filter the test fold.
 - **`data/`** is machine-local and gitignored; a fresh clone has no runs.
