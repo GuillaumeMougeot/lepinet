@@ -46,7 +46,11 @@ DECISIONS = [
     {"id": "dec-scope", "title": "Scope", "md":
      "The draft makes 9 contributions over 16 results sections. A paper needs one argument. Which spine?",
      "options": [
-         {"key": "classifier", "label": "Classifier stage + protocol + self-training", "rec": True,
+         {"key": "split", "label": "Two companion papers, with Asger's draft", "rec": True,
+          "md": "Asger's *Role of hierarchically explicit models* takes the head comparison (§2, §4.1, §4.4, §4.7, "
+                "rank-wise thresholds of §4.6) on Lepidoptera and Pl@ntNet. This paper keeps deployment under "
+                "shift: self-training, the classifier stage, long tail, open-set rules, abstention, contamination."},
+         {"key": "classifier", "label": "Classifier stage + protocol + self-training",
           "md": "§4.15 as the spine, with the evaluation protocol (three axes, scoring rules, contamination) "
                 "and self-training (§4.11). Margin (§4.3, §4.7) and head scaling (§4.12) go to an appendix. "
                 "PLAN's proposal."},
