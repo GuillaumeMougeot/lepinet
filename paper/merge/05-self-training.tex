@@ -1,0 +1,16 @@
+%% title: Self-training on unlabelled trap images
+%% target: Sections/Methods.tex
+%% anchor: \subsection{Metrics for hierarchical and species classification}\label{sec:metrics}
+%% action: before
+%% why: Defines the paper's strongest lever. The share of training rows, not the replication count, is the quantity the results vary.
+%% source: dev/065_pseudolabel.py, dev/066_combine_pseudo.py; journal/2026-08-03-b3-self-training.md; journal/2026-08-04-replication-sweep.md
+%% check: \cref{sec:results_selftraining} arrives with step 20; Overleaf shows ?? until then. | Teacher B4 is the 198 M DINOv3-ConvNeXt-L with trap-like augmentation; name it by architecture in the paper? | 98.15 % label accuracy is measured with the expert labels of the adaptation set, which the gate never reads.
+%% status: ready
+\subsection{Self-training on unlabelled target images}\label{sec:selftraining}
+A model trained without trap images (the teacher, a DINOv3-ConvNeXt-L trained with trap-like augmentation) predicts a species for every crop of the adaptation set.
+A confidence gate keeps the most confident predictions: a quantile gate set to keep 30\,\% kept 45\,\% (12,230 crops) because the confidence distribution saturates near 1.
+The expert labels of the adaptation set are never read by the gate; measured against them, 98.15\,\% of the kept labels are correct.
+The pseudo-labelled crops are added to the training set of Global Lepidoptera, only for species that pass the 50-image floor on real images alone, and a new model is trained from scratch with recipe L.
+They are never used for validation or model selection.
+The dose is the share of training rows that are pseudo-labelled.
+With 12,230 images, a share of 2.6\,\% means each image appears 11 times; the results vary this share (\cref{sec:results_selftraining}).

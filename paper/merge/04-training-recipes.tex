@@ -1,0 +1,20 @@
+%% title: Training: two recipes, one to be kept
+%% target: Sections/Methods.tex
+%% anchor: \subsection{Loss function}\label{sec:loss_function}
+%% action: before
+%% why: The two drafts trained with different recipes. Until one is chosen, every result has to say which one it used. The lepinet recipe is the baseline of every shift, self-training and long-tail result.
+%% source: configs/20260729_ucloud_singlehead_species_effnetv2s.yaml; src/lepinet/data.py (sample_weights); docs/design-decisions.md section 1 for the ladder
+%% check: \cref{sec:results_heads} arrives with a results step; Overleaf shows ?? until then. | Asger's settings for the head comparison (epochs, image size, optimiser): marked X. | The recipe names (M and L) are placeholders.
+%% status: ready
+\subsection{Training}\label{sec:training}
+% TODO(GM, AS): one of the two recipes will be kept for the final paper. Until then every table and figure names the recipe it used.
+Two training recipes are used in this draft, and every result names the one it used.
+
+\textbf{Recipe M} (mini\_trainer) trains with the EMLA loss (\cref{sec:loss_function}) and the prototype regulariser (\cref{sec:regularization}) for \textbf{X} epochs at \textbf{X} pixels with \textbf{X}.
+It is used for the comparison of head architectures (\cref{sec:results_heads}).
+
+\textbf{Recipe L} (lepinet) trains EfficientNetV2-S for 5 epochs with plain cross-entropy and square-root class oversampling: each image of a species with $n$ training images is drawn with weight $n^{-1/2}$, so the species as a whole carries weight $n^{1/2}$.
+The backbone is optimised with Muon and the classification head with AdamW, under a one-cycle schedule with half an epoch of warm-up, a learning rate of $10^{-3}$, batches of 64 and gradient clipping at 5.
+Images are resized to 460 pixels and augmented by flips, rotations up to $15^\circ$ and zoom up to 1.1, then cropped to 256 pixels.
+Training uses fp16 mixed precision with the head kept in fp32; heads with an additive angular margin overflow in fp16 and are trained in bf16.
+Recipe L is used for all results on domain shift, self-training and the long tail.

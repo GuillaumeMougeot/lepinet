@@ -263,7 +263,7 @@ they match a conventionally pretrained model of the same size, so the benefit wa
 pretraining style**.
 
 **Epoch / batch.** A **batch** is the group of images processed together (64 here); an **epoch** is
-one pass over the whole training set (~3 M images). This project trains for 5 epochs by convention —
+one pass over the whole training set (~5 M images). This project trains for 5 epochs by convention —
 a comparison budget, not a converged optimum, and 10-epoch runs were still improving when they
 stopped.
 

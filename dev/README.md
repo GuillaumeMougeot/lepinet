@@ -47,6 +47,8 @@ kept as a record. Long-term tooling does not live here: the documentation check 
 | `088_trap_split_twins.py` | do individual moths leak across the adapt/probe split? pixel-level twin scan | B3, T1 |
 | `089_trap_holdout.py` | self-training with a trap or site held out: fold data, job specs, pooled scoring | X1, X2 |
 | `091_paper_reader.py` (+ `.html`) | Paper Desk: cuts `paper/DRAFT.md` into reading items by priority, one HTML page; reviews come back through the artifact database | paper |
+| `092_metric_conventions.py` | one predictions file scored under each macro-F1 convention (ours, mini_metrics with and without threshold) | paper |
+| `094_merge_desk.py` (+ `.html`) | Merge Desk: the LaTeX pieces of `paper/merge/` as ordered insertion steps into the Overleaf draft; mirrors pasted pieces into the local copy | paper |
 
 **Conventions.** Never `uv sync` or `uv run` (the venv is hand-managed); use `.venv/bin/python`
 from the repo root.

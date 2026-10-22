@@ -1,0 +1,12 @@
+%% title: Adapting the classifier only, on a frozen backbone
+%% target: Sections/Methods.tex
+%% anchor: \subsection{Self-training on unlabelled target images}\label{sec:selftraining}
+%% action: after-paragraph
+%% why: Defines the staged recipe behind the paper's main through-line: rebalancing and adaptation belong in the classifier, which is cheap to redo per deployment.
+%% source: journal/2026-08-01-imbalance-methods-bench.md (L4, cRT); journal/2026-08-06-adaptation-is-mostly-a-classifier-problem.md (T2); journal/2026-08-06-f2-capstone.md (F2)
+%% check: Epoch counts for the classifier stages (2 each) are from T2 and F2.
+%% status: ready
+Two variants change only the classifier.
+In classifier re-training (cRT, \textbf{(REF: Kang et al. 2020)}), the backbone is trained on the natural class distribution, then frozen while the head is re-trained for 2 epochs with square-root oversampling.
+In classifier adaptation, the frozen backbone's head is trained for 2 further epochs on the same pseudo-labelled trap images as end-to-end self-training.
+Both stages train only the head of a frozen network, take minutes and need no labels, so they can be repeated for each new deployment.

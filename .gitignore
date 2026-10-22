@@ -176,3 +176,6 @@ cython_debug/
 
 # Claude Code: personal per-machine permissions stay local; .claude/settings.json (the CPU budget hook) is shared
 .claude/settings.local.json
+
+# Overleaf copy of the colleague's draft: unpublished, kept local (owner, 2026-10-22)
+archive/paper/asger/

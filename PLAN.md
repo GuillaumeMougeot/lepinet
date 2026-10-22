@@ -1,6 +1,6 @@
 # PLAN — what we are doing now
 
-**Kind:** living · **Last updated:** 2026-10-21 · **Supersedes:** [2026-07-28-landscape-and-plan](archive/journal/engineering/2026-07-28-landscape-and-plan.md)
+**Kind:** living · **Last updated:** 2026-10-22 · **Supersedes:** [2026-07-28-landscape-and-plan](archive/journal/engineering/2026-07-28-landscape-and-plan.md)
 
 The one file about *today*. Experiment IDs resolve in [`RESULTS.md`](RESULTS.md); reasons are in
 the linked journal entries; older versions of this file are in git history.
@@ -12,7 +12,7 @@ and two evaluation-only runs.
 
 | # | step | who | state |
 |---|---|---|---|
-| 1 | **Choose the scope and venue.** 9 contributions, 16 results sections, 13 k words. Proposed spine: classifier-stage interventions (§4.15) + the evaluation protocol (three axes, scoring rules, contamination) + self-training (§4.11); margin (§4.3, §4.7) and head scaling (§4.12) to an appendix; TreeOfLife (W1-W3) a second paper | owner | open |
+| 1 | **One paper, merged with Svenning et al.'s draft** (`~/Documents/hierarchical_classification.pdf`; owner, 2026-10-22: no second paper). Proposed outline: methods = data (Lepidoptera, Pl@ntNet, traps with the grouped split), HGLL head, the five heads, one recipe, evaluation (metric conventions, retrain noise); results = hierarchy (parameters vs supervision, alignment, novelty by taxonomic distance), evaluating under shift (conventions, scoring rules, contamination), long tail, target-domain data, classifier stage, abstention; appendix = margin, nuisance augmentation, head scaling, recipe ladder, AR decoder, EMLA and regulariser. Open: one training recipe for both drafts (EMLA vs √-oversampling), the colleague's raw trap predictions rescored with `dev/092` | owner + colleague | open |
 | 2 | Restructure §4 to ~6 sections; rewrite the abstract; write §1 (still an outline) | agent, after 1 | — |
 | 3 | Re-score §4.5 with each head's own rule; measure open-set under shift for B8 and P5 | GPU, eval only | — |
 | 4 | Verify every citation in §1b and the references (written from memory) | owner | open |

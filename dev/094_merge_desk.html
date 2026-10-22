@@ -1,0 +1,232 @@
+<title>Merge Desk</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,600;1,6..72,400&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400&display=swap">
+<style>
+/* Layout: the step list on the left, one insertion step at a time on the right, LaTeX first. */
+:root {
+  --paper: #f3f4f6; --card: #ffffff; --ink: #1a1d24; --muted: #5a6170; --rule: #d8dbe2;
+  --accent: #34519c; --accent-ink: #ffffff; --lamp: #a5650f; --lamp-bg: #fbf0dc; --ok: #2b7a4b; --sel: #e6eaf4; --code: #f6f7fa;
+  --read: "Newsreader", "Iowan Old Style", Georgia, serif;
+  --ui: "Instrument Sans", "Segoe UI", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --paper: #111318; --card: #181b22; --ink: #e4e7ee; --muted: #9aa1b0; --rule: #2a2f3a;
+  --accent: #8fa8ec; --accent-ink: #0e1220; --lamp: #e2a94e; --lamp-bg: #2c2312; --ok: #6cc28f; --sel: #222a3c; --code: #13161c; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --paper: #111318; --card: #181b22; --ink: #e4e7ee; --muted: #9aa1b0; --rule: #2a2f3a;
+  --accent: #8fa8ec; --accent-ink: #0e1220; --lamp: #e2a94e; --lamp-bg: #2c2312; --ok: #6cc28f; --sel: #222a3c; --code: #13161c; color-scheme: dark }
+* { box-sizing: border-box }
+body { background: var(--paper); color: var(--ink); font: 15px/1.5 var(--ui); padding-inline: 16px; padding-block: 0 48px }
+header.top { max-width: 1180px; margin: 0 auto 20px; padding-block: 20px 14px; display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 20px; border-bottom: 1px solid var(--rule) }
+header.top h1 { font: 600 20px/1.2 var(--read); margin: 0 }
+header.top .sub { color: var(--muted); font-size: 13px }
+.meter { margin-left: auto; display: flex; gap: 14px; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; flex-wrap: wrap }
+.banner { max-width: 1180px; margin: 0 auto 16px; padding: 10px 14px; border-radius: 6px; background: var(--lamp-bg); border: 1px solid var(--lamp); font-size: 13px }
+.wrap { max-width: 1180px; margin: 0 auto; display: grid; grid-template-columns: 290px minmax(0, 1fr); gap: 28px }
+nav { position: sticky; top: env(safe-area-inset-top, 0px); max-height: 100vh; overflow-y: auto; font-size: 13px; padding-bottom: 24px }
+nav h2 { font: 600 11px var(--ui); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 14px 0 6px }
+nav button { all: unset; display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; gap: 6px; align-items: baseline; width: 100%; padding: 4px 6px; border-radius: 4px; cursor: pointer; color: var(--muted); line-height: 1.35 }
+nav button:hover, nav button:focus-visible { background: var(--sel); color: var(--ink) }
+nav button[aria-current="true"] { background: var(--sel); color: var(--ink); font-weight: 500 }
+nav .num { font-family: var(--mono); font-size: 12px }
+.chip { font: 500 11px var(--ui); padding: 1px 7px; border-radius: 99px; border: 1px solid var(--rule); color: var(--muted); white-space: nowrap }
+.chip.ready { border-color: var(--accent); color: var(--accent) }
+.chip.pasted { border-color: var(--ok); color: var(--ok); background: transparent }
+.chip.hold { border-color: var(--lamp); color: var(--lamp) }
+.navtoggle { display: none }
+main { min-width: 0; display: grid; gap: 16px; align-content: start }
+.eyebrow { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); display: flex; gap: 12px; flex-wrap: wrap }
+.eyebrow b { color: var(--accent) }
+h2.title { font: 600 26px/1.2 var(--read); margin: 2px 0 0; text-wrap: balance }
+.why { font: 17px/1.55 var(--read); max-width: 70ch; margin: 0 }
+.where { background: var(--card); border: 1px solid var(--rule); border-radius: 8px; padding: 14px 16px; display: grid; gap: 6px }
+.where .lbl { font: 600 11px var(--ui); letter-spacing: .08em; text-transform: uppercase; color: var(--muted) }
+.where code, .anchor { font: 13px/1.5 var(--mono); background: var(--code); border: 1px solid var(--rule); border-radius: 4px; padding: 2px 6px; overflow-wrap: anywhere }
+.astate { font-size: 12px } .astate.bad { color: var(--lamp) } .astate.good { color: var(--ok) }
+.codebox { border: 1px solid var(--rule); border-radius: 8px; background: var(--code); overflow: hidden }
+.codebar { display: flex; gap: 8px; align-items: center; padding: 8px 10px; border-bottom: 1px solid var(--rule); background: var(--card); flex-wrap: wrap }
+.codebar .lbl { font: 600 11px var(--ui); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-right: auto }
+pre.latex { margin: 0; padding: 14px 16px; font: 13px/1.6 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink) }
+textarea { width: 100%; border: 0; background: var(--code); color: var(--ink); padding: 14px 16px; font: 13px/1.6 var(--mono); resize: vertical; min-height: 220px; display: block }
+textarea#note { border: 1px solid var(--rule); border-radius: 6px; min-height: 60px; font: 14px/1.5 var(--ui); background: var(--card) }
+.preview { background: var(--card); border: 1px solid var(--rule); border-radius: 8px; padding: 18px 22px; font: 17px/1.6 var(--read); max-width: 78ch }
+.preview h3 { font: 600 19px var(--read); margin: 0 0 8px } .preview h4 { font: 600 17px var(--read); margin: 0 0 6px }
+.preview p { margin: 0 0 .7em } .preview .todo { font: 13px/1.4 var(--mono); color: var(--lamp); background: var(--lamp-bg); padding: 4px 8px; border-radius: 4px; margin: 6px 0 }
+.preview .ref { color: var(--accent) } .preview .cite { color: var(--muted) }
+.preview .tbl { font: 13px var(--ui); color: var(--muted) }
+.cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px }
+.box { background: var(--card); border: 1px solid var(--rule); border-radius: 8px; padding: 14px 16px; min-width: 0 }
+.box h3 { font: 600 11px var(--ui); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 0 0 8px }
+.box ul { margin: 0; padding-left: 1.1em } .box li { margin-bottom: 6px; overflow-wrap: anywhere }
+.actions { display: grid; gap: 10px; max-width: 78ch }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center }
+button.b { font: 500 14px var(--ui); padding: 8px 14px; border-radius: 6px; border: 1px solid var(--rule); background: var(--card); color: var(--ink); cursor: pointer }
+button.b:hover { border-color: var(--muted) }
+button.b.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent) }
+button.b.flag { color: var(--lamp); border-color: var(--lamp) }
+button.b[disabled] { opacity: .5; cursor: default }
+button:focus-visible, textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
+.msg { font-size: 13px; color: var(--ok) }
+.state { font-size: 13px; color: var(--muted) }
+.planned { background: var(--card); border: 1px dashed var(--rule); border-radius: 8px; padding: 18px 20px; font: 17px/1.55 var(--read); color: var(--muted) }
+@media (max-width: 860px) {
+  .wrap { grid-template-columns: minmax(0, 1fr) }
+  nav { position: static; max-height: none; display: none } nav.open { display: block }
+  .navtoggle { display: inline-block } .meter { margin-left: 0 }
+}
+</style>
+
+<header class="top">
+  <h1>Merge Desk</h1>
+  <span class="sub" id="sub">lepinet results into the Overleaf draft</span>
+  <div class="meter"><button class="b navtoggle" id="navtoggle" aria-expanded="false">Steps</button><span id="count"></span></div>
+</header>
+<div class="banner" id="banner" hidden></div>
+<div class="wrap">
+  <nav id="nav" aria-label="Steps"></nav>
+  <main id="main"></main>
+</div>
+
+<script>
+window.MathJax = { tex: { inlineMath: [["$", "$"], ["\\(", "\\)"]] }, svg: { fontCache: "global" }, startup: { typeset: false } };
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-svg.js" async></script>
+<script>
+const DATA = /*__DATA__*/null;
+const steps = DATA.steps;
+let reviews = {}, applied = {}, db = null, cur = 0;
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const store = { get(k) { try { return JSON.parse(localStorage.getItem(k)) } catch { return null } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)) } catch {} } };
+
+const WHERE = {
+  before: "Paste it on a new line just above this line:",
+  after: "Paste it on a new line just below this line:",
+  "after-paragraph": "Find this line, then paste it after the paragraph that follows it, separated by a blank line:",
+};
+
+function statusOf(s) {
+  const r = reviews[s.id];
+  if (s.status === "pasted" || applied[s.id]) return "pasted";
+  if (r?.status === "pasted" || r?.status === "changed") return "pasted";
+  if (r?.status === "hold") return "hold";
+  return s.status === "planned" ? "planned" : "ready";
+}
+const LABEL = { planned: "not drafted", ready: "to paste", pasted: "pasted", hold: "on hold" };
+
+// A rough preview: enough to read the prose; tables and figures are only named.
+function preview(tex) {
+  const math = [];
+  let s = tex.replace(/\$[^$]+\$/g, m => (math.push(m), `@@M${math.length - 1}@@`));
+  const out = [];
+  for (const block of s.split(/\n\s*\n/)) {
+    let b = block.trim(); if (!b) continue;
+    const todos = []; b = b.split("\n").filter(l => { const m = l.match(/^\s*%\s*(.*)/); if (m) { if (/TODO/.test(m[1])) todos.push(m[1]); return false; } return true; }).join("\n");
+    todos.forEach(t => out.push(`<div class="todo">${esc(t)}</div>`));
+    if (!b) continue;
+    if (/\\begin\{(table|tabular|longtable|figure)/.test(b)) { out.push(`<p class="tbl">[${b.match(/\\begin\{(\w+)/)[1]}: see the LaTeX]</p>`); continue; }
+    let h = esc(b)
+      .replace(/\\(sub)?subsection\*?\{([^}]*)\}(\\label\{[^}]*\})?/g, (m, sub, t) => `</p><h${sub ? 4 : 3}>${t}</h${sub ? 4 : 3}><p>`)
+      .replace(/\\section\*?\{([^}]*)\}/g, "</p><h3>$1</h3><p>")
+      .replace(/\\textbf\{([^{}]*)\}/g, "<b>$1</b>").replace(/\\(textit|emph)\{([^{}]*)\}/g, "<i>$2</i>")
+      .replace(/\\texttt\{([^{}]*)\}/g, "<code>$1</code>")
+      .replace(/\\(auto|text|paren)?cite\{([^}]*)\}/g, '<span class="cite">[$2]</span>')
+      .replace(/\\[cC]ref\{([^}]*)\}/g, '<span class="ref">&sect;$1</span>')
+      .replace(/\\label\{[^}]*\}/g, "").replace(/\\noindent/g, "")
+      .replace(/\\,/g, "&thinsp;").replace(/\\%/g, "%").replace(/\\_/g, "_").replace(/---/g, "&mdash;").replace(/--/g, "&ndash;")
+      .replace(/~/g, "&nbsp;");
+    out.push(`<p>${h}</p>`.replace(/<p>\s*<\/p>/g, ""));
+  }
+  return out.join("").replace(/@@M(\d+)@@/g, (_, i) => esc(math[i]));
+}
+
+function renderNav() {
+  const nav = $("#nav"); let part = "";
+  nav.innerHTML = steps.map((s, i) => {
+    const st = statusOf(s);
+    const head = s.part !== part ? `<h2>${esc(part = s.part)}</h2>` : "";
+    return head + `<button data-i="${i}" aria-current="${i === cur}"><span class="num">${s.id}</span><span>${esc(s.title)}</span><span class="chip ${st}">${LABEL[st]}</span></button>`;
+  }).join("");
+  nav.querySelectorAll("button[data-i]").forEach(b => b.onclick = () => go(+b.dataset.i));
+  const c = { ready: 0, pasted: 0, hold: 0, planned: 0 }; steps.forEach(s => c[statusOf(s)]++);
+  $("#count").textContent = `${c.pasted} pasted · ${c.ready} to paste · ${c.hold} on hold · ${c.planned} not drafted`;
+}
+
+function go(i) { cur = Math.max(0, Math.min(steps.length - 1, i)); store.set("md.cur", steps[cur].id); render(); window.scrollTo({ top: 0 }); $("#nav").classList.remove("open"); }
+
+function render() {
+  renderNav();
+  const s = steps[cur], st = statusOf(s), r = reviews[s.id] || {}, ap = applied[s.id];
+  const main = $("#main");
+  const eyebrow = `<div class="eyebrow"><b>${esc(s.part)}</b><span>step ${s.id} of ${steps[steps.length - 1].id}</span><span class="chip ${st}">${LABEL[st]}</span></div>`;
+  if (st === "planned") {
+    main.innerHTML = `${eyebrow}<h2 class="title">${esc(s.title)}</h2><div class="planned">Not drafted yet. Claude drafts a few steps ahead of where you are, so each piece is written against what Overleaf already holds.</div>
+      <div class="row"><button class="b" id="back" ${cur === 0 ? "disabled" : ""}>Back</button><button class="b" id="fwd">Next step</button></div>`;
+    $("#back").onclick = () => go(cur - 1); $("#fwd").onclick = () => go(cur + 1);
+    return;
+  }
+  const draft = store.get("md.draft." + s.id) || {};
+  const text = draft.edit ?? r.edited ?? s.latex;
+  const editing = draft.edit != null || !!r.edited;
+  const anc = s.anchor_state || "";
+  main.innerHTML = `${eyebrow}<h2 class="title">${esc(s.title)}</h2><p class="why">${esc(s.why || "")}</p>
+    <div class="where"><span class="lbl">Where it goes</span><div>In Overleaf, open <code>${esc(s.target)}</code>. ${esc(WHERE[s.action] || s.action)}</div>
+      <div class="anchor">${esc(s.anchor)}</div>
+      <div class="astate ${anc === "not found" ? "bad" : "good"}">${anc === "found" ? "This line is in the local copy of the Overleaf project." : anc === "not found" ? "This line is not in the local copy. Check the place by hand, and tell Claude." : "This line arrives with " + esc(anc.replace("created by ", "")) + "; paste that one first."}</div></div>
+    <div class="codebox"><div class="codebar"><span class="lbl">LaTeX to paste</span><button class="b" id="edit">${editing ? "Discard edits" : "Edit before copying"}</button><button class="b primary" id="copy">Copy</button></div>
+      ${editing ? `<label for="tex" hidden>LaTeX</label><textarea id="tex" spellcheck="false">${esc(text)}</textarea>` : `<pre class="latex" id="pre">${esc(text)}</pre>`}</div>
+    <div class="preview" id="pv">${preview(text)}</div>
+    <div class="cols"><div class="box"><h3>Check before pasting</h3><ul>${(s.check || []).map(c => `<li>${esc(c)}</li>`).join("") || "<li>Nothing flagged.</li>"}</ul></div>
+      <div class="box"><h3>Where the numbers come from</h3><ul>${(s.source || []).map(c => `<li>${esc(c)}</li>`).join("")}</ul><p class="state">Piece file: ${esc(s.file)}</p></div></div>
+    ${ap ? `<div class="msg">Mirrored into the local copy by Claude${ap.note ? ": " + esc(ap.note) : ""}.</div>` : ""}
+    <div class="actions"><label for="note">Note to Claude (optional)</label><textarea id="note" placeholder="e.g. moved it to the appendix, rephrased the second sentence, Asger disagrees">${esc(draft.note ?? r.note ?? "")}</textarea>
+      <div class="row"><button class="b" id="back" ${cur === 0 ? "disabled" : ""}>Back</button><button class="b flag" id="hold">Hold, needs discussion</button><button class="b primary" id="pasted">Pasted into Overleaf</button><span class="msg" id="msg"></span></div>
+      <p class="state">If you changed the text in Overleaf, paste your final version into the box above (Edit before copying) before you mark it, so the local copy matches.</p></div>`;
+  MathJax?.typesetPromise?.([$("#pv")]).catch(() => {});
+  wire(s);
+}
+
+function wire(s) {
+  const save = () => store.set("md.draft." + s.id, { edit: $("#tex") ? $("#tex").value : null, note: $("#note").value });
+  $("#note").oninput = save;
+  if ($("#tex")) $("#tex").oninput = () => { save(); $("#pv").innerHTML = preview($("#tex").value); };
+  $("#edit").onclick = () => { if ($("#tex")) { store.set("md.draft." + s.id, { note: $("#note").value }); if (reviews[s.id]) reviews[s.id] = { ...reviews[s.id], edited: undefined }; } else store.set("md.draft." + s.id, { edit: s.latex, note: $("#note").value }); render(); };
+  $("#copy").onclick = async () => {
+    const t = $("#tex") ? $("#tex").value : s.latex;
+    try { await navigator.clipboard.writeText(t); $("#copy").textContent = "Copied"; setTimeout(() => $("#copy") && ($("#copy").textContent = "Copy"), 1500); }
+    catch { const el = $("#pre") || $("#tex"); const sel = getSelection(), rg = document.createRange(); rg.selectNodeContents(el); sel.removeAllRanges(); sel.addRange(rg); $("#copy").textContent = "Selected: press Ctrl+C"; }
+  };
+  $("#back").onclick = () => go(cur - 1);
+  $("#hold").onclick = () => submit(s, "hold");
+  $("#pasted").onclick = () => submit(s, $("#tex") && $("#tex").value.trim() !== s.latex.trim() ? "changed" : "pasted");
+}
+
+async function submit(s, status) {
+  const rec = { status, at: new Date().toISOString(), note: $("#note").value.trim() };
+  if ($("#tex") && $("#tex").value.trim() !== s.latex.trim()) rec.edited = $("#tex").value;
+  if (status === "hold" && !rec.note) { $("#msg").textContent = "Say what needs discussing."; return; }
+  reviews[s.id] = rec;
+  try { if (db) await db.collection("steps").doc(s.id).set(rec); else store.set("md.reviews", reviews); store.set("md.draft." + s.id, null); }
+  catch (e) { delete reviews[s.id]; $("#msg").textContent = "Not saved: " + (e.message || e.code); return; }
+  const next = steps.findIndex((x, i) => i > cur && statusOf(x) === "ready");
+  go(next < 0 ? cur : next);
+}
+
+function soft() { if (document.activeElement?.tagName === "TEXTAREA") renderNav(); else render(); }
+$("#navtoggle").onclick = () => { const o = $("#nav").classList.toggle("open"); $("#navtoggle").setAttribute("aria-expanded", o); };
+if (DATA.built) $("#sub").textContent = `lepinet results into the Overleaf draft · built ${DATA.built}`;
+reviews = store.get("md.reviews") || {};
+{ const i = steps.findIndex(s => s.id === store.get("md.cur")); cur = i >= 0 ? i : Math.max(0, steps.findIndex(s => statusOf(s) === "ready")); }
+render();
+window.addEventListener("load", () => MathJax?.typesetPromise?.([$("#pv")].filter(Boolean)).catch(() => {}));
+
+(async () => {
+  const d = window.claude?.use ? await window.claude.use("db") : null;
+  if (!d) { const b = $("#banner"); b.hidden = false; b.textContent = "Your marks are saved in this browser only, so Claude cannot read them. Open the page on claude.ai while signed in."; return; }
+  db = d;
+  db.collection("steps").onSnapshot(q => { reviews = {}; q.docs.forEach(x => reviews[x.id] = x.data()); soft(); },
+    e => { const b = $("#banner"); b.hidden = false; b.textContent = "Cannot reach the shared store (" + e.code + "). Marks are not being saved."; });
+  db.collection("applied").onSnapshot(q => { applied = {}; q.docs.forEach(x => applied[x.id] = x.data()); soft(); }, () => {});
+})();
+</script>

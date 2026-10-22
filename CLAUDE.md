@@ -13,7 +13,7 @@ here from those files; a duplicated fact is a fact that will go stale in one of 
 
 Hierarchical fine-grained image classification: from one photo, predict a label at every level of a
 taxonomy at once. Reference dataset is Lepidoptera — 12,041 species / 4,333 genera / 102 families,
-~3 M images, heavy long tail. The package is generic over the number and names of levels.
+6.3 M images (5.0 M training rows after the 50-image floor), heavy long tail. The package is generic over the number and names of levels.
 
 The headline metric is **species macro-F1** on the held-out fold (`set == '0'`) over **all** species.
 Macro, because the tail is the point.

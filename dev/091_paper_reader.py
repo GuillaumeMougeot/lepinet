@@ -46,18 +46,14 @@ DECISIONS = [
     {"id": "dec-scope", "title": "Scope", "md":
      "The draft makes 9 contributions over 16 results sections. A paper needs one argument. Which spine?",
      "options": [
-         {"key": "split", "label": "Two companion papers, with Asger's draft", "rec": True,
-          "md": "Asger's *Role of hierarchically explicit models* takes the head comparison (§2, §4.1, §4.4, §4.7, "
-                "rank-wise thresholds of §4.6) on Lepidoptera and Pl@ntNet. This paper keeps deployment under "
-                "shift: self-training, the classifier stage, long tail, open-set rules, abstention, contamination."},
+         {"key": "merged", "label": "One paper, merged with Asger's draft", "rec": True,
+          "md": "His methods and head comparison (with Pl@ntNet), our results on shift. Margin, nuisance "
+                "augmentation, head scaling and the recipe ladder go to the appendix. Outline in PLAN.md step 1."},
          {"key": "classifier", "label": "Classifier stage + protocol + self-training",
           "md": "§4.15 as the spine, with the evaluation protocol (three axes, scoring rules, contamination) "
                 "and self-training (§4.11). Margin (§4.3, §4.7) and head scaling (§4.12) go to an appendix. "
                 "PLAN's proposal."},
-         {"key": "selftrain", "label": "Self-training at light traps",
-          "md": "§4.11 with the hold-out and label-budget results as the whole paper; the protocol as setup; "
-                "the rest as a second paper. Shortest, most applied."},
-         {"key": "all", "label": "Keep everything",
+         {"key": "all", "label": "Keep everything in the main text",
           "md": "One long paper for a venue without a page limit. Least work now, hardest to read."},
      ]},
     {"id": "dec-venue", "title": "Venue", "md": "Where does it go? This sets the length.",

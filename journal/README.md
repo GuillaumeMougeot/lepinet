@@ -59,6 +59,8 @@ incidents are in [`engineering/`](engineering/). The plan is [`../PLAN.md`](../P
 | [10-12](2026-10-12-do-trap-moths-leak-across-nights.md) | Does the trap adapt/probe split leak individual moths across nights? | Barely: 13 of 15,200 probe crops; macro-F1 moves <= 0.0003 |
 | [10-12](2026-10-12-self-training-on-a-trap-it-never-saw.md) | Does self-training help at a trap, or a site, it never saw? (X1, X2) | Accuracy transfers to a new trap, the rare tail does not (macro-F1 keeps 64 %, a new site 23 %) |
 | [10-21](2026-10-21-self-training-on-european-traps.md) | Does self-training on traps across Europe beat our Danish traps? (U) | **OPEN**, design; waits for the crop pool |
+| [10-22](2026-10-22-why-the-trap-scores-of-the-two-drafts-differ.md) | Why does the colleague's draft score trap images so much lower? | The metric: mini_metrics averages over predicted-only species too (1,271 for B1): 0.6923 becomes 0.1544 |
+| [10-22](2026-10-22-rescoring-in-the-mini-metrics-convention.md) | What do our results say in mini_metrics' current convention? | **OPEN**: predictions written, rescoring running |
 
 ## Engineering: side projects, cluster work, incidents
 
