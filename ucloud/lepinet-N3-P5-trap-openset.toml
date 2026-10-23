@@ -17,7 +17,7 @@ local = ".."
 remote = "/12347837/repos/lepinet"
 [setup]
 script = "setup-lepinet.sh"
-run = "set -e; python dev/061_ood_scoring_rules.py --model '/work/lepinet/data/ucloud_models/*-lepinet-P5-bioclip2-adapted-unfrozen-ucloud/*.pt' --parquet /work/lepinet/data/flemming/flemming_names_labels.parquet --img-dir /work/flemming/images --out /work/lepinet/data/ucloud_preds/trap-openset-P5.json --save-scores /work/lepinet/data/ucloud_preds/trap-openset-P5.parquet --img-size 256 --bioclip2"
+run = "set -e; uv pip install --no-deps open_clip_torch ftfy regex wcwidth; python dev/061_ood_scoring_rules.py --model '/work/lepinet/data/ucloud_models/*-lepinet-P5-bioclip2-adapted-unfrozen-ucloud/*.pt' --parquet /work/lepinet/data/flemming/flemming_names_labels.parquet --img-dir /work/flemming/images --out /work/lepinet/data/ucloud_preds/trap-openset-P5.json --save-scores /work/lepinet/data/ucloud_preds/trap-openset-P5.parquet --img-size 224 --bioclip2"
 [schedule]
 auto_extend = "1h"
 max_time = "6h"

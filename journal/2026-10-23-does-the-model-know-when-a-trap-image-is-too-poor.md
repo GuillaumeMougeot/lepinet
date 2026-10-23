@@ -84,3 +84,44 @@ quintiles, Q1 the blurriest:
 
 Part B (open-set on trap images) runs as three evaluation jobs: N2 (C3b, 747 crops of 9 withheld
 species plus 234 out-of-vocabulary crops), N3 (B8 and P5, the 234 out-of-vocabulary crops).
+
+## Result, part B: species the model never saw, on trap images (2026-10-23, `dev/096`)
+
+AUROC of each open-set rule, novel crops against all 46,924 known trap crops (higher score = more novel):
+
+| model | novel crops | best rule | AUROC | same model on museum-style images |
+|---|---|---|---|---|
+| C3b, near (8 withheld species, genus known) | 742 | MSP | **0.566** | 0.8717 (near stratum, entropy) |
+| C3b, mid (1 withheld genus) | 5 | entropy | 0.955 | 0.9463 |
+| C3b, out-of-vocabulary (6 species) | 234 | MSP | 0.781 | — |
+| C3b, all 981 novel crops | 981 | MSP | 0.619 | — |
+| B8, out-of-vocabulary (6 species) | 234 | top-2 margin | 0.857 | 0.9153 (entropy) |
+| P5 | — | — | pending (job resubmitted after a missing-library failure) | 0.9161 |
+
+* **H4 holds, and worse than predicted.** On trap images C3b barely detects an unseen species from a
+  genus it knows: 0.566, against 0.8717 for the same stratum on museum-style images and a predicted
+  0.60-0.75. The unseen genus (5 crops) and the out-of-vocabulary species stay detectable.
+* **One species dominates.** *Pleuroptya ruralis* is 682 of the 742 near-novel crops (AUROC 0.563).
+  The other seven near species average 0.61 over 60 crops. Read the near result as "one common
+  trap species and seven rare ones", not as a population estimate.
+* **H5: the best rule changes under shift.** C3b's best rule is MSP on trap images (entropy on museum
+  images); B8's is the top-2 margin (entropy on museum images). Max-logit and energy fall below
+  chance for C3b on trap images (0.42, 0.39): shift lowers every logit, known species included.
+* **What the back-off policy says to an unseen species** (C3b, thresholds fitted on known crops of
+  half the nights, 95 % target):
+
+  | crops | species answer | genus | family | abstain | genus correct | family correct |
+  |---|---|---|---|---|---|---|
+  | known (other half of the nights) | 46.2 % | 10.3 % | 27.1 % | 16.4 % | 0.947 | 0.951 |
+  | novel, near | **37.6 %** (all wrong) | 9.2 % | 45.6 % | 7.7 % | 0.426 | 0.988 |
+  | novel, out-of-vocabulary | 3.4 % (all wrong) | 19.2 % | 34.2 % | 43.2 % | 1.000 | 0.712 |
+
+  **38 % of the crops of an unseen species in a known genus receive a confident, wrong species
+  name.** The family answers are right (0.988), so backing off would have helped; the policy simply
+  does not see that the species is new. Out-of-vocabulary crops are mostly caught (43 % abstain).
+
+**What it means.** On trap images, novelty detection is the weak link, not the back-off. A species
+close to a known one passes as known, with a confident name. This confirms §4.5's direction with a
+current model and the right rules: novelty detection is not domain-robust. It also means a deployed
+model's species answers on trap images should be read as "this species or a close relative it
+was never shown".

@@ -61,7 +61,8 @@ incidents are in [`engineering/`](engineering/). The plan is [`../PLAN.md`](../P
 | [10-21](2026-10-21-self-training-on-european-traps.md) | Does self-training on traps across Europe beat our Danish traps? (U) | **OPEN**, design; waits for the crop pool |
 | [10-22](2026-10-22-why-the-trap-scores-of-the-two-drafts-differ.md) | Why does the colleague's draft score trap images so much lower? | The metric: mini_metrics averages over predicted-only species too (1,271 for B1): 0.6923 becomes 0.1544 |
 | [10-22](2026-10-22-rescoring-in-the-mini-metrics-convention.md) | What do our results say in mini_metrics' current convention? | **RESOLVED** 2026-10-23: in-distribution unchanged; on traps self-training's gain triples, real labels and the checklist overtake it (+10 to +35), the dose optimum survives only on held-out species |
-| [10-23](2026-10-23-does-the-model-know-when-a-trap-image-is-too-poor.md) | On trap images, does the model back off when the image is poor, and notice a new species? (N) | **OPEN**: backs off on blurry crops (species answers 91 to 65 %), precision holds within 2 pt; open-set jobs running |
+| [10-23](2026-10-23-does-the-model-know-when-a-trap-image-is-too-poor.md) | On trap images, does the model back off when the image is poor, and notice a new species? (N) | **OPEN** (P5 pending): backs off on blurry crops (species answers 91 to 65 %); an unseen species of a known genus is barely detected (AUROC 0.566) and 38 % of its crops get a confident wrong name |
+| [10-23](2026-10-23-what-is-the-best-back-off-policy.md) | What is the best back-off policy, independent of moths and traps? (Q) | **OPEN**, design: greedy 95 % thresholds vs expected utility, on three datasets |
 
 ## Engineering: side projects, cluster work, incidents
 
