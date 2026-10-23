@@ -24,7 +24,7 @@ One line each, with the paper section and the experiments (section 2) that carry
 | 10 | Two thirds of our test fold is inside BioCLIP-2's training data by GBIF occurrence id; a frozen probe understates that model by 7 pt; fine-tuned it is the better trunk, and our recipe closes the gap. | §4.14 | P1-P5 |
 | 11 | A margin damages marginalisation more than classification, through calibration; replicated at 10x scale. | §4.7 | A1, A2, A4 |
 | 12 | Augmentation that mimics trap conditions closes only 17 % of the gap. | §4.8 | B1 |
-| 13 | Measurement: macro-F1 does not decompose over subsets; averaging over predicted-only species too (mini_metrics) turns 0.69 into 0.15 for the same predictions; noise floors depend on the training regime (identical runs 3.74 pt apart); give every arm its own best configuration. | §3.2, §5 | A5, G3b, R5b, [conventions](journal/2026-10-22-why-the-trap-scores-of-the-two-drafts-differ.md) |
+| 13 | Measurement: macro-F1 does not decompose over subsets; averaging over predicted-only species too (mini_metrics) turns 0.69 into 0.15 for the same predictions, and re-scoring every run that way changes the trap conclusions about labels, checklists and dose ([rescore](journal/2026-10-22-rescoring-in-the-mini-metrics-convention.md)); noise floors depend on the training regime (identical runs 3.74 pt apart); give every arm its own best configuration. | §3.2, §5 | A5, G3b, R5b, [conventions](journal/2026-10-22-why-the-trap-scores-of-the-two-drafts-differ.md) |
 | 14 | A regional checklist helps the average observation (+5 pt accuracy) and hurts per-species macro-F1 when the scored set is most of the checklist. *(Not in the paper.)* | — | K1 |
 
 ### 1b. Engineering (argued in [`docs/design-decisions.md`](docs/design-decisions.md))
