@@ -1,6 +1,6 @@
 # PLAN — what we are doing now
 
-**Kind:** living · **Last updated:** 2026-10-22 · **Supersedes:** [2026-07-28-landscape-and-plan](archive/journal/engineering/2026-07-28-landscape-and-plan.md)
+**Kind:** living · **Last updated:** 2026-10-23 · **Supersedes:** [2026-07-28-landscape-and-plan](archive/journal/engineering/2026-07-28-landscape-and-plan.md)
 
 The one file about *today*. Experiment IDs resolve in [`RESULTS.md`](RESULTS.md); reasons are in
 the linked journal entries; older versions of this file are in git history.
@@ -23,6 +23,7 @@ and two evaluation-only runs.
 
 | ID | what | state | next |
 |---|---|---|---|
+| **N2/N3** | open-set detection on all 47,905 trap crops: C3b (withheld species), B8, P5; per-image scores saved | 3 evaluation jobs submitted 2026-10-23 (12431234-6) | download `trap-openset-*.{json,parquet}` and `C3b-shift`, then part B of [[2026-10-23-does-the-model-know-when-a-trap-image-is-too-poor]] |
 | **W1** | TreeOfLife-200M at short side 256, on the workstation (`/data/au761367/tol256s/`; zero UCloud core-hours) | crawl done: 64.16 M images plus ~0.54 M retried ([crawl](journal/engineering/2026-10-01-the-crawl-resized-the-wrong-side.md)); `retry3/` (9 servers, 72 h cap) | **upload paused on storage**: 28 of 1,048 shards up; ~550 more fit, the rest needs ~0.7 TB. Then merge `retry1/`/`retry3/` metas, upload the manifest, audit (`dev/085`) |
 
 ## 3. Backlog, in order

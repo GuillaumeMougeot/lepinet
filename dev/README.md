@@ -50,6 +50,7 @@ kept as a record. Long-term tooling does not live here: the documentation check 
 | `092_metric_conventions.py` | one predictions file scored under each macro-F1 convention (ours, mini_metrics with and without threshold) | paper |
 | `093_rescore_mini_metrics.py` | re-score prediction folders in mini_metrics' current convention (zero and calibrated) next to ours; checkpoints per run in `data/rescore/`, progress in `data/rescore/progress.md` | paper |
 | `094_merge_desk.py` (+ `.html`) | Merge Desk: the LaTeX pieces of `paper/merge/` as ordered insertion steps into the Overleaf draft; mirrors pasted pieces into the local copy | paper |
+| `095_trap_quality_backoff.py` | the release back-off cascade broken down by crop sharpness and size, on held-out trap nights | N1 |
 
 **Conventions.** Never `uv sync` or `uv run` (the venv is hand-managed); use `.venv/bin/python`
 from the repo root.

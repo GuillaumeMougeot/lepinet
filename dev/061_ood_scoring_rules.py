@@ -211,6 +211,12 @@ def main(a):
         print(f"  (head emits log-probabilities; {sorted(degenerate)} excluded from the ranking)")
     json.dump(res, open(a.out, "w"), indent=2)
     print(f"wrote {a.out}")
+    if a.save_scores:
+        # Per-image scores, so strata (near / mid) and the back-off on novel crops can be read later.
+        out = pd.DataFrame({k: np.asarray(v) for k, v in scores.items()})
+        out["image_path"], out["label"], out["novel"] = df["image_path"].values, df[levels[0]].values, nv
+        out.to_parquet(a.save_scores, index=False)
+        print(f"wrote {a.save_scores}")
 
 
 if __name__ == "__main__":
@@ -223,6 +229,7 @@ if __name__ == "__main__":
     ap.add_argument("--bioclip2", action="store_true",
                     help="checkpoint uses the dev/075 BioCLIP-2 trunk (P5); installs that seam")
     ap.add_argument("--num-workers", type=int, default=32)
+    ap.add_argument("--save-scores", default=None, help="parquet of per-image scores (image_path, label, novel)")
     ap.add_argument("--raw-scores", action="store_true",
                     help="Score on pre-clamp cos-like values instead of the head's clamped z-scores.")
     main(ap.parse_args())

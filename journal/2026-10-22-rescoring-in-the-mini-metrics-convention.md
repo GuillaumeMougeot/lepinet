@@ -166,3 +166,29 @@ and overtake self-training; and the dose optimum on probe disappears, surviving 
 species. The merged paper must present §4.11's dose and label-budget claims, and K1, in the new
 form, and state that the calibrated column fits its threshold on a random, not trap-and-night,
 split.
+
+## Amendment (2026-10-23): calibration split grouped by trap and night
+
+mini_metrics' calibrated score draws a random 10 % of images, stratified by label. On trap images that
+puts frames of the same moth on both sides (35 % of crops have a near-identical twin in their night).
+`dev/093 --grouped` instead calibrates on a seeded 10 % of the (trap, night) groups and scores the
+rest, 20 seeds, same threshold search (`data/rescore/<set>-grouped.csv`).
+
+| run | probe, random split | probe, grouped | held-out species, random | held-out species, grouped |
+|---|---|---|---|---|
+| B1 (no trap images) | 0.4070 | 0.4242 | 0.3558 | 0.3561 |
+| B3rep5x (self-training) | 0.6214 | 0.6309 | 0.3946 | 0.4139 |
+| T1rep (real labels, 11x) | 0.7233 | 0.7232 | 0.3196 | 0.3122 |
+| B8 | 0.6407 | 0.6472 | 0.4370 | 0.4520 |
+| P5 | 0.6155 | 0.6223 | 0.4903 | 0.4974 |
+| X1 (trap held out) | 0.6153 | 0.6273 | 0.4001 | 0.4039 |
+| X2 (site held out) | 0.5963 | 0.5923 | 0.3817 | 0.3911 |
+
+* **Grouping changes little, and in the unexpected direction.** Over 65 probe runs the grouped score
+  is 0.8 points higher on average (range -0.5 to +2.3); held-out species likewise (+0.8, range -1.4 to
+  +3.8). The leak did not inflate the random-split numbers. A threshold fitted on frames of the same
+  nights is, if anything, slightly worse for the other nights.
+* **No conclusion changes.** Self-training's gain is +20.7 (grouped); a held-out trap keeps 98 % of
+  it and a held-out site 81 %; T1rep still leads self-training on probe (+9.2) and loses on held-out
+  species (-10.2 grouped, against -7.5 random).
+* The paper's calibrated trap numbers use the grouped split (Merge Desk step 10).

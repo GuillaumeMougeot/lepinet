@@ -1,0 +1,27 @@
+# N3-B8: open-set detection on trap images (all 47,905 crops), five scoring rules from one forward pass,
+# per-image scores saved. Novel = species outside this model's vocabulary.
+# journal/2026-10-23-does-the-model-know-when-a-trap-image-is-too-poor.md (part B). Evaluation only.
+name = "lepinet-N3-B8-trap-openset"
+replicas = 1
+[application]
+name = "pytorch-te"
+version = "26.05"
+[product]
+id = "gpu-nvidia-b200-1-gpu"
+category = "gpu-nvidia-b200"
+provider = "ucloud"
+[time_allocation]
+hours = 3
+[sync]
+local = ".."
+remote = "/12347837/repos/lepinet"
+[setup]
+script = "setup-lepinet.sh"
+run = "set -e; python dev/061_ood_scoring_rules.py --model '/work/lepinet/data/ucloud_models/*-lepinet-B8-best-at-2pct-dinov3cnxl-ucloud/*.pt' --parquet /work/lepinet/data/flemming/flemming_names_labels.parquet --img-dir /work/flemming/images --out /work/lepinet/data/ucloud_preds/trap-openset-B8.json --save-scores /work/lepinet/data/ucloud_preds/trap-openset-B8.parquet --img-size 256"
+[schedule]
+auto_extend = "1h"
+max_time = "6h"
+[[resources]]
+type = "file"
+path = "/12347837/datasets/flemming"
+read_only = true

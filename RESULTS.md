@@ -208,6 +208,14 @@ distance), **E2** (scoring rules do not transfer across scale), **L4** (cRT), **
 |---|---|---|---|
 | U1-U4 | pseudo-labels from EU traps (teacher B8, unique images, no Danish probe traps): natural vs balanced at 2.6 %, then a share sweep, then plus the Danish set | not run | [EU traps](journal/2026-10-21-self-training-on-european-traps.md) |
 
+### N — knowing when a trap image is too poor, or a species is new (opened 2026-10-23)
+
+| ID | question | result | where |
+|---|---|---|---|
+| N1 | the release back-off cascade by image sharpness and crop size (B8, P5, B3rep5x, probe) | species answers fall from 83-91 % on the sharpest fifth to 51-65 % on the blurriest; species precision there 0.931-0.935 (target 0.95); B8 and B3rep5x never answer at genus | [quality](journal/2026-10-23-does-the-model-know-when-a-trap-image-is-too-poor.md) |
+| N2 | open-set on trap images: C3b (9 withheld trap species, 747 crops) plus the 234 out-of-vocabulary crops; five rules | running (job 12431234) | same |
+| N3 | open-set on trap images for B8 and P5 (234 out-of-vocabulary crops) | running (jobs 12431235-6) | same |
+
 ### P — foundation model (BioCLIP-2) as the trunk (closed)
 
 | ID | question | result | where |
