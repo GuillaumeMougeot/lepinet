@@ -83,6 +83,9 @@ that chat logs are not load-bearing. `RESULTS.md` §2 records every experiment a
   does the affinity mask; only `/sys/fs/cgroup/cpu.max` is right. Anything that sizes a thread pool
   from `os.cpu_count()` (pyarrow, torch intra-op, BLAS) oversubscribes the job's real CPUs. Read the
   cgroup quota -- `effective_cpus()` in `dev/082_tol_crawler.py` -- and pin pools to it.
+- **Workstation: systemd-oomd kills the owner's tmux sessions under memory pressure**, and a
+  `systemd-run -p MemoryMax=` cap does not prevent it (2026-10-22). Keep local jobs streaming/sharded
+  and a few GB at most (`dev/085`, `dev/090` show how), or run them on UCloud.
 - **`data/` is a symlink to machine-local storage and is gitignored.** A clone elsewhere has no runs,
   so every result must be written into `RESULTS.md` §2: it is the only copy that leaves the box.
 - **Read UCloud job logs, not job status.** A job reports SUCCESS while the script inside exits 1.

@@ -37,7 +37,7 @@ from pathlib import Path
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-IMAGES = "/data/au761367/tol256s/images"
+IMAGES = "/data/datasets/tol256/images"  # moved and renamed by dev/090 (2026-10-23)
 WORK = "/data/au761367/tol256s/upload"
 REMOTE = "/12383016/treeoflife_200m/s256"
 

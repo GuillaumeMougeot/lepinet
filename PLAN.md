@@ -24,7 +24,7 @@ and two evaluation-only runs.
 | ID | what | state | next |
 |---|---|---|---|
 | **N3-P5** | open-set on all 47,905 trap crops for P5 (N2 C3b and N3 B8 done, part B written) | resubmitted 2026-10-23 (12431255) after a missing open_clip | download `trap-openset-P5.{json,parquet}`, add its row to part B of [[2026-10-23-does-the-model-know-when-a-trap-image-is-too-poor]] |
-| **W1** | TreeOfLife-200M at short side 256, on the workstation (`/data/au761367/tol256s/`; zero UCloud core-hours) | crawl done: 64.16 M images plus ~0.54 M retried ([crawl](journal/engineering/2026-10-01-the-crawl-resized-the-wrong-side.md)); `retry3/` (9 servers, 72 h cap) | **upload paused on storage**: 28 of 1,048 shards up; ~550 more fit, the rest needs ~0.7 TB. Then merge `retry1/`/`retry3/` metas, upload the manifest, audit (`dev/085`) |
+| **W1** | TreeOfLife-200M at short side 256, on the workstation (`/data/au761367/tol256s/`; zero UCloud core-hours) | crawl done: 64.16 M images plus ~0.54 M retried ([crawl](journal/engineering/2026-10-01-the-crawl-resized-the-wrong-side.md)); `retry3/` (9 servers, 72 h cap) | shared as `/data/datasets/tol256`: 65.2 M images, metadata with ToL's per-image fields ([share](journal/engineering/2026-10-21-sharing-the-tol-crawl.md)). **Upload re-planned** (1,053 shards); old shards in the UCloud Trash; upload paused on storage |
 
 ## 3. Backlog, in order
 

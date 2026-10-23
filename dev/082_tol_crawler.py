@@ -983,7 +983,8 @@ class Fetcher:
         if meta_path.exists() and not retrying:
             return
         b = self.budget(host)
-        if b.blocked:
+        offline = self.a.offline          # record what is on disk; never send a request
+        if b.blocked and not offline:
             return
         done: set[str] = set()
         old_meta = None
@@ -1003,7 +1004,7 @@ class Fetcher:
         aborted = False
         for batch in pq.ParquetFile(part).iter_batches(batch_size=max(1, self.a.chunk),
                                                        columns=["uuid", "url", "species"]):
-            if b.blocked:
+            if b.blocked and not offline:
                 aborted = True
                 break
             rows = [r for r in batch.to_pylist() if r["uuid"] not in done]
@@ -1014,7 +1015,7 @@ class Fetcher:
                                            for p in paths))
 
             async def one(row, p, size):
-                if b.blocked:
+                if b.blocked and not offline:
                     return                    # leave unattempted, so a later --retry-blocked can finish it
                 rec = {"uuid": row["uuid"], "species": row["species"], "status": "",
                        "path": "", "content_hash": "", "width": 0, "height": 0, "bytes": 0}
@@ -1023,6 +1024,9 @@ class Fetcher:
                             "bytes": size}
                     self.totals["already_on_disk"] += 1
                     recs.append(rec)
+                    return
+                if offline:                   # a failure status, so --retry-failed fetches it later
+                    recs.append(rec | {"status": "not_fetched"})
                     return
                 jpg, status, meta = await self.fetch_one(session, row, b)
                 if status == SKIPPED_BLOCKED:
@@ -1041,7 +1045,9 @@ class Fetcher:
             if recs:
                 tables.append(pa.Table.from_pylist(recs))
 
-        if aborted or b.blocked:
+        if offline and not any(r["status"] == STATUS_OK for t in tables for r in t.select(["status"]).to_pylist()):
+            return                            # nothing on disk: leave the part as it was
+        if (aborted or b.blocked) and not offline:
             self.record_blocked(b)
             return                            # part not finished: no meta, so it stays resumable
         if tables:
@@ -1090,12 +1096,12 @@ class Fetcher:
         async with aiohttp.ClientSession(timeout=timeout, connector=conn,
                                          headers=BASE_HEADERS) as session:
             async def host_worker(host, plist):
-                if host in self.known_blocked and not self.a.retry_blocked:
+                if host in self.known_blocked and not (self.a.retry_blocked or self.a.offline):
                     self.totals["skipped_blocked_parts"] += len(plist)
                     return
                 async with self.active_hosts:
                     for p in plist:
-                        if self.budget(host).blocked:
+                        if self.budget(host).blocked and not self.a.offline:
                             break
                         await self.run_part(session, p, host)
 
@@ -1652,6 +1658,9 @@ def build_parser():
                         "retry of servers that once blocked us")
     q.add_argument("--retry-blocked", action="store_true",
                    help="re-attempt hosts recorded in blocked_hosts.json (e.g. after access is granted)")
+    q.add_argument("--offline", action="store_true",
+                   help="no requests: record images already on disk (parts without a meta only); "
+                        "other rows get status not_fetched")
     q.add_argument("--dead-probe", type=int, default=200,
                    help="recent outcomes over which a host may be declared dead (404/DNS/TLS)")
     q.add_argument("--dead-ratio", type=float, default=0.97,

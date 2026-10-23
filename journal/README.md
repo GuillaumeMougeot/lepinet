@@ -83,3 +83,4 @@ incidents are in [`engineering/`](engineering/). The plan is [`../PLAN.md`](../P
 | [09-30](engineering/2026-09-30-full-fold-and-p5-resize.md) | subproject | P5's published preprocessing fixed |
 | [10-01](engineering/2026-10-01-the-crawl-that-spent-58-percent-of-the-cpu-budget.md) | incident | a crawler spent 58 % of the CPU budget |
 | [10-01](engineering/2026-10-01-the-crawl-resized-the-wrong-side.md) | incident | the ToL crawl stored the wrong side; a deadlock froze it (**OPEN**: re-crawl running) |
+| [10-21](engineering/2026-10-21-sharing-the-tol-crawl.md) | infrastructure | the ToL crawl shared as `/data/datasets/tol256` with ToL's per-image metadata; a sharded audit after oomd killed tmux |
