@@ -53,6 +53,7 @@ kept as a record. Long-term tooling does not live here: the documentation check 
 | `094_merge_desk.py` (+ `.html`) | Merge Desk: the LaTeX pieces of `paper/merge/` as ordered insertion steps into the Overleaf draft; mirrors pasted pieces into the local copy | paper |
 | `095_trap_quality_backoff.py` | the release back-off cascade broken down by crop sharpness and size, on held-out trap nights | N1 |
 | `096_trap_openset.py` | open-set detection on all trap crops by stratum (near, mid, out-of-vocabulary), per species, and what the back-off policy answers on unseen species | N2, N3 |
+| `097_backoff_policies.py` | back-off policies compared (greedy per-rank, lower genus target, expected utility, cost tuned to 95 %), any number of ranks; Pl@ntNet drops in with `--plantnet` | Q1 |
 
 **Conventions.** Never `uv sync` or `uv run` (the venv is hand-managed); use `.venv/bin/python`
 from the repo root.

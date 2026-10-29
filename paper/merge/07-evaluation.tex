@@ -1,0 +1,18 @@
+%% title: Evaluation: three axes and the open-set benchmark
+%% target: Sections/Methods.tex
+%% anchor: \subsection{Metrics for hierarchical and species classification}\label{sec:metrics}
+%% action: before
+%% why: States the paper's protocol: every model on three axes that disagree, with unseen species withheld on purpose (no image floor, so they cannot come from rare species).
+%% source: journal/2026-08-08-is-novelty-monotone-or-just-rare.md (C3b design: 2 families, 40 genera, 120 species; 231 common species scored; 2.62 % of training rows removed); dev/072_holdout_common.py
+%% check: Paste after steps 05 and 06, so it lands below them. | The withheld-taxa split is the C3b design; the rerun applies it to every head (decision sheet row 15). | Pl@ntNet's role (third axis for the head comparison, or a second training set only) is for Asger to state.
+%% status: ready
+\subsection{Evaluation}\label{sec:evaluation}
+Every model is scored on three axes, which answer different questions and need not agree.
+The first is the test fold of the training dataset (Global Lepidoptera, and \textbf{X} for Pl@ntNet).
+The second is the probe set of light-trap images (\cref{sec:data_traps}), with its held-out-species subset: images from a different camera, and the species that adaptation to the traps never saw.
+The third is open-set detection: whether a model can tell that an image shows a species it was never trained on.
+
+For the third axis, whole taxa are withheld from training at three depths: 2 families, 40 genera and 120 single species, chosen among species with at least 200 training images, which removes 2.6\,\% of the training images.
+The 231 common species among them are scored as unseen, in three strata by how much of their lineage the model knows: \emph{near} (unseen species, known genus), \emph{mid} (unseen genus, known family) and \emph{far} (unseen family).
+Choosing common species avoids confounding novelty with rarity.
+Nine of the withheld species also occur at the traps, which gives unseen species under domain shift as well.

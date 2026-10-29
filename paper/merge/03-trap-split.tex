@@ -2,14 +2,16 @@
 %% target: Sections/Methods.tex
 %% anchor: \subsubsection{Light-trap images}\label{sec:data_traps}
 %% action: after-paragraph
-%% why: The same trap images are both the benchmark and the only source of unlabelled target images. Without this split, self-training would train on its own test set. Every trap result in the paper uses it.
-%% source: data/flemming/splits/split_summary.json; journal/2026-08-02-the-shifted-benchmark-is-also-the-adaptation-set.md; journal/2026-10-12-do-trap-moths-leak-across-nights.md
-%% check: The 0.0003 was measured in the old metric convention; re-check after rescoring (TODO in the comment). | Asger's calibration split is random over crops; this paragraph is the argument for grouping it too.
+%% why: The same trap images are both the benchmark and the only source of unlabelled target images. Without this split, self-training would train on its own test set. Every trap result in the paper uses it. Owner's wording of 2026-10-22, with the missing counts filled in.
+%% source: data/flemming/splits/flemming_groups.parquet (species counted by GBIF key: adaptation 383, probe 368, unused 72); split_summary.json; journal/2026-10-12-do-trap-moths-leak-across-nights.md
+%% check: The unused remainder is exactly the held-out species' crops that fell on adaptation nights (72 species); the last sentence says so, keep or drop. | The 0.0003 was measured in the old metric convention (TODO in the piece).
 %% status: ready
 Because the trap images serve both as the benchmark and as the only source of unlabelled target-domain images (\cref{sec:selftraining}), they are partitioned by capture group, a pair of trap and night with nights running from midday to midday.
-Groups are assigned at random to an adaptation set (27,230 crops), a probe set (15,200 crops of 368 species) that no training run touches, and an unused remainder (5,475 crops).
-Fifteen percent of the species (75) are withheld from adaptation altogether.
-Their probe crops (2,455 crops of 58 species) form the held-out-species subset, which separates adaptation to the capture conditions from specialisation on the species that were adapted to.
+Groups are assigned at random to an adaptation set (27,230 crops of 383 species), a probe set (15,200 crops of 368 species) that no training run touches, and an unused remainder (5,475 crops of 72 species).
+Fifteen percent of the species (75) are withheld from the adaptation set.
+Only 58 of these 75 species can be found in the probe set.
+Their image crops (2,455 crops) form the held-out-species subset, which separates adaptation to the capture conditions from specialisation on the species that were adapted to.
+The unused remainder is the crops of the withheld species that fell on adaptation nights.
 Grouping by night is necessary: 35\,\% of crops have a near pixel-identical twin elsewhere in the same night.
-It is also nearly sufficient: 13 probe crops (0.09\,\%) have a twin in the adaptation set one night later, a moth that stayed on the sheet, and removing them changes no score by more than 0.0003.
+It is also nearly sufficient: 13 probe crops have a twin in the adaptation set one night later, a moth that stayed on the sheet, and removing them changes no score by more than 0.0003.
 % TODO: re-check the 0.0003 in the mini_metrics convention once the rescoring lands.

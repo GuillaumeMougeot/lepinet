@@ -1,0 +1,13 @@
+%% title: Which classes a macro average counts
+%% target: Sections/Methods.tex
+%% anchor: Because classification models are rarely deployed without quality control, all reported metrics are evaluated after selecting an optimal confidence threshold $\tau$ via numerical optimization of macro-averaged $\text{F}_1$ on a calibration split (\cref{sec:tune_tau}).
+%% action: before
+%% why: The class set of a macro average decides the trap numbers more than any model change: the same predictions score 0.69 or 0.15. Owner's decision (2026-10-22): count predicted-only species, as mini_metrics does.
+%% source: journal/2026-10-22-why-the-trap-scores-of-the-two-drafts-differ.md (B1 on the probe set: 0.6923 vs 0.1544; 1,271 absent species predicted); dev/092_metric_conventions.py
+%% check: B1 was trained with the 50-image floor (12,041 species); the illustration still holds, the rerun will give the final numbers. | Paste it into the metrics section, above the paragraph that starts "Because classification models are rarely deployed".
+%% status: ready
+The class set $\mathcal{C}$ of every macro average contains each species that occurs in the ground truth or in the predictions; ground-truth species outside the model's vocabulary are kept as classes it can never predict.
+A species that a model predicts but that never occurs in the evaluation data therefore enters the average with $\text{F}_1 = 0$.
+This matters most when the evaluation data cover a small part of the label set.
+On the probe set (368 species), a model trained without trap images predicts 1,271 species that are absent from it, and the same predictions score a species macro-$\text{F}_1$ of 0.69 when only the species present are averaged and 0.15 when predicted-only species count.
+We count them, because naming a species that is not there is an error a user meets in deployment; the convention rewards models that keep to the local fauna, which the results report separately from adaptation to the capture conditions.

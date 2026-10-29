@@ -2,13 +2,11 @@
 %% target: Sections/Methods.tex
 %% anchor: \subsubsection{Global Lepidoptera}
 %% action: after
-%% why: Fills an empty subsection. Defines the 50-image floor that every lepinet result uses, and where the unseen species for open-set evaluation come from.
-%% source: counts recomputed 2026-10-22 from the global_lepi parquet (6,329,994 rows); species floor and open-set benchmark from paper/DRAFT.md section 3; the ~2,000-image cap from section 4.13.1
-%% check: \cref{sec:evaluation} arrives with step 07; Overleaf shows ?? until then. | Is the split really by GBIF observation for the whole corpus (Asger's README says so for his 512-species cohort)? | Does Asger train his heads on all 12,632 species, i.e. without the floor? | Family count: 104 (Asger's README) vs our 102 after the floor.
+%% why: Fills an empty subsection, with the colleague's settings (all 12,632 species, no image floor), as the owner asked. The 50-image floor of the lepinet runs is a recipe decision for the rerun, not a dataset property.
+%% source: counts recomputed 2026-10-22 from the global_lepi parquet (6,329,994 rows; fold 0 632,913, folds 2-9 5,063,857); the ~2,000-image cap from paper/DRAFT.md section 4.13.1
+%% check: Every lepinet number so far used a 50-image floor (12,041 species); they hold only until the rerun (journal/2026-10-23-which-recipe-does-the-merged-paper-rerun.md). | The open-set benchmark of the lepinet runs used the species below that floor; without a floor it needs withheld species instead (TODO in the piece). | Is the split by GBIF observation for the whole corpus (Asger's README says so for his 512-species cohort)?
 %% status: ready
 Global Lepidoptera is assembled from GBIF occurrence images of adult moths and butterflies \autocite{gbif}, capped at about 2,000 images per species when the corpus was built.
 After quality filtering it holds 6.33\,M images of 12,632 species, 4,476 genera and 104 families.
-The images are split into ten folds of equal size: fold 0 is the test set, fold 1 the validation set and folds 2--9 the training set.
-Unless stated otherwise, results trained with the lepinet recipe (\cref{sec:training}) also drop species with fewer than 50 training images.
-This leaves 12,041 species, 4,333 genera and 102 families, 5.04\,M training images and a test fold of 629,742 images.
-The species below the floor are never trained on, and supply the unseen species of the open-set benchmark (\cref{sec:evaluation}).
+The images are split into ten folds of equal size: fold 0 is the test set (632,913 images), fold 1 the validation set and folds 2--9 the training set (5.06\,M images).
+% TODO: open-set benchmark. The lepinet runs drew unseen species from those below a 50-image floor; with every species trained on, unseen species must be withheld on purpose (as in the C3b run). Decide with the rerun.

@@ -1,0 +1,11 @@
+%% title: Open-set scoring rules
+%% target: Sections/Methods.tex
+%% anchor: \subsection{Metrics for hierarchical and species classification}\label{sec:metrics}
+%% action: before
+%% why: Defines the five rules. Which one is best changes with model size and with domain shift, so the paper reports all five and names the best.
+%% source: dev/061_ood_scoring_rules.py; journal/2026-08-01-the-scoring-rule-was-the-bug.md; journal/2026-10-23-does-the-model-know-when-a-trap-image-is-too-poor.md
+%% check: Paste after step 07, so it lands below it. | A head that outputs log-probabilities makes energy constant and MSP identical to max-logit; the sentence on that can go to a footnote.
+%% status: ready
+Novelty is scored from the same forward pass with five rules on the logits $z$: the maximum softmax probability (MSP), the negative entropy of the softmax, the margin between the two largest logits, the largest logit, and the energy $\log \sum_j e^{z_j}$.
+Detection is measured as the area under the ROC curve (AUROC) between unseen and known images.
+The best rule is not a property of the method: it changes with the size of the model and between museum-style and trap images (\cref{sec:results_openset}), so all five are reported and the best is named.

@@ -220,7 +220,7 @@ distance), **E2** (scoring rules do not transfer across scale), **L4** (cRT), **
 
 | ID | question | result | where |
 |---|---|---|---|
-| Q1 | greedy per-rank 95 % thresholds (current) against an expected-utility rule with one error cost, calibrated in-distribution or on target data; Lepidoptera test fold, trap probe, Pl@ntNet, novel trap crops | not run | [back-off](journal/2026-10-23-what-is-the-best-back-off-policy.md) |
+| Q1 | greedy per-rank 95 % thresholds (current) against an expected-utility rule with one error cost, calibrated in-distribution or on target data; Lepidoptera test fold, trap probe, Pl@ntNet, novel trap crops | at 95 % precision, expected utility wins in-distribution (+1.1 to +1.9 correct) and for the plain head on traps (C3b +5.2), loses on traps for the margin heads (B3rep5x -5.7, B8 -0.9 to -2.5): their coarse confidences equal the species one; policies fitted in-distribution miss 95 % on traps by 6-11 pt; Pl@ntNet pending | [back-off](journal/2026-10-23-what-is-the-best-back-off-policy.md) |
 
 ### P — foundation model (BioCLIP-2) as the trunk (closed)
 

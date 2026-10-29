@@ -1,0 +1,13 @@
+%% title: Two kinds of noise: retraining spread and test resampling
+%% target: Sections/Methods.tex
+%% anchor: On the trap images the split is made by capture group: a random 10\,\% of the (trap, night) groups calibrates the thresholds and the rest is scored, so that no moth photographed on one night appears on both sides.
+%% action: after-paragraph
+%% why: Bootstrap intervals over test images miss the variation between training runs, which is larger, so several "clear winners" in the current tables may be retraining noise. The rerun's three seeds measure it.
+%% source: journal/2026-08-01-how-noisy-are-our-numbers.md (A5: identical retrain, 0.0069 on trap images, 0.0000 species in-distribution); journal/2026-08-27-the-noise-floor-does-not-transfer-across-training-regimes.md (G3b: 3.74 pt between identical frozen-backbone runs)
+%% check: The two spreads quoted were measured in the old metric convention; replace with the three-seed spread of the rerun (TODO in the piece). | Paste below step 10.
+%% status: ready
+Two sources of variation are reported separately.
+Bootstrap resampling of the test images measures how much a score depends on which images were drawn.
+Retraining with another seed measures how much it depends on the training run, and it is larger: in our earlier runs, two identical trainings differed by 0.7 points of macro-$\text{F}_1$ on trap images, and two identical 2-epoch fine-tunings of a frozen backbone by 3.7 points on the held-out species.
+A difference between two heads is therefore claimed only when it exceeds the spread across three training seeds, not only the bootstrap interval.
+% TODO: replace the two spreads with the three-seed spread of the rerun, in the mini_metrics convention.

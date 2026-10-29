@@ -110,7 +110,7 @@ function statusOf(s) {
   const r = reviews[s.id];
   if (s.status === "pasted" || applied[s.id]) return "pasted";
   if (r?.status === "pasted" || r?.status === "changed") return "pasted";
-  if (r?.status === "hold") return "hold";
+  if (r?.status === "hold" || s.status === "hold") return "hold";
   return s.status === "planned" ? "planned" : "ready";
 }
 const LABEL = { planned: "not drafted", ready: "to paste", pasted: "pasted", hold: "on hold" };

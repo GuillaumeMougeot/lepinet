@@ -1,0 +1,10 @@
+%% title: Calibration split grouped by trap and night
+%% target: Sections/Methods.tex
+%% anchor: To rigorously capture calibration variance on finite distributions, we randomly partition the evaluation data into a calibration split (10\%) and a reporting split (90\%). Thresholds are calibrated strictly on the calibration split, while all reported metrics and model rankings are evaluated on the held-out reporting split across repeated Monte-Carlo trials.
+%% action: after
+%% why: A random split over trap crops puts frames of the same moth on both sides. Grouping removes that; measured, it moves calibrated scores by under a point and changes no conclusion.
+%% source: journal/2026-10-22-rescoring-in-the-mini-metrics-convention.md, amendment of 2026-10-23 (65 probe runs: +0.8 on average, range -0.5 to +2.3); dev/093_rescore_mini_metrics.py --grouped
+%% check: Asger's own trap numbers need the same grouped split before they are compared with ours.
+%% status: ready
+On the trap images the split is made by capture group: a random 10\,\% of the (trap, night) groups calibrates the thresholds and the rest is scored, so that no moth photographed on one night appears on both sides.
+On the probe set this changes calibrated macro-$\text{F}_1$ by 0.8 points on average (between $-0.5$ and $+2.3$ over 65 models) and no comparison between models.

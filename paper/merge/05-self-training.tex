@@ -4,7 +4,7 @@
 %% action: before
 %% why: Defines the paper's strongest lever. The share of training rows, not the replication count, is the quantity the results vary.
 %% source: dev/065_pseudolabel.py, dev/066_combine_pseudo.py; journal/2026-08-03-b3-self-training.md; journal/2026-08-04-replication-sweep.md
-%% check: \cref{sec:results_selftraining} arrives with step 20; Overleaf shows ?? until then. | Teacher B4 is the 198 M DINOv3-ConvNeXt-L with trap-like augmentation; name it by architecture in the paper? | 98.15 % label accuracy is measured with the expert labels of the adaptation set, which the gate never reads.
+%% check: Wording of the recipe follows the decision sheet (step 04 on hold). | \cref{sec:results_selftraining} arrives with step 20; Overleaf shows ?? until then. | Teacher B4 is the 198 M DINOv3-ConvNeXt-L with trap-like augmentation; name it by architecture in the paper? | 98.15 % label accuracy is measured with the expert labels of the adaptation set, which the gate never reads.
 %% status: ready
 \subsection{Self-training on unlabelled target images}\label{sec:selftraining}
 A model trained without trap images (the teacher, a DINOv3-ConvNeXt-L trained with trap-like augmentation) predicts a species for every crop of the adaptation set.
