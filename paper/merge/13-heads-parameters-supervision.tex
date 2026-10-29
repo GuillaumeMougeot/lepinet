@@ -1,0 +1,35 @@
+%% title: Hierarchy: coarse parameters against coarse supervision
+%% target: Sections/Results.tex
+%% anchor: \resulttable{main_comparison_calibrated}
+%% action: after
+%% why: Splits the head comparison into two questions with opposite answers: per-level parameters do not help, per-level losses do, and only the trap images show the second.
+%% source: paper/DRAFT.md §4.1; journal/2026-10-22-rescoring-in-the-mini-metrics-convention.md (in-distribution unchanged; full-trap rows); data/rescore/trap-grouped.csv (base 0.2836, marg 0.3125, M2 0.3183, mh2 0.3462, cond 0.2735, A5 0.2735)
+%% check: Numbers are recipe L, one seed, before the rerun; the rerun's three seeds replace them. | Rename \subsection{Experiment 1} to \subsection{Hierarchical heads}\label{sec:results_heads}, which step 04 references. | In our old convention I and BU tied on the traps; in the current one I leads by about 3 points. Compare with Asger's own trap ranking in the table above. | AR row: species only, from runs that predate the fp32 head fix.
+%% status: ready
+\paragraph{Coarse parameters against coarse supervision (recipe L).}
+The heads differ in two ways that the comparison above confounds: whether genus and family have parameters of their own (I, TD, AR), and whether they receive a loss of their own (every head except F).
+\Cref{tab:heads_recipeL} separates the two on one backbone.
+
+\begin{table}[htb]
+    \centering
+    \caption{Heads on EfficientNetV2-S with recipe L (one seed). Test fold: macro-$\text{F}_1$ at zero threshold. Traps: species macro-$\text{F}_1$ on all 47,905 trap crops, calibrated on 10\,\% of the (trap, night) groups.}
+    \label{tab:heads_recipeL}
+    \begin{tabular}{lcccccc}
+        \toprule
+        & coarse & coarse & \multicolumn{3}{c}{test fold} & traps \\
+        head & parameters & loss & species & genus & family & species \\
+        \midrule
+        F & no & no & 0.9135 & 0.9606 & 0.9739 & 0.284 \\
+        BU & no & yes & 0.9135 & 0.9633 & 0.9778 & 0.313 \\
+        I & yes & yes & 0.9110 & 0.9587 & 0.9708 & 0.346 \\
+        TD & yes & yes & 0.8845 & 0.9471 & 0.9683 & 0.274 \\
+        AR & yes & yes & 0.69--0.73 & -- & -- & -- \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+Coarse parameters do not help on the test fold: the heads with per-level layers score below F and BU at every rank, and TD is lowest at every rank and on the trap images (0.274).
+Coarse supervision leaves species unchanged to four decimals and raises genus by 0.27 and family by 0.39 points.
+On the trap images it is worth 2.9 points (BU 0.313, and 0.318 for a repeat of BU, against 0.284 for F), about three times the 1.0-point difference between two identical trainings of F.
+The independent head, which has both coarse parameters and coarse losses, leads on the trap images by a further 3 points.
+The two questions therefore have different answers, and a held-out fold of the training distribution sees only the first.

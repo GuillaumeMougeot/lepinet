@@ -1,0 +1,20 @@
+%% title: Adaptation is a classifier problem
+%% target: Sections/Results.tex
+%% anchor: Combined with the larger backbone and without oversampling (\cref{sec:results_longtail}), self-training gives B8 (0.647 and 0.452).
+%% action: after
+%% why: Adapting only the classifier on a frozen backbone captures most of self-training's gain in minutes; the staged recipe is better on the test fold and close under shift; balancing pseudo-labels harms a trainable backbone; a foreign backbone must be unfrozen. With the long-tail and hierarchy results, the interventions that matter act on the classifier.
+%% source: paper/DRAFT.md §4.15, §4.14.3, §4.12 (centroids 0.29 vs 3.7 pt); journal/2026-08-06-adaptation-is-mostly-a-classifier-problem.md; journal/2026-08-27-the-noise-floor-does-not-transfer-across-training-regimes.md; data/rescore/probe-grouped.csv, probe-ho-grouped.csv (B1 0.4242/0.3561, B3rep5x 0.6309/0.4139, T2 0.6045/0.4338, T2b 0.6015/0.4191, F2 0.6019/0.3938, B9 0.5670/0.3730, G3 0.6181/0.4484, G3b 0.6195/0.4261, P4 0.4796/0.3568, P5 0.6223/0.4974)
+%% check: Paste after step 20. | Numbers are recipe L before the rerun. | The staged in-distribution advantage (F2 0.9081 vs 0.9003) is unchanged in the current convention. | The centroid sentence could move to the appendix if space is short.
+%% status: ready
+\subsection{Adaptation is a classifier problem}\label{sec:results_classifier}
+Training only the classifier of the frozen B1 backbone for 2 epochs on the same pseudo-labels (\cref{sec:selftraining}) raises the probe set from 0.424 to 0.605, 87\,\% of what retraining the whole network for 5 epochs achieves (0.631), and the held-out species from 0.356 to 0.434, above end-to-end self-training (0.414).
+From a backbone trained without trap-like augmentation the result is almost the same (0.602), so augmentation and classifier adaptation are substitutes.
+The full staged recipe, a representation trained without oversampling or augmentation followed by cRT and classifier adaptation (2 + 2 epochs on a frozen backbone), is 0.8 points better than end-to-end training on the test fold (0.9081 against 0.9003) and 2.9 points worse on the probe set (0.602 against 0.631), at a fraction of the cost.
+
+Two limits bound the claim.
+Balancing the pseudo-labels so that every species contributes equally harms a trainable backbone (end-to-end at 20\,M: $-6.4$ points on the probe set, $-4.1$ on held-out species), because balancing replicates the species with the fewest images, whose pseudo-labels are least reliable, and the backbone memorises them; on a frozen backbone its effect is comparable to the spread between identical runs (at 198\,M, $+2.4$ points on held-out species against a 2.2-point spread).
+And a frozen backbone works only if it was trained with the head being refitted: BioCLIP-2's features, arranged for alignment with text, give 0.480 with frozen adaptation and 0.622 unfrozen (\cref{sec:results_contamination}).
+
+With the hierarchy (coarse losses help, coarse parameters do not, \cref{tab:heads_recipeL}) and the long tail (rebalance the classifier, not the representation, \cref{sec:results_longtail}), this is the third question whose answer lies in the classifier.
+For the margin head, the trained prototype matrix can even be replaced at inference by the mean training embedding of each class for 0.29 points (3.7 for the plain head).
+The representation is the expensive and robust component; the classifier is the cheap one where interventions belong, and a new camera needs a new classifier, which takes minutes and no labels, rather than a new model.

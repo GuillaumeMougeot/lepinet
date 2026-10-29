@@ -1,0 +1,33 @@
+%% title: Accuracy saturates; the three axes disagree
+%% target: Sections/Results.tex
+%% anchor: Shift lowers the logits of known species towards those of novel ones, so a species close to a known one passes as known: novelty detection is not robust to the domain, and a species-level answer on a trap image means ``this species, or a close relative the model never saw''.
+%% action: after
+%% why: The motivating table: models within 1.4 points on the test fold span 43 points on trap images, and the axes rank them differently, so the test fold cannot select a model for deployment.
+%% source: paper/DRAFT.md §4.0, §4.2, §4.10; data/rescore/probe-grouped.csv and probe-ho-grouped.csv (base-probef 0.2875 / 0.2394; B1 0.4242 / 0.3561; B8 0.6472 / 0.4520; P5 0.6223 / 0.4974; T1rep 0.7232 / 0.3122); journal/2026-10-22-rescoring-in-the-mini-metrics-convention.md (in-distribution)
+%% check: Paste after step 14. | Recipe-L models, before the rerun; the rerun's head grid replaces the rows. | The model names B1, B8, P5, T1rep need defining once in the paper (here, or in a model table in the methods).
+%% status: ready
+\subsection{Accuracy on the test fold does not predict accuracy under shift}\label{sec:results_axes}
+\Cref{tab:axes} scores five recipe-L models on every axis.
+On the test fold they lie within 1.4 points; on the trap probe set they span 43 points, and on its held-out species 26.
+The most accurate model we trained on the test fold (ConvNeXtV2-L at 320 pixels, 0.932) is 1.8 points above the baseline there, and self-training on trap images, worth 21 points on the probe set (\cref{sec:results_selftraining}), changes the test fold by 0.04.
+The axes also rank models differently: real trap labels give the best model on the probe set and the worst adapted model on the species those labels never covered.
+
+\begin{table}[htb]
+    \centering
+    \caption{Species macro-$\text{F}_1$ on the three axes (recipe L). Test fold: zero threshold. Probe and held-out species: calibrated on 10\,\% of the (trap, night) groups. Open set: AUROC with the model's best rule, rare-species benchmark.}
+    \label{tab:axes}
+    \begin{tabular}{lcccc}
+        \toprule
+        model & test fold & probe & held-out species & open set \\
+        \midrule
+        F, EfficientNetV2-S, no trap images & 0.9135 & 0.288 & 0.239 & 0.899 \\
+        B1: + margin and trap-like augmentation & 0.8999 & 0.424 & 0.356 & -- \\
+        B8: ConvNeXt-L, self-training, no oversampling & 0.9060 & 0.647 & 0.452 & 0.915 \\
+        P5: BioCLIP-2 fine-tuned, adapted & 0.9113 & 0.622 & 0.497 & 0.916 \\
+        T1rep: B1 + real trap labels, 11 copies & -- & 0.723 & 0.312 & -- \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+Three axes are therefore needed, though the two strongest general models, B8 and P5, are ahead of the baseline on all three and close to each other.
+What none of them shows is how a model abstains (\cref{sec:results_backoff}).

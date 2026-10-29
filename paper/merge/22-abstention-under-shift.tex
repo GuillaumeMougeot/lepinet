@@ -1,0 +1,46 @@
+%% title: Abstention under shift is a composition, not a score
+%% target: Sections/Results.tex
+%% anchor: The representation is the expensive and robust component; the classifier is the cheap one where interventions belong, and a new camera needs a new classifier, which takes minutes and no labels, rather than a new model.
+%% action: after
+%% why: What the back-off policy of sec:backoff does in-distribution and on trap images: it backs off on blurry crops and keeps precision, but abstains ten times more under shift, models trade species answers for coarser ones, no single rule wins, thresholds must be fitted on target images, and unseen species still get confident names.
+%% source: paper/DRAFT.md §4.6, §4.6a (C1; temperature, 69.7 % saturated); journal/2026-10-23-what-is-the-best-back-off-policy.md (Q: P0 vs P3, eleven splits, P1-0.80, Q-H2, Q-H3); journal/2026-10-23-does-the-model-know-when-a-trap-image-is-too-poor.md (part A: sharpness quintiles; part B: unseen species)
+%% check: Paste after step 21; it closes the results. | Per-image outputs only, so the numbers do not depend on the macro-F1 convention. | Pl@ntNet column pending Asger's predictions (dev/097 --plantnet). | Figure 4 of our earlier draft (composition bars) can be regenerated from data/backoff/*.csv.
+%% status: ready
+\subsection{Backing off under domain shift}\label{sec:results_backoff}
+On the test fold the greedy policy of \cref{sec:backoff} answers 99.2\,\% of images, 95.0\,\% of them correctly, and the genus and family answers carry their 95\,\% target because each threshold was fitted on the images that reach its rank.
+On held-out trap nights the same policy abstains on 10 to 19\,\% of crops, and the models answer differently (\cref{tab:backoff}).
+P5 and B3rep5x answer correctly at some rank on 85\,\% of crops, B8 on 77\,\%; B8 names more species correctly, P5 backs off more often.
+Which is better depends on what a genus or family answer is worth to the user, and a single score hides the trade.
+
+\begin{table}[htb]
+    \centering
+    \caption{Share of images answered correctly at the rank returned, at 95\,\% precision. Greedy: thresholds per rank (\cref{sec:backoff}). Expected utility: utilities 1/0.8/0.5, cost tuned to 95\,\% overall precision. Trap: thresholds fitted on half of the (trap, night) groups, mean of eleven halvings. B8 and B3rep5x carry a temperature.}
+    \label{tab:backoff}
+    \begin{tabular}{llcc}
+        \toprule
+        images & model & greedy & expected utility \\
+        \midrule
+        test fold & B8 / P5 / B3rep5x & 94.4 / 94.6 / 92.8\,\% & 96.0 / 96.6 / 94.7\,\% \\
+        trap & B8 & 77.1\,\% & 76.2\,\% \\
+        trap & P5 & 84.5\,\% & 85.3\,\% \\
+        trap & B3rep5x & 85.1\,\% & 79.4\,\% \\
+        trap & withheld-taxa model (flat head) & 79.3\,\% & 84.5\,\% \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+\emph{Poor images.} From the sharpest to the blurriest fifth of trap crops, B8's species answers fall from 91 to 65\,\% and its abstentions rise from 6 to 31\,\%, while species precision stays at 0.935 on the blurriest fifth.
+The policy backs off on poor images without being told about image quality.
+
+\emph{No rule wins everywhere.} Expected utility beats the greedy policy on the test fold (1.1 to 1.9 points) and for the flat head on trap images (5.2), and loses for the margin heads on trap images (B3rep5x $-5.7$, B8 $-0.9$ to $-2.5$).
+On the uncertain trap crops of the margin heads, the genus and family confidences are close to the species confidence, often identical, so there is nothing to trade and the rule abstains instead of backing off.
+It can also meet its overall target while its family answers are only 70\,\% correct.
+The greedy policy, which controls every rank, is the safer default.
+Its 95\,\% genus target is out of reach for the margin heads on trap images (genus answers on crops that fail the species threshold are right 54\,\% of the time), so they never answer at genus; lowering that target to 80\,\% adds 1.5 to 2.1 points of correct answers.
+
+\emph{Thresholds must be fitted on target images.} Fitted on the test fold and applied to trap images, every policy misses its 95\,\% target by 6 to 11 points, and recalibrating the confidences on trap data does not rescue a rule whose cost was fitted in-distribution.
+Margin heads also need a temperature first: B8's softmax returns exactly 1.0 on 70\,\% of trap images, so without one no threshold can separate them.
+
+\emph{Unseen species.} No back-off rule fixes novelty.
+Of the trap crops of unseen species in known genera, 38\,\% receive a species answer under the greedy policy, all wrong, and 26\,\% under the best expected-utility rule; on museum-style images the greedy policy names a species for 86 to 87\,\% of unseen-species images.
+Detecting novelty (\cref{sec:results_openset}), not choosing the rank, is the weak link under shift.

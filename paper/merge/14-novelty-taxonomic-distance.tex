@@ -1,0 +1,36 @@
+%% title: Novelty is graded by taxonomic distance (with the alignment result)
+%% target: Sections/Results.tex
+%% anchor: \label{fig:main_taxonomic_alignment}
+%% action: after-paragraph
+%% why: The open-set counterpart of taxonomic alignment: an unseen taxon is easier to detect the less of its lineage the model knows, for any head, and this is not rarity. Under domain shift detection collapses for the common case.
+%% source: paper/DRAFT.md §4.4 (C3, C3b); journal/2026-08-08-is-novelty-monotone-or-just-rare.md; journal/2026-10-23-does-the-model-know-when-a-trap-image-is-too-poor.md (part B: N2, N3; dev/096)
+%% check: Paste after the taxonomic-alignment figure; it starts a new subsection. | With Asger's no-floor rule the "rare" benchmark disappears; keep its column only if the paper says the recipe-L runs used a floor. | B8 and P5's museum-style values come from the rare-species benchmark, not the withheld-taxa one. | Rerun: the withheld-taxa split applied to every head (decision sheet row 15).
+%% status: ready
+\subsection{Novelty is graded by taxonomic distance}\label{sec:results_openset}
+On the withheld-taxa benchmark (\cref{sec:evaluation}), a flat head (F, recipe L) read with the entropy rule detects an unseen species of a known genus with an AUROC of 0.872, an unseen genus with 0.946 and an unseen family with 0.973 (\cref{tab:openset_distance}).
+The same order holds for a head trained with an angular margin, and when the unseen species are the rare species below a 50-image floor instead of withheld common ones; withholding common taxa raises every stratum slightly, so rarity added noise but not the gradient.
+An unseen taxon is placed by the embedding as far from the known species as its lineage is from theirs, with or without hierarchical supervision: the open-set counterpart of the taxonomic alignment in \cref{fig:main_taxonomic_alignment}.
+The hardest stratum is also the common field case, a new species in a familiar genus, and it is 7 to 10 points below the easiest, so a pooled AUROC flatters.
+
+\begin{table}[htb]
+    \centering
+    \caption{Open-set AUROC by taxonomic distance of the unseen species (recipe L). Museum-style images: the test fold's image distribution. Trap images: all 47,905 crops, unseen crops against the 46,924 known ones; each model read with its best rule.}
+    \label{tab:openset_distance}
+    \begin{tabular}{llccc}
+        \toprule
+        images & model, unseen species & near & mid & far / outside vocabulary \\
+        \midrule
+        museum-style & F, rare species (entropy) & 0.853 & 0.934 & 0.964 \\
+        museum-style & F with margin, rare species (max-logit) & 0.868 & 0.917 & 0.944 \\
+        museum-style & F, withheld common taxa (entropy) & 0.872 & 0.946 & 0.973 \\
+        trap & F, withheld common taxa (MSP) & 0.566 & 0.955 & 0.781 \\
+        trap & B8, outside vocabulary (top-2 margin) & -- & -- & 0.857 \\
+        trap & P5, outside vocabulary (max-logit) & -- & -- & 0.835 \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+On trap images the near stratum collapses to 0.566, against 0.872 for the same model on museum-style images.
+It holds 742 crops of eight species, 682 of them of one common trap species, \textit{Pleuroptya ruralis} (0.563); the mid stratum is a single genus of five crops.
+Species outside every model's vocabulary (six species, 234 crops) stay detectable but lose 6 to 8 points for the two strongest models (B8 0.915 to 0.857, P5 0.916 to 0.835).
+Shift lowers the logits of known species towards those of novel ones, so a species close to a known one passes as known: novelty detection is not robust to the domain, and a species-level answer on a trap image means ``this species, or a close relative the model never saw''.

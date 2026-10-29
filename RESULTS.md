@@ -214,7 +214,7 @@ distance), **E2** (scoring rules do not transfer across scale), **L4** (cRT), **
 |---|---|---|---|
 | N1 | the release back-off cascade by image sharpness and crop size (B8, P5, B3rep5x, probe) | species answers fall from 83-91 % on the sharpest fifth to 51-65 % on the blurriest; species precision there 0.931-0.935 (target 0.95); B8 and B3rep5x never answer at genus | [quality](journal/2026-10-23-does-the-model-know-when-a-trap-image-is-too-poor.md) |
 | N2 | open-set on trap images: C3b (9 withheld trap species, 747 crops) plus the 234 out-of-vocabulary crops; five rules | near-novel AUROC **0.566** (0.8717 on museum images), out-of-vocabulary 0.781, all 0.619 (MSP); 38 % of near-novel crops get a confident wrong species name, family answers 0.988 correct | same |
-| N3 | open-set on trap images for B8 and P5 (234 out-of-vocabulary crops) | B8 **0.857** (top-2 margin; 0.9153 on museum images); P5 running (job 12431255) | same |
+| N3 | open-set on trap images for B8 and P5 (234 out-of-vocabulary crops) | B8 **0.857** (top-2 margin; 0.9153 on museum images); P5 **0.835** (max-logit; 0.9161 on museum images) | same |
 
 ### Q — the back-off policy (opened 2026-10-23)
 

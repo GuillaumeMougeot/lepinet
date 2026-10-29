@@ -1,6 +1,6 @@
 # PLAN — what we are doing now
 
-**Kind:** living · **Last updated:** 2026-10-23 · **Supersedes:** [2026-07-28-landscape-and-plan](archive/journal/engineering/2026-07-28-landscape-and-plan.md)
+**Kind:** living · **Last updated:** 2026-10-29 · **Supersedes:** [2026-07-28-landscape-and-plan](archive/journal/engineering/2026-07-28-landscape-and-plan.md)
 
 The one file about *today*. Experiment IDs resolve in [`RESULTS.md`](RESULTS.md); reasons are in
 the linked journal entries; older versions of this file are in git history.
@@ -14,8 +14,8 @@ and two evaluation-only runs.
 |---|---|---|---|
 | 1 | **One paper, merged with Svenning et al.'s draft** (`~/Documents/hierarchical_classification.pdf`; owner, 2026-10-22: no second paper). Proposed outline: methods = data (Lepidoptera, Pl@ntNet, traps with the grouped split), HGLL head, the five heads, one recipe, evaluation (metric conventions, retrain noise); results = hierarchy (parameters vs supervision, alignment, novelty by taxonomic distance), evaluating under shift (conventions, scoring rules, contamination), long tail, target-domain data, classifier stage, abstention; appendix = margin, nuisance augmentation, head scaling, recipe ladder, AR decoder, EMLA and regulariser. Open: one training recipe for both drafts (EMLA vs √-oversampling), the colleague's raw trap predictions rescored with `dev/092` | owner + colleague | open |
 | 1b | **Pin the rerun recipe before any rerun** (owner, 2026-10-23: the colleague's settings have priority; some experiments will be redone). 16 decisions with both drafts' settings and our evidence: species floor, sampling, loss (EMLA vs CE), regulariser, epochs, image size, backbones, heads, margin, seeds, dose, open-set split, budget. [[2026-10-23-which-recipe-does-the-merged-paper-rerun]] | owner + colleague | open |
-| 2 | Insert our pieces into the Overleaf draft through the Merge Desk (`paper/merge/`, `dev/094`): methods steps 01-11 drafted (02 pasted; 04 on hold for 1b); results steps wait for 1b | owner, agent | ongoing |
-| 3 | Re-score §4.5 with each head's own rule; measure open-set under shift for B8 and P5 | GPU, eval only | — |
+| 2 | Insert our pieces into the Overleaf draft through the Merge Desk (`paper/merge/`, `dev/094`): all 23 steps drafted (02 pasted; 04 on hold for 1b). Results steps 13-22 and the appendix (23) carry recipe-L numbers in mini_metrics' current convention, trap scores calibrated on grouped splits; each says in its check line what the rerun replaces | owner, agent | ongoing |
+| 3 | Re-score §4.5 with each head's own rule; measure open-set under shift for B8 and P5 | GPU, eval only | done (N2, N3; Merge Desk step 14) |
 | 4 | Verify every citation in §1b and the references (written from memory) | owner | open |
 | 5 | Consistency pass: every number against its journal entry | agent | — |
 | 6 | Re-run A2's scoring rules: `rules-A2.json` was overwritten on 2026-08-03; §4.9 uses the 2026-08-01 file | GPU, eval only | open |
@@ -24,14 +24,13 @@ and two evaluation-only runs.
 
 | ID | what | state | next |
 |---|---|---|---|
-| **N3-P5** | open-set on all 47,905 trap crops for P5 (N2 C3b and N3 B8 done, part B written) | resubmitted 2026-10-23 (12431255) after a missing open_clip | download `trap-openset-P5.{json,parquet}`, add its row to part B of [[2026-10-23-does-the-model-know-when-a-trap-image-is-too-poor]] |
 | **W1** | TreeOfLife-200M at short side 256, on the workstation (`/data/au761367/tol256s/`; zero UCloud core-hours) | crawl done: 64.16 M images plus ~0.54 M retried ([crawl](journal/engineering/2026-10-01-the-crawl-resized-the-wrong-side.md)); `retry3/` (9 servers, 72 h cap) | shared as `/data/datasets/tol256`: 65.2 M images, metadata with ToL's per-image fields ([share](journal/engineering/2026-10-21-sharing-the-tol-crawl.md)). **Upload re-planned** (1,053 shards); old shards in the UCloud Trash; upload paused on storage |
 
 ## 3. Backlog, in order
 
 | ID | work | cost | why |
 |---|---|---|---|
-| Q | the back-off policy: greedy 95 % thresholds vs expected utility, generic over taxonomies; Lepidoptera, traps, Pl@ntNet | CPU only, existing per-image outputs | B8 and B3rep5x never answer at genus on traps. [[2026-10-23-what-is-the-best-back-off-policy]] |
+| Q | the back-off policy on Pl@ntNet: Lepidoptera and traps done (no single rule wins; greedy with a lower genus target is the cheapest fix) | CPU only; needs the colleague's predictions (`dev/097 --plantnet`) | does the in-distribution ranking hold for another kingdom and five ranks? [[2026-10-23-what-is-the-best-back-off-policy]] |
 | U | self-training on EU trap crops (>50 M): natural vs balanced, then share sweep, teacher B8 | 4-7 runs at 20 M, after the crop location and metadata are known | the largest lever, without copies. [[2026-10-21-self-training-on-european-traps]] |
 | W3 | training parquets for the ToL run: join the catalog by uuid, seven levels keyed by full path, check the hierarchy is a tree, drop the audit's 584 k excluded rows; then the 20 M run | GPU, after W1 | the owner's question: does seeing the whole tree help open-set and shift? Also gives a trap order classifier. [[2026-10-01-does-seeing-the-whole-tree-teach-a-model-what-it-does-not-know]] |
 | S1a | two organisms in one picture: composites (moth on moth, moth on trap background) through B8 and P5; does the open-set score flag them as novel? Per-location logits as a readout | workstation GPU, hours | the owner's question (2026-10-09); also decides how W3 is read out (whole tree vs subtree). [[2026-10-09-two-organisms-in-one-picture]] |

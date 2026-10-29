@@ -8,4 +8,4 @@
 %% status: ready
 Novelty is scored from the same forward pass with five rules on the logits $z$: the maximum softmax probability (MSP), the negative entropy of the softmax, the margin between the two largest logits, the largest logit, and the energy $\log \sum_j e^{z_j}$.
 Detection is measured as the area under the ROC curve (AUROC) between unseen and known images.
-The best rule is not a property of the method: it changes with the size of the model and between museum-style and trap images (\cref{sec:results_openset}), so all five are reported and the best is named.
+The best rule is not a property of the method: it changes with the size of the model and between museum-style and trap images (\cref{sec:results_rules}), so all five are reported and the best is named.

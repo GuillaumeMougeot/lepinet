@@ -1,6 +1,10 @@
 # On trap images, does the model back off when the image is poor, and notice a species it never saw?
 
-**Kind:** research · **Status:** **OPEN** (2026-10-23). Hypotheses written before any measurement.
+**Kind:** research · **Status:** **RESOLVED** (2026-10-29). The back-off cascade does back off on blurry
+crops (species answers 91 -> 65 % from sharpest to blurriest fifth) and keeps species precision within 2
+points of target; but on trap images an unseen species of a known genus is barely detected (C3b AUROC
+0.566 against 0.8717 on museum images) and 38 % of its crops get a confident wrong name.
+Out-of-vocabulary species lose 6-8 points (B8 0.857, P5 0.835).
 
 ## The question (the owner's)
 
@@ -96,7 +100,7 @@ AUROC of each open-set rule, novel crops against all 46,924 known trap crops (hi
 | C3b, out-of-vocabulary (6 species) | 234 | MSP | 0.781 | — |
 | C3b, all 981 novel crops | 981 | MSP | 0.619 | — |
 | B8, out-of-vocabulary (6 species) | 234 | top-2 margin | 0.857 | 0.9153 (entropy) |
-| P5 | — | — | pending (job resubmitted after a missing-library failure) | 0.9161 |
+| P5, out-of-vocabulary (6 species) | 234 | max-logit | 0.835 | 0.9161 |
 
 * **H4 holds, and worse than predicted.** On trap images C3b barely detects an unseen species from a
   genus it knows: 0.566, against 0.8717 for the same stratum on museum-style images and a predicted
@@ -104,6 +108,9 @@ AUROC of each open-set rule, novel crops against all 46,924 known trap crops (hi
 * **One species dominates.** *Pleuroptya ruralis* is 682 of the 742 near-novel crops (AUROC 0.563).
   The other seven near species average 0.61 over 60 crops. Read the near result as "one common
   trap species and seven rare ones", not as a population estimate.
+* **Out-of-vocabulary species lose 6-8 points of AUROC on trap images** for both release models (B8
+  0.9153 to 0.857, P5 0.9161 to 0.835), much less than C3b's near stratum loses. P5's rules sit within
+  0.016 of each other; energy stays usable for P5 (0.835) and collapses for B8 (0.47).
 * **H5: the best rule changes under shift.** C3b's best rule is MSP on trap images (entropy on museum
   images); B8's is the top-2 margin (entropy on museum images). Max-logit and energy fall below
   chance for C3b on trap images (0.42, 0.39): shift lowers every logit, known species included.

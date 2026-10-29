@@ -1,0 +1,37 @@
+%% title: Metric conventions change the ranking
+%% target: Sections/Results.tex
+%% anchor: What none of them shows is how a model abstains (\cref{sec:results_backoff}).
+%% action: after
+%% why: Shows that the class set of a macro average (step 09) reorders models on trap images and flips two of our earlier conclusions (regional checklist, real labels), while comparisons within one label space survive.
+%% source: journal/2026-10-22-rescoring-in-the-mini-metrics-convention.md (probe table; P2, P3, P5; amendment for the grouped split); journal/2026-10-22-why-the-trap-scores-of-the-two-drafts-differ.md; data/rescore/probe-grouped.csv (K1 = D1-probe first row, 0.7705)
+%% check: Paste after step 15. | Present-only is our old lepinet convention and mini_metrics before commit 1132a10; say so in one clause if Asger agrees. | K1 is B8 restricted to the 464-species Danish trap checklist.
+%% status: ready
+\subsection{Which classes are averaged changes the ranking on trap images}\label{sec:results_conventions}
+On the test fold every species occurs in the ground truth, so averaging over the species present and averaging over the species present or predicted (\cref{sec:metrics}) agree to four decimals for all 53 models we scored.
+On the probe set, which holds 368 of the 12,041 species, they do not (\cref{tab:conventions}).
+
+\begin{table}[htb]
+    \centering
+    \caption{Probe-set species macro-$\text{F}_1$ under three conventions (recipe L). Present only: the average runs over species in the ground truth. Present or predicted: species that are predicted but absent count with $\text{F}_1 = 0$, at zero threshold and calibrated on 10\,\% of the (trap, night) groups.}
+    \label{tab:conventions}
+    \begin{tabular}{lccc}
+        \toprule
+        model & present only & present or predicted & present or predicted, calibrated \\
+        \midrule
+        B1, no trap images & 0.692 & 0.154 & 0.424 \\
+        self-training (B1 + 12,230 pseudo-labels, 11 copies) & 0.772 & 0.372 & 0.631 \\
+        T1rep, real labels instead (11 copies) & 0.781 & 0.623 & 0.723 \\
+        B8 & 0.782 & 0.311 & 0.647 \\
+        K1: B8 restricted to the regional checklist & 0.768 & 0.665 & 0.771 \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+Counting predicted-only species triples the gain from self-training (8.0 points present only, 21.7 at zero threshold, 20.7 calibrated).
+It also reverses two comparisons.
+Real labels lead self-training by 0.9 points present only and by 9.2 calibrated; restricting B8 to the checklist costs 1.4 points present only and gains 12.3 calibrated.
+Both interventions confine predictions to the local fauna.
+When only present species are averaged, a wrong answer outside the probe species lowers one species' recall and costs nothing else, while a wrong answer inside it also lowers the precision of the species named; confining predictions moves errors from the free kind to the costly kind.
+When predicted species count, every absent species named adds a class with $\text{F}_1 = 0$, and confining predictions removes them.
+Comparisons between models with the same label space keep their order under every convention: the head order, the long-tail order (\cref{sec:results_longtail}) and the gain from self-training.
+A macro-$\text{F}_1$ on a subset of the label space is therefore uninterpretable unless the class set is stated.

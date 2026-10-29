@@ -1,0 +1,16 @@
+%% title: Open-set scoring rules do not transfer across scale
+%% target: Sections/Results.tex
+%% anchor: A macro-$\text{F}_1$ on a subset of the label space is therefore uninterpretable unless the class set is stated.
+%% action: after
+%% why: The best novelty score changes with model size, with the margin, and between museum-style and trap images; carrying one rule silently inverts rankings (a 7.7-point "capacity penalty" is mostly the rule).
+%% source: paper/DRAFT.md §4.3, §4.9 (A1 vs A2, five rules); journal/2026-10-23-does-the-model-know-when-a-trap-image-is-too-poor.md (part B: C3b max-logit 0.42, energy 0.39 on traps; B8 best margin)
+%% check: Paste after step 16. | AUROCs are independent of the macro-F1 convention.
+%% status: ready
+\subsection{Open-set scoring rules do not transfer across scale or domain}\label{sec:results_rules}
+The five rules of \cref{sec:evaluation} are computed from the same forward pass on the same images, and the best one changes three times.
+\emph{With the head.} A flat cosine head is best read by entropy (0.899) and worst by the largest logit (0.626), a 27-point spread; with an angular margin the largest logit is best (0.907) and the spread is 1.2 points.
+The margin moves the novelty signal from the shape of the logit vector into the size of its maximum, which makes the rule nearly irrelevant, at a cost of 1.0 point of species macro-$\text{F}_1$ for 0.8 points of AUROC.
+\emph{With the scale.} The largest logit wins at 20\,M parameters and is beaten by MSP by 6 to 8 points at 198\,M; read with each model's best rule, the apparent loss of novelty detection with capacity falls from 7.7 to 1.6 points.
+In a well-fitted embedding every image reaches a high cosine to some prototype, so the maximum saturates, and what still separates known from novel is whether one prototype dominates, which only MSP, entropy and the top-2 margin see.
+\emph{With the domain.} On trap images the flat head's best rule becomes MSP, and the largest logit and energy fall below chance (0.42 and 0.39), because shift lowers every logit, known species included; B8's best rule changes from entropy to the top-2 margin.
+Open-set results are therefore reported with the rule named, and the rule is re-selected whenever the model or the domain changes.

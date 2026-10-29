@@ -1,0 +1,51 @@
+%% title: Appendix: margin, nuisance augmentation, head scaling, recipe ladder, noise floors
+%% target: Sections/Appendix.tex
+%% anchor: The complete decoder output sequence is obtained after $N$ layers followed by a final normalization block: $\mathcal{D}(T, e) = \mathrm{RMSNorm}_{\text{final}}\left( T^{(N)} \right)$.
+%% action: after
+%% why: Results that support the main text but are not part of its argument: why the margin hurts the coarse ranks, how much of the gap is nameable nuisance, why the classifier matrix limits scale, how recipe L was chosen, and the retraining spread per regime in the current convention.
+%% source: paper/DRAFT.md §3.1, §4.7, §4.8, §4.12; journal/2026-10-22-rescoring-in-the-mini-metrics-convention.md (repeats); data/rescore/*-grouped.csv (A1 0.3636, B1 0.4086 full trap; repeats base/A5, G3/G3b, R5/R5b, P5/P5b)
+%% check: Paste at the end of the appendix. | The recipe ladder documents recipe L only; drop it if recipe L is not kept. | Test-fold numbers are unchanged in the current convention; trap numbers are rescored (grouped calibration). | The ToL-200M floor numbers (884,662 to 203,878 species) assume a 50-image floor, which the merged paper drops for training; keep them as a statement about scale.
+%% status: ready
+\section{The angular margin and marginalisation}\label{appendix:margin}
+Adding an ArcFace margin to the flat head costs 1.00 point at species, 1.15 at genus and 1.11 at family on the test fold, and 0.95, 1.21 and 1.13 on a backbone ten times larger.
+The coarse ranks lose more than the species rank they are summed from.
+A genus posterior $P(g) = \sum_{s \in g} P(s)$ depends on how probability is spread over the species of a genus, not only on which ranks first; a margin trains against a harder target than the label and distorts that spread.
+Supervising the marginals does the opposite (species unchanged, genus $+0.27$, family $+0.39$), so a model that marginalises and uses a margin should also supervise the marginals.
+
+\section{Nameable nuisance}\label{appendix:nuisance}
+Adding motion blur, low light and JPEG quantisation to training (B1) raises species macro-$\text{F}_1$ on the 47,905 trap crops from 0.364 to 0.409 (calibrated, grouped) for 0.36 points on the test fold, at no inference cost.
+Each transform encodes a guess about what differs between the domains, so the gain measures the part of the gap that can be named in advance; it is worth little once the classifier is adapted to trap images (\cref{sec:results_classifier}).
+
+\section{The classifier matrix at scale}\label{appendix:scaling}
+At an embedding size of 1,280 a prototype matrix for the roughly one million species of a global taxonomy takes 15.4\,GB in fp32 with its optimiser state.
+For the margin head, class centroids replace the trained matrix at inference for 0.29 points (3.7 for the plain head), and single means beat $k$-means centroids and medoids.
+But the matrix is not low-rank (rank 1,035 of 1,280 for 90\,\% of its energy; rank 128 costs 3.1 points), and training without it fails: sampled softmax degrades with no plateau, taxonomy-aware negatives recover 26\,\% of that loss, and a head of running class centroids with no matrix costs 4.6 points.
+Centroids can replace a trained matrix at inference but not substitute for training one.
+A 50-image floor reduces TreeOfLife-200M from 884,662 to 203,878 species while removing about 7\,\% of images, which brings the footprint to 3.1\,GB.
+
+\section{How recipe L was chosen}\label{appendix:ladder}
+Recipe L was built by single-factor ablation (species macro-$\text{F}_1$ on the test fold): Muon with a flat cosine schedule and heavy augmentation, 0.8297; warm-up, lighter augmentation and looser gradient clipping, 0.8769; a one-cycle schedule, 0.8887; square-root class oversampling, 0.9148; 10 instead of 5 epochs without oversampling, 0.8976.
+The second step bundles three changes and cannot be attributed.
+The optimiser is in every row; schedule, augmentation and sampler moved the number.
+Logit adjustment reached 0.9031 and lowered genus and family: one temperature shared by three label distributions (12,041, 4,333 and 102 classes) suits none of them, while oversampling changes which images are drawn and acts the same at every rank.
+The 10-epoch run was still improving, so the 5-epoch budget is a comparison convention, not a converged optimum.
+
+\section{Retraining spread}\label{appendix:noise}
+\Cref{tab:noise} gives the difference between two identical trainings, by training regime.
+It varies more than tenfold on one benchmark, so a noise floor belongs to the training procedure as well as to the evaluation set.
+
+\begin{table}[htb]
+    \centering
+    \caption{Absolute difference in species macro-$\text{F}_1$ between two identical trainings (recipe L), calibrated on 10\,\% of the (trap, night) groups. On the test fold, end-to-end repeats differ by 0.0000.}
+    \label{tab:noise}
+    \begin{tabular}{lcc}
+        \toprule
+        regime & probe & held-out species \\
+        \midrule
+        end-to-end, 20\,M, 5 epochs & 0.014 & 0.015 \\
+        end-to-end self-training, no gate, 20\,M & 0.011 & 0.024 \\
+        frozen-backbone stage, 198\,M, 2 epochs & 0.001 & 0.022 \\
+        unfrozen adaptation, 303\,M, 2 epochs & 0.004 & 0.026 \\
+        \bottomrule
+    \end{tabular}
+\end{table}

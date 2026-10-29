@@ -1,0 +1,19 @@
+%% title: Backing off to genus or family: thresholds per rank
+%% target: Sections/Methods.tex
+%% anchor: A difference between two heads is therefore claimed only when it exceeds the spread across three training seeds, not only the bootstrap interval.
+%% action: after-paragraph
+%% why: Defines the abstention policy the results use (sec:results_backoff): one threshold per rank, each fitted on the images that reach that rank, and the expected-utility rule it is compared with.
+%% source: journal/2026-10-23-what-is-the-best-back-off-policy.md (Q: policies P0-P3, eleven splits); paper/DRAFT.md §4.6 (C1: conditional fitting, genus precision 0.487 vs 0.970); dev/083_hf_release.py (cascade); dev/097_backoff_policies.py
+%% check: Paste below step 11. | The Deng et al. (2012) reference is from memory; verify. | Temperatures (1.91, 1.70) belong to the recipe-L release models; the rerun's models get their own.
+%% status: ready
+\subsection{Backing off to a coarser rank}\label{sec:backoff}
+Summing the species posterior over each genus and family gives a posterior at every rank from one forward pass, so a model can answer at a coarser rank without a second model.
+The policy is greedy: answer at species if the top species confidence reaches a threshold $\tau_s$; otherwise at genus if the top genus confidence reaches $\tau_g$; otherwise at family if it reaches $\tau_f$; otherwise abstain.
+Each threshold is the lowest that gives 95\,\% precision on the calibration images that reach its rank, that is, the images that failed every finer rank.
+Fitting the coarse thresholds on all images instead lets them borrow reliability from easy images: on the 15,453 test images whose species confidence is below 0.40, genus precision is 0.487, against 0.970 over all images.
+
+On the trap images the thresholds are fitted on half of the (trap, night) groups and evaluated on the other half, over eleven random halvings.
+Heads trained with an angular margin saturate their softmax (B8 returns a confidence of exactly 1.0 for 70\,\% of trap images), so they are first rescaled by a temperature fitted on in-distribution validation data.
+The greedy policy is compared with an expected-utility rule, which answers at the rank $r$ that maximises $u_r p_r - c\,(1-p_r)$, where $p_r$ is the top posterior at rank $r$, and abstains when every rank gives a negative value \textbf{(REF: Deng et al. 2012, hedging your bets)}.
+The utilities are 1, 0.8 and 0.5 for species, genus and family, and the error cost $c$ is chosen to reach the same 95\,\% precision overall.
+Each policy is reported as the share of images answered at each rank, the precision of each returned rank, and the share answered correctly at some rank.
