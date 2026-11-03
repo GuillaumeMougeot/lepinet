@@ -147,7 +147,10 @@ class DistillCallback(Callback):
 class GCCallback(Callback):
     """Force a generation-0 garbage collection after every batch.
 
-    **Kept dormant by default** (``journal/engineering/2026-07-24-src-lepinet-baseline-port.md``, D3). It existed
+    **Off by default, but not unnecessary** (D3 of ``journal/engineering/2026-07-24-src-lepinet-baseline-port.md``
+    assumed it was). Measured 2026-11-03: without it, allocated GPU memory grows ~0.23 GiB per batch at
+    460->256, roughly one batch of images kept alive by a reference cycle until the GC runs; with it,
+    memory is flat and numerics are unchanged. Turn it on for any GPU with little headroom. It existed
     to break the reference cycle that the original head's ``_weight_bias`` cache created by stashing
     a graph-attached weight view into a persistent buffer each forward — without it, GPU memory
     climbed every batch until OOM. The clean :class:`~lepinet.heads.IndependentHead` has no such

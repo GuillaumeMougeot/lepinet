@@ -230,6 +230,11 @@ In MT's own loop, the head's projection matrix can receive Muon: only parameter 
 - 2026-11-03: the decision; phase 0 assigned to the `mt` session; the Muon finding. Phase 0 done the
   same day; phase 1 approved. Two mistakes of mine in the first brief were corrected: label smoothing
   is not a difference, and the flat head's F1 column is valid (I had cut the wrong CSV columns). V0F
-  and V0BU started. The owner
+  and V0BU started.
+- 2026-11-03, evening: phase 1 implemented (six local commits, all opt-in, MT's tests pass); every
+  CPU check matches lepinet exactly, augmentation draws and optimiser groups included. The subset
+  side-by-side found that lepinet leaks GPU memory per batch without `GCCallback` (the port's D3 claim
+  was wrong; a B200 hides it), so lepinet's subset runs use `extra_cbs=[GCCallback()]` (numerics
+  unchanged), and the throughput job runs lepinet as on UCloud. The owner
   approved the selection and the parity setting. The reference conventions in the brief were
   corrected. Nemo's card set was judged unreconciled, so Nemo is re-scored on `data/flemming`.

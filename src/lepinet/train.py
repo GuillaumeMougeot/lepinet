@@ -134,8 +134,12 @@ def train(cfg: TrainConfig, extra_cbs=None, init_from=None, freeze_body=False):
         from .callbacks import DistillCallback
 
         cbs.append(DistillCallback(teacher_model))
-    # GCCallback is intentionally omitted (D3): the clean head has no per-batch reference cycle.
-    # Add `GCCallback()` here if a future head reintroduces one and GPU memory climbs.
+    # GCCallback is omitted, and the reason first given for it (D3: "the clean head has no per-batch
+    # reference cycle") is wrong: measured 2026-11-03 (fastai 2.8.7, torch 2.12.1), allocated memory
+    # still grows ~0.23 GiB per batch at 460->256 until Python's GC happens to run. A 180 GB B200
+    # absorbs it, which is why every UCloud run trained; a 32 GB GPU shared with another job OOMs.
+    # Pass `extra_cbs=[GCCallback()]` there (numerics unchanged, memory flat). Left off by default so
+    # the published runs' throughput stays the reference.
     #
     # `extra_cbs` is the callback counterpart of HEAD_REGISTRY: a dev/ experiment whose head needs
     # something the training loop does not provide (e.g. the batch labels inside forward, for a

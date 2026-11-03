@@ -223,6 +223,13 @@ leaves the *train* split empty and `DataBlock.setup` dies far from the cause. It
 twice — both times on inference-only loaders, where every row was marked valid because the labels
 were placeholders. `make_dls` now raises a message naming the actual problem.
 
+**A guard documented as dormant may still be needed.** The port dropped `GCCallback` because the clean
+head "has no per-batch reference cycle". Something else still keeps each batch alive until Python's GC
+runs: ~0.23 GiB per batch at 460->256 (measured 2026-11-03). Every UCloud run hid it behind 180 GB of
+B200 memory; the first run on a shared 32 GB card ran out of memory 30 s in. `extra_cbs=[GCCallback()]`
+keeps memory flat at no cost in accuracy. The claim had been checked by reading code, not by watching
+memory.
+
 **`isinstance(True, int)` is `True`** in Python, which is how a boolean reached a `sqrt()` and
 produced `sqrt(-1)`.
 
