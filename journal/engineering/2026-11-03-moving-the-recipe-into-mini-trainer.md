@@ -32,7 +32,8 @@ the merged code (phase 3 below), not by preference.
 | √-oversampling sampler: per-row weights, drawn with replacement, epoch length kept | +2.6 pt on the ladder; also the mechanism for self-training doses and cRT | "resampling is not supported" |
 | presizing: aspect-preserving resize to 460, random crop (train) or centre crop (valid), bilinear; then a fastai-style GPU affine (dihedral p=0.5, rotate ±15°, zoom 1-1.1, reflection padding) resampled once to 256 | the lighter-augmentation part of the +4.7 bundle | squashes to the input size with NEAREST; salt-and-pepper, flips, rotation, translate |
 | warm-up from lr/100 over 0.5 epoch, then cosine to 0, the same curve for every group from step 0; one learning rate; weight decay on every parameter | one-cycle +1.2 pt | backbone at lr 0 during a head warm-up, then lr/3; no decay on norms and biases |
-| cross-entropy without smoothing or regulariser | lepinet's recipe | knobs exist; defaults are smoothing 1/C, regulariser 0.1 |
+| cross-entropy without regulariser (both codes smooth labels by 1/C) | lepinet's recipe | knob exists; default regulariser 0.1 |
+| the head's per-class scale and bias, trained (lepinet trains them by accident; see the audit) | every lepinet number | frozen at 1 and 0 |
 | head in fp32 under fp16 autocast; GradScaler settings | fp16 overflow in the cosine head | to check |
 
 **Phase 2, the methods the paper and the third model need.**
@@ -100,6 +101,42 @@ If the full run still misses by more than 0.003 with every piece ported, the res
 implementation detail (resampling kernels, GradScaler, initialisation), found by swapping one
 component at a time.
 
+## Phase 0: what the audit found (2026-11-03)
+
+The `mt` session's component-by-component diff is in mini_trainer's
+`.agents/notes/2026-11-03-lepinet-integration.md` (branch `feature/lepinet-integration`, commit 0e93a0d,
+local). What it adds to the prediction above:
+
+- **lepinet's head trains its "frozen" scale and bias.** fastai's optimiser setup makes every parameter
+  trainable; reproduced here on CPU. Species scales end at 1.6-2.6 and biases at -0.9 to 0.2, larger for
+  rare species. This is the mechanism of [[2026-08-06-the-cosine-head-is-not-unit-norm]], now resolved.
+- **mini_trainer's default augmentation draws once per batch:** the whole batch flips and rotates
+  together. Its preprocess also crops the central 87.5 % of the squashed image, in training too. Both
+  apply to Nemo's recipe; flagged to Asger.
+- **Existing knobs already reproduce lepinet's learning-rate curve** (within 1.3e-8 over 393,685 steps).
+- **mini_trainer routes the head's 1280 x 1280 hidden layer to Muon**, the only tensor Muon gets on
+  EfficientNetV2-S. It decays neither BatchNorm, biases nor prototypes, runs the head in fp16 with TF32,
+  and since 2026-08-17 initialises the prototypes almost at random.
+- **Not a difference:** label smoothing. lepinet's `None` resolves to 1/C, mini_trainer's default too.
+- **All three heads already exist in mini_trainer:** I = independent, BU = hierarchical, F = hierarchical
+  with loss weights 1 0 0, which marginalises at inference.
+
+**Phase 1 plan (approved 2026-11-03):** eight opt-in pieces, each defaulting to today's behaviour:
+1. the class floor and a test vocabulary filter;
+2. the weighted sampler;
+3. head options (learned scale and bias, fp32 head, lepinet's initialisation);
+4. a grouping that decays every parameter;
+5. the crop reader;
+6. the per-image affine with its resample-and-normalise preprocess;
+7. a validation macro-F1 statistic;
+8. a recipe builder with I, BU and F presets.
+
+The order is GPU-free equivalence checks first (lepinet's checkpoint gives identical logits in
+mini_trainer's head; the same images give the same pixels; lepinet's predictions re-score to 0.9110),
+then the pieces, then the subset side-by-side (50-image floor, Asger's family x abundance selector,
+512 species, seed 20261003, two seeds per code), then the gate. The tolerances are agreed: per-epoch
+validation macro-F1 within 0.001, investigated above 0.002; test within 0.003 at every rank.
+
 ## Phase 3: the recipe, settled by measurement
 
 Single-factor runs against the parity baseline: 20 M, 5 epochs, scored on the test fold, probe and
@@ -113,6 +150,8 @@ probe-HO (calibrated, grouped), with two seeds wherever the probe spread matters
 | schedule | one-cycle, all groups | head warm-up, backbone lr/3 | one-cycle wins at 5 epochs; the gap shrinks at 30 |
 | resize and augmentation | crop, bilinear, affine | squash, NEAREST, salt-and-pepper | crop and bilinear >= squash in-distribution; salt-and-pepper may help on traps |
 | epochs, image size | 5, 256 | 30, 384 | cost decides; 10 epochs were still improving |
+| head scale and bias | learned | frozen | unknown; they sharpen rare classes, so they may raise macro-F1 and change open-set scores |
+| augmentation draws | per image | per batch | per image wins: a whole batch flipping together adds little diversity per step |
 
 ## Phases 4-6
 
@@ -157,6 +196,9 @@ In MT's own loop, the head's projection matrix can receive Muon: only parameter 
 
 ## Log
 
-- 2026-11-03: the decision; phase 0 assigned to the `mt` session; the Muon finding. The owner
+- 2026-11-03: the decision; phase 0 assigned to the `mt` session; the Muon finding. Phase 0 done the
+  same day; phase 1 approved. Two mistakes of mine in the first brief were corrected: label smoothing
+  is not a difference, and the flat head's F1 column is valid (I had cut the wrong CSV columns). V0F
+  and V0BU started. The owner
   approved the selection and the parity setting. The reference conventions in the brief were
   corrected. Nemo's card set was judged unreconciled, so Nemo is re-scored on `data/flemming`.

@@ -67,7 +67,7 @@ and two evaluation-only runs.
 
 - **Noise floors depend on the training regime.** Probe spread is ~0.004 between end-to-end runs and ~0.012 between frozen-trunk stages; identical 198 M frozen runs differed by 3.74 pt once (G3b). Claim nothing under ~3x the matching floor.
 - **Thresholds do not transfer between models or embedding spaces.** Rankings do; abstention, novelty and temperature values must be refitted.
-- **The cosine head's rows are not unit-norm** (mean 1.08 and 1.77 on two checkpoints). No accuracy number is affected; do not change the head. [[2026-08-06-the-cosine-head-is-not-unit-norm]]
+- **Every lepinet head learned a per-class scale and bias.** fastai's optimiser setup trains the head's "frozen" `g` and bias (found 2026-11-03), so the rows are not unit-norm (species `g` mean 1.88). No reported number changes; mini_trainer keeps them frozen, so parity needs an option and phase 3 tests learned against frozen. [[2026-08-06-the-cosine-head-is-not-unit-norm]]
 
 ## 6. How to run things
 

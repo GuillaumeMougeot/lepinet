@@ -78,7 +78,7 @@ incidents are in [`engineering/`](engineering/). The plan is [`../PLAN.md`](../P
 | [07-24](engineering/2026-07-24-src-lepinet-baseline-port.md) | subproject | the clean `src/lepinet` package reproduces 0.9148 |
 | [07-25](engineering/2026-07-25-teacher-student-app-bridge.md) | subproject | distillation and the one-command bundle (A3, A6, D2) |
 | [07-30](engineering/2026-07-30-ucloud-queue-daemon.md) | incident | the UCloud queue only advances when something ticks it |
-| [08-06](engineering/2026-08-06-the-cosine-head-is-not-unit-norm.md) | incident | the cosine head's rows are not unit-norm (no accuracy effect) |
+| [08-06](engineering/2026-08-06-the-cosine-head-is-not-unit-norm.md) | incident | the cosine head's rows are not unit-norm: fastai's optimiser setup trains the "frozen" per-class scale and bias (resolved 2026-11-03) |
 | [08-24](engineering/2026-08-24-work-storage-degraded.md) | incident | training stalled: `/work` read latency collapsed |
 | [09-29](engineering/2026-09-29-public-hf-release.md) | subproject | public release of P5, B8, B3rep5x on Hugging Face |
 | [09-30](engineering/2026-09-30-full-fold-and-p5-resize.md) | subproject | P5's published preprocessing fixed |

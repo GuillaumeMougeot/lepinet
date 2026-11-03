@@ -113,7 +113,11 @@ chokes on it, because that schedules momentum as well as learning rate. Hence th
 
 ### Head: a cosine head, and the bottleneck width
 
-Class prototypes are L2-normalised and scored by angle. Why that beats a plain linear layer — and
+Class prototypes are L2-normalised and scored by angle. **As trained, each class also has a learned
+scale and bias**: the head builds them frozen at 1 and 0, but fastai's optimiser setup makes every
+parameter trainable (found 2026-11-03), so species scales end at 1.6-2.6 and biases at -0.9 to 0.2,
+both larger for rare species. Whether that helps is untested; it is a phase-3 factor of the
+mini_trainer integration. Why the cosine beats a plain linear layer — and
 why a raw cosine is a poor logit in high dimension — is a scientific claim and lives in the paper
 (§2.1–2.2), not here.
 

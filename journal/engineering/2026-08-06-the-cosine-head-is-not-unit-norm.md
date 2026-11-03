@@ -1,11 +1,12 @@
 # The cosine head's prototypes are not unit-norm, and the docs say they are
 
-**Kind:** incident · **Status:** **OPEN (2026-08-06) — but downgraded.** The clamp rate is now
-measured and it is a **documentation problem, not a correctness one**: no ties, top-1 essentially
-never saturates, so no reported accuracy is affected. The mechanism is still unknown. Original
-status: Observation confirmed on two independently
-trained checkpoints; **mechanism not yet identified.** Written now rather than after diagnosis
-because the observation contradicts a documented invariant and several claims rest on it.
+**Kind:** incident · **Status:** **RESOLVED (2026-11-03).** Mechanism found: fastai's optimiser
+setup makes the head's "frozen" per-class magnitude `g` (weight_norm's `original0`) and bias trainable.
+With `muon_opt_func`, both are `requires_grad=False` when the head is built and `True` as soon as
+`learn.create_opt()` runs, before any `freeze`/`unfreeze` (reproduced on CPU, below). So every
+lepinet run trained a per-class scale and bias under AdamW (lr 1e-3, wd 0.01). No reported number
+changes; the head's description does. Found by the mini_trainer parity audit
+([[2026-11-03-moving-the-recipe-into-mini-trainer]]).
 
 ## The observation
 
@@ -127,3 +128,18 @@ That is testable by scoring novelty on the **raw** pre-clamp values, which costs
 
 **Not being done:** changing the head. Every published number was produced with this behaviour, and
 changing it before it is understood would invalidate the lot for no measured gain.
+
+
+## Mechanism (2026-11-03)
+
+The mini_trainer audit traced it through fastai: `freeze_to` sets `requires_grad_(True)` on every tensor in
+the optimiser's parameter lists (`fastai/optimizer.py`, `fastai/learner.py`), and fastai's splitter puts
+*all* parameters in those lists, frozen ones included. Reproduced on CPU with lepinet's own `build_learner`
+and `muon_opt_func` (an `IndependentHead` on resnet18): `g` and the bias are `False` when built and `True`
+after `create_opt()`, `freeze()` and `unfreeze()` alike. The earlier "not `unfreeze()` on its own" test
+used a minimal Learner that does not go through this optimiser path.
+
+Measured in the dev/030 and clean-package I checkpoints: species `g` 1.60-2.62 (mean 1.88), bias -0.92 to
+0.17 (mean -0.30), both higher for rare species (Spearman against log training count: -0.38 and -0.34), so
+the bias is not a log prior. mini_trainer keeps both frozen at 1 and 0. Parity therefore needs a head option
+that trains them, and the recipe choice tests learned against frozen as a single factor.
