@@ -1,0 +1,28 @@
+# V0BU (2026-11-03): recipe L's marginal supervision (BU, Nemo's head) without the 50-image floor (12,632 species).
+# Two V0 runs read /work at once on purpose: their first-epoch speed measures whether parallel
+# jobs still starve each other (ucloud/README.md: "run one image-heavy job at a time"), which
+# decides how the mini_trainer runs are parallelised. Watch the img/s in the log.
+name = "lepinet-V0BU"
+replicas = 1
+[application]
+name = "pytorch-te"
+version = "26.05"
+[product]
+id = "gpu-nvidia-b200-1-gpu"
+category = "gpu-nvidia-b200"
+provider = "ucloud"
+[time_allocation]
+hours = 10
+[sync]
+local = ".."
+remote = "/12347837/repos/lepinet"
+[setup]
+script = "setup-lepinet.sh"
+run = "python dev/051_benchmark_run.py train configs/20261103_V0BU_nofloor_marginal_effnetv2s.yaml"
+[schedule]
+auto_extend = "3h"
+max_time = "30h"
+[[resources]]
+type = "file"
+path = "/12383016/global_lepi"
+read_only = true

@@ -257,3 +257,10 @@ distance), **E2** (scoring rules do not transfer across scale), **L4** (cRT), **
 |---|---|---|---|
 | S1a | do our open-set scores flag a two-organism image as novel? Synthetic composites, published B8 and P5; per-location logits | designed | [S1](journal/2026-10-09-two-organisms-in-one-picture.md) |
 | S1b | the same on the W3 model, with moth-on-plant, FathomNet frames and hand-checked photos; fixes W3's readout | after W3 | same |
+
+### V — one code base: the recipe moves into mini_trainer (opened 2026-11-03)
+
+| ID | question | status / result | where |
+|---|---|---|---|
+| V0F | recipe L's flat head without the 50-image floor: the anchor on mini_trainer's class set and test set (12,632 species, 632,913 test images); same vocabulary as Nemo | **running** (UCloud job 12444405; eval chained) | [integration](journal/engineering/2026-11-03-moving-the-recipe-into-mini-trainer.md) |
+| V0BU | the same with marginal supervision (BU, mini_trainer's HierarchicalClassifier and Nemo's head) | **running** (UCloud job 12444406; eval chained) | same |

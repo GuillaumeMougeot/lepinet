@@ -1,0 +1,32 @@
+# V0F-eval (2026-11-03): the four evaluations of V0F, chained (cloned from the singlehead-eval,
+# B1-shift, B1-probe and B1-probeho run lines): the full test fold (set 0, no filter: 632,913
+# images, 12,632 species), all trap crops, held-out trap nights, held-out species.
+name = "lepinet-V0F-eval"
+replicas = 1
+[application]
+name = "pytorch-te"
+version = "26.05"
+[product]
+id = "gpu-nvidia-b200-1-gpu"
+category = "gpu-nvidia-b200"
+provider = "ucloud"
+[time_allocation]
+hours = 6
+[sync]
+local = ".."
+remote = "/12347837/repos/lepinet"
+[setup]
+script = "setup-lepinet.sh"
+run = "lepinet test --model '/work/lepinet/data/ucloud_models/*-lepinet-V0F-nofloor-singlehead-effnetv2s-ucloud/*.pt' --parquet /work/global_lepi/0032836-250426092105405_processing_metadata_postprocessed_quality_filtered.parquet --img-dir /work/global_lepi/images --out-dir /work/lepinet/data/ucloud_preds/V0F-eval --test-set 0 --min-img-per-spc 0 --num-workers 32 --eval-levels speciesKey,genusKey,familyKey && lepinet test --model '/work/lepinet/data/ucloud_models/*-lepinet-V0F-nofloor-singlehead-effnetv2s-ucloud/*.pt' --parquet /work/lepinet/data/flemming/flemming_names_labels.parquet --img-dir /work/flemming/images --out-dir /work/lepinet/data/ucloud_preds/V0F-shift --test-set 0 --min-img-per-spc 0 --img-size 256 --aug-img-size 460 --batch-size 128 --num-workers 32 --no-drop-unknown-species && lepinet test --model '/work/lepinet/data/ucloud_models/*-lepinet-V0F-nofloor-singlehead-effnetv2s-ucloud/*.pt' --parquet /work/lepinet/data/flemming/splits/flemming_probe.parquet --img-dir /work/flemming/images --out-dir /work/lepinet/data/ucloud_preds/V0F-probe --test-set 0 --min-img-per-spc 0 --img-size 256 --aug-img-size 460 --batch-size 128 --num-workers 32 --no-drop-unknown-species && lepinet test --model '/work/lepinet/data/ucloud_models/*-lepinet-V0F-nofloor-singlehead-effnetv2s-ucloud/*.pt' --parquet /work/lepinet/data/flemming/splits/flemming_probe_heldout_species.parquet --img-dir /work/flemming/images --out-dir /work/lepinet/data/ucloud_preds/V0F-probeho --test-set 0 --min-img-per-spc 0 --img-size 256 --aug-img-size 460 --batch-size 128 --num-workers 32 --no-drop-unknown-species"
+[schedule]
+auto_extend = "1h"
+max_time = "12h"
+[[resources]]
+type = "file"
+path = "/12383016/global_lepi"
+read_only = true
+
+[[resources]]
+type = "file"
+path = "/12347837/datasets/flemming"
+read_only = true

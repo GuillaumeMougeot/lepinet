@@ -38,6 +38,7 @@ and two evaluation-only runs.
 
 | ID | what | state | next |
 |---|---|---|---|
+| **V0F, V0BU** | recipe L without the 50-image floor (flat head; marginal supervision), the anchor for mini_trainer's test set; both read `/work` at once to measure whether parallel jobs still starve | UCloud 12444405, 12444406, evals chained | compare with the mini_trainer runs after the parity gate; Nemo on the same vocabulary |
 | **W1** | TreeOfLife-200M at short side 256, on the workstation (`/data/au761367/tol256s/`; zero UCloud core-hours) | crawl done: 64.16 M images plus ~0.54 M retried ([crawl](journal/engineering/2026-10-01-the-crawl-resized-the-wrong-side.md)); `retry3/` (9 servers, 72 h cap) | shared as `/data/datasets/tol256`: 65.2 M images, metadata with ToL's per-image fields ([share](journal/engineering/2026-10-21-sharing-the-tol-crawl.md)). **Upload re-planned** (1,053 shards); old shards in the UCloud Trash; upload paused on storage |
 
 ## 3. Backlog, in order
