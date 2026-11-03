@@ -153,6 +153,37 @@ probe-HO (calibrated, grouped), with two seeds wherever the probe spread matters
 | head scale and bias | learned | frozen | unknown; they sharpen rare classes, so they may raise macro-F1 and change open-set scores |
 | augmentation draws | per image | per batch | per image wins: a whole batch flipping together adds little diversity per step |
 
+## Nemo on the reconciled trap export (VN, 2026-11-03)
+
+Re-scored by `dev/098` and `dev/093`: the same 47,905 crops, nights and calibration as every lepinet
+model. Species macro-F1, mini_metrics' convention, zero threshold / calibrated by (trap, night), mean
+over 20 splits:
+
+| model | trap (47,905) | probe (15,200) | probe-HO (2,455) |
+|---|---|---|---|
+| Nemo, full vocabulary | 0.104 / 0.305 | 0.137 / 0.338 | 0.097 / 0.293 |
+| Nemo + TTA | 0.142 / 0.449 | 0.200 / 0.479 | 0.140 / 0.359 |
+| Nemo + north_europe list | 0.261 / 0.525 | 0.294 / 0.546 | 0.178 / 0.449 |
+| Nemo + list + TTA (the card's setting) | 0.321 / 0.599 | 0.369 / 0.646 | 0.236 / 0.490 |
+| B1 (20 M, margin + trap augmentation) | 0.112 / 0.409 | 0.154 / 0.424 | 0.098 / 0.356 |
+| B8 (198 M, self-training) | - | 0.311 / 0.647 | 0.148 / 0.452 |
+| P5 (BioCLIP-2, unfrozen) | - | 0.396 / 0.622 | 0.209 / 0.497 |
+
+- **Like for like, Nemo sits with our plain 5-epoch heads.** On all trap crops its 0.305 matches F
+  0.284 and BU 0.313, and is 10 points under B1. Six times the epochs and 2.25 times the pixels buy
+  nothing under shift. That fits finding 2: in-distribution accuracy is saturated, and the headroom is
+  under shift.
+- **TTA is worth +14 points** on all crops and on probe, and +7 on held-out species. That is more than
+  margin plus trap augmentation together (+12.5). Its recipe (`rotation30_pad25_3`) has three views,
+  two of them rotated and zoomed out by 25 % padding. It was chosen on these same crops, so part of the
+  gain is selection, and it needs a test on images that did not choose it. Zooming out may match the
+  framing of the training photographs; that is a candidate augmentation for phase 3.
+- **The regional list is worth +16 to +22 points**, the checklist effect of K1.
+- The card's setting ties B8 on probe, but it pairs a regional list and TTA against unrestricted
+  single-view models. The third model is reported in all four settings.
+- Nemo lacks the same 6 trap species as lepinet (234 rows, 0.5 %). Its larger vocabulary costs little
+  here: 2,499 species predicted but absent, against B1's 2,455.
+
 ## Phases 4-6
 
 - **Paper reruns**, as the decision sheet listed them:
