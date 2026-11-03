@@ -22,8 +22,10 @@ a time:
 
 Two things are worth reading off this table before anything else.
 
-**The optimiser was never the lever.** Muon was in place from the first row and the model was still
-at 0.83. What moved it was the *schedule*, the *augmentation strength* and the *sampler* — the parts
+**The optimiser was never the lever.** It never changed, and at 20 M it was AdamW throughout:
+`MuonAuxAdamW` hands Muon only 2-D tensors, every EfficientNetV2-S body weight is a 4-D convolution
+(0 of 20.18 M parameters are 2-D) and the head is routed to AdamW, so Muon updated nothing in any
+row of this table (found 2026-11-03). The model was still at 0.83. What moved it was the *schedule*, the *augmentation strength* and the *sampler* — the parts
 that decide what the model sees and for how long, not the parts that decide how a gradient is
 applied. The instinct to reach for a fancier optimiser first was wrong here, and would likely be
 wrong again.
@@ -98,6 +100,11 @@ general rule, and it is the reason domain-mimicking augmentation is an **opt-in*
 (`domain_aug`, `src/lepinet/augment.py`) rather than a change to the default pipeline.
 
 ### Optimiser: Muon + AdamW, with a caveat that costs time
+
+**On a convolutional backbone this is AdamW.** Muon takes only 2-D tensors; EfficientNetV2-S has
+none in its body and the head goes to AdamW, so every 20 M result is an AdamW result (lr 1e-3, betas
+0.9/0.999, weight decay 0.01 on every parameter, norms and biases included). Muon acts on the linear
+layers of the 198 M ConvNeXt and of the ViT trunks.
 
 Muon (`MuonAuxAdamW`) **re-partitions parameter groups**, which breaks fastai's freeze bookkeeping —
 it only works with unfrozen schedules. It also takes tuple betas, so fastai's stock `fit_one_cycle`

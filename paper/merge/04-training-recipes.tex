@@ -14,7 +14,7 @@ Two training recipes are used in this draft, and every result names the one it u
 It is used for the comparison of head architectures (\cref{sec:results_heads}).
 
 \textbf{Recipe L} (lepinet) trains EfficientNetV2-S for 5 epochs with plain cross-entropy and square-root class oversampling: each image of a species with $n$ training images is drawn with weight $n^{-1/2}$, so the species as a whole carries weight $n^{1/2}$.
-The backbone is optimised with Muon and the classification head with AdamW, under a one-cycle schedule with half an epoch of warm-up, a learning rate of $10^{-3}$, batches of 64 and gradient clipping at 5.
+Two-dimensional backbone weights are optimised with Muon and all other parameters, the classification head included, with AdamW; EfficientNetV2-S has no two-dimensional weights, so it is trained with AdamW alone, under a one-cycle schedule with half an epoch of warm-up, a learning rate of $10^{-3}$, batches of 64 and gradient clipping at 5.
 Images are resized to 460 pixels and augmented by flips, rotations up to $15^\circ$ and zoom up to 1.1, then cropped to 256 pixels.
 Training uses fp16 mixed precision with the head kept in fp32; heads with an additive angular margin overflow in fp16 and are trained in bf16.
 Recipe L is used for all results on domain shift, self-training and the long tail.

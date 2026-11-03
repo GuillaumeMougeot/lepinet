@@ -66,7 +66,9 @@ that chat logs are not load-bearing. `RESULTS.md` §2 records every experiment a
   celebrating. `journal/engineering/2026-07-24-src-lepinet-baseline-port.md`.
 - **`ucloud q` only advances when a tick *succeeds*.** Without one, `auto_extend` is inert and
   `--after` jobs never launch, while `ucloud q ls` still looks healthy. A cron entry exists, so the
-  check is not "is it scheduled" but **"is it working"**: `tail ~/.ucloud-tick.log`. On
+  check is not "is it scheduled" but **"is it working"**: run `ucloud q tick; echo $?`. A
+  successful tick prints nothing, so the log only grows on failure: an error at the end of
+  `~/.ucloud-tick.log` means failing only if the file changed in the last few minutes. On
   2026-08-30 the UCloud refresh token expired, every tick since has failed, and a 40-hour crawl was
   terminated mid-run because nothing extended it. Fix: the owner runs `ucloud login` with a fresh
   browser token. `journal/engineering/2026-07-30-ucloud-queue-daemon.md`.

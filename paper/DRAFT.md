@@ -203,7 +203,7 @@ is what the marginal is for.
 ## 3. Experimental setup
 
 12,041 species / 4,333 genera / 102 families; 5.04 M training images (6.33 M before the 50-image floor and the validation and test folds); a held-out fold of
-**629,742 images**. Backbone efficientnet\_v2\_s unless stated; Muon + AdamW, one-cycle, 5 epochs,
+**629,742 images**. Backbone efficientnet\_v2\_s unless stated; AdamW (Muon is configured for 2-D weights, which EfficientNet does not have), one-cycle, 5 epochs,
 460→256 px, square-root class oversampling ($p=0.5$). Metric: **species macro-F1** (each species
 weighted equally, so the tail counts). All comparisons change exactly one factor; configs are
 released. Open-set benchmark: species with < 50 images, excluded from training but drawn from the
@@ -216,13 +216,13 @@ order of what mattered is informative.
 
 | change | species macro-F1 | Δ |
 |---|---|---|
-| Muon + flat-cosine schedule, heavy augmentation | 0.8297 | — |
+| flat-cosine schedule, heavy augmentation | 0.8297 | — |
 | + warmup, **lighter** augmentation, looser gradient clip | 0.8769 | +4.7 |
 | flat-cosine → **one-cycle** schedule | 0.8887 | +1.2 |
 | 5 → 10 epochs | 0.8976 | +0.9 |
 | 5 epochs + **square-root class oversampling** | **0.9148** | +2.6 |
 
-**The optimiser was not the lever.** Muon is in every row. The schedule, augmentation strength and
+**The optimiser was not the lever.** It is the same in every row, and AdamW in effect: Muon takes only 2-D tensors, which a convolutional backbone does not have. The schedule, augmentation strength and
 sampler moved the number. Under a flat schedule the model was still descending when the budget ran
 out; one-cycle fixed that.
 

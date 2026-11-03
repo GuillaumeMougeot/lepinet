@@ -3,6 +3,11 @@
 **Kind:** research · **Status:** **OPEN** (2026-10-23). Decisions to pin, with both drafts' settings
 and the evidence; nothing is rerun until every row has an owner's decision.
 
+> **Reframed 2026-11-03 (owner):** the code base is mini_trainer, with lepinet's recipe and findings
+> integrated. The rows are settled by single-factor runs in the merged code, against a parity
+> baseline: [[2026-11-03-moving-the-recipe-into-mini-trainer]]. Row 8: at 20 M lepinet's optimiser
+> was AdamW, because Muon takes only 2-D tensors and EfficientNetV2-S has none.
+
 ## The question (the owner's, 2026-10-23)
 
 The colleague's settings have priority, and some experiments will have to be redone anyway. Pin and

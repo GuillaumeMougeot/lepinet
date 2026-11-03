@@ -273,9 +273,11 @@ model explores early and settles late. `one_cycle` anneals over ~90 % of the run
 (which anneals over the last 25 %) by **1.2 points** — the model was previously being graded
 mid-descent. The single largest lever in the project's history was this, not the optimiser.
 
-**Optimizer (Muon, AdamW).** The rule for turning gradients into weight updates. This project uses
-**Muon** for the matrix-shaped parameters and AdamW for the rest. Worth knowing: Muon was in place
-from the very first run at 0.8297 and never changed — **the optimiser was never what moved the
+**Optimizer (Muon, AdamW).** The rule for turning gradients into weight updates. This project configures
+**Muon** for the matrix-shaped (2-D) parameters and AdamW for the rest. A convolutional backbone has
+no 2-D weights, so the EfficientNet runs were AdamW throughout; Muon acts only on the linear layers
+of ConvNeXt and ViT trunks. Worth knowing: the optimiser was in place from the very first run at
+0.8297 and never changed — **the optimiser was never what moved the
 number.**
 
 **fp16 / bf16 / mixed precision.** Training in 16-bit instead of 32-bit numbers, for speed and

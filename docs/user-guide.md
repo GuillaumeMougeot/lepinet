@@ -70,7 +70,7 @@ The winning configuration (held fixed unless you are experimenting):
 |---|---|
 | backbone | `efficientnet_v2_s` |
 | head | `independent` (cosine, per-level prototypes) |
-| optimizer | `muon` (backbone) + AdamW (head) |
+| optimizer | `muon`: Muon for 2-D backbone weights (EfficientNet has none, so effectively AdamW) + AdamW for the rest and the head |
 | schedule | `one_cycle`, `warmup_epochs: 0.5` |
 | grad clip | `5.0` |
 | oversampling | `oversample_power: 0.5` (square-root) |

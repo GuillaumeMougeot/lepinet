@@ -63,7 +63,7 @@ incidents are in [`engineering/`](engineering/). The plan is [`../PLAN.md`](../P
 | [10-22](2026-10-22-rescoring-in-the-mini-metrics-convention.md) | What do our results say in mini_metrics' current convention? | **RESOLVED** 2026-10-23: in-distribution unchanged; on traps self-training's gain triples, real labels and the checklist overtake it (+10 to +35), the dose optimum survives only on held-out species |
 | [10-23](2026-10-23-does-the-model-know-when-a-trap-image-is-too-poor.md) | On trap images, does the model back off when the image is poor, and notice a new species? (N) | **RESOLVED**: backs off on blurry crops (species answers 91 to 65 %); an unseen species of a known genus is barely detected (AUROC 0.566) and 38 % of its crops get a confident wrong name; out-of-vocabulary species lose 6-8 points (B8 0.857, P5 0.835) |
 | [10-23](2026-10-23-what-is-the-best-back-off-policy.md) | What is the best back-off policy, independent of moths and traps? (Q) | **OPEN** (Pl@ntNet pending): no rule wins everywhere; expected utility wins in-distribution and for the plain head, the greedy per-rank policy on traps for margin heads |
-| [10-23](2026-10-23-which-recipe-does-the-merged-paper-rerun.md) | Which recipe does the merged paper rerun? (decision sheet) | **OPEN**: 16 settings to pin with the colleague before any rerun |
+| [10-23](2026-10-23-which-recipe-does-the-merged-paper-rerun.md) | Which recipe does the merged paper rerun? (decision sheet) | **OPEN**: the code base is now mini_trainer (2026-11-03); the rows are settled by single-factor runs in the merged code |
 
 ## Engineering: side projects, cluster work, incidents
 
@@ -85,3 +85,4 @@ incidents are in [`engineering/`](engineering/). The plan is [`../PLAN.md`](../P
 | [10-01](engineering/2026-10-01-the-crawl-that-spent-58-percent-of-the-cpu-budget.md) | incident | a crawler spent 58 % of the CPU budget |
 | [10-01](engineering/2026-10-01-the-crawl-resized-the-wrong-side.md) | incident | the ToL crawl stored the wrong side; a deadlock froze it (**OPEN**: re-crawl running) |
 | [10-21](engineering/2026-10-21-sharing-the-tol-crawl.md) | infrastructure | the ToL crawl shared as `/data/datasets/tol256` with ToL's per-image metadata; a sharded audit after oomd killed tmux |
+| [11-03](engineering/2026-11-03-moving-the-recipe-into-mini-trainer.md) | subproject | one code base: lepinet's recipe and findings move into mini_trainer, parity first (**OPEN**); at 20 M the optimiser was AdamW (Muon touches no conv weight) |

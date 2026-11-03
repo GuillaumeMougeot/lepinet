@@ -27,7 +27,7 @@ The [developer guide](developer-guide.md) explains *why* each piece is there; th
 
 ## What you get
 
-- **Train** the winning recipe (efficientnet_v2_s, cosine independent head, Muon + one-cycle,
+- **Train** the winning recipe (efficientnet_v2_s, cosine independent head, AdamW + one-cycle,
   square-root oversampling) from a config or from Python.
 - **Evaluate** on a held-out fold with a native per-level macro-F1 / micro-accuracy report
   (plus `predictions.csv` in `mini_metrics` format for interoperability).

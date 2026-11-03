@@ -1,9 +1,23 @@
 # PLAN — what we are doing now
 
-**Kind:** living · **Last updated:** 2026-10-29 · **Supersedes:** [2026-07-28-landscape-and-plan](archive/journal/engineering/2026-07-28-landscape-and-plan.md)
+**Kind:** living · **Last updated:** 2026-11-03 · **Supersedes:** [2026-07-28-landscape-and-plan](archive/journal/engineering/2026-07-28-landscape-and-plan.md)
 
 The one file about *today*. Experiment IDs resolve in [`RESULTS.md`](RESULTS.md); reasons are in
 the linked journal entries; older versions of this file are in git history.
+
+## 0. The focus: one code base, mini_trainer
+
+Owner, 2026-11-03: training moves to mini_trainer (Asger maintains it); lepinet runs in parallel for
+a while. The mini_trainer session (tmux `mt`) does the work on branch `feature/lepinet-integration`,
+supervised from here. [[2026-11-03-moving-the-recipe-into-mini-trainer]]
+
+| phase | what | state |
+|---|---|---|
+| 0 | parity audit: lepinet's recipe against MT's defaults, component by component | assigned (2026-11-03) |
+| 1 | port the recipe as opt-in pieces (√-oversampling sampler, presizing and fastai-style affine, one-cycle for every group, CE without smoothing or regulariser); gate: test F1 within 0.003 of 0.9135 / 0.9606 / 0.9739, same per-epoch curve, same img/s | — |
+| 2 | the methods: F head, frozen-backbone stages (cRT, adaptation), self-training on trap crops, trap-like augmentation, image cap, the evaluation (grouped calibration, probe, open-set, back-off) | — |
+| 3 | settle the recipe by single-factor runs: sampler, EMLA vs CE, regulariser, schedule, resize and augmentation, epochs and size; then the new baseline on MT's test set (12,632 species) | — |
+| 4-6 | the paper reruns; Nemo re-scored on the reconciled Flemming export (its card used the unreconciled one) next to the new models; the third production model | — |
 
 ## 1. The goal: a submittable paper
 
@@ -13,7 +27,7 @@ and two evaluation-only runs.
 | # | step | who | state |
 |---|---|---|---|
 | 1 | **One paper, merged with Svenning et al.'s draft** (`~/Documents/hierarchical_classification.pdf`; owner, 2026-10-22: no second paper). Proposed outline: methods = data (Lepidoptera, Pl@ntNet, traps with the grouped split), HGLL head, the five heads, one recipe, evaluation (metric conventions, retrain noise); results = hierarchy (parameters vs supervision, alignment, novelty by taxonomic distance), evaluating under shift (conventions, scoring rules, contamination), long tail, target-domain data, classifier stage, abstention; appendix = margin, nuisance augmentation, head scaling, recipe ladder, AR decoder, EMLA and regulariser. Open: one training recipe for both drafts (EMLA vs √-oversampling), the colleague's raw trap predictions rescored with `dev/092` | owner + colleague | open |
-| 1b | **Pin the rerun recipe before any rerun** (owner, 2026-10-23: the colleague's settings have priority; some experiments will be redone). 16 decisions with both drafts' settings and our evidence: species floor, sampling, loss (EMLA vs CE), regulariser, epochs, image size, backbones, heads, margin, seeds, dose, open-set split, budget. [[2026-10-23-which-recipe-does-the-merged-paper-rerun]] | owner + colleague | open |
+| 1b | **Pin the rerun recipe before any rerun** (owner, 2026-10-23: the colleague's settings have priority; some experiments will be redone). 16 decisions with both drafts' settings and our evidence: species floor, sampling, loss (EMLA vs CE), regulariser, epochs, image size, backbones, heads, margin, seeds, dose, open-set split, budget. [[2026-10-23-which-recipe-does-the-merged-paper-rerun]] | owner + colleague | reframed 2026-11-03: settled by measurement in mini_trainer (§0, phase 3) |
 | 2 | Insert our pieces into the Overleaf draft through the Merge Desk (`paper/merge/`, `dev/094`): all 23 steps drafted (02 pasted; 04 on hold for 1b). Results steps 13-22 and the appendix (23) carry recipe-L numbers in mini_metrics' current convention, trap scores calibrated on grouped splits; each says in its check line what the rerun replaces | owner, agent | ongoing |
 | 3 | Re-score §4.5 with each head's own rule; measure open-set under shift for B8 and P5 | GPU, eval only | done (N2, N3; Merge Desk step 14) |
 | 4 | Verify every citation in §1b and the references (written from memory) | owner | open |
