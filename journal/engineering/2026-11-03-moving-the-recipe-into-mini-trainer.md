@@ -1,7 +1,8 @@
 # Moving the recipe into mini_trainer
 
-**Kind:** subproject · **Status:** **OPEN** (2026-11-03). Phase 0, the parity audit, is with the
-mini_trainer session (tmux `mt`), on branch `feature/lepinet-integration` in the worktree
+**Kind:** subproject · **Status:** **OPEN** (2026-11-03). Phases 0 and 1 are done and the subset
+side-by-side passed (V1); the full-scale gate (V2) is on UCloud. The mini_trainer session (tmux `mt`)
+does the work on branch `feature/lepinet-integration` in the worktree
 `~/codes/mini_trainer/.worktrees/lepinet-integration`; its technical notes go to
 `.agents/notes/2026-11-03-lepinet-integration.md` there.
 
@@ -238,3 +239,21 @@ In MT's own loop, the head's projection matrix can receive Muon: only parameter 
   unchanged), and the throughput job runs lepinet as on UCloud. The owner
   approved the selection and the parity setting. The reference conventions in the brief were
   corrected. Nemo's card set was judged unreconciled, so Nemo is re-scored on `data/flemming`.
+- 2026-11-03, night: the subset side-by-side (V1) passed. On set 0, mini_trainer is within 0.0007 of
+  lepinet at every rank at threshold 0, and 34 of 35 per-epoch validation cells are within the rule.
+  The exception is family macro-F1 after epoch 2 of 5: mini_trainer +0.0111, tolerance 0.0089. I
+  read it as noise, for three reasons:
+  - With two seeds per code, a permutation test cannot give p below 1/6.
+  - mini_trainer's family lead on validation (+0.002 to +0.019 per epoch, +0.0068 at the end) is
+    +0.0004 on set 0, and family accuracy is equal (+0.0001). There are 40 families, so a few
+    small ones move the macro average.
+  - The two codes' learning-rate curves agree to four digits.
+
+  Gate (b) is approved. Each job stages its images to node-local disk with `ucloud/stage.py` (5.67 M
+  files in 12.6 min in July). mini_trainer submits I first, then BU and F, each after the previous
+  job's staging finishes.
+
+  One claim of mine was wrong. I told the `mt` session that `/work` caps at about 1,000 img/s
+  across jobs. I took that from V0's first epoch, which was slower in both jobs for a reason not
+  established (training 1:46 and 1:35, validation 8:50 and 20:00). From the second epoch on, each
+  V0 job reads about 1,000 img/s, so two parallel jobs do not starve.
