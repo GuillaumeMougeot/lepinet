@@ -380,6 +380,24 @@ In MT's own loop, the head's projection matrix can receive Muon: only parameter 
    name caching is tested.
 10. With the merge to mini_trainer's main branch in view, the branch follows its agent rules
     (`AGENTS.md`) and keeps code and docs to the fewest words, without removing docs.
+11. The paper reruns go ahead now, not after the paper, run in parallel over 11 days (until
+    2026-11-15), while the owner writes the sections as results land.
+
+**The campaign (2026-11-04).** One recipe, pinned on evidence (Phase 3), on mini_trainer's test set.
+Multi-GPU jobs stage the images once and train one model per GPU. 9,087 B200 hours remain, against
+about 650 needed.
+
+| block | runs | starts |
+|---|---|---|
+| cross-entropy against EMLA (V2-S, BU) | 2 | now |
+| head grid, Lepidoptera: F, BU, I, TD, AR x B0, V2-S, ViT-L/16 x 3 seeds | 45 | after the gate |
+| the same grid on Pl@ntNet-300K | 45 | once the data is on UCloud (download and conversion delegated) |
+| shift on V2-S with BU, like the original evidence (B3, T1rep, X1, X2 and L4 were all at 20 M). The teacher is the cross-entropy arm; self-training at 0.24, 2.6 and 12.3 % of training rows; real labels at 2.6 %; X1 (12 folds) and X2 (3); cRT | ~20 | after the teacher's pseudo-labels |
+| DINOv3 ConvNeXt-L with BU, the paper's large backbone at B8's settings (320 px, batch 96): no adaptation, then self-training at 2.6 % | 2 | after the gate |
+| open-set: C3b's withheld taxa, 5 heads on V2-S | 5 | as soon as the specs are ready |
+
+The owner approved every campaign submission, DINOv3 for the paper (BioCLIP-2 may come later for
+the AMI deployment model), and the Pl@ntNet download.
 
 ## Log
 
