@@ -282,6 +282,32 @@ order L, M, M, L. lepinet ran as on UCloud, without `GCCallback`, and mini_train
 - mini_trainer exits 1.5 s after saving its weights on UCloud, so the 5 s per worker exit delay seen
   locally does not occur there.
 
+## The labels mix species (2026-11-04)
+
+The mini_trainer session in tmux `nemo` found that the classes are GBIF `speciesKey`s, the species
+that the legacy GBIF Backbone accepts for each record's matched name. Every Backbone synonymy error
+is baked into the labels, ours included, because lepinet trains on the same parquet. Its crosswalk to
+Catalogue of Life XR, GBIF's new taxonomy, has about 370 hand decisions and lives in mini_trainer's
+ignored `.agents/local/nemo_species_colxr/`. It finds:
+- **163 of 12,632 classes contain images of another species.** The worst is class 1924494, which
+  holds 1,962 *Lycaena tityrus* and 1,836 *Brintesia circe*, a homonym. This one is confirmed here
+  from `scientificName`, independently of the crosswalk.
+- **281 classes share their species with another class**, so training splits one species over two
+  classes. An example is *Pleuroptya ruralis* and *Patania ruralis*.
+- **The quality filter** (7.49 M to 6.33 M images) removed 81 % of the images labelled as larvae, so
+  species photographed mostly as caterpillars fell under the floor. Where the filter comes from is
+  not recorded in lepinet either: the filtered parquet arrived as is in July.
+
+**On the trap set**, 7 of the 486 species (364 crops, 0.8 %) are in mixed classes and 12 (1,512
+crops, 3.2 %) in duplicated ones, led by *P. ruralis* (682 crops) and *Euproctis similis* (472). Every
+model so far saw the same labels, so comparisons between models stand; the absolute scores of these
+species do not.
+
+**Proposal:** a versioned label map from `taxonKey` to species, built on the crosswalk with the
+epithet changes reviewed by hand, and applied from phase 3 on. Then the new baseline, the paper
+reruns and the third model share one corrected test set, and the trap labels go through the same
+map. The parity gate is unaffected, because both codes see the same labels.
+
 ## Phases 4-6
 
 - **Paper reruns**, as the decision sheet listed them:
