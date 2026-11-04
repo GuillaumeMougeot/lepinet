@@ -398,6 +398,10 @@ about 650 needed.
 
 The owner approved every campaign submission, DINOv3 for the paper (BioCLIP-2 may come later for
 the AMI deployment model), and the Pl@ntNet download.
+The campaign uses channels_last (owner, 2026-11-04): 25-35 % faster for the convnets in V3, the same
+function computed in another summation order, so differences should be run-to-run noise. One control
+run checks it: the gate's BU spec with channels_last as the only change, against V2BU on the same
+629,742 test rows. Pass: within 0.003 at every rank.
 
 ## Log
 
