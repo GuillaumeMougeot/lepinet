@@ -25,7 +25,12 @@ relative to `ucloud/`).
   `ucloud jobs logs` takes the spec file, not the job id.
 - **A spec with `[setup] run` needs a `[sync]` block**: the generated script is stored in the synced folder.
 - **Inside a job, `os.cpu_count()` says 256.** Size thread pools from `/sys/fs/cgroup/cpu.max`.
-- **Run one image-heavy job at a time**: concurrent jobs collapsed `/work` read throughput once.
+- **`/work` reads scale with the number of readers, so give image jobs 256 workers or stage.** Two
+  training jobs at 256 workers read ~1,000 img/s each at once (V0, 2026-11-03); their evaluations at
+  32 workers read 80-94 img/s, two hours for the test fold. Concurrent jobs collapsed throughput once
+  (July), so watch the first epoch.
+- **`ucloud files download` copies a folder's contents, not the folder**: give each folder its own
+  destination, or same-named run folders inside merge and overwrite each other's `predictions.csv`.
 - **Mount `flemming` for any self-training job**: the pseudo-label parquet reaches trap images
   through `../../flemming/images/`.
 

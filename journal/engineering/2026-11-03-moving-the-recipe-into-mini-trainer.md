@@ -1,7 +1,8 @@
 # Moving the recipe into mini_trainer
 
 **Kind:** subproject · **Status:** **OPEN** (2026-11-03). Phases 0 and 1 are done and the subset
-side-by-side passed (V1); the full-scale gate (V2) is on UCloud. The mini_trainer session (tmux `mt`)
+side-by-side passed (V1); the full-scale gate (V2) waits for the owner's go to submit. V0 is scored:
+dropping the floor costs nothing under shift. The mini_trainer session (tmux `mt`)
 does the work on branch `feature/lepinet-integration` in the worktree
 `~/codes/mini_trainer/.worktrees/lepinet-integration`; its technical notes go to
 `.agents/notes/2026-11-03-lepinet-integration.md` there.
@@ -185,6 +186,73 @@ over 20 splits:
 - Nemo lacks the same 6 trap species as lepinet (234 rows, 0.5 %). Its larger vocabulary costs little
   here: 2,499 species predicted but absent, against B1's 2,455.
 
+## V0: lepinet's recipe on mini_trainer's class set
+
+V0F and V0BU are recipe L without the 50-image floor. They cover 12,632 species, the vocabulary of
+mini_trainer's test set and of Nemo, so they anchor phase 3 and are Nemo's like-for-like partner.
+Training finished on 2026-11-03 (UCloud B200, 7.6-8 h each). Epoch 1 took about 1:55 in both runs
+and the later epochs 1:18-1:37, at about 1,000 img/s per job.
+
+| validation, species macro-F1 by epoch | 1 | 2 | 3 | 4 | 5 |
+|---|---|---|---|---|---|
+| V0F (no floor) | 0.7884 | 0.8356 | 0.8691 | 0.8962 | 0.9103 |
+| F (floor, `20260729-182718`) | 0.7979 | 0.8376 | 0.8717 | 0.9002 | 0.9129 |
+| V0BU (no floor) | 0.7795 | 0.8317 | 0.8625 | 0.8930 | 0.9102 |
+| BU (floor, `20260730-074913`) | 0.7856 | 0.8384 | 0.8691 | 0.8968 | 0.9133 |
+
+The validation sets differ, because V0's includes the 591 added species. If the 12,041 floor species
+keep their F1, the added species score about 0.86. V0BU's genus and family reach 0.9606 and 0.9785,
+against 0.9614 and 0.9794 with the floor.
+
+**Prediction, written on 2026-11-04 while the evaluations run.**
+- **Test fold** (632,913 images), threshold 0: species 0.909-0.911 for both runs; genus and family
+  within 0.002 of the floor runs.
+- **Traps, calibrated:** at or slightly below the floor runs (F: trap 0.284, probe 0.287, probe-HO
+  0.239; BU: trap 0.313). The added species include none of the trap species, because Nemo lacks the
+  same 6 as lepinet, so they can only act as distractors. Rare classes learned the largest biases,
+  which could pull a few trap crops their way.
+- **Against Nemo** (0.305 / 0.338 / 0.293): level on all crops, as before. On probe and probe-HO,
+  Nemo is 5 points above the floor F run; V0BU should close about half of that.
+
+**Result (2026-11-04).** Both evaluations exited 0 and scored all 632,913 test images (12,632
+species). Species macro-F1; the test fold at threshold 0, the trap sets calibrated by (trap, night),
+mean over 20 splits (split sd 0.006-0.008 on trap and probe, 0.02-0.03 on probe-HO):
+
+| species macro-F1 | test fold | trap | probe | probe-HO |
+|---|---|---|---|---|
+| V0F (no floor) | 0.9110 | 0.279 | 0.300 | 0.235 |
+| F (floor; its test fold has 629,742 images) | 0.9135 | 0.284 | 0.287 | 0.239 |
+| V0BU (no floor) | 0.9107 | 0.330 | 0.351 | 0.288 |
+| BU (floor) | 0.9135 | 0.313 | - | - |
+| Nemo, full vocabulary | - | 0.305 | 0.338 | 0.293 |
+
+Scoring the predictions:
+- **Test fold: right.** Species 0.9110 and 0.9107. Genus is within 0.002 in both runs (-0.0006,
+  -0.0008); family is +0.0021 for V0F, just outside, and +0.0004 for V0BU. The 591 added species
+  score 0.877 (F) and 0.873 (BU) on 3,171 test images, a median of 5 per species, near the 0.86
+  inferred from validation. They cost the 12,041 shared species 0.0009 (0.9126 in both runs against
+  0.9135): 0.06 % of the shared species' images go to an added species. So 0.0017 of the 0.0025 drop
+  is the average taking in the added species, and 0.0009 is distraction.
+- **Traps: half wrong.** F is level (trap -0.005, probe +0.013, probe-HO -0.005), but BU is 1.8 points
+  above its floor run, not below. Threshold-free in our old convention (rows with a known label,
+  classes = truth species), both no-floor runs are above on every set: F +0.005 / +0.009 / +0.019, BU
+  +0.013 on trap. These are single runs; the end-to-end probe floor is ~0.004. No trap species is
+  among the added ones, so nothing explains a gain. My reading: dropping the floor costs nothing under
+  shift, and the gains are not a result.
+- **Against Nemo: wrong, in V0BU's favour.** With the same head, vocabulary and protocol, V0BU is +2.5
+  points on trap, +1.3 on probe and -0.5 on probe-HO. It closes all of the probe gap and nine tenths
+  of probe-HO's, where I said half. I anchored on the flat head; probe has no floor BU run. Five
+  epochs at 256 px match or beat Nemo's 30 epochs at 384 px on trap crops, which strengthens VN.
+- **The head matters under shift.** BU beats F by 5 points on every trap set (+5.2 / +5.1 / +5.3) and
+  by 2.9 on trap with the floor, while the two are equal on the test fold. Finding 1 has the same
+  sign at ~1.4 points. BU is mini_trainer's default head and Nemo's; phase 3 tests it for the third
+  model.
+
+So mini_trainer's test set (no floor) is safe for phase 3, and V0F / V0BU are its anchors:
+0.9110 / 0.9600 / 0.9760 and 0.9107 / 0.9625 / 0.9782 at threshold 0. The evaluations read `/work`
+at 80-94 img/s with 32 workers, two hours each for the test fold, against ~1,000 img/s in training
+at 256 workers ([ucloud/README](../../ucloud/README.md)).
+
 ## Phases 4-6
 
 - **Paper reruns**, as the decision sheet listed them:
@@ -257,3 +325,7 @@ In MT's own loop, the head's projection matrix can receive Muon: only parameter 
   across jobs. I took that from V0's first epoch, which was slower in both jobs for a reason not
   established (training 1:46 and 1:35, validation 8:50 and 20:00). From the second epoch on, each
   V0 job reads about 1,000 img/s, so two parallel jobs do not starve.
+- 2026-11-04, early: V0 scored (see its section). The test-fold prediction held; the trap prediction
+  was half wrong and the Nemo one wrong in V0BU's favour. The four mini_trainer jobs are not
+  submitted: the "go ahead, submit all four" in the `mt` input box is Claude Code's dimmed
+  suggestion, not the owner's message.
