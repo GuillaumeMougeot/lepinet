@@ -1,9 +1,9 @@
 # Moving the recipe into mini_trainer
 
-**Kind:** subproject · **Status:** **OPEN** (2026-11-03). Phases 0 and 1 are done and the subset
-side-by-side passed (V1); the full-scale gate (V2) is training on UCloud since 2026-11-04. V0 is
-scored: dropping the floor costs nothing under shift. V2T is done: mini_trainer's training loop is
-1.185x lepinet's. The mini_trainer session (tmux `mt`)
+**Kind:** subproject · **Status:** **OPEN** (2026-11-03). Phases 0 and 1 are done: the subset
+side-by-side (V1) and the full-scale gate (V2, 2026-11-04) passed for I, BU and F, every rank within
+0.0025 of lepinet on the test fold. V0 is scored: dropping the floor costs nothing under shift. V2T:
+mini_trainer's training loop is 1.185x lepinet's. The mini_trainer session (tmux `mt`)
 does the work on branch `feature/lepinet-integration` in the worktree
 `~/codes/mini_trainer/.worktrees/lepinet-integration`; its technical notes go to
 `.agents/notes/2026-11-03-lepinet-integration.md` there.
@@ -292,16 +292,57 @@ order L, M, M, L. lepinet ran as on UCloud, without `GCCallback`, and mini_train
 - **The training loop is 1.185x faster** in mini_trainer, on 40 % less memory. Each code's two runs
   agree within 0.4 %. The three gates shared the node, but L1 and L2 show no drift, so the load was
   steady.
-- **Whole epochs are slower**, because about 3 minutes go outside the loops: 93 s between the last
-  training step and the first validation batch, and 96 s after validation, where macro-F1 and the
-  confusion matrices run. A dendrogram adds 46 s on first use. The cause is not found yet. If it
-  scales with the training rows, it grows ninefold in the gates, so the `mt` session times it at the
-  gates' first epoch boundary.
+- **Whole epochs looked slower**, with about 3 minutes outside the loops. The `mt` session found two
+  causes:
+  - **Worker start-up, once per run.** Python 3.14 starts DataLoader workers with forkserver; each
+    launch pickles the dataset and waits for the child to import mini_trainer, about 2.1 s per worker
+    on UCloud, one at a time. With persistent workers this happens once per loader, not every epoch.
+    Preloading the module into the forkserver cuts a launch to 0.11 s.
+  - **The per-epoch figures.** At 12,041 species the dendrogram takes 135-157 s per epoch, mostly
+    resolving names over the network, and the confusion matrices 10-16 s: about 12 minutes per
+    5-epoch run. They are now off in the lepinet presets (decision 9).
 - The gates' own step rates (I ~1,290, BU ~1,420, F ~1,400 img/s at 32 workers) say the loaders are
   not the limit. They are not a comparison with lepinet's reference runs, which read `/work` with
   256 workers.
 - mini_trainer exits 1.5 s after saving its weights on UCloud, so the 5 s per worker exit delay seen
   locally does not occur there.
+
+## V2: the parity gate at full scale (2026-11-04)
+
+The presets for heads I, BU and F in lepinet's setting (50-image floor, 12,041 species), one B200
+each, images staged to node-local disk, 32 workers. Training took 355 min (I), 324 (BU) and 325 (F)
+with the per-epoch figures still on; `last.pt` then predicted all 632,913 test images. The `mt`
+session's `match_ref.py` kept lepinet's 629,742 images and checked that each is present with the same
+labels at every rank (the 3,171 others belong to the 591 species under the floor). lepinet's
+`dev/093` scored them.
+
+**Test fold, macro-F1 at threshold 0** (mini_trainer minus lepinet's reference run in brackets):
+
+| | species | genus | family | species, calibrated |
+|---|---|---|---|---|
+| I | 0.9107 (-0.0002) | 0.9588 (+0.0001) | 0.9726 (+0.0018) | 0.9071 (-0.0004) |
+| BU | 0.9131 (-0.0004) | 0.9629 (-0.0004) | 0.9803 (+0.0025) | 0.9105 (+0.0000) |
+| F | 0.9144 (+0.0009) | 0.9608 (+0.0002) | 0.9759 (+0.0020) | 0.9126 (+0.0009) |
+| lepinet's repeat of F (A5) | 0.9135 (+0.0000) | 0.9601 (-0.0006) | 0.9763 (+0.0023) | 0.9115 (-0.0002) |
+
+**All three pass**: every rank is within 0.003. Family carries the largest gaps, all positive (+0.0018
+to +0.0025), and lepinet's own repeat moved family by +0.0023 on the same images. The protocol's
+"retraining noise on the test fold is about 0.000" holds for species only; macro-F1 over 102 families
+moves about 0.002 between runs.
+
+**Validation curves** (set 1, species macro-F1, mini_trainer minus the reference run; lepinet's repeat
+minus the same reference in brackets):
+
+| epoch | 1 | 2 | 3 | 4 | 5 |
+|---|---|---|---|---|---|
+| I | +0.0013 | -0.0014 | +0.0004 | +0.0000 | +0.0002 |
+| BU | +0.0027 (+0.0018) | -0.0054 (-0.0028) | +0.0001 (-0.0006) | -0.0017 (-0.0013) | -0.0004 (-0.0007) |
+| F | -0.0047 (-0.0060) | +0.0006 (+0.0024) | -0.0011 (-0.0007) | -0.0008 (-0.0006) | +0.0008 (-0.0007) |
+
+Gaps reach 0.005 mid-training and close by epoch 5, as lepinet's repeat does. A per-epoch tolerance
+of 0.001 would fail lepinet against itself (F species -0.0060 at epoch 1, BU family +0.0050 at
+epoch 3), so the curves are judged against the repeat, and pass. Genus and family behave the same way
+(epoch 5: I +0.0001 / +0.0015, BU +0.0004 / +0.0013 against the repeat's +0.0005 / +0.0014).
 
 ## The labels mix species (2026-11-04)
 
@@ -474,4 +515,8 @@ run checks it: the gate's BU spec with channels_last as the only change, against
   predicting after about 8 hours. The guard now reads the path from the trainer's own "Final weights
   saved at:" line. Tested on the real trainer for all three heads.
 - 2026-11-04, evening: Pl@ntNet-300K is on UCloud (see its section). The `mt` session proposes the
-  grid's specs.
+  grid's specs. V3 (GPU options, F preset, one epoch) is done: channels_last, torch.compile
+  reduce-overhead and the compiled optimizer with CUDA graphs reach 2,242 img/s against 1,335 (1.68x),
+  with the same accuracy (64.48 %) and peak memory down from 6.6 to 4.3 GiB; channels_last alone is
+  about 1.3x. Whether to compile waits for the owner. The full-scale gate passed for all three heads
+  (see V2).
