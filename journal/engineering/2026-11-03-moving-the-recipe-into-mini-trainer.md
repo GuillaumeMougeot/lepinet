@@ -333,4 +333,8 @@ In MT's own loop, the head's projection matrix can receive Muon: only parameter 
   the `mt` session fixed before submission. Only sets 1-9 were staged, and predict would have read
   set 0 from `/work` with 32 workers, about 2 hours, past its 2-hour limit. Setup now stages set 0
   too. Predict also keeps the 3,171 rows whose species are outside the gate models' classes, so the
-  gate is scored on lepinet's 629,742 rows, matched by file.
+  gate is scored on lepinet's 629,742 rows, matched by file. Checking that predict handles those rows
+  in a real run found a second gap. mini_trainer rewrites run names (`gate-I` saves to `gate_I/`), so
+  the run guard would never have seen a finished run, and all three gates would have stopped without
+  predicting after about 8 hours. The guard now reads the path from the trainer's own "Final weights
+  saved at:" line. Tested on the real trainer for all three heads.
