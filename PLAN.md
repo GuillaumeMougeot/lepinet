@@ -38,7 +38,7 @@ and two evaluation-only runs.
 
 | ID | what | state | next |
 |---|---|---|---|
-| **V2I, V2BU, V2F, V2T** | mini_trainer's parity gate at full scale (heads I, BU, F; lepinet's setting) and the speed job, submitted by the `mt` session | specs approved (2026-11-03); **waiting for the owner's go in the `mt` session** (the four go together) | score against the gate; per-epoch curves against the clean-package logs |
+| **V2I, V2BU, V2F, V2T** | mini_trainer's parity gate at full scale (heads I, BU, F; lepinet's setting) and the speed job, submitted by the `mt` session | submitted 2026-11-04 13:50; gates training (12445754-56, from 14:06). V2T done: mini_trainer's training loop is 1.185x lepinet's, but each epoch spends ~3 min outside the loops (being measured) | score against the gate; per-epoch curves against the clean-package logs; the epoch overhead |
 | **W1** | TreeOfLife-200M at short side 256, on the workstation (`/data/au761367/tol256s/`; zero UCloud core-hours) | crawl done: 64.16 M images plus ~0.54 M retried ([crawl](journal/engineering/2026-10-01-the-crawl-resized-the-wrong-side.md)); `retry3/` (9 servers, 72 h cap) | shared as `/data/datasets/tol256`: 65.2 M images, metadata with ToL's per-image fields ([share](journal/engineering/2026-10-21-sharing-the-tol-crawl.md)). **Upload re-planned** (1,053 shards); old shards in the UCloud Trash; upload paused on storage |
 
 ## 3. Backlog, in order

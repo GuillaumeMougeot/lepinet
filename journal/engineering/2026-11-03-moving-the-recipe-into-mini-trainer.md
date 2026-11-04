@@ -1,8 +1,9 @@
 # Moving the recipe into mini_trainer
 
 **Kind:** subproject · **Status:** **OPEN** (2026-11-03). Phases 0 and 1 are done and the subset
-side-by-side passed (V1); the full-scale gate (V2) waits for the owner's go to submit. V0 is scored:
-dropping the floor costs nothing under shift. The mini_trainer session (tmux `mt`)
+side-by-side passed (V1); the full-scale gate (V2) is training on UCloud since 2026-11-04. V0 is
+scored: dropping the floor costs nothing under shift. V2T is done: mini_trainer's training loop is
+1.185x lepinet's. The mini_trainer session (tmux `mt`)
 does the work on branch `feature/lepinet-integration` in the worktree
 `~/codes/mini_trainer/.worktrees/lepinet-integration`; its technical notes go to
 `.agents/notes/2026-11-03-lepinet-integration.md` there.
@@ -253,6 +254,33 @@ So mini_trainer's test set (no floor) is safe for phase 3, and V0F / V0BU are it
 0.9110 / 0.9600 / 0.9760 and 0.9107 / 0.9625 / 0.9782 at threshold 0. The evaluations read `/work`
 at 80-94 img/s with 32 workers, two hours each for the test fold, against ~1,000 img/s in training
 at 256 workers ([ucloud/README](../../ucloud/README.md)).
+
+## V2T: speed on the same staged data (2026-11-04)
+
+One B200 job ran both codes on a 10 % sample (566,932 rows, 12,035 species), one epoch each, in the
+order L, M, M, L. lepinet ran as on UCloud, without `GCCallback`, and mini_trainer used 44 workers.
+
+| | lepinet | mini_trainer |
+|---|---|---|
+| steady training img/s, batch 64 (two runs each) | 1,201 / 1,205 | 1,422 / 1,428 |
+| peak GPU memory allocated | 10.4-10.6 GiB | 6.6 GiB |
+| GPU busy | 72 % | 85 % |
+| validation, 47,487 images | 29 s | 18 s |
+| whole process, one epoch | 386-390 s | 508-552 s |
+
+- **The training loop is 1.185x faster** in mini_trainer, on 40 % less memory. Each code's two runs
+  agree within 0.4 %. The three gates shared the node, but L1 and L2 show no drift, so the load was
+  steady.
+- **Whole epochs are slower**, because about 3 minutes go outside the loops: 93 s between the last
+  training step and the first validation batch, and 96 s after validation, where macro-F1 and the
+  confusion matrices run. A dendrogram adds 46 s on first use. The cause is not found yet. If it
+  scales with the training rows, it grows ninefold in the gates, so the `mt` session times it at the
+  gates' first epoch boundary.
+- The gates' own step rates (I ~1,290, BU ~1,420, F ~1,400 img/s at 32 workers) say the loaders are
+  not the limit. They are not a comparison with lepinet's reference runs, which read `/work` with
+  256 workers.
+- mini_trainer exits 1.5 s after saving its weights on UCloud, so the 5 s per worker exit delay seen
+  locally does not occur there.
 
 ## Phases 4-6
 
