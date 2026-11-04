@@ -232,7 +232,8 @@ Scoring the predictions:
   score 0.877 (F) and 0.873 (BU) on 3,171 test images, a median of 5 per species, near the 0.86
   inferred from validation. They cost the 12,041 shared species 0.0009 (0.9126 in both runs against
   0.9135): 0.06 % of the shared species' images go to an added species. So 0.0017 of the 0.0025 drop
-  is the average taking in the added species, and 0.0009 is distraction.
+  is the average taking in the added species, and 0.0009 is distraction. mini_metrics agrees at
+  threshold 0; calibrated, the runs score 0.9091 and 0.9079 (floor 0.9117 and 0.9104), the same gap.
 - **Traps: half wrong.** F is level (trap -0.005, probe +0.013, probe-HO -0.005), but BU is 1.8 points
   above its floor run, not below. Threshold-free in our old convention (rows with a known label,
   classes = truth species), both no-floor runs are above on every set: F +0.005 / +0.009 / +0.019, BU
@@ -328,4 +329,8 @@ In MT's own loop, the head's projection matrix can receive Muon: only parameter 
 - 2026-11-04, early: V0 scored (see its section). The test-fold prediction held; the trap prediction
   was half wrong and the Nemo one wrong in V0BU's favour. The four mini_trainer jobs are not
   submitted: the "go ahead, submit all four" in the `mt` input box is Claude Code's dimmed
-  suggestion, not the owner's message.
+  suggestion, not the owner's message. V0's slow evaluations exposed a gap in the gate specs, which
+  the `mt` session fixed before submission. Only sets 1-9 were staged, and predict would have read
+  set 0 from `/work` with 32 workers, about 2 hours, past its 2-hour limit. Setup now stages set 0
+  too. Predict also keeps the 3,171 rows whose species are outside the gate models' classes, so the
+  gate is scored on lepinet's 629,742 rows, matched by file.
