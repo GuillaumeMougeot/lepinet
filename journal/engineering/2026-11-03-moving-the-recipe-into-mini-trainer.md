@@ -390,8 +390,8 @@ about 650 needed.
 | block | runs | starts |
 |---|---|---|
 | cross-entropy against EMLA (V2-S, BU) | 2 | now |
-| head grid, Lepidoptera: F, BU, I, TD, AR x B0, V2-S, ViT-L/16 x 3 seeds | 45 | after the gate |
-| the same grid on Pl@ntNet-300K | 45 | once the data is on UCloud (download and conversion delegated) |
+| head grid, Lepidoptera: F, BU, I, TD, AR x B0, V2-S, ViT-L/16, seed 42 (seeds 43 and 44 later, as confirmations) | 15 | after the gate |
+| the same grid on Pl@ntNet-300K, seed 42 | 15 | once the data is on UCloud (download and conversion delegated) |
 | shift on V2-S with BU, like the original evidence (B3, T1rep, X1, X2 and L4 were all at 20 M). The teacher is the cross-entropy arm; self-training at 0.24, 2.6 and 12.3 % of training rows; real labels at 2.6 %; X1 (12 folds) and X2 (3); cRT | ~20 | after the teacher's pseudo-labels |
 | DINOv3 ConvNeXt-L with BU, the paper's large backbone at B8's settings (320 px, batch 96): no adaptation, then self-training at 2.6 % | 2 | after the gate |
 | open-set: C3b's withheld taxa, 5 heads on V2-S | 5 | as soon as the specs are ready |
