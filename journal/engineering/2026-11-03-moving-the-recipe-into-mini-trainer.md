@@ -330,6 +330,33 @@ species do not.
 `taxonKey` to species, built on the crosswalk with the epithet changes reviewed by hand. Nobody
 involved is a moth expert, and every run would have to repeat.
 
+## Pl@ntNet-300K on UCloud (2026-11-04)
+
+For the Pl@ntNet head grid, `/12383016/plantnet300k/` holds Asger's own processed copy
+(`/12348329/mini-trainer-ablations/datasets/plantnet`; converter `examples/plantnet/format.py` in
+mini_trainer) in MT's format, labels and split unchanged. It is the data behind his Pl@ntNetV2
+results. A delegated agent copied it; I re-checked the counts.
+
+- **Version:** Pl@ntNet-300K **v2** (Zenodo 10419064: 1,000 classes, 306,087 images), not v1.
+- **Asger's processing:** he renamed *Oreomecon* to *Papaver*, dropped 6 genus-only classes (158
+  images) and merged classes that land on one legacy-Backbone key: *Ophrys sphegodes* (6 classes),
+  *Ophrys fusca* (2), *Anemone baldensis* (2).
+- **Contents:** 305,929 images, 512 px on the longest side (Asger trained at 384).
+- **Split:** the official one. Test (`set` 0) 31,088, val (1) 31,097, train (2) 243,744; every
+  species is in all three, with 2 to 7,207 training images (median 22).
+- **Taxa:** 987 species, 325 genera, 111 families, up to 7 ranks.
+- **Checked:**
+  - the archives against his SHA256 manifest;
+  - every JPEG decodes;
+  - MT's adapter maps every label;
+  - today's GBIF API gives his key for all 994 names;
+  - the remote listing equals the local copy.
+- **Calibration split:** the draft splits the test fold 10/90 into calibration and reporting at
+  scoring time, so it belongs in the scorer, not the data.
+- **Open for the owner** (Asger's choice stands until then): the 6-way *O. sphegodes* merge
+  (subspecies under one GBIF key), and the 512 px ceiling (going above it means rebuilding from the
+  41.8 GB originals).
+
 ## Phases 4-6
 
 - **Paper reruns**, as the decision sheet listed them:
@@ -391,7 +418,7 @@ about 650 needed.
 |---|---|---|
 | cross-entropy against EMLA (V2-S, BU) | 2 | now |
 | head grid, Lepidoptera: F, BU, I, TD, AR x B0, V2-S, ViT-L/16, seed 42 (seeds 43 and 44 later, as confirmations) | 15 | after the gate |
-| the same grid on Pl@ntNet-300K, seed 42 | 15 | once the data is on UCloud (download and conversion delegated) |
+| the same grid on Pl@ntNet-300K, seed 42; epochs and image size from Asger's Pl@ntNet runs (the data is 20x smaller) | 15 | data on UCloud (2026-11-04); specs next |
 | shift on V2-S with BU, like the original evidence (B3, T1rep, X1, X2 and L4 were all at 20 M). The teacher is the cross-entropy arm; self-training at 0.24, 2.6 and 12.3 % of training rows; real labels at 2.6 %; X1 (12 folds) and X2 (3); cRT | ~20 | after the teacher's pseudo-labels |
 | DINOv3 ConvNeXt-L with BU, the paper's large backbone at B8's settings (320 px, batch 96): no adaptation, then self-training at 2.6 % | 2 | after the gate |
 | open-set: C3b's withheld taxa, 5 heads on V2-S | 5 | as soon as the specs are ready |
@@ -446,3 +473,5 @@ run checks it: the gate's BU spec with channels_last as the only change, against
   the run guard would never have seen a finished run, and all three gates would have stopped without
   predicting after about 8 hours. The guard now reads the path from the trainer's own "Final weights
   saved at:" line. Tested on the real trainer for all three heads.
+- 2026-11-04, evening: Pl@ntNet-300K is on UCloud (see its section). The `mt` session proposes the
+  grid's specs.
