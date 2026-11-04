@@ -156,6 +156,27 @@ probe-HO (calibrated, grouped), with two seeds wherever the probe spread matters
 | head scale and bias | learned | frozen | unknown; they sharpen rare classes, so they may raise macro-F1 and change open-set scores |
 | augmentation draws | per image | per batch | per image wins: a whole batch flipping together adds little diversity per step |
 
+**Reduced (owner, 2026-11-04): no grid.** The paper is due next week. Proposed: prior evidence
+settles every row except one.
+- **Sampler: none.** At 20 M on all trap crops (calibrated by trap and night), no oversampling scores
+  0.349 against 0.284 with it (L0 against F), for -1.9 in-distribution. cRT, as a separate stage,
+  recovers the in-distribution part.
+- **The one measurement: cross-entropy against EMLA**, both without oversampling: BU head,
+  mini_trainer's test set, 5 epochs at 256 px, seed 0, otherwise the lepinet preset. EMLA is
+  Svenning et al.'s loss, untested under shift, and the merged paper needs one recipe. The
+  cross-entropy run against V0BU also measures the sampler on this test set, if the gate passes.
+- **The rest, on evidence:** BU head (V0); one-cycle; crop, bilinear and per-image affine;
+  regulariser 0; learned head scale and bias; 5 epochs at 256 px (V0BU matches Nemo's 30 at 384 on
+  trap crops).
+
+**Prediction, before the runs.** Cross-entropy without oversampling: about 0.895 on the test fold
+(V0BU minus the sampler's 1.9 points) and 0.36-0.40 on all trap crops (V0BU's 0.330 plus part of
+L0's +6.5). EMLA: 0.5-1.5 points higher on the test fold, because it corrects the prior as
+oversampling does, and 2-6 points lower on probe and probe-HO. Every prior-correcting loss lost
+under shift in proportion to its strength (balanced softmax -12.5 against L0), and the entropy
+gate should weaken that, not reverse it. If EMLA trails by more than 1.5 points on probe and
+probe-HO, the recipe is cross-entropy; inside 1.5, a second seed; if EMLA leads, EMLA.
+
 ## Nemo on the reconciled trap export (VN, 2026-11-03)
 
 Re-scored by `dev/098` and `dev/093`: the same 47,905 crops, nights and calibration as every lepinet
@@ -295,18 +316,19 @@ ignored `.agents/local/nemo_species_colxr/`. It finds:
 - **281 classes share their species with another class**, so training splits one species over two
   classes. An example is *Pleuroptya ruralis* and *Patania ruralis*.
 - **The quality filter** (7.49 M to 6.33 M images) removed 81 % of the images labelled as larvae, so
-  species photographed mostly as caterpillars fell under the floor. Where the filter comes from is
-  not recorded in lepinet either: the filtered parquet arrived as is in July.
+  species photographed mostly as caterpillars fell under the floor. The filter is the owner's: a
+  classifier trained on the owner's annotations keeps adult-only images, dropping larvae, leaves,
+  background, blur, subjects too far or too close, and microscopy. It lives in a local gbifxdl branch
+  on another computer.
 
 **On the trap set**, 7 of the 486 species (364 crops, 0.8 %) are in mixed classes and 12 (1,512
 crops, 3.2 %) in duplicated ones, led by *P. ruralis* (682 crops) and *Euproctis similis* (472). Every
 model so far saw the same labels, so comparisons between models stand; the absolute scores of these
 species do not.
 
-**Proposal:** a versioned label map from `taxonKey` to species, built on the crosswalk with the
-epithet changes reviewed by hand, and applied from phase 3 on. Then the new baseline, the paper
-reruns and the third model share one corrected test set, and the trap labels go through the same
-map. The parity gate is unaffected, because both codes see the same labels.
+**Deferred until after the paper (owner, 2026-11-04).** The fix is a versioned label map from
+`taxonKey` to species, built on the crosswalk with the epithet changes reviewed by hand. Nobody
+involved is a moth expert, and every run would have to repeat.
 
 ## Phases 4-6
 
@@ -348,6 +370,16 @@ In MT's own loop, the head's projection matrix can receive Muon: only parameter 
 3. Compute: use the local GPU as much as needed, but it is shared, so local speed tests are biased.
    Use UCloud GPUs freely, preferably for experiments in parallel.
 4. Open: the third model's name.
+
+**2026-11-04:**
+5. The paper is to be finished next week; spend GPU minutes only on what it needs.
+6. Phase 2 starts now, in parallel with the gate.
+7. Phase 3 shrinks to its most important comparison, with instinct over a grid (see Phase 3).
+8. The label correction waits until after the paper.
+9. mini_trainer's per-epoch figure becomes optional and is off in every run from now on, after the
+   name caching is tested.
+10. With the merge to mini_trainer's main branch in view, the branch follows its agent rules
+    (`AGENTS.md`) and keeps code and docs to the fewest words, without removing docs.
 
 ## Log
 

@@ -15,14 +15,15 @@ supervised from here. [[2026-11-03-moving-the-recipe-into-mini-trainer]]
 |---|---|---|
 | 0 | parity audit: lepinet's recipe against MT's defaults, component by component | done (2026-11-03): every CPU check exact (initialisation, logits, decoding, augmentation, optimiser groups, scorer) |
 | 1 | port the recipe as opt-in pieces (√-oversampling sampler, presizing and fastai-style affine, one-cycle for every group, CE with label smoothing 1/C and no regulariser, learned head scale and bias); gate: test F1 within 0.003 at every rank for I, BU and F, same per-epoch curve, same img/s | ported (six local commits); subset side-by-side passed (V1); full-scale gate V2I / V2BU / V2F and speed job V2T on UCloud |
-| 2 | the methods: F head, frozen-backbone stages (cRT, adaptation), self-training on trap crops, trap-like augmentation, image cap, the evaluation (grouped calibration, probe, open-set, back-off) | — |
-| 3 | settle the recipe by single-factor runs: sampler, EMLA vs CE, regulariser, schedule, resize and augmentation, epochs and size; then the new baseline on MT's test set (12,632 species) | anchors done (V0F, V0BU, 2026-11-04): without the floor the test fold scores 0.9110 / 0.9107 and the traps are unchanged; BU is 5 pt above F under shift and level with or above Nemo. Proposed first: a corrected label map (the labels mix species, §5) |
+| 2 | the methods: F head, frozen-backbone stages (cRT, adaptation), self-training on trap crops, trap-like augmentation, image cap, the evaluation (grouped calibration, probe, open-set, back-off) | started 2026-11-04, in parallel with the gate; the trap evaluation first |
+| 3 | settle the recipe by single-factor runs: sampler, EMLA vs CE, regulariser, schedule, resize and augmentation, epochs and size; then the new baseline on MT's test set (12,632 species) | anchors done (V0F, V0BU, 2026-11-04): without the floor the test fold scores 0.9110 / 0.9107 and the traps are unchanged; BU is 5 pt above F under shift and level with or above Nemo. No grid (owner, 2026-11-04); proposed: one comparison, cross-entropy against EMLA without oversampling (two runs), the rest on evidence |
 | 4-6 | the paper reruns; Nemo re-scored on the reconciled Flemming export (its card used the unreconciled one) next to the new models; the third production model | — |
 
 ## 1. The goal: a submittable paper
 
 Every experiment [`paper/DRAFT.md`](paper/DRAFT.md) uses is closed. What remains is scoping, writing
-and two evaluation-only runs.
+and two evaluation-only runs. **Target: finished next week** (owner, 2026-11-04); GPU time goes only
+to what the paper needs.
 
 | # | step | who | state |
 |---|---|---|---|
@@ -39,6 +40,7 @@ and two evaluation-only runs.
 | ID | what | state | next |
 |---|---|---|---|
 | **V2I, V2BU, V2F, V2T** | mini_trainer's parity gate at full scale (heads I, BU, F; lepinet's setting) and the speed job, submitted by the `mt` session | submitted 2026-11-04 13:50; gates training (12445754-56, from 14:06). V2T done: mini_trainer's training loop is 1.185x lepinet's, but each epoch spends ~3 min outside the loops (being measured) | score against the gate; per-epoch curves against the clean-package logs; the epoch overhead |
+| **V3** | GPU options in mini_trainer (cudnn.benchmark, channels_last, fused AdamW, torch.compile modes, compiled optimizer), owner's request, run by the `mt` session | UCloud 12446034, 2-3 h; local smoke on the shared 5090: +28 % without compile, +37 % with | pick the settings for phase 3 |
 | **W1** | TreeOfLife-200M at short side 256, on the workstation (`/data/au761367/tol256s/`; zero UCloud core-hours) | crawl done: 64.16 M images plus ~0.54 M retried ([crawl](journal/engineering/2026-10-01-the-crawl-resized-the-wrong-side.md)); `retry3/` (9 servers, 72 h cap) | shared as `/data/datasets/tol256`: 65.2 M images, metadata with ToL's per-image fields ([share](journal/engineering/2026-10-21-sharing-the-tol-crawl.md)). **Upload re-planned** (1,053 shards); old shards in the UCloud Trash; upload paused on storage |
 
 ## 3. Backlog, in order
@@ -67,7 +69,7 @@ and two evaluation-only runs.
 
 - **Noise floors depend on the training regime.** Probe spread is ~0.004 between end-to-end runs and ~0.012 between frozen-trunk stages; identical 198 M frozen runs differed by 3.74 pt once (G3b). Claim nothing under ~3x the matching floor.
 - **Thresholds do not transfer between models or embedding spaces.** Rankings do; abstention, novelty and temperature values must be refitted.
-- **The labels mix species.** The classes are legacy GBIF Backbone `speciesKey`s: 163 contain images of another species and 281 share a species with another class. 19 of the 486 trap species are affected (1,876 crops). Comparisons between models stand; the absolute scores of those species do not. Proposed: a corrected label map from phase 3 on. [[2026-11-03-moving-the-recipe-into-mini-trainer]]
+- **The labels mix species.** The classes are legacy GBIF Backbone `speciesKey`s: 163 contain images of another species and 281 share a species with another class. 19 of the 486 trap species are affected (1,876 crops). Comparisons between models stand; the absolute scores of those species do not. The correction waits until after the paper (owner, 2026-11-04). [[2026-11-03-moving-the-recipe-into-mini-trainer]]
 - **Every lepinet head learned a per-class scale and bias.** fastai's optimiser setup trains the head's "frozen" `g` and bias (found 2026-11-03), so the rows are not unit-norm (species `g` mean 1.88). No reported number changes; mini_trainer keeps them frozen, so parity needs an option and phase 3 tests learned against frozen. [[2026-08-06-the-cosine-head-is-not-unit-norm]]
 
 ## 6. How to run things
