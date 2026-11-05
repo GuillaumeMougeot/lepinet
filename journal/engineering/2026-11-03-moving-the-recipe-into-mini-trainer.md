@@ -451,6 +451,14 @@ In MT's own loop, the head's projection matrix can receive Muon: only parameter 
 11. The paper reruns go ahead now, not after the paper, run in parallel over 11 days (until
     2026-11-15), while the owner writes the sections as results land.
 
+**2026-11-05:**
+12. The AR head is dropped from the paper's grids and the open-set block (it does not learn in
+    mini_trainer; Asger's own grid had no AR).
+13. Seeds 43 and 44 wait for seed 42's results: GPUs are often busy and other work comes first.
+14. The matched real-label arm (the gated crops with their true labels) is added to the shift block.
+15. Reproducing lepinet's past results comes first. Pl@ntNet runs only when GPUs are free and those
+    runs are all running.
+
 **The campaign (2026-11-04).** One recipe, pinned on evidence (Phase 3), on mini_trainer's test set.
 Multi-GPU jobs stage the images once and train one model per GPU. 9,087 B200 hours remain, against
 about 650 needed.
@@ -458,11 +466,11 @@ about 650 needed.
 | block | runs | starts |
 |---|---|---|
 | cross-entropy against EMLA (V2-S, BU) | 2 | now |
-| head grid, Lepidoptera: F, BU, I, TD, AR x B0, V2-S, ViT-L/16, seed 42 (seeds 43 and 44 later, as confirmations) | 15 | after the gate |
-| the same grid on Pl@ntNet-300K, seed 42; epochs and image size from Asger's Pl@ntNet runs (the data is 20x smaller) | 15 | data on UCloud (2026-11-04); specs next |
-| shift on V2-S with BU, like the original evidence (B3, T1rep, X1, X2 and L4 were all at 20 M). The teacher is the cross-entropy arm; self-training at 0.24, 2.6 and 12.3 % of training rows; real labels at 2.6 %; X1 (12 folds) and X2 (3); cRT | ~20 | after the teacher's pseudo-labels |
+| head grid, Lepidoptera: F, BU, I, TD x B0, V2-S, ViT-L/16, seed 42 (seeds 43 and 44 after seed 42's results, as confirmations) | 12 | B0 and V2-S running (2026-11-05); ViT-L at lr 1e-4 |
+| the same grid on Pl@ntNet-300K, seed 42; epochs and image size from Asger's Pl@ntNet runs (the data is 20x smaller) | 12 | specs ready; runs when GPUs are free and the reproductions are running |
+| shift on V2-S with BU, like the original evidence (B3, T1rep, X1, X2 and L4 were all at 20 M). The teacher is the cross-entropy arm; self-training at 0.24, 2.6 and 12.3 % of training rows; real labels at 2.6 % (T1rep's round-robin draw, and the gated crops with their true labels); X1 (12 folds) and X2 (3); cRT | ~21 | after the teacher's pseudo-labels |
 | DINOv3 ConvNeXt-L with BU, the paper's large backbone at B8's settings (320 px, batch 96): no adaptation, then self-training at 2.6 % | 2 | after the gate |
-| open-set: C3b's withheld taxa, 5 heads on V2-S | 5 | as soon as the specs are ready |
+| open-set: C3b's withheld taxa, 4 heads on V2-S | 4 | as soon as the specs are ready |
 
 The owner approved every campaign submission, DINOv3 for the paper (BioCLIP-2 may come later for
 the AMI deployment model), and the Pl@ntNet download.
