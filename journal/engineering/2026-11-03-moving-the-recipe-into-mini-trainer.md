@@ -471,6 +471,47 @@ F / BU / I / TD:
 - The ImageNet-1k ViT-L is below V2-S here too (his 38.2 flat, against 48.2). The owner is asked
   whether DINOv3 ConvNeXt-L should replace it, and EfficientNetV2-B0 replace B0, in the grid.
 
+## The V2-S grid, cross-entropy against EMLA, and the real labels (2026-11-05)
+
+c-v2s and c-t1rep finished at 16:20. Test fold (632,913 images) at threshold 0; traps as species
+macro-F1 calibrated by (trap, night); the real-label arms' "trap" set contains their own training
+crops, so only probe and probe-HO count for them.
+
+| V2-S, BU unless named | species | genus | family | trap | probe | probe-HO |
+|---|---|---|---|---|---|---|
+| F | 0.8890 | 0.9488 | 0.9693 | 0.348 | 0.366 | 0.298 |
+| BU, cross-entropy (the teacher) | 0.8877 | 0.9556 | 0.9759 | 0.339 | 0.371 | 0.306 |
+| I | 0.8812 | 0.9471 | 0.9655 | **0.381** | **0.405** | 0.307 |
+| TD | 0.8413 | 0.9293 | 0.9618 | 0.315 | 0.347 | 0.271 |
+| BU, EMLA | **0.8936** | 0.9515 | 0.9683 | 0.300 | 0.316 | 0.257 |
+| T1rep: round-robin real labels, 11x | 0.8868 | 0.9557 | 0.9759 | | 0.722 | 0.305 |
+| the gated crops with true labels, 11x | 0.8873 | 0.9558 | 0.9766 | | 0.682 | **0.343** |
+| V0F / V0BU (with oversampling) | 0.9110 / 0.9107 | | | 0.279 / 0.330 | 0.300 / 0.351 | 0.235 / 0.288 |
+
+**The predictions, scored:**
+- **Cross-entropy without oversampling on the test fold, about 0.895:** 0.8877. The sampler cost 2.3
+  points, not 1.9.
+- **On all trap crops, 0.36-0.40:** 0.339. Falsified, low. Dropping oversampling gained F 6.9 points
+  on traps, as L0 did, but BU only 0.9: with oversampling BU was already 5 points above F.
+- **EMLA 0.5-1.5 higher on the test fold:** +0.59 at species, but -0.41 at genus and -0.76 at family.
+- **EMLA 2-6 lower on probe and probe-HO:** -5.5 and -4.9, and -3.9 on all crops. Cross-entropy stays
+  in the recipe.
+
+**What else it shows:**
+- **T1rep reproduces.** On probe and probe-HO it scores 0.722 / 0.305, against lepinet's 0.723 /
+  0.312 in the same convention, from a teacher with neither trap augmentation nor ArcFace. Hand
+  labels replicated 11x again buy nothing on held-out species.
+- **The matched arm splits the effect.** True labels on the gated crops give probe-HO 0.343, a 3.7
+  point gain that the round-robin draw (0.305) does not give. So which crops are labelled decides
+  whether the world stays open, as the draft guessed: the gate leaves out the look-alikes. The label
+  noise is measured against the self-training run at 0.02, compiled, through the compile control.
+- **Heads.** In-distribution, F and BU tie, I trails by 0.8 and TD by 4.8. Under shift, I leads on
+  all crops and probe by 3-4 points, F and BU tie, and all three tie on probe-HO; TD is last.
+  Without oversampling at 20 M, BU no longer beats F under shift; at B0 it does, by 5-7 points.
+  Single seeds; seeds 43 and 44 decide.
+- **TD's gap persists at V2-S:** 4.8 points at species, against 1.4 in Svenning et al.'s V2-S. So the
+  one-epoch check of the head options is next.
+
 ## Phases 4-6
 
 - **Paper reruns**, as the decision sheet listed them:
