@@ -440,7 +440,19 @@ calibrated by (trap, night):
 - **TD** trails F by 8.7 points, against 4.3 in Svenning et al. The learned scales grew in every
   head (no decay flattening). The `mt` session's candidate mechanism is the clamp after the learned
   scale: with g ≈ 2, every class with cosine above 0.5 sits at the same maximum logit, which ties
-  most easily in TD's family layer. Untested; v2s_td_s42 shows whether the gap persists.
+  most easily in TD's family layer.
+- **Tested the same day, and falsified.** On 10,000 test images, with exact fp32 head maths, no F,
+  BU or I image (nor lepinet's V2-S F) has any class at the ceiling. TD has one class there on about
+  10 % of images, but two or more tied classes on 0.07 %; every tie includes the true class, and
+  argmax picks a wrong one on 0.04 %. TD's layers work at positive scaled cosines, F and BU at
+  negative ones: different geometries.
+- **The floor has a small cost to F and BU instead.** Below g·cos = -1 every class gets the minimum
+  logit and no gradient. The true class sits there on 0.33 % of B0 F's images (about 4 % of its
+  top-1 errors) and 0.09 % of lepinet's V2-S F's, so it is a limitation of the recipe's head in both
+  codes. Fixing it changes every head, so it waits until after the paper.
+- The next check for TD: one epoch each of TD and F, with the recipe's head and with mini_trainer's
+  default head (fixed unit scale, zero bias), once v2s_td_s42 shows whether the gap persists at
+  V2-S.
 
 **Pl@ntNet, seed 42** (test fold, 31,088 images, threshold 0; RESULTS VP). Species for
 F / BU / I / TD:
