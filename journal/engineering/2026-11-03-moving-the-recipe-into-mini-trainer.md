@@ -458,6 +458,8 @@ In MT's own loop, the head's projection matrix can receive Muon: only parameter 
 14. The matched real-label arm (the gated crops with their true labels) is added to the shift block.
 15. Reproducing lepinet's past results comes first. Pl@ntNet runs only when GPUs are free and those
     runs are all running.
+16. The branch is pushed to Asger's repository (`origin/feature/lepinet-integration`), without a
+    pull request (owner, in the `mt` session).
 
 **The campaign (2026-11-04).** One recipe, pinned on evidence (Phase 3), on mini_trainer's test set.
 Multi-GPU jobs stage the images once and train one model per GPU. 9,087 B200 hours remain, against
@@ -543,3 +545,12 @@ run checks it: the gate's BU spec with channels_last as the only change, against
   - T1rep's real labels are a round-robin draw (`dev/067`), not the gated crops, so the draft's
     "hand-labelling the same images" was wrong as worded (now "as many images"). A matched arm, the
     gated crops with their true labels, is proposed.
+- 2026-11-05, late morning: seven jobs run on UCloud (PLAN, Running now), T1rep and the matched arm
+  among them.
+  - c-dinov3 failed: mini_trainer could not attach its head to timm's nested `head.fc` (fixed in MT
+    0b08370).
+  - In a compressed local test, DINOv3 did not learn at B8's 8e-4: full lr after 431 steps instead of
+    ~26k. The full run keeps 8e-4 and B8's warm-up.
+  - mini_trainer attaches its head after timm's pooled LayerNorm; lepinet's heads pooled the feature
+    map themselves. It is the same in both DINOv3 arms.
+  - The shift block (18 runs) and the DINOv3 self-training arm wait for c-v2s in the queue.
