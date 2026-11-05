@@ -398,6 +398,67 @@ results. A delegated agent copied it; I re-checked the counts.
   (subspecies under one GBIF key), and the 512 px ceiling (going above it means rebuilding from the
   41.8 GB originals).
 
+## The B0 grid against lepinet's B0 (2026-11-05)
+
+The first campaign job to finish was c-b0: the four heads on B0 with the pinned recipe. The owner
+compared its flat head with lepinet's A6 (0.8789) and its multi-level head with the July B0 (0.8692),
+and found it lower. The two runs differ in more than the head, and every difference favours A6:
+
+| | A6 (lepinet, 2026-08-01) | b0_f_s42 (campaign) |
+|---|---|---|
+| backbone | timm `tf_efficientnetv2_b0` (EfficientNetV2-B0) | torchvision `efficientnet_b0` (Asger's grid) |
+| sampler | √-oversampling | none (pinned recipe) |
+| classes | 12,041 (50-image floor) | 12,632 (no floor) |
+| hidden layer | 256 | 1,280 (backbone width) |
+| epochs, size | 5, 256 px | 5, 256 px |
+
+Known costs to b0_f: the sampler is worth 1.9 points on the test fold (L0 against F at 20 M), and the
+floor about 0.25 (V0F against F). The rest are unmeasured.
+
+**Prediction, before the test-fold scores:** b0_f is within 0.002 of its validation score of 0.8741,
+since V0F's validation and test agreed to 0.001. That puts it 0.4-0.5 below A6, less than the
+sampler alone. So the gap is the recipe, not mini_trainer.
+
+**Result: held.** Test fold (632,913 images), threshold 0, then species macro-F1 on the traps,
+calibrated by (trap, night):
+
+| B0 head | species | genus | family | trap | probe | probe-HO |
+|---|---|---|---|---|---|---|
+| F | 0.8751 | 0.9405 | 0.9618 | 0.281 | 0.298 | 0.236 |
+| BU | 0.8641 | 0.9408 | 0.9654 | **0.329** | **0.357** | **0.307** |
+| I | 0.8533 | 0.9232 | 0.9409 | 0.329 | 0.356 | 0.267 |
+| TD | 0.7878 | 0.8862 | 0.9326 | 0.270 | 0.291 | 0.212 |
+| A6 (lepinet) | 0.8789 | 0.9386 | 0.9626 | | | |
+| V0BU (V2-S, oversampled) | 0.9107 | 0.9625 | 0.9782 | 0.330 | 0.351 | 0.288 |
+
+- b0_f is 0.0010 above its validation score and 0.0038 below A6 at species. It is above A6 at genus
+  and level at family.
+- Svenning et al.'s B0 (10 epochs, class weights, 224 px) scores 83.5 / 83.3 / 82.4 / 79.2 for
+  F / BU / I / TD. Ours is 3-4 points higher except TD.
+- On the traps, the 5 M BU model matches the 21 M V0BU trained with oversampling. BU beats F by 5-7
+  points, as at 20 M.
+- **TD** trails F by 8.7 points, against 4.3 in Svenning et al. The learned scales grew in every
+  head (no decay flattening). The `mt` session's candidate mechanism is the clamp after the learned
+  scale: with g ≈ 2, every class with cosine above 0.5 sits at the same maximum logit, which ties
+  most easily in TD's family layer. Untested; v2s_td_s42 shows whether the gap persists.
+
+**Pl@ntNet, seed 42** (test fold, 31,088 images, threshold 0; RESULTS VP). Species for
+F / BU / I / TD:
+
+| backbone | F | BU | I | TD |
+|---|---|---|---|---|
+| V2-S, 384 px | 0.467 | 0.462 | 0.451 | 0.406 |
+| B0, 224 px | 0.420 | 0.400 | 0.398 | 0.355 |
+| ViT-L/16, 224 px | 0.409 | 0.413 | 0.395 | 0.378 |
+| Svenning et al., V2-S | 48.2 | 47.3 | 47.8 | 37.5 |
+
+- At genus and family, BU leads on V2-S (0.645 and 0.715).
+- Against Svenning et al., ours is 1-3 points lower except TD. The likely cause is his class
+  weighting: Pl@ntNet's tail is heavy (median 22 training images per species), and its test fold
+  has no shift, so rebalancing's in-distribution gain shows and its cost under shift cannot.
+- The ImageNet-1k ViT-L is below V2-S here too (his 38.2 flat, against 48.2). The owner is asked
+  whether DINOv3 ConvNeXt-L should replace it, and EfficientNetV2-B0 replace B0, in the grid.
+
 ## Phases 4-6
 
 - **Paper reruns**, as the decision sheet listed them:
