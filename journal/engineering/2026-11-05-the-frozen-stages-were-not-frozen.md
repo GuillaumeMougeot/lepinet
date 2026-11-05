@@ -73,6 +73,13 @@ variants per claim:
 - **cRT:** (a) the whole network trains, as L4 ran; (b) a frozen trunk with BN statistics fixed.
 - **Classifier-only adaptation** on the 2.6 % pseudo-labels: (a) and (b) likewise.
 
-(b) decides whether the spine stands; (a) reproduces the old numbers. lepinet's `freeze_body` is not
+(b) decides whether the spine stands; (a) reproduces the old numbers.
+
+The four runs are built as job `c-crt-t2` and wait for the owner's approval.
+- They use a new mini_trainer option, `freeze_backbone` (MT e55b65f). It trains only the head, pins
+  every trunk module in eval mode (BN statistics fixed; dropout and stochastic depth off) and keeps
+  the precision.
+- Checked on the real V2-S BU model for one epoch: 0 of 670 trunk tensors changed, weights and BN
+  statistics included. It ran at 2,786 img/s against ~950 for full training. lepinet's `freeze_body` is not
 fixed here, since training has moved to mini_trainer. Anyone reusing it must re-freeze after
 `unfreeze()` and check that the trunk's checkpoint tensors are unchanged.
