@@ -59,7 +59,7 @@ In-distribution macro-F1 spans 4 points and orders the models poorly; under shif
     and only the first is visible in-distribution (§4.1);
   - **(C2)** **interventions belong in the classifier, not the representation**: coarse supervision,
     long-tail rebalancing, domain adaptation and the prototype matrix all resolve that way (§4.15).
-    This is the spine;
+    This is the spine; **on hold (2026-11-05): its rebalancing and adaptation runs were not frozen (§4.15)**;
   - **(C3)** **unlabelled target-domain data is the strongest, cheapest lever**, with a sharp optimum
     in its *share* beyond which adaptation becomes memorisation (§4.11);
   - **(C4)** **the long-tail ranking inverts under source shift**, monotonically in how hard a method
@@ -803,6 +803,9 @@ Oversampling **changes which data the model sees**, and a larger model fits the 
 distribution, and its bias, better. **Interventions that constrain the objective weaken with
 capacity; interventions that reshape the data do not, and may strengthen.**
 
+> **On hold (2026-11-05):** the "frozen trunk" runs behind this claim (L4, T2, F2, the G series) trained the whole
+> network ([incident](../journal/engineering/2026-11-05-the-frozen-stages-were-not-frozen.md)). The mini_trainer reruns decide its wording.
+
 **The trade is not intrinsic.** cRT [Kang et al. 2020] trains the representation on the natural
 distribution, then freezes it and rebalances only the classifier:
 
@@ -940,6 +943,10 @@ downloadable model, and the extra data is almost all head images, which our cap 
 (§4.13.1).
 
 ### 4.15 Almost everything that matters is a classifier-stage concern
+
+> **On hold (2026-11-05):** the "frozen trunk" runs behind this claim (L4, T2, F2, the G series) trained the whole
+> network ([incident](../journal/engineering/2026-11-05-the-frozen-stages-were-not-frozen.md)). The mini_trainer reruns decide its wording.
+
 
 *Figure 2 shows three of the four cases side by side.*
 

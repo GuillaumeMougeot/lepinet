@@ -39,7 +39,7 @@ to what the paper needs.
 
 | ID | what | state | next |
 |---|---|---|---|
-| **Campaign** | the paper reruns on mini_trainer, run by the `mt` session (journal: the campaign table) | running (2026-11-05, UCloud): c-v2s (12447133: CE, which is also the teacher and the BU cell; EMLA; the F, I and TD heads; the channels_last control), c-b0 (12447137), c-vitl (12447251, lr 1e-4), c-openset (12447244), c-t1rep (12447346: T1rep and the matched arm), c-dinov3-r2 (12447408: no adaptation), the compile smoke test (12447240). Queued after c-v2s: the shift block (18 runs) and the DINOv3 self-training arm; cRT to build. Owner, 2026-11-05: reproductions first; the Pl@ntNet grid (12 runs, ~14 GPU-hours) when GPUs are free; seeds 43 and 44 after seed 42's results; AR dropped (it does not learn in mini_trainer) | score each run on the test fold and the traps; the channels_last control against V2BU; the shift block after the teacher's pseudo-labels |
+| **Campaign** | the paper reruns on mini_trainer, run by the `mt` session (journal: the campaign table) | running (2026-11-05, UCloud): c-v2s (12447133: CE, which is also the teacher and the BU cell; EMLA; the F, I and TD heads; the channels_last control), c-b0 (12447137), c-vitl (12447251, lr 1e-4), c-openset (12447244), c-t1rep (12447346: T1rep and the matched arm), c-dinov3-r2 (12447408: no adaptation), the compile smoke test (12447240). Queued after c-v2s: the shift block (18 runs) and the DINOv3 self-training arm. Proposed (waits for the owner): cRT and classifier-only adaptation, each with the whole network and with a frozen trunk (4 runs), since lepinet's "frozen" stages were not frozen. Owner, 2026-11-05: reproductions first; the Pl@ntNet grid (12 runs, ~14 GPU-hours) when GPUs are free; seeds 43 and 44 after seed 42's results; AR dropped (it does not learn in mini_trainer) | score each run on the test fold and the traps; the channels_last control against V2BU; the shift block after the teacher's pseudo-labels |
 | **W1** | TreeOfLife-200M at short side 256, on the workstation (`/data/au761367/tol256s/`; zero UCloud core-hours) | crawl done: 64.16 M images plus ~0.54 M retried ([crawl](journal/engineering/2026-10-01-the-crawl-resized-the-wrong-side.md)); `retry3/` (9 servers, 72 h cap) | shared as `/data/datasets/tol256`: 65.2 M images, metadata with ToL's per-image fields ([share](journal/engineering/2026-10-21-sharing-the-tol-crawl.md)). **Upload re-planned** (1,053 shards); old shards in the UCloud Trash; upload paused on storage |
 
 ## 3. Backlog, in order
@@ -58,15 +58,16 @@ to what the paper needs.
 ## 4. Decided not to do — each closed for a reason
 
 - **More in-distribution accuracy**: saturated; the headroom is under shift.
-- **LDAM, background suppression**: classifier adaptation subsumes that family (T2b).
+- **LDAM, background suppression**: classifier adaptation subsumes that family (T2b; on hold, its trunk was not frozen: [[2026-11-05-the-frozen-stages-were-not-frozen]]).
 - **Re-tuning the ArcFace margin**: two cheap proxies failed for principled reasons; the margin is worth ~0.8 pt.
 - **The autoregressive head**: lost by 20 pt.
 - **Uniform sampled softmax, low-rank or proxy-free heads for 1 M species**: all measured dead (H2-H4); a 50-image floor makes the matrix fit instead.
-- **Re-litigating staged vs end-to-end**: a tie at 198 M once the noise floor was measured (G3b).
+- **Re-litigating staged vs end-to-end**: a tie at 198 M once the noise floor was measured (G3b). The stages were short end-to-end fine-tunes, not frozen (2026-11-05).
 
 ## 5. Caveats to carry
 
-- **Noise floors depend on the training regime.** Probe spread is ~0.004 between end-to-end runs and ~0.012 between frozen-trunk stages; identical 198 M frozen runs differed by 3.74 pt once (G3b). On the test fold, retraining moves species macro-F1 by ~0.000 and family by ~0.002 (A5, V2). Claim nothing under ~3x the matching floor.
+- **The conv-backbone "frozen" stages trained the whole network** (2026-11-05): L4, T2, F2, the G and R series. The claims built on them are on hold until the mini_trainer reruns: the spine (C2), "cRT removes the trade", the staged recipe. BioCLIP-2's frozen stages held. [[2026-11-05-the-frozen-stages-were-not-frozen]]
+- **Noise floors depend on the training regime.** Probe spread is ~0.004 between end-to-end runs and ~0.012 between short fine-tuning stages (the "frozen" stages above); identical 198 M staged runs differed by 3.74 pt once (G3b). On the test fold, retraining moves species macro-F1 by ~0.000 and family by ~0.002 (A5, V2). Claim nothing under ~3x the matching floor.
 - **Thresholds do not transfer between models or embedding spaces.** Rankings do; abstention, novelty and temperature values must be refitted.
 - **The labels mix species.** The classes are legacy GBIF Backbone `speciesKey`s: 163 contain images of another species and 281 share a species with another class. 19 of the 486 trap species are affected (1,876 crops). Comparisons between models stand; the absolute scores of those species do not. The correction waits until after the paper (owner, 2026-11-04). [[2026-11-03-moving-the-recipe-into-mini-trainer]]
 - **Every lepinet head learned a per-class scale and bias.** fastai's optimiser setup trains the head's "frozen" `g` and bias (found 2026-11-03), so the rows are not unit-norm (species `g` mean 1.88). No reported number changes; mini_trainer keeps them frozen, so parity needs an option and phase 3 tests learned against frozen. [[2026-08-06-the-cosine-head-is-not-unit-norm]]

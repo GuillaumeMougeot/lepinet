@@ -14,9 +14,9 @@ One line each, with the paper section and the experiments (section 2) that carry
 |---|---|---|---|
 | 1 | Hierarchy-aware heads do not help; one species head plus marginalisation matches or beats them. Coarse *supervision* (a loss on the marginals) still buys ~1.4 pt under shift. | §4.1 | singlehead, marginal, A4 |
 | 2 | In-distribution accuracy saturates near 0.93 but falls ~23 pt on trap images, and the three axes rank models differently. | §4.2, §4.10 | flemming, B4 |
-| 3 | **The spine:** interventions belong in the classifier, not the representation: rebalancing (cRT), domain adaptation (83 % from the classifier alone), the prototype matrix (centroids for 0.29 pt, for the margin head; 3.7 pt for the plain head). | §4.15 | L4, T2, H1 |
+| 3 | **On hold ([2026-11-05](journal/engineering/2026-11-05-the-frozen-stages-were-not-frozen.md)): L4 and T2 trained the whole network.** **The spine:** interventions belong in the classifier, not the representation: rebalancing (cRT), domain adaptation (83 % from the classifier alone), the prototype matrix (centroids for 0.29 pt, for the margin head; 3.7 pt for the plain head). | §4.15 | L4, T2, H1 |
 | 4 | Unlabelled trap images are the largest lever: +7.94 probe from self-training at 2.6 % of training rows, no target labels; more becomes memorisation. Real labels at the same dose score +1.01 but lose the gain on unseen species (91 % of their errors land in the labelled fauna). At a new trap accuracy keeps all the gain, macro-F1 64 % (new site 23 %). | §4.11 | B3rep5x, T1, T1rep, X1, X2 |
-| 5 | Long-tail reweighting trades shift robustness for accuracy, monotonically; cRT removes the trade; capping training at 1,000 images per species helps shift. | §4.13 | L0-L4, L7 |
+| 5 | Long-tail reweighting trades shift robustness for accuracy, monotonically; cRT removes the trade (on hold, [2026-11-05](journal/engineering/2026-11-05-the-frozen-stages-were-not-frozen.md): L4 was two late epochs of oversampling on the whole network); capping training at 1,000 images per species helps shift. | §4.13 | L0-L4, L7 |
 | 6 | The best open-set scoring rule changes with model scale (6-7.6 pt); one rule for all models produced a false ranking. | §4.9 | E2 |
 | 7 | The angular margin relocates open-set signal rather than creating it: +0.78 AUROC best-vs-best (an earlier "31 pt" compared rules, and is retracted). | §4.3 | A1, C3r |
 | 8 | Novelty detection improves with taxonomic distance (near < mid < far), and not because unseen taxa are rare. | §4.4 | C3, C3b |
@@ -139,17 +139,17 @@ distance), **E2** (scoring rules do not transfer across scale), **L4** (cRT), **
 | ID | question | change | result | where |
 |---|---|---|---|---|
 | F1 | compose every win at 198 M | B4 + marginal supervision | 0.9219 / full trap 0.7103 / probe 0.7209 / AUROC 0.8800 — identical to B4 on species and shift; coarse levels gain | [F1](journal/2026-08-02-f1-flagship.md) |
-| **F2** | the staged recipe at 20 M | 1 clean representation + cRT + adaptation, frozen trunk | in-dist **0.9081**, probe 0.7541 | [F2](journal/2026-08-06-f2-capstone.md) |
-| F3 | joint vs sequential classifier stages | joint | 0.9061 / 0.7479 — a near-wash | same |
+| **F2** | the staged recipe at 20 M (**trunk was not frozen**, [2026-11-05](journal/engineering/2026-11-05-the-frozen-stages-were-not-frozen.md)) | 1 clean representation + cRT + adaptation, frozen trunk | in-dist **0.9081**, probe 0.7541 | [F2](journal/2026-08-06-f2-capstone.md) |
+| F3 | joint vs sequential classifier stages (**trunk was not frozen**, [2026-11-05](journal/engineering/2026-11-05-the-frozen-stages-were-not-frozen.md)) | joint | 0.9061 / 0.7479 — a near-wash | same |
 
 ### G — the 198 M confirmation (closed)
 
 | ID | question | result | where |
 |---|---|---|---|
-| G1 | cRT at 198 M | in-dist 0.9112 — confirms at half strength | [F2](journal/2026-08-06-f2-capstone.md) |
-| G2 | the staged recipe at 198 M | 0.9150 / probe 0.7648 / probe-HO 0.7600 | same |
-| G3 | staged + balanced pseudo-labels | 0.9138 / 0.7740 / 0.7518 | [balance](journal/2026-08-10-balance-is-oversampling-and-it-does-not-scale.md) |
-| G3b | exact repeat of G3 | 0.7870 / 0.7892: **a 3.74 pt spread between identical runs** — retracted two claims; staged vs end-to-end is a tie at 198 M | [noise floor](journal/2026-08-27-the-noise-floor-does-not-transfer-across-training-regimes.md) |
+| G1 | cRT at 198 M (**trunk was not frozen**, [2026-11-05](journal/engineering/2026-11-05-the-frozen-stages-were-not-frozen.md)) | in-dist 0.9112 — confirms at half strength | [F2](journal/2026-08-06-f2-capstone.md) |
+| G2 | the staged recipe at 198 M (**trunk was not frozen**, [2026-11-05](journal/engineering/2026-11-05-the-frozen-stages-were-not-frozen.md)) | 0.9150 / probe 0.7648 / probe-HO 0.7600 | same |
+| G3 | staged + balanced pseudo-labels (**trunk was not frozen**, [2026-11-05](journal/engineering/2026-11-05-the-frozen-stages-were-not-frozen.md)) | 0.9138 / 0.7740 / 0.7518 | [balance](journal/2026-08-10-balance-is-oversampling-and-it-does-not-scale.md) |
+| G3b | exact repeat of G3 (**trunk was not frozen**, [2026-11-05](journal/engineering/2026-11-05-the-frozen-stages-were-not-frozen.md)) | 0.7870 / 0.7892: **a 3.74 pt spread between identical runs** — retracted two claims; staged vs end-to-end is a tie at 198 M | [noise floor](journal/2026-08-27-the-noise-floor-does-not-transfer-across-training-regimes.md) |
 
 ### H — scaling the head to ~1 M species (closed; answered by a data policy instead)
 
@@ -169,9 +169,9 @@ distance), **E2** (scoring rules do not transfer across scale), **L4** (cRT), **
 | (singlehead) | square-root oversampling | — | 0.9135 / 0.6293 | same |
 | L1 | balanced softmax | τ=1 | 0.8970 / 0.5726 | same |
 | L2 | both | | 0.8689 / 0.5492 — robustness falls monotonically with tail weighting | same |
-| **L4** | rebalance only the classifier (cRT) | L0's trunk, classifier oversampled | **0.9068 / 0.6539** — the trade disappears | same |
+| **L4** | rebalance only the classifier (cRT) (**trunk was not frozen**, [2026-11-05](journal/engineering/2026-11-05-the-frozen-stages-were-not-frozen.md)) | L0's trunk, classifier oversampled | **0.9068 / 0.6539** — the trade disappears | same |
 | L5 | does oversampling's cost grow at 198 M? | no oversampling, 198 M | 0.9055 / probe 0.7497 / probe-HO 0.7641 — costs 2.88 probe | same |
-| L6 | cRT at 198 M | | launched 2026-08-06, **result never journalled**; G1 answers the same question | same |
+| L6 | cRT at 198 M (**trunk was not frozen**, [2026-11-05](journal/engineering/2026-11-05-the-frozen-stages-were-not-frozen.md)) | | launched 2026-08-06, **result never journalled**; G1 answers the same question | same |
 | L7 (cap 250/500/1000) | where is the optimal cap per species? | cap training images per species | cap 1,000: **+1.57 probe, +3.26 probe-HO, −0.88 in-dist** vs ~2,000 | [L7](journal/2026-08-28-fine-tuned-bioclip2-beats-us-and-the-head-hurts.md) |
 | L7c1000b | repeat of cap 1,000 | | survives n = 2: +1.76 / +2.94 | same |
 | M2 | repeat of the marginal-supervision shifted number | | the multi-head's apparent lead was noise | [marginal](journal/2026-07-30-marginal-supervision.md) |
@@ -180,11 +180,11 @@ distance), **E2** (scoring rules do not transfer across scale), **L4** (cRT), **
 
 | ID | change | probe / probe-HO | where |
 |---|---|---|---|
-| R2 | relabel with F2, keep top 30 % by confidence | 0.7161 / 0.7257 — falsified by 4.2 pt | [iteration](journal/2026-08-08-self-training-does-not-iterate.md) |
-| R3 | per-species cap instead | 0.7585 / 0.7682 | same |
-| R4 | no gate at all | 0.7674 / 0.7458 | same |
-| R5 | no gate, balanced | 0.7692 / 0.7781 | same |
-| R5b | repeat of R5 | 0.7573: frozen-stage probe spread is **0.0119**, 3x the old floor | [noise floor](journal/2026-08-27-the-noise-floor-does-not-transfer-across-training-regimes.md) |
+| R2 | relabel with F2, keep top 30 % by confidence (**trunk was not frozen**, [2026-11-05](journal/engineering/2026-11-05-the-frozen-stages-were-not-frozen.md)) | 0.7161 / 0.7257 — falsified by 4.2 pt | [iteration](journal/2026-08-08-self-training-does-not-iterate.md) |
+| R3 | per-species cap instead (**trunk was not frozen**, [2026-11-05](journal/engineering/2026-11-05-the-frozen-stages-were-not-frozen.md)) | 0.7585 / 0.7682 | same |
+| R4 | no gate at all (**trunk was not frozen**, [2026-11-05](journal/engineering/2026-11-05-the-frozen-stages-were-not-frozen.md)) | 0.7674 / 0.7458 | same |
+| R5 | no gate, balanced (**trunk was not frozen**, [2026-11-05](journal/engineering/2026-11-05-the-frozen-stages-were-not-frozen.md)) | 0.7692 / 0.7781 | same |
+| R5b | repeat of R5 (**trunk was not frozen**, [2026-11-05](journal/engineering/2026-11-05-the-frozen-stages-were-not-frozen.md)) | 0.7573: frozen-stage probe spread is **0.0119**, 3x the old floor | [noise floor](journal/2026-08-27-the-noise-floor-does-not-transfer-across-training-regimes.md) |
 
 ### T — what labels would have bought, and where adaptation happens
 
@@ -192,8 +192,8 @@ distance), **E2** (scoring rules do not transfer across scale), **L4** (cRT), **
 |---|---|---|---|
 | T1 (lab500 / 2500 / 12230) | real trap labels instead of pseudo-labels, each image once | 12,230 real labels: probe 0.7568, **+2.14 over 12,230 pseudo-labels at the same 1x dose** (0.7354). Not comparable with self-training at 11x (0.7706): different dose | [labels](journal/2026-08-05-label-budget.md) |
 | T1rep | the 12,230 real labels at 11x, the dose of B3rep5x | probe **0.7807** (predicted 0.78-0.79), +1.01 over self-training; held-out species **0.7007** (self-training 0.7704): 91 % of its held-out-species errors land in the labelled fauna (self-training 42 %). Preds `T1rep-probe`, `T1rep-probeho` | same |
-| **T2** | adapt only the classifier, trunk frozen, 2 epochs | probe 0.7572 / probe-HO 0.7621: **83 %** of self-training's gain | [T2](journal/2026-08-06-adaptation-is-mostly-a-classifier-problem.md) |
-| T2b | the same from a trunk with no trap augmentation | 0.7515 — the features were already good | same |
+| **T2** | adapt only the classifier, trunk frozen, 2 epochs (**trunk was not frozen**, [2026-11-05](journal/engineering/2026-11-05-the-frozen-stages-were-not-frozen.md)) | probe 0.7572 / probe-HO 0.7621: **83 %** of self-training's gain | [T2](journal/2026-08-06-adaptation-is-mostly-a-classifier-problem.md) |
+| T2b | the same from a trunk with no trap augmentation (**trunk was not frozen**, [2026-11-05](journal/engineering/2026-11-05-the-frozen-stages-were-not-frozen.md)) | 0.7515 — the features were already good | same |
 
 ### X — does self-training transfer to a trap or site it never saw?
 

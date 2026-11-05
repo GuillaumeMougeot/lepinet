@@ -130,7 +130,9 @@ beat per-level heads. It is the closest thing this project has to a design princ
 because they did not look like results: `-max_logit` (it looked like the definition of the score, and
 was wrong across a scale change) and "marginalisation is consistent by construction" (it looked like
 a theorem, and is false — `max` and `Σ` do not commute over a partition). Both were caught by writing
-an assertion that took the words literally. If a property cannot be falsified by a test, it is not a
+an assertion that took the words literally. So was a third, the costliest: "frozen trunk"
+(2026-11-05). The flag was set and logged, and fastai's `unfreeze()` undid it on every conv backbone;
+comparing the trunk's tensors before and after took a minute. If a property cannot be falsified by a test, it is not a
 property, it is a hope.
 
 **Prove what you can without a GPU first.** The clean package was made to load the old checkpoint

@@ -4,8 +4,8 @@
 %% action: after-paragraph
 %% why: Defines the staged recipe behind the paper's main through-line: rebalancing and adaptation belong in the classifier, which is cheap to redo per deployment.
 %% source: journal/2026-08-01-imbalance-methods-bench.md (L4, cRT); journal/2026-08-06-adaptation-is-mostly-a-classifier-problem.md (T2); journal/2026-08-06-f2-capstone.md (F2)
-%% check: Wording of the recipe follows the decision sheet (step 04 on hold). | Epoch counts for the classifier stages (2 each) are from T2 and F2.
-%% status: ready
+%% check: HOLD (2026-11-05): the frozen-backbone runs behind this step trained the whole network (journal/engineering/2026-11-05-the-frozen-stages-were-not-frozen.md); waits for the mini_trainer reruns. | Wording of the recipe follows the decision sheet (step 04 on hold). | Epoch counts for the classifier stages (2 each) are from T2 and F2.
+%% status: hold
 Two variants change only the classifier.
 In classifier re-training (cRT, \textbf{(REF: Kang et al. 2020)}), the backbone is trained on the natural class distribution, then frozen while the head is re-trained for 2 epochs with square-root oversampling.
 In classifier adaptation, the frozen backbone's head is trained for 2 further epochs on the same pseudo-labelled trap images as end-to-end self-training.
