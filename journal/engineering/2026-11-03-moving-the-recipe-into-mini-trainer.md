@@ -512,6 +512,33 @@ crops, so only probe and probe-HO count for them.
 - **TD's gap persists at V2-S:** 4.8 points at species, against 1.4 in Svenning et al.'s V2-S. So the
   one-epoch check of the head options is next.
 
+**Open-set on C3b reproduces** (c-openset, scored with `dev/099` on all 632,913 test images; RESULTS
+VO). Species-rank AUROC of known against near / mid / far, entropy rule:
+
+| head | near | mid | far |
+|---|---|---|---|
+| F | 0.887 | 0.963 | 0.973 |
+| BU | 0.880 | 0.952 | 0.970 |
+| I | 0.881 | 0.958 | 0.969 |
+| TD | 0.843 | 0.904 | 0.922 |
+| lepinet's C3b | 0.8717 | 0.9463 | 0.9726 |
+
+- The stratum sizes match C3b's exactly (10,391 / 2,969 / 2,376 images).
+- AUROC rises from near to far for every head with entropy, msp and margin.
+- Entropy is the best rule for all four heads. max and energy score 0.5-0.72, as `dev/059` warned for
+  plain cosine heads; TD's fall below 0.5 at mid and far.
+- At family rank, F and BU (whose coarse ranks are marginals) separate unseen families at
+  0.985-0.989.
+
+**Pl@ntNet with DINOv3 ConvNeXt-L** (pp-dinov3: 320 px, B8's lr 8e-4 and batch 96, 10 epochs).
+Species for F / BU / I / TD: 0.439 / 0.439 / 0.438 / 0.398, against V2-S's 0.467 / 0.462 / 0.451 /
+0.406.
+- The 198 M backbone is below the 21 M one on Pl@ntNet. BU still leads at genus and family (0.621,
+  0.703).
+- Two settings are Lepidoptera's rather than Pl@ntNet's: B8's lr was set for 20x more data (about 25k
+  steps here against 330k), and its 320 px is below V2-S's 384.
+- Whether either explains the gap is untested; one run per factor would tell.
+
 ## Phases 4-6
 
 - **Paper reruns**, as the decision sheet listed them:
