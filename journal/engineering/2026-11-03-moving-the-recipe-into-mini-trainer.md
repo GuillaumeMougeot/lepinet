@@ -453,6 +453,18 @@ calibrated by (trap, night):
 - The next check for TD: one epoch each of TD and F, with the recipe's head and with mini_trainer's
   default head (fixed unit scale, zero bias), once v2s_td_s42 shows whether the gap persists at
   V2-S.
+- **Done (mt-td-head-check, 18:15), and the head options are not the cause.** One epoch of V2-S on
+  the capped sample gives TD minus F at species F1 of -0.051 with the recipe's head and -0.058 with
+  mini_trainer's default head.
+- **Two suspects from the code were also in Svenning et al.'s TD**, so they cannot explain why our
+  gap is three times his: the sibling normaliser computed without gradient (unchanged on master since
+  2026-08-13), and level weights [1,1,1] (mini_trainer's default).
+- **His TD differs from ours in the loss.** His `--class_weighted` makes mini_trainer use EMLA with
+  the class frequencies, so his whole grid ran with EMLA, not class-weighted cross-entropy. His runs
+  also had 10 epochs, 384 px, backbone lr 3.3e-4 and the 50-image floor.
+- EMLA and the backbone lr can be checked in one epoch. The first proposal is TD and F with EMLA.
+- This also corrects how his Pl@ntNet lead was described earlier: it comes from EMLA, not class
+  weighting.
 
 **Pl@ntNet, seed 42** (test fold, 31,088 images, threshold 0; RESULTS VP). Species for
 F / BU / I / TD:
@@ -465,8 +477,8 @@ F / BU / I / TD:
 | Svenning et al., V2-S | 48.2 | 47.3 | 47.8 | 37.5 |
 
 - At genus and family, BU leads on V2-S (0.645 and 0.715).
-- Against Svenning et al., ours is 1-3 points lower except TD. The likely cause is his class
-  weighting: Pl@ntNet's tail is heavy (median 22 training images per species), and its test fold
+- Against Svenning et al., ours is 1-3 points lower except TD. The likely cause is his loss, EMLA
+  (his `--class_weighted` selects it), which corrects for class frequency: Pl@ntNet's tail is heavy (median 22 training images per species), and its test fold
   has no shift, so rebalancing's in-distribution gain shows and its cost under shift cannot.
 - The ImageNet-1k ViT-L is below V2-S here too (his 38.2 flat, against 48.2). The owner is asked
   whether DINOv3 ConvNeXt-L should replace it, and EfficientNetV2-B0 replace B0, in the grid.
