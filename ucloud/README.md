@@ -33,6 +33,13 @@ relative to `ucloud/`).
   destination, or same-named run folders inside merge and overwrite each other's `predictions.csv`.
 - **Mount `flemming` for any self-training job**: the pseudo-label parquet reaches trap images
   through `../../flemming/images/`.
+- **A submission that fails with "POST /api/files/upload failed with 502" is not transient while the
+  backend is slow.** The `[sync]` step asks for upload sessions in batches of 64 files, under a ~5 s
+  gateway limit. On 2026-11-05, with many jobs staging from `/work`, 64 files overran it on every
+  retry while 16 passed in 1.4 s. The queue marks the job FAILED and does not retry it, so resubmit
+  with a smaller batch (the `mt` session used a 16-file wrapper).
+- **An 8-GPU job waits for a whole free node; 3- and 4-GPU jobs start at once.** Split large jobs
+  into 4-GPU ones.
 
 Mounts: `/work/lepinet` is this repo (pushed by `[sync]`), `/work/global_lepi` and
 `/work/flemming_helsing` come from the `datasets` drive (`/12383016/...`), read-only.
