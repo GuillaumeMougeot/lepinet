@@ -20,7 +20,7 @@ methods degrade cross-source accuracy **monotonically in how hard they reweight 
 changes with model capacity, a 6–7.6 point effect that inverted a published ranking of our own. A
 held-out fold of the training distribution sees neither inversion. Third, **unlabelled** target
 images are the strongest lever we find. Self-training gains 7.9 points on held-out trap nights
-without a single target label (89 % of what hand-labelling the same images buys, and unlike hand
+without a single target label (89 % of what hand-labelling as many images buys, and unlike hand
 labels at that dose it keeps its gain on species nobody labelled), costs nothing in-distribution, and
 lets a 20 M model beat a 198 M one, with a sharp optimum in the *share* of target data beyond which
 adaptation becomes memorisation. An **angular margin composed with a dimension-aware z-score

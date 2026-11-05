@@ -520,3 +520,18 @@ run checks it: the gate's BU spec with channels_last as the only change, against
   with the same accuracy (64.48 %) and peak memory down from 6.6 to 4.3 GiB; channels_last alone is
   about 1.3x. Whether to compile waits for the owner. The full-scale gate passed for all three heads
   (see V2).
+- 2026-11-05: c-v2s (UCloud 12447133) and c-b0 (12447137) have been training since 10:30. The owner
+  approved them in the `mt` session.
+  - Compile (owner): a one-epoch smoke test of every planned configuration, then compile only where
+    it saves real training time.
+  - ViT-L/16 does not learn at the recipe's lr 1e-3 (1.2 % after a capped epoch) and does at 1e-4
+    (15.5 %). It runs at 1e-4: lepinet's P3a/b/c (BioCLIP-2 ViT-L/14, the same Muon settings)
+    scored 0.8912 / 0.9025 / 0.9146 at 1e-3 / 1e-4 / 1e-5.
+  - Asger's own grid used MT's defaults: head lr 1e-3, backbone 3.3e-4, 10 epochs, class weights.
+    It has four heads (no AR) at MT's metadata sizes: B0 224, V2-S 384, ViT-L 224. The Pl@ntNet
+    grid follows his sizes and his five ranks.
+  - The AR head does not learn in mini_trainer. Two real defects were found (a teacher-forcing leak,
+    oversized start and position embeddings); fixing them did not help.
+  - T1rep's real labels are a round-robin draw (`dev/067`), not the gated crops, so the draft's
+    "hand-labelling the same images" was wrong as worded (now "as many images"). A matched arm, the
+    gated crops with their true labels, is proposed.

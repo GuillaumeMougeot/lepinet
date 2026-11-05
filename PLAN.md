@@ -1,6 +1,6 @@
 # PLAN — what we are doing now
 
-**Kind:** living · **Last updated:** 2026-11-04 · **Supersedes:** [2026-07-28-landscape-and-plan](archive/journal/engineering/2026-07-28-landscape-and-plan.md)
+**Kind:** living · **Last updated:** 2026-11-05 · **Supersedes:** [2026-07-28-landscape-and-plan](archive/journal/engineering/2026-07-28-landscape-and-plan.md)
 
 The one file about *today*. Experiment IDs resolve in [`RESULTS.md`](RESULTS.md); reasons are in
 the linked journal entries; older versions of this file are in git history.
@@ -39,7 +39,7 @@ to what the paper needs.
 
 | ID | what | state | next |
 |---|---|---|---|
-| **Campaign** | the paper reruns on mini_trainer, run by the `mt` session (journal: the campaign table) | job 1 (c-v2s: CE, EMLA, the F, I and TD heads on V2-S, the channels_last control; 6 B200, ~45 GPU-hours) is ready and waits for the owner's go-ahead in the `mt` session; compile waits for the owner (V3: 1.68x with channels_last); Pl@ntNet-300K is on UCloud, its grid specs next; the AR head does not learn in mini_trainer yet (1.9 % after one epoch) | score each run on the test fold and the traps; the channels_last control against V2BU |
+| **Campaign** | the paper reruns on mini_trainer, run by the `mt` session (journal: the campaign table) | running since 2026-11-05 10:13: c-v2s (UCloud 12447133: CE, which is also the teacher and the BU cell; EMLA; the F, I and TD heads; the channels_last control) and c-b0 (12447137: F, BU, I, TD on B0). Ready: the Pl@ntNet grid (12 runs, ~14 GPU-hours, ~1.5 h in parallel) and the compile smoke test (owner: compile only where it saves real time). ViT-L at lr 1e-4 (1e-3 does not learn). AR does not learn in mini_trainer: drop it from the grid? (owner) | score each run on the test fold and the traps; the channels_last control against V2BU; the shift block after the teacher's pseudo-labels |
 | **W1** | TreeOfLife-200M at short side 256, on the workstation (`/data/au761367/tol256s/`; zero UCloud core-hours) | crawl done: 64.16 M images plus ~0.54 M retried ([crawl](journal/engineering/2026-10-01-the-crawl-resized-the-wrong-side.md)); `retry3/` (9 servers, 72 h cap) | shared as `/data/datasets/tol256`: 65.2 M images, metadata with ToL's per-image fields ([share](journal/engineering/2026-10-21-sharing-the-tol-crawl.md)). **Upload re-planned** (1,053 shards); old shards in the UCloud Trash; upload paused on storage |
 
 ## 3. Backlog, in order
