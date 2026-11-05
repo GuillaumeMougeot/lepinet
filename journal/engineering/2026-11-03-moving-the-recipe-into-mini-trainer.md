@@ -521,6 +521,12 @@ In MT's own loop, the head's projection matrix can receive Muon: only parameter 
     runs are all running.
 16. The branch is pushed to Asger's repository (`origin/feature/lepinet-integration`), without a
     pull request (owner, in the `mt` session).
+17. DINOv3 ConvNeXt-L replaces ViT-L/16 as the large backbone of both head grids. The ImageNet-1k
+    ViT-L trails V2-S on both datasets, in Svenning et al.'s runs and ours. The ViT-L results
+    already run become an appendix row.
+18. EfficientNetV2-B0 in place of B0 is shelved: no GPU hours for it now.
+19. The TD gap's suspected cause, the clamp after the learned scale, may be fixed before the paper
+    if the saturation test confirms it.
 
 **The campaign (2026-11-04).** One recipe, pinned on evidence (Phase 3), on mini_trainer's test set.
 Multi-GPU jobs stage the images once and train one model per GPU. 9,087 B200 hours remain, against
@@ -529,8 +535,8 @@ about 650 needed.
 | block | runs | starts |
 |---|---|---|
 | cross-entropy against EMLA (V2-S, BU) | 2 | now |
-| head grid, Lepidoptera: F, BU, I, TD x B0, V2-S, ViT-L/16, seed 42 (seeds 43 and 44 after seed 42's results, as confirmations) | 12 | B0 and V2-S running (2026-11-05); ViT-L at lr 1e-4 |
-| the same grid on Pl@ntNet-300K, seed 42; epochs and image size from Asger's Pl@ntNet runs (the data is 20x smaller) | 12 | specs ready; runs when GPUs are free and the reproductions are running |
+| head grid, Lepidoptera: F, BU, I, TD x B0, V2-S, DINOv3 ConvNeXt-L (replacing ViT-L/16, owner 2026-11-05), seed 42 (seeds 43 and 44 after seed 42's results, as confirmations) | 12 | B0 done (VB0); V2-S running; DINOv3 BU running, F, I and TD to queue after the reproductions; ViT-L at lr 1e-4 finishing, for the appendix |
+| the same grid on Pl@ntNet-300K, seed 42; epochs and image size from Asger's Pl@ntNet runs (the data is 20x smaller) | 12 | V2-S, B0 and ViT-L done (VP); DINOv3 to queue |
 | shift on V2-S with BU, like the original evidence (B3, T1rep, X1, X2 and L4 were all at 20 M). The teacher is the cross-entropy arm; self-training at 0.24, 2.6 and 12.3 % of training rows; real labels at 2.6 % (T1rep's round-robin draw, and the gated crops with their true labels); X1 (12 folds) and X2 (3); cRT | ~21 | after the teacher's pseudo-labels |
 | DINOv3 ConvNeXt-L with BU, the paper's large backbone at B8's settings (320 px, batch 96): no adaptation, then self-training at 2.6 % | 2 | after the gate |
 | open-set: C3b's withheld taxa, 4 heads on V2-S | 4 | as soon as the specs are ready |
