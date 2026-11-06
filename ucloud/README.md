@@ -40,6 +40,10 @@ relative to `ucloud/`).
   with a smaller batch (the `mt` session used a 16-file wrapper).
 - **An 8-GPU job waits for a whole free node; 3- and 4-GPU jobs start at once.** Split large jobs
   into 4-GPU ones.
+- **Single-GPU jobs are scheduled first, but they share a node's local disk.** On 2026-11-06, seven
+  single-GPU Lepidoptera jobs failed with "No space left on device": each stages the 452 GB image
+  set to the node's `/tmp`. Small datasets (Pl@ntNet, 0.9 min) run fine one per job; Lepidoptera runs
+  go 4 per job, staged once.
 
 Mounts: `/work/lepinet` is this repo (pushed by `[sync]`), `/work/global_lepi` and
 `/work/flemming_helsing` come from the `datasets` drive (`/12383016/...`), read-only.
