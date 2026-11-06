@@ -44,6 +44,8 @@ relative to `ucloud/`).
   single-GPU Lepidoptera jobs failed with "No space left on device": each stages the 452 GB image
   set to the node's `/tmp`. Small datasets (Pl@ntNet, 0.9 min) run fine one per job; Lepidoptera runs
   go 4 per job, staged once.
+- **A multi-GPU job holds every GPU until its last run ends.** Put only runs of matching length in one
+  job (owner, 2026-11-06): a 39 h run beside two 13.5 h ones idles two GPUs for 25 h.
 
 Mounts: `/work/lepinet` is this repo (pushed by `[sync]`), `/work/global_lepi` and
 `/work/flemming_helsing` come from the `datasets` drive (`/12383016/...`), read-only.
