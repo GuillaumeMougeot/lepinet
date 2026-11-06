@@ -102,6 +102,8 @@ its own pseudo-labelled crops.
 - **T2's test-fold losses are real** (checked: merge, splits, weights, class order). The likely cause
   is the design: a 2-epoch re-warm to lr 1e-3 without oversampling knocks the tail back. acc1 falls
   1.5 points, macro-F1 9. cRT has the same re-warm but with oversampling, and keeps the tail.
-- So T2 against the teacher confounds pseudo-labels with the re-warm. The control is running: the
-  same re-warm on global data only, frozen and whole network (v2s_bu_rewarm_{frozen,full}_s42).
+- So T2 against the teacher confounds pseudo-labels with the re-warm. The control: the same re-warm
+  on global data only, frozen and whole network (v2s_bu_rewarm_{frozen,full}_s42), job c-rewarm
+  (12449970, owner-approved 2026-11-06, 1 B200 with MPS, ~2-3 h). Reading: if the re-warm alone
+  loses the test fold like T2 does, the pseudo-labels are not what costs it.
 - This teacher's gate kept 8,169 crops at 16x (lepinet: 12,230 at 11x), the same share.
