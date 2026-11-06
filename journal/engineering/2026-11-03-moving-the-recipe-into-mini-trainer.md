@@ -463,6 +463,12 @@ calibrated by (trap, night):
   the class frequencies, so his whole grid ran with EMLA, not class-weighted cross-entropy. His runs
   also had 10 epochs, 384 px, backbone lr 3.3e-4 and the 50-image floor.
 - EMLA and the backbone lr can be checked in one epoch. The first proposal is TD and F with EMLA.
+- **Checked (mt-td-emla-check, 2026-11-06), and EMLA is not it.** TD minus F at species F1 is -0.070
+  with EMLA against -0.051 with cross-entropy: EMLA costs TD 0.018 and gives F 0.002.
+- **Training length is the likelier cause.** TD's gap to F shrinks every epoch (V2-S validation:
+  -0.104, -0.095, -0.077, -0.055, -0.047), so TD converges more slowly.
+- **The full-scale test is running:** TD and F at 10 epochs and 384 px, Svenning et al.'s length and
+  size (job c-v2s-384). The backbone lr and the schedule remain as candidates.
 - This also corrects how his Pl@ntNet lead was described earlier: it comes from EMLA, not class
   weighting.
 
@@ -704,6 +710,11 @@ run checks it: the gate's BU spec with channels_last as the only change, against
   - T1rep's real labels are a round-robin draw (`dev/067`), not the gated crops, so the draft's
     "hand-labelling the same images" was wrong as worded (now "as many images"). A matched arm, the
     gated crops with their true labels, is proposed.
+- 2026-11-06: everything queued on 2026-11-05 finished overnight. The weekend queue (56 runs) went in
+  as single-GPU jobs, at the owner's request. Seven Lepidoptera jobs failed: single-GPU jobs share a
+  node's disk, and each stages 452 GB, so the disk filled. The owner chose to pack Lepidoptera runs
+  4 per job (weekend2: 7 jobs, ~235 GPU-h); Pl@ntNet stays single-GPU. `dev/100` scores every
+  finished output into `data/campaign/summary.md` from cron.
 - 2026-11-05, late morning: seven jobs run on UCloud (PLAN, Running now), T1rep and the matched arm
   among them.
   - c-dinov3 failed: mini_trainer could not attach its head to timm's nested `head.fc` (fixed in MT
