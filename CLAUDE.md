@@ -153,6 +153,9 @@ Stated preferences, from repeated instruction. Treat as standing orders.
 - **Report reasoning, not just outcomes.** What was surprising, what it means, what it changes.
 - **Compute is not the constraint; experimental hygiene is.** Parallel jobs are fine. Do not fear a
   full GPU. Queue evals behind training with `--after`.
+- **Do not waste GPU resources; this ranks above "time matters more than GPU-hours"** (owner,
+  2026-11-06). No idle GPUs inside a multi-GPU job: pack only runs of matching length; fill
+  underused GPUs when a measurement shows it pays.
 - **Limit background watchers.** They consume resources. Prefer telling the owner when to check back.
 - **The paper matters.** Findings should be journalled in a form that can become `paper/DRAFT.md`.
 - **Surface your own mistakes plainly.** Several corrections in this project came from the owner
