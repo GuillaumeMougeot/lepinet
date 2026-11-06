@@ -83,3 +83,25 @@ The four runs are built as job `c-crt-t2` and wait for the owner's approval.
   statistics included. It ran at 2,786 img/s against ~950 for full training. lepinet's `freeze_body` is not
 fixed here, since training has moved to mini_trainer. Anyone reusing it must re-freeze after
 `unfreeze()` and check that the trunk's checkpoint tensors are unchanged.
+
+## The reruns (2026-11-06)
+
+c-crt-t2, from the cross-entropy teacher (test fold 0.888; traps 0.339 / 0.371 / 0.306 for trap /
+probe / probe-HO). Species macro-F1; traps calibrated by (trap, night); a T2 run's "trap" set holds
+its own pseudo-labelled crops.
+
+| run | test | trap | probe | probe-HO |
+|---|---|---|---|---|
+| cRT, frozen trunk | 0.899 | 0.360 | 0.397 | 0.329 |
+| cRT, whole network (as L4 ran) | 0.897 | 0.425 | 0.447 | 0.373 |
+| T2, frozen trunk | 0.847 | 0.465 | 0.509 | 0.326 |
+| T2, whole network | 0.803 | 0.577 | 0.619 | 0.425 |
+
+- **cRT survives, frozen:** +1.1 on the test fold and +2 to +2.6 under shift. The whole-network
+  version gains more under shift (+7.5 on probe) at the same test score.
+- **T2's test-fold losses are real** (checked: merge, splits, weights, class order). The likely cause
+  is the design: a 2-epoch re-warm to lr 1e-3 without oversampling knocks the tail back. acc1 falls
+  1.5 points, macro-F1 9. cRT has the same re-warm but with oversampling, and keeps the tail.
+- So T2 against the teacher confounds pseudo-labels with the re-warm. The control is running: the
+  same re-warm on global data only, frozen and whole network (v2s_bu_rewarm_{frozen,full}_s42).
+- This teacher's gate kept 8,169 crops at 16x (lepinet: 12,230 at 11x), the same share.
