@@ -630,6 +630,9 @@ In MT's own loop, the head's projection matrix can receive Muon: only parameter 
 20. Do not waste GPU resources. This ranks above "time matters more than GPU-hours", which still
     holds. No idle GPUs inside a job; a quick benchmark decides whether two runs share a GPU.
 21. Lepidoptera runs go 4 per job (node disk); Pl@ntNet runs go one per job.
+22. Two runs share each GPU, with MPS, for V2-S and B0 (RESULTS VG: 1.65x the throughput of one run,
+    identical maths). Unstarted jobs were repacked; DINOv3's sharing is unmeasured and is checked on
+    its first epoch.
 
 **The campaign (2026-11-04).** One recipe, pinned on evidence (Phase 3), on mini_trainer's test set.
 Multi-GPU jobs stage the images once and train one model per GPU. 9,087 B200 hours remain, against
