@@ -27,6 +27,8 @@ OUT = ROOT / "data/campaign"
 LOCAL = ROOT / "data/ucloud_preds/campaign"
 PY = str(ROOT / ".venv/bin/python")
 SKIP = ("ctl_",)  # the channels_last control is scored on lepinet's rows by hand (RESULTS VC)
+# open-set models withheld C3b's taxa, so their whole test fold cannot be scored without filtering it
+SKIP_TEST = ("os_",)
 ENV = {**os.environ, "PYTHONPATH": str(ROOT / "data/tools/mini_metrics-61db373"), "COLUMNS": "400"}
 
 
@@ -113,6 +115,7 @@ def main():
     names = remote()
     only = sys.argv[1:]  # optional substrings, for a manual test
     todo = [n for n in names if n.endswith(tuple(SCORERS)) and not n.startswith(SKIP)
+            and not (n.endswith("_test") and n.startswith(SKIP_TEST))
             and state.get(n, {}).get("done") is not True and state.get(n, {}).get("tries", 0) < 3 and (not only or any(o in n for o in only))]
     print(f"{time.strftime('%F %T')} {len(names)} outputs, {len(todo)} to score", flush=True)
     for name in todo:
