@@ -11,6 +11,7 @@ The large test-fold CSVs are deleted after scoring; ``scores.csv`` stays next to
     */30 * * * * cd ~/codes/lepinet && flock -n /tmp/lepinet-autoscore.lock .venv/bin/python dev/100_campaign_autoscore.py >> data/campaign/autoscore.log 2>&1
 """
 import json
+import shutil
 import os
 import re
 import subprocess
@@ -26,6 +27,7 @@ REMOTE = "/12347837/repos/mini_trainer-campaign/tmp-runs/eval"
 OUT = ROOT / "data/campaign"
 LOCAL = ROOT / "data/ucloud_preds/campaign"
 PY = str(ROOT / ".venv/bin/python")
+UCLOUD = shutil.which("ucloud") or str(Path.home() / ".local/bin/ucloud")  # cron has no ~/.local/bin on PATH
 SKIP = ("ctl_",)  # the channels_last control is scored on lepinet's rows by hand (RESULTS VC)
 # open-set models withheld C3b's taxa, so their whole test fold cannot be scored without filtering it
 SKIP_TEST = ("os_",)
@@ -40,13 +42,13 @@ def sh(*cmd, cwd=ROOT, timeout=3600):
 
 
 def remote(path=""):
-    out = sh("ucloud", "files", "ls", f"{REMOTE}/{path}".rstrip("/"), cwd=ROOT / "ucloud", timeout=300)
+    out = sh(UCLOUD, "files", "ls", f"{REMOTE}/{path}".rstrip("/"), cwd=ROOT / "ucloud", timeout=300)
     return [ln.split("│")[2].strip().rstrip("/") for ln in out.splitlines() if ln.count("│") > 3]
 
 
 def fetch(src, dst):
     dst.parent.mkdir(parents=True, exist_ok=True)
-    sh("ucloud", "files", "download", f"{REMOTE}/{src}", str(dst), cwd=ROOT / "ucloud", timeout=1800)
+    sh(UCLOUD, "files", "download", f"{REMOTE}/{src}", str(dst), cwd=ROOT / "ucloud", timeout=1800)
     if not dst.exists():
         raise RuntimeError(f"download of {src} produced nothing")
 
