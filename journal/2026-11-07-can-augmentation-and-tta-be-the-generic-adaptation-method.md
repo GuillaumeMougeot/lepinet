@@ -34,40 +34,38 @@ photometric only, so it teaches neither.
 
 Step 2 is the adaptive part. It needs a few hundred labelled target images, not an unlabelled pool.
 
-## The grid (V2-S BU, the pinned recipe, 256 px, seed 42; one factor per comparison)
+## The runs (cut to the best candidates, owner, 2026-11-07)
 
-| run | augmentation | epochs | compared with |
+The owner asked for few candidates, enough epochs, and a start as soon as possible, in parallel with
+Otto. So no 5-epoch arms and no Pl@ntNet for now. The schedule is 10 epochs at 384 px, Otto's
+schedule, whose plain run already exists as the control (v2s_bu_384x10_s42: test 0.9116, probe
+0.418, probe-HO 0.326).
+
+| run | augmentation | GPU | compared with |
 |---|---|---|---|
-| A0 | the pinned recipe (exists: v2s_bu_s42) | 5 | — |
-| A0-15 | the pinned recipe | 15 | A0: what epochs alone buy |
-| G | + geometric: rotation +-45, zoom-out by edge padding 0-25 % | 5 | A0 |
-| G-15 | the same | 15 | A0-15: does the schedule pay for it? |
-| W | + TrivialAugmentWide (generic, chosen for no dataset) | 5 | A0 |
-| W-15 | the same | 15 | A0-15 |
-| GP-15 | geometric + photometric trap augmentation ("broad") | 15 | G-15 |
+| v2s_bu_384x10_geo | geometric: rotation +-45, zoom-out by edge padding 0-25 % | 1 B200, ~13 h | the control |
+| v2s_bu_384x10_geotrap | geometric + photometric trap ("broad") | 1 B200, ~13 h | geo |
+| v2s_bu_384x10_trivial | TrivialAugmentWide (generic, chosen for no dataset) | 1 B200, ~13 h | the control |
+| otto_bioclip_bu_geo | Otto plus geometric, nothing else changed | 1 B200, ~35 h | Otto |
 
-- **Lepidoptera:** test fold, trap / probe / probe-HO, and the iNaturalist set from Nemo's card as
-  a second shifted domain (941 images).
-- **Pl@ntNet:** A0, G, W and GP at 10 and 30 epochs, test fold. There is no shift set for plants, so
-  this only checks that the method does not hurt another dataset.
-- **TTA on every run:** the per-view logits of the Otto TTA study, so the policy and its gain are
-  measured per training recipe.
-
-Cost: about 70 B200 hours for Lepidoptera, a few for Pl@ntNet. Runs of matching length are packed
-into the same job.
+- The fourth run answers "does Otto benefit" directly, without waiting for V2-S. Geometric is the
+  candidate with the strongest evidence (Nemo's TTA, +10 to +14 probe). Photometric trap
+  augmentation was turned off for Otto (VA).
+- Each run is a single-GPU job, since the lengths differ. About 75 B200 hours in all.
+- Every run gets the per-view TTA logits on the trap crops, as in the Otto TTA study.
+- Pl@ntNet and the 5-epoch arms only if a candidate wins.
 
 ## Predictions
 
-- A0-15 against A0: +1 test fold, probe within the seed range (+-1.5).
-- G at 5 epochs: test -0.5 to -1, probe +3 to +6, and TTA's gain halves. G-15 brings the test fold
-  back within 0.3 of A0-15 and keeps the probe gain.
-- W: smaller under shift than G (+1 to +3 probe), because it does not target framing or orientation;
-  it costs more in-distribution at 5 epochs (about -1).
-- GP-15 is the best non-adapted model in the grid, about +6 to +9 probe over A0-15. It is still far
-  below self-training (+22): augmentation complements target data, it does not replace it.
-- On Pl@ntNet, nothing in the grid loses more than 0.5 at 30 epochs.
-- **Falsified if** the augmented runs still lose more than 0.5 on the test fold at 15 epochs: then
-  epochs do not pay for augmentation at this size, and the method costs accuracy.
+- geo: test fold within 0.3 of the control, probe +3 to +6, and TTA's gain on it halves.
+- trivial: smaller under shift than geo (+1 to +3 probe), because it does not target framing or
+  orientation.
+- geotrap: the best V2-S run without target data, about +5 to +8 probe over the control, still far
+  below self-training (+22).
+- otto_bioclip_bu_geo: +1 to +3 probe over Otto, less than on V2-S, since self-training on trap
+  crops already teaches part of the framing; single-view score closer to TTA's.
+- **Falsified if** the augmented V2-S runs lose more than 0.5 on the test fold at 10 epochs: then
+  the schedule does not pay for augmentation, and the method costs accuracy.
 
 ## What would ship in mini_trainer
 
