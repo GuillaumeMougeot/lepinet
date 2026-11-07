@@ -127,6 +127,26 @@ from the pinned recipe):**
   accepted and stated in the figure caption.
 - **Averaging the ensemble:** by GBIF key. Species outside P5's 12,041 get P5 probability 0.
 
+## The teacher check (mt, 2026-11-07)
+
+Scored on the probe crops, which no teacher saw. Species; known set = the 12,632-key union for
+every teacher, so P5 pays for the 591 species it cannot predict.
+
+| teacher | top-1, probe / probe-HO | macro-F1 calibrated by (trap, night) | macro-F1 at zero |
+|---|---|---|---|
+| P5 | 0.836 / 0.758 | 0.622 / 0.488 | 0.394 / 0.206 |
+| DINOv3 self-trained (st26) | 0.846 / 0.745 | 0.627 / 0.431 | 0.410 / 0.195 |
+| **ensemble (probabilities averaged)** | **0.864 / 0.783** | **0.670 / 0.503** | **0.452 / 0.223** |
+
+- **The ensemble teacher stays** (rule: at least the best single teacher on both sets).
+- **Prediction falsified:** "less than 2 points" was wrong. The gain is +4.3 on probe over the best
+  single teacher and +1.5 on probe-HO.
+- On adapt crops the ensemble ranked below st26 (0.859 against 0.869). Both teachers had trained on
+  those crops, so that ranking was biased, as expected.
+- Pseudo-labels: per-species top-K, K = 35; 8,305 crops over 913 species, 71.3 % correct.
+- The averaged pair is itself the best trap model we have. That makes it a bar Otto, a single
+  model, should reach.
+
 ## Log
 
 - 2026-11-07: plan agreed by the owner; Tree of Life postponed. Name: Otto. Both comparison models
