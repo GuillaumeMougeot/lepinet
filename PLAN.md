@@ -61,6 +61,7 @@ to what the paper needs.
 
 | ID | work | cost | why |
 |---|---|---|---|
+| AG | broad augmentation + longer training + TTA as a generic adaptation method (owner, 2026-11-07): a 7-run grid on V2-S BU (geometric, TrivialAugmentWide, broad; 5 and 15 epochs), Pl@ntNet check, TTA per view | ~70 B200 h; mt implements, owner approves in mt | ships in mini_trainer if augmentation at 15 epochs keeps the test fold. [[2026-11-07-can-augmentation-and-tta-be-the-generic-adaptation-method]] |
 | Q | the back-off policy on Pl@ntNet: Lepidoptera and traps done (no single rule wins; greedy with a lower genus target is the cheapest fix) | CPU only; needs the colleague's predictions (`dev/097 --plantnet`) | does the in-distribution ranking hold for another kingdom and five ranks? [[2026-10-23-what-is-the-best-back-off-policy]] |
 | U | self-training on EU trap crops (>50 M): natural vs balanced, then share sweep, teacher B8 | 4-7 runs at 20 M, after the crop location and metadata are known | the largest lever, without copies. [[2026-10-21-self-training-on-european-traps]] |
 | W3 | training parquets for the ToL run: join the catalog by uuid, seven levels keyed by full path, check the hierarchy is a tree, drop the audit's 584 k excluded rows; then the 20 M run | GPU, after W1 | the owner's question: does seeing the whole tree help open-set and shift? Also gives a trap order classifier. [[2026-10-01-does-seeing-the-whole-tree-teach-a-model-what-it-does-not-know]] |

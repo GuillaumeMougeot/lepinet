@@ -64,6 +64,7 @@ incidents are in [`engineering/`](engineering/). The plan is [`../PLAN.md`](../P
 | [10-23](2026-10-23-does-the-model-know-when-a-trap-image-is-too-poor.md) | On trap images, does the model back off when the image is poor, and notice a new species? (N) | **RESOLVED**: backs off on blurry crops (species answers 91 to 65 %); an unseen species of a known genus is barely detected (AUROC 0.566) and 38 % of its crops get a confident wrong name; out-of-vocabulary species lose 6-8 points (B8 0.857, P5 0.835) |
 | [10-23](2026-10-23-what-is-the-best-back-off-policy.md) | What is the best back-off policy, independent of moths and traps? (Q) | **OPEN** (Pl@ntNet pending): no rule wins everywhere; expected utility wins in-distribution and for the plain head, the greedy per-rank policy on traps for margin heads |
 | [10-23](2026-10-23-which-recipe-does-the-merged-paper-rerun.md) | Which recipe does the merged paper rerun? (decision sheet) | **OPEN**: the code base is now mini_trainer (2026-11-03); the rows are settled by single-factor runs in the merged code |
+| [11-07](2026-11-07-can-augmentation-and-tta-be-the-generic-adaptation-method.md) | Can broad augmentation, longer training and TTA adapt to any dataset without target images? | **OPEN**, design: a 7-run grid on V2-S and Pl@ntNet, TTA per view |
 
 ## Engineering: side projects, cluster work, incidents
 
