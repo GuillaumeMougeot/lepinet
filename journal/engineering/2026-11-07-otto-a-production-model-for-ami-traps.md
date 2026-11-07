@@ -220,3 +220,11 @@ student learns TTA's output at 1x cost.
   RUNNING; x2oh 12450601 and x2ss 12450602 queued. 384x30 resume 12450604 queued. TTA tool ready
   (17 views, per-view logits); Nemo reproduces VN through it. Nemo on the adapt nights, calibrated
   species F1: full 0.326, + TTA 0.492, north_europe 0.556, both 0.614.
+- 2026-11-07: AG submitted (owner-approved in mt; MT 988b29f): ag-otto-bioclip-geo 12450608,
+  ag-v2s-384x10-geo 12450609, -geotrap 12450610, -trivial 12450611, each its control plus one key.
+  Augmentation grid checked by eye: geometric as intended; TrivialAugmentWide includes strong colour
+  ops (solarize, posterize, inversion). Meghan scored (species calibrated, probe / probe-HO): full
+  0.321 / 0.248, + TTA 0.239 / 0.170, north_europe 0.509 / 0.403, both 0.402 / 0.322. TTA *costs*
+  Meghan about 8 points with argmax nearly unchanged (zero-threshold 0.131 against 0.134); being
+  checked (probability or logit averaging, confidence flattening) before it is reported. Logits are
+  stored in fp32: fp16 moved calibrated F1 by up to 7e-4 at species, 3e-3 at genus.
