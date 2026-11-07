@@ -147,6 +147,23 @@ every teacher, so P5 pays for the 591 species it cannot predict.
 - The averaged pair is itself the best trap model we have. That makes it a bar Otto, a single
   model, should reach.
 
+## Trap augmentation: off (2026-11-07)
+
+v2s_bu_trapaug_s42 (MT e32c25a, `domain_aug: trap`, one draw per batch) against the V2-S BU seeds.
+Species macro-F1; traps calibrated by (trap, night).
+
+| run | test | trap | probe | probe-HO |
+|---|---|---|---|---|
+| v2s_bu, seeds 42 / 43 / 44 | 0.8877 / 0.8866 / 0.8872 | 0.339 / 0.338 / 0.316 | 0.371 / 0.378 / 0.349 | 0.306 / 0.306 / 0.292 |
+| v2s_bu_trapaug_s42 | **0.8802** | 0.361 | 0.405 | 0.321 |
+
+- The rule, written before the result: on if probe and probe-HO are both at least v2s_bu_s42's and
+  the test fold is within 0.3 points. Off otherwise.
+- **Off.** The shift legs pass (+3.4 probe, +1.5 probe-HO), but the test fold loses 0.75 points,
+  about 7 times the seed spread (0.11). So the cost on the test fold is real.
+- The gain under shift is before adaptation. lepinet found little left after self-training, and Otto
+  has the ensemble pseudo-labels. Trap augmentation stays opt-in in mini_trainer.
+
 ## Log
 
 - 2026-11-07: plan agreed by the owner; Tree of Life postponed. Name: Otto. Both comparison models
