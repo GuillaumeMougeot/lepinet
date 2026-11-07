@@ -66,6 +66,9 @@ Rules, so that the result cannot be argued away:
     `deployment/mambo_deploy/augmentation.py`), applied unchanged to Otto, P5 and Meghan. Not
     re-tuned for Otto.
   - Nemo's list and TTA were chosen on these crops (VN), so that setting favours Nemo slightly.
+  - Also reported for every model, Otto included: **tta3bm**, the same three views with a border-mean
+    fill instead of edge padding (same cost). It is the best fixed policy for all three models scored
+    so far (log, 2026-11-07 late), so Nemo with tta3bm is the fair-best line next to its card setting.
 - **Speed and size as well.** A ViT-L is slower than an EfficientNetV2-S, and the figure should
   show it instead of hiding it.
 - **Extra panels in our convention:** calibration grouped by (trap, night), probe-HO, and the
@@ -262,3 +265,38 @@ student learns TTA's output at 1x cost.
     recommended policy is chosen on half of the probe nights and reported on the other half.
 - AG jobs failed during image staging (all four, 12.5 min in; suspected full node disk), resubmitted
   with the border-mean fill: 12450732 (Otto geo), 12450733-35 (V2-S geo, geotrap, trivial).
+- 2026-11-07 late: **TTA, fixed policy set** (mt; species macro-F1 calibrated by (trap, night); genus
+  and family in `/data/au761367/otto_eval/fixed_table.json`). North_europe list, probe / probe-HO:
+
+  | policy | views | Nemo | P5 | Meghan |
+  |---|---|---|---|---|
+  | none | 1 | 0.546 / 0.448 | 0.679 / 0.500 | 0.509 / 0.403 |
+  | pad15 | 1 | 0.599 / 0.472 | 0.691 / 0.537 | 0.483 / 0.368 |
+  | pad3 | 3 | 0.613 / 0.485 | 0.709 / 0.532 | 0.508 / 0.375 |
+  | tta3 (Nemo's card) | 3 | 0.646 / 0.491 | 0.663 / 0.486 | 0.402 / 0.322 |
+  | **tta3bm** (border-mean fill) | 3 | **0.660 / 0.519** | **0.711 / 0.546** | **0.549** / 0.402 |
+  | all17 | 17 | 0.628 / 0.496 | 0.707 / 0.544 | 0.544 / 0.421 |
+
+  Full vocabulary, tta3bm: Nemo 0.489 / 0.371 (tta3 0.478 / 0.358), P5 0.660 / 0.519 (none 0.622 /
+  0.488), Meghan 0.408 / 0.313 (none 0.321 / 0.248).
+
+  - **The stripes were costing every model, Nemo included.** Changing only the fill (same three
+    views, same cost) gives Nemo +1.4 / +2.8, P5 +4.8 / +6.0 and Meghan +14.7 / +8.0 over tta3. For
+    Nemo this is a free improvement to its released default; worth passing to Asger.
+  - **TTA is now positive for all three models.** With tta3bm, Meghan gains +4.0 probe over no TTA
+    instead of losing 10.7.
+  - **P5 without any list equals Nemo with the list:** both 0.660 / 0.519 at tta3bm.
+  - At the same policy (north_europe, tta3bm), P5 leads Nemo by +5.1 / +2.7.
+  - **Choose on half A, report on half B** (seeded halves stratified by trap, split by (trap, night):
+    A 293 groups / 7,983 crops, B 295 / 7,217). North_europe: Nemo picks tta3bm, B 0.676 / 0.527;
+    P5 picks all17, B 0.724 / 0.577; Meghan picks tta3bm, B 0.571 / 0.420. Full vocabulary: Nemo
+    tta3bm 0.530 / 0.431, P5 all17 0.675 / 0.522, Meghan tta3bm 0.440 / 0.347. Halves are scored
+    over fewer species than the full probe, so compare halves only with halves.
+  - **P5's all17 pick is a tie, not a preference:** on A, all17, pad3 and tta3bm are within 0.003
+    (0.004 full). all17 costs 17 forward passes, tta3bm 3. The owner's objective is F1 per unit of
+    prediction time, so the cost decides a tie. **Decided: tta3bm is the one deployment policy
+    for all models,** never more than 0.004 below the best on A for any model. The rule's literal pick
+    (all17 for P5) is reported too. Picking on A-HO instead would move Nemo and Meghan to all17.
+  - Hypothesis "one padded view gives about half the 3-view gain": held for Nemo (pad15 +5.3 of
+    tta3's +9.9). The other two (Otto's smaller gain, geometric training removing most of it) wait
+    for Otto and the AG runs.
