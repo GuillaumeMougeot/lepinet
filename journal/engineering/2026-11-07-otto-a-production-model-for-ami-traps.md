@@ -228,3 +228,13 @@ student learns TTA's output at 1x cost.
   Meghan about 8 points with argmax nearly unchanged (zero-threshold 0.131 against 0.134); being
   checked (probability or logit averaging, confidence flattening) before it is reported. Logits are
   stored in fp32: fp16 moved calibrated F1 by up to 7e-4 at species, 3e-3 at genus.
+- 2026-11-07 evening: **Meghan's TTA loss is real, and comes from the views.** The scoring path is
+  the same for every model. Each of Nemo's rotated views alone drops Meghan's probe top-1 from 0.645
+  to 0.16-0.17, while Nemo rises to 0.76. Rotation followed by *edge* padding replicates the border
+  pixels where the rotated corners touch the canvas, which draws long stripes. Meghan breaks on them;
+  Nemo tolerates them. Rotation with a plain fill does not hurt Meghan (white 0.701, grey 0.625).
+  My earlier note "argmax nearly unchanged" was mt's first reading, since corrected: agreement is
+  65 %. Consequence: the AG geometric augmentation trained on the same striped views. Decided: a
+  constant fill per image (the mean colour of its outer border, i.e. more trap sheet), and the three
+  geometric AG jobs are resubmitted before they start. A matched TTA policy with that fill (tta3bm)
+  joins the study. Nemo's own tta3 stays its card setting.
