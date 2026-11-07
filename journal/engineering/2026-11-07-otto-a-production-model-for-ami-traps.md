@@ -168,3 +168,7 @@ Species macro-F1; traps calibrated by (trap, night).
 
 - 2026-11-07: plan agreed by the owner; Tree of Life postponed. Name: Otto. Both comparison models
   located (above). Otto is queued as soon as the settings are settled and GPUs are free (owner).
+- 2026-11-07: trap augmentation off. Submitted by mt (owner-approved there): c-otto-bioclip 12450502
+  (4 B200: otto_bioclip_bu_s42 and the site folds x2lv, x2oh, x2ss) and c-otto-dinov3 12450503
+  (1 B200: otto_dinov3_bu_s42, 320 from 384, bs 96, Muon 8e-4, head off Muon). Pseudo-labels at
+  `target_frac` 0.02 of all parquet rows, i.e. x16, 2.6 % of training rows.
