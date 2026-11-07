@@ -170,6 +170,43 @@ Species macro-F1; traps calibrated by (trap, night).
 - The gain under shift is before adaptation. lepinet found little left after self-training, and Otto
   has the ensemble pseudo-labels. Trap augmentation stays opt-in in mini_trainer.
 
+## TTA: what it fixes, and a cheaper way to get it (opened 2026-11-07, owner)
+
+**What we know.**
+- Nemo on our probe crops (VN), species macro-F1 calibrated by (trap, night): TTA adds +14 points on
+  the full vocabulary (0.338 to 0.479) and +10 with the north_europe list (0.546 to 0.646).
+- Asger's policy comparison on his trap crops (`docs/assets/mambo-composed-tta.json`, 52,788
+  images, accuracy / macro-F1 at threshold 0): one view 0.713 / 0.259; 3 views of rotation +-30
+  and padding 0.749 / 0.320; 5 views 0.755 / 0.322. The fourth and fifth views add almost nothing.
+- On iNaturalist photos, the training domain, TTA adds nothing (macro-F1 0.834 against 0.833) and
+  costs 3x (91 against 279 ms per image on CPU; Nemo's card).
+
+**Reading.** TTA here is not a general accuracy trick. It corrects two differences between GBIF
+photos and trap crops: framing (a trap crop is a tight box; padding zooms out) and orientation (a
+moth on a trap sheet sits at any angle). It pays for that correction 3 times per image.
+
+**Hypotheses, before measurement.**
+- Self-training on trap crops teaches part of the framing, so TTA's gain on Otto is smaller than on
+  Nemo: +3 to +5 probe, against Nemo's +10 with the list.
+- One padded view (no rotation) recovers about half of the 3-view gain at 1x cost.
+- Training with geometric augmentation (rotation and zoom-out, missing from today's trap
+  augmentation, which is photometric only) removes most of the TTA gain at no inference cost.
+
+**Plan, evaluation only (no training).**
+- One forward pass per distinct view, logits saved: original, hflip, pad 0.08 / 0.15 / 0.25,
+  rotations +-10 / +-30 with padding, the d4 views. Every policy is then an average of saved logits,
+  so any combination costs no GPU.
+- Models: Otto, the DINOv3 twin, P5, Nemo.
+- Policies are chosen on the adapt nights and reported on probe and probe-HO, because choosing on
+  probe crops would favour whichever model was tuned there. Nemo's own default is reported as is.
+- Report per policy: probe / probe-HO, and time per image on CPU (int8) and GPU (fp16). The
+  figure is F1 against time, so a policy is judged by what it gains per millisecond.
+
+**Training, later (one factor, needs a run).** Geometric trap augmentation on V2-S BU, 5 epochs at
+256 px: random rotation +-45 and zoom-out padding 0-25 %. Read: single-view probe up, and TTA's gain
+down. The second option is TTA distillation: pseudo-labels from the teacher with TTA, so that the
+student learns TTA's output at 1x cost.
+
 ## Log
 
 - 2026-11-07: plan agreed by the owner; Tree of Life postponed. Name: Otto. Both comparison models
