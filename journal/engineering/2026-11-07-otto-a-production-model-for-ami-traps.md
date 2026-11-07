@@ -75,6 +75,18 @@ Rules, so that the result cannot be argued away:
 - The ensemble teacher beats a single teacher by less than 2 points. That is a guess: ensembles
   were never measured in this project.
 
+**Where the two models are:**
+- **Nemo (MAMBO_v3):** EfficientNetV2-S, on Hugging Face (`asgersvenning/MAMBO-v3`), with the
+  regional lists in `bundle/regions/`.
+- **Meghan (MAMBO_v2):** BioCLIP-2 (`imageomics/bioclip-2`) with a 21 MB hierarchical head, one
+  head per region (`hierarchical_bioclip2_ft_{neu,eu,}_v1.pt`). Public on ERDA
+  (`anon.erda.au.dk/share_redirect/HE90eyuZCT/MAMBO/`), pinned with SHA-256 in mini_trainer's
+  `dev/releases/mambo_v3/inventory.toml`. Asger's `legacy_evaluation.py` runs it from its original
+  source (commit 32b3cd6).
+
+Meghan shares Otto's trunk, so Otto against Meghan compares our recipe on the same backbone.
+
 ## Log
 
-- 2026-11-07: plan agreed by the owner; Tree of Life postponed. Name: Otto.
+- 2026-11-07: plan agreed by the owner; Tree of Life postponed. Name: Otto. Both comparison models
+  located (above). Otto is queued as soon as the settings are settled and GPUs are free (owner).
