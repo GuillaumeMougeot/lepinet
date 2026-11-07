@@ -238,3 +238,27 @@ student learns TTA's output at 1x cost.
   constant fill per image (the mean colour of its outer border, i.e. more trap sheet), and the three
   geometric AG jobs are resubmitted before they start. A matched TTA policy with that fill (tta3bm)
   joins the study. Nemo's own tta3 stays its card setting.
+- 2026-11-07 night: **TTA, first results** (17 views, north_europe list, species calibrated by
+  (trap, night), probe / probe-HO):
+
+  | policy | views | Nemo | P5 |
+  |---|---|---|---|
+  | none | 1 | 0.546 / 0.448 | **0.679 / 0.500** |
+  | pad15 | 1 | 0.599 / 0.472 | 0.691 / 0.536 |
+  | pad3 (none, pad 0.08, pad 0.15) | 3 | 0.613 / 0.485 | **0.709** / 0.532 |
+  | rot30p15_3 | 3 | 0.637 / 0.497 | 0.683 / 0.507 |
+  | tta3 (Nemo's card) | 3 | **0.645** / 0.491 | 0.663 / 0.486 |
+  | d4 | 8 | 0.563 / 0.468 | 0.687 / 0.500 |
+  | all17 | 17 | 0.628 / 0.496 | 0.707 / 0.544 |
+
+  - **P5 with the list and one view (0.679 / 0.500) already beats Nemo's card setting** (0.645 /
+    0.491), at a third of Nemo's TTA cost in views.
+  - One padded view gives Nemo about half its TTA gain (+5.3 of +9.9), as predicted.
+  - Nemo's tta3 hurts P5 (-1.6), as it hurt Meghan: both are BioCLIP-2, and both break on
+    edge-padding stripes. tta3bm (border-mean fill) is being scored.
+  - Quarter turns do not pay (d4).
+  - Selection rule changed: adapt nights are biased for any model whose pseudo-labels came from them
+    (P5, Otto, the twin). Every model is reported on a fixed set of policies without selection. A
+    recommended policy is chosen on half of the probe nights and reported on the other half.
+- AG jobs failed during image staging (all four, 12.5 min in; suspected full node disk), resubmitted
+  with the border-mean fill: 12450732 (Otto geo), 12450733-35 (V2-S geo, geotrap, trivial).
