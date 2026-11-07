@@ -215,3 +215,8 @@ student learns TTA's output at 1x cost.
   (4 B200: otto_bioclip_bu_s42 and the site folds x2lv, x2oh, x2ss) and c-otto-dinov3 12450503
   (1 B200: otto_dinov3_bu_s42, 320 from 384, bs 96, Muon 8e-4, head off Muon). Pseudo-labels at
   `target_frac` 0.02 of all parquet rows, i.e. x16, 2.6 % of training rows.
+- 2026-11-07 16:20: c-otto-bioclip (12450502) waited 2 h 20 min for 4 B200 at once. Split into four
+  1-B200 jobs with identical specs (owner-approved in mt): candidate 12450599 and x2lv 12450600
+  RUNNING; x2oh 12450601 and x2ss 12450602 queued. 384x30 resume 12450604 queued. TTA tool ready
+  (17 views, per-view logits); Nemo reproduces VN through it. Nemo on the adapt nights, calibrated
+  species F1: full 0.326, + TTA 0.492, north_europe 0.556, both 0.614.
