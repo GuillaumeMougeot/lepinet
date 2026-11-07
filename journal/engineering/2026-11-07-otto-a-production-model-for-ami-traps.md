@@ -86,6 +86,47 @@ Rules, so that the result cannot be argued away:
 
 Meghan shares Otto's trunk, so Otto against Meghan compares our recipe on the same backbone.
 
+## Step 2 and the contamination check (mt, 2026-11-07)
+
+**BioCLIP-2 trains in mini_trainer.**
+- Smoke run on 4 species: loss 3.25 to 2.06, validation accuracy 72 to 91 % in 2 epochs, and the
+  checkpoint reloads.
+- **One bug fixed:** the preset fed BioCLIP-2 ImageNet-normalised pixels. BioCLIP's transform
+  exposes no mean and std, so the preprocessing fell back silently. This is the same handicap
+  `dev/075` corrected in lepinet. MT commit ce5b7e7.
+
+**Differences from P5 that remain:**
+- MT uses the projected 768-d embedding (Meghan's convention); P5 used the 1024-d pooled feature.
+- The unused text tower is saved in the checkpoint (1.7 GB). Strip it at release.
+
+**Cost:** about 430-500 img/s on a B200, so about 16 h for 5 epochs and 32 h for 10. Otto, the
+DINOv3 twin and 3 site folds come to about 80 B200 hours at 5 epochs.
+
+**No Flemming crops in Meghan's or Nemo's training data:**
+- Meghan is stock BioCLIP-2 with a head trained on the same GBIF parquet as Nemo.
+- None of the Danish training rows is a machine observation.
+- Visually, the most similar of the 47,913 Flemming crops to any Danish or machine-observation
+  training image is a different photo of the same species (cosine 0.989 at most).
+- Not checked: non-Danish images, visually.
+
+**Decisions (lepinet-ac, 2026-11-07; the first needs the owner's confirmation, since it departs
+from the pinned recipe):**
+- **Optimiser: Muon at lr 1e-5, as P3c, not AdamW at 1e-3.** On this trunk 1e-3 was the worst
+  setting measured (P3a 0.8912 against P3c 0.9146 in-distribution). A per-backbone optimiser is
+  already the practice (DINOv3 runs use Muon).
+- **224 px**, BioCLIP-2's pretraining size. At 384 px a ViT-L/14 costs about 3x, so V2-S's 384 px
+  result does not transfer.
+- **10 epochs.** At 384 px, 10 epochs gave V2-S +4.7 probe and +2.4 test over 5 epochs at 256
+  (confounded with size). 30 epochs on a ViT-L would take about 4 days per run.
+- **The 768-d embedding is accepted.** The 1024-d option would need checkpoint metadata. The
+  difference is unmeasured, and Otto differs from P5 in other factors anyway (no floor, BU head, no
+  oversampling).
+- **Teacher for the site folds:** P5 and the DINOv3 self-trained model saw every site's adapt
+  crops, unlabelled. A fold's student still sees no pixel of its held-out site, since that site's
+  pseudo-labels are dropped. The leak goes only through labels on the other sites' crops, so it is
+  accepted and stated in the figure caption.
+- **Averaging the ensemble:** by GBIF key. Species outside P5's 12,041 get P5 probability 0.
+
 ## Log
 
 - 2026-11-07: plan agreed by the owner; Tree of Life postponed. Name: Otto. Both comparison models
