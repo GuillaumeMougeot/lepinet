@@ -1,6 +1,6 @@
 # PLAN — what we are doing now
 
-**Kind:** living · **Last updated:** 2026-11-06 · **Supersedes:** [2026-07-28-landscape-and-plan](archive/journal/engineering/2026-07-28-landscape-and-plan.md)
+**Kind:** living · **Last updated:** 2026-11-07 · **Supersedes:** [2026-07-28-landscape-and-plan](archive/journal/engineering/2026-07-28-landscape-and-plan.md)
 
 The one file about *today*. Experiment IDs resolve in [`RESULTS.md`](RESULTS.md); reasons are in
 the linked journal entries; older versions of this file are in git history.
@@ -18,6 +18,21 @@ supervised from here. [[2026-11-03-moving-the-recipe-into-mini-trainer]]
 | 2 | the methods: F head, frozen-backbone stages (cRT, adaptation), self-training on trap crops, trap-like augmentation, image cap, the evaluation (grouped calibration, probe, open-set, back-off) | started 2026-11-04, in parallel with the gate; the trap evaluation first |
 | 3 | settle the recipe by single-factor runs: sampler, EMLA vs CE, regulariser, schedule, resize and augmentation, epochs and size; then the new baseline on MT's test set (12,632 species) | anchors done (V0F, V0BU, 2026-11-04): without the floor the test fold scores 0.9110 / 0.9107 and the traps are unchanged; BU is 5 pt above F under shift and level with or above Nemo. No grid (owner, 2026-11-04); proposed: one comparison, cross-entropy against EMLA without oversampling (two runs), the rest on evidence |
 | 4-6 | the paper reruns; Nemo re-scored on the reconciled Flemming export (its card used the unreconciled one) next to the new models; the third production model | reruns now, in parallel, until 2026-11-15 (owner, 2026-11-04): head grid on Lepidoptera and Pl@ntNet, one seed now (12 + 12, four heads; seeds 43 and 44 after seed 42's results), shift results on V2-S (~21, like the original evidence) plus a DINOv3 pair at 198 M, open-set on C3b's withheld taxa (4) |
+
+## 0b. Otto, the production model for AMI traps (owner, 2026-11-07)
+
+On free GPUs, after the paper's jobs. [[2026-11-07-otto-a-production-model-for-ami-traps]]
+
+| step | what | state |
+|---|---|---|
+| 1 | schedule and trap augmentation, from the 384x30 and c-v2s-trapaug runs | running |
+| 2 | BioCLIP-2 trains in mini_trainer (P5 never reproduced there) | next, mt |
+| 3 | candidate: BioCLIP-2 ViT-L, BU, 12,632 species, self-training 2.6 % per species from an ensemble teacher; DINOv3 twin | after 1-2 |
+| 4 | three site folds (LV, OH, SS), so that every Danish crop is scored by a model that never saw its site | after 3 |
+| 5 | comparison with Meghan (MAMBO_v2) and Nemo (MAMBO_v3): their pipeline, Asger's figure plus Otto, matched lists and TTA, speed and size | after 4 |
+| 6 | release through mini_trainer's release path, int8 and fp16, regional lists | after 5 |
+
+Postponed (owner, 2026-11-07): the Tree of Life run (W3); first step when it resumes is the upload, the parquets and a one-epoch throughput pilot.
 
 ## 1. The goal: a submittable paper
 
