@@ -29,7 +29,7 @@ On free GPUs, after the paper's jobs. [[2026-11-07-otto-a-production-model-for-a
 | 2 | BioCLIP-2 trains in mini_trainer | done (normalisation bug fixed, MT ce5b7e7); ensemble teacher checked (0.670 / 0.503 probe / probe-HO) |
 | 3 | candidate: BioCLIP-2 ViT-L, BU, 12,632 species, Muon 1e-5, 224 px, 10 epochs, ensemble pseudo-labels K=35 at x16; DINOv3 twin | **running**: c-otto-bioclip 12450502 (4 B200, with step 4), c-otto-dinov3 12450503 (1 B200); ~32-40 h |
 | 4 | three site folds (LV, OH, SS), so that every Danish crop is scored by a model that never saw its site | **running**, in 12450502 |
-| 5 | comparison with Meghan (MAMBO_v2) and Nemo (MAMBO_v3): their pipeline, Asger's figure plus Otto, matched lists and TTA, speed and size | after 4 |
+| 5 | comparison with Meghan (MAMBO_v2) and Nemo (MAMBO_v3): their pipeline, Asger's figure plus Otto, speed and size; every model with and without the north_europe list and TTA, headline north_europe + TTA (Nemo's card setting; owner) | after 4 |
 | 6 | release through mini_trainer's release path, int8 and fp16, regional lists | after 5 |
 
 Postponed (owner, 2026-11-07): the Tree of Life run (W3); first step when it resumes is the upload, the parquets and a one-epoch throughput pilot.

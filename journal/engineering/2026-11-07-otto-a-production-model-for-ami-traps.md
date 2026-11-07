@@ -58,8 +58,14 @@ Rules, so that the result cannot be argued away:
   (`dev/releases/mambo_v3`, `evaluate.py` and `legacy_evaluation.py`). The figure is his
   `comparison_charts.py`, extended by one model. Same metric (mini_metrics, all and known species),
   same regional lists (north_europe, europe, full).
-- **Matched inference.** Each model uses its own preprocessing. Every model is shown with and
-  without the regional list, and TTA is either on for all or off for all.
+- **Matched inference.** Each model uses its own preprocessing. Every model is scored in four
+  settings: full vocabulary or the north_europe list, each with and without TTA.
+  - **The headline against Nemo is north_europe with TTA**, Nemo's card setting (Nemo 0.646 / 0.490
+    probe / probe-HO, RESULTS VN). Owner, 2026-11-07.
+  - TTA is Nemo's default profile, `rotation30_pad25_3` (mini_trainer's
+    `deployment/mambo_deploy/augmentation.py`), applied unchanged to Otto, P5 and Meghan. Not
+    re-tuned for Otto.
+  - Nemo's list and TTA were chosen on these crops (VN), so that setting favours Nemo slightly.
 - **Speed and size as well.** A ViT-L is slower than an EfficientNetV2-S, and the figure should
   show it instead of hiding it.
 - **Extra panels in our convention:** calibration grouped by (trap, night), probe-HO, and the
