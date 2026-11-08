@@ -248,7 +248,9 @@ The only public light-trap benchmark with published numbers, so the one that mat
     - A few GBIF-backbone species keys put butterflies into the wrong family. Examples: Lycaena
       hyllus, helloides, epixanthe and rubidus, and Biblis hyperia, sit under Sesia (Sesiidae);
       Papilio agestor under Plebicula; Brintesia circe under Loweia (Lycaenidae).
-    - About 4 k of 6.3 M rows, across fewer than 10 species keys.
-    - Species classes stay coherent, since each key holds images of one taxon; only those species'
-      genus and family marginals are wrong.
-    - Not fixed now. The tree check planned for W3 should catch this class of error.
+    - **Corrected the same day; my first reading was wrong.** I wrote that this was about 4 k rows over
+      fewer than 10 keys and that species classes stay coherent. That only counted cross-family
+      names whose genus occurs elsewhere. The full investigation finds 163 mixed classes (23,306
+      images), among them *Loweia tityrus* with 1,836 *Brintesia circe*, so some classes are not
+      coherent. [[2026-11-03-the-training-labels-inherit-gbif-backbone-errors]]
+    - Not fixed now; the correction waits until the paper is submitted.

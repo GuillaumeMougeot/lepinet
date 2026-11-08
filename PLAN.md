@@ -1,6 +1,6 @@
 # PLAN — what we are doing now
 
-**Kind:** living · **Last updated:** 2026-11-07 · **Supersedes:** [2026-07-28-landscape-and-plan](archive/journal/engineering/2026-07-28-landscape-and-plan.md)
+**Kind:** living · **Last updated:** 2026-11-08 · **Supersedes:** [2026-07-28-landscape-and-plan](archive/journal/engineering/2026-07-28-landscape-and-plan.md)
 
 The one file about *today*. Experiment IDs resolve in [`RESULTS.md`](RESULTS.md); reasons are in
 the linked journal entries; older versions of this file are in git history.
@@ -62,6 +62,7 @@ to what the paper needs.
 | ID | work | cost | why |
 |---|---|---|---|
 | AG | broad augmentation + TTA as a generic adaptation method (owner, 2026-11-07), cut to 4 runs, each 1 B200, in parallel with Otto: V2-S BU 384x10 with geometric, geometric + trap, TrivialAugmentWide (control v2s_bu_384x10_s42), and Otto + geometric | ~75 B200 h; mt implements the two augmentations, owner approves in mt | ships in mini_trainer if it keeps the test fold; Otto + geometric answers whether Otto benefits. [[2026-11-07-can-augmentation-and-tta-be-the-generic-adaptation-method]] |
+| TAX | **after the paper is submitted (owner):** correct the training labels: relabel from `taxonKey` to Catalogue of Life XR, decide duplicates, re-map trap labels and regional lists, measure the effect, then retrain production models | CPU first; retraining decided from the measurement | 163 mixed and 281 duplicated classes come from legacy GBIF Backbone errors. [[2026-11-03-the-training-labels-inherit-gbif-backbone-errors]] |
 | PB | a small check on public benchmarks after Otto (owner, 2026-11-07): iNat21 Lepidoptera val (closed-set on our species, the rest as an open-set slice), BioCLIP's Rare Species and its frozen-probe task suite, and a public light-trap set (AMI, to confirm); Otto, P5, Nemo, Meghan, BioCLIP-2 frozen as reference | eval only; mt plans it (sizes, label mapping, published protocols and numbers) | our numbers are all on our own data; this places them next to published ones. Plan: ~29 GB downloads, under 1 GPU-hour; AMI-Traps first. [[2026-11-07-where-do-our-models-stand-on-public-benchmarks]] |
 | Q | the back-off policy on Pl@ntNet: Lepidoptera and traps done (no single rule wins; greedy with a lower genus target is the cheapest fix) | CPU only; needs the colleague's predictions (`dev/097 --plantnet`) | does the in-distribution ranking hold for another kingdom and five ranks? [[2026-10-23-what-is-the-best-back-off-policy]] |
 | U | self-training on EU trap crops (>50 M): natural vs balanced, then share sweep, teacher B8 | 4-7 runs at 20 M, after the crop location and metadata are known | the largest lever, without copies. [[2026-10-21-self-training-on-european-traps]] |
@@ -86,7 +87,7 @@ to what the paper needs.
 - **The conv-backbone "frozen" stages trained the whole network** (2026-11-05): L4, T2, F2, the G and R series. The claims built on them are on hold until the mini_trainer reruns: the spine (C2), "cRT removes the trade", the staged recipe. BioCLIP-2's frozen stages held. [[2026-11-05-the-frozen-stages-were-not-frozen]]
 - **Noise floors depend on the training regime.** Probe spread is ~0.004 between end-to-end runs and ~0.012 between short fine-tuning stages (the "frozen" stages above); identical 198 M staged runs differed by 3.74 pt once (G3b). On the test fold, retraining moves species macro-F1 by ~0.000 and family by ~0.002 (A5, V2). Claim nothing under ~3x the matching floor.
 - **Thresholds do not transfer between models or embedding spaces.** Rankings do; abstention, novelty and temperature values must be refitted.
-- **The labels mix species.** The classes are legacy GBIF Backbone `speciesKey`s: 163 contain images of another species and 281 share a species with another class. 19 of the 486 trap species are affected (1,876 crops). Comparisons between models stand; the absolute scores of those species do not. The correction waits until after the paper (owner, 2026-11-04). [[2026-11-03-moving-the-recipe-into-mini-trainer]]
+- **The labels mix species.** The classes are legacy GBIF Backbone `speciesKey`s: 163 contain images of another species and 281 share a species with another class. 19 of the 486 trap species are affected (1,876 crops). Comparisons between models stand; the absolute scores of those species do not. The correction waits until after the paper (owner, 2026-11-04). [[2026-11-03-the-training-labels-inherit-gbif-backbone-errors]]
 - **Every lepinet head learned a per-class scale and bias.** fastai's optimiser setup trains the head's "frozen" `g` and bias (found 2026-11-03), so the rows are not unit-norm (species `g` mean 1.88). No reported number changes; mini_trainer keeps them frozen, so parity needs an option and phase 3 tests learned against frozen. [[2026-08-06-the-cosine-head-is-not-unit-norm]]
 
 ## 6. How to run things
