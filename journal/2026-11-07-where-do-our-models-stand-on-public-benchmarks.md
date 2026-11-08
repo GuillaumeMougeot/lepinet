@@ -213,3 +213,42 @@ The only public light-trap benchmark with published numbers, so the one that mat
   - **Predictions rescored:** P5 within 3 of the paper's W-Europe macro: falsified narrowly with
     tta3bm (-3.2), clearly without (-10.8). Nemo 5-10 below P5: held at the margin (-4.4 micro,
     -4.4 macro with tta3bm). NE-America 5-15 below: held.
+- 2026-11-08: **iNat21 scored** (Lepidoptera val, same key resolution as AMI; files
+  `/data/au761367/benchmarks/inat21/scores/<model>.json`).
+  - Resolution of the 1,430 species: accepted name 1,288; our table's original name usage 105; a
+    unique (family, epithet) 12 (all genus moves, e.g. Argynnis adippe to Fabriciana adippe);
+    unresolved 25. So the closed set is 1,405 species and the open set 25 (250 images), not 142.
+  - Closed set, top-1 / macro-F1, raw argmax over the full vocabulary:
+
+  | | species | genus | family |
+  |---|---|---|---|
+  | P5 | **0.918 / 0.933** | 0.956 / 0.959 | 0.990 / 0.971 |
+  | P5 tta3bm | 0.900 / 0.915 | 0.940 / 0.945 | 0.969 / 0.937 |
+  | Nemo | 0.907 / 0.929 | 0.953 / 0.959 | 0.988 / 0.967 |
+  | Nemo tta3bm | 0.895 / 0.916 | 0.941 / 0.946 | 0.979 / 0.950 |
+  | Meghan | 0.874 / 0.906 | 0.937 / 0.947 | 0.986 / 0.961 |
+  | Meghan tta3bm | 0.835 / 0.874 | 0.905 / 0.919 | 0.964 / 0.931 |
+  | BioCLIP-2 zero-shot | 0.854 / 0.887 | 0.928 / 0.936 | 0.986 / 0.945 |
+
+  - Seen against unseen images (42 % seen), species top-1, single view: P5 0.940 / 0.903, Nemo
+    0.933 / 0.887, Meghan 0.887 / 0.864, BioCLIP-2 0.857 / 0.851. The unseen line is the fair one.
+  - Open set (25 species), genus / family top-1 / max-softmax AUROC closed against open: P5 0.452 /
+    0.740 / 0.768, Nemo 0.432 / 0.752 / 0.764, Meghan 0.456 / 0.752 / 0.733, BioCLIP-2 0.468 /
+    0.756 / 0.723. Renames can undercount genus here.
+  - **TTA hurts on photos:** tta3bm costs P5 and Nemo 1.2 to 1.8 points, Meghan 3.9. It adds 5 to 11
+    on AMI and Flemming. TTA corrects trap-crop framing and orientation; on photos there is nothing
+    to correct. So the deployment rule is per domain: tta3bm on trap crops, single view on photos.
+  - **BioCLIP-2 zero-shot is the contrast that matters:** 0.854 on curated photos, 0.393 on AMI's
+    W-Europe trap crops. Its loss under shift (-46 points) is far larger than P5's (-13 single
+    view), so the shift, not the domain knowledge, is what the foundation model lacks.
+  - **Predictions scored:** P5 and Nemo at 0.85-0.92: held (0.918, 0.907). Seen 2 to 5 above
+    unseen: held (3.7, 4.6). BioCLIP-2 zero-shot at least 15 below our models: **falsified** (6.4
+    below P5).
+  - **A data flag from mt, checked in our training table:**
+    - A few GBIF-backbone species keys put butterflies into the wrong family. Examples: Lycaena
+      hyllus, helloides, epixanthe and rubidus, and Biblis hyperia, sit under Sesia (Sesiidae);
+      Papilio agestor under Plebicula; Brintesia circe under Loweia (Lycaenidae).
+    - About 4 k of 6.3 M rows, across fewer than 10 species keys.
+    - Species classes stay coherent, since each key holds images of one taxon; only those species'
+      genus and family marginals are wrong.
+    - Not fixed now. The tree check planned for W3 should catch this class of error.

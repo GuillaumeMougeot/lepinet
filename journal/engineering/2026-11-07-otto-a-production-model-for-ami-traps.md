@@ -300,3 +300,6 @@ student learns TTA's output at 1x cost.
   - Hypothesis "one padded view gives about half the 3-view gain": held for Nemo (pad15 +5.3 of
     tta3's +9.9). The other two (Otto's smaller gain, geometric training removing most of it) wait
     for Otto and the AG runs.
+- 2026-11-08: the tta3bm decision is for trap crops. On iNat21 photos it costs 1.2 to 3.9 points
+  (public benchmarks entry), as Nemo's card found for its TTA. The deployment default is per
+  domain: tta3bm on trap crops, single view on photos.
