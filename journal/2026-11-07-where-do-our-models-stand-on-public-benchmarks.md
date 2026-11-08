@@ -166,3 +166,50 @@ The only public light-trap benchmark with published numbers, so the one that mat
     labels, not at the model. The gap to the paper is not read as a model gap until a matched
     check is done: the same insects in the 448 shared frames, AMI crop against Flemming crop, and
     AMI label against Flemming label.
+- 2026-11-08: **matched check: the anomaly was mostly our label mapping.** Files in
+  `/data/au761367/benchmarks/ami/` (`pairs_checked.parquet`, `species_truth_resolved*.json`; first
+  scores kept in `scores_v1_keymap/`).
+  - **Cause.** AMI's keys come from a newer GBIF backbone. For 170 W-Europe species crops neither
+    AMI key was in our vocabulary, and the name fallback missed every genus change (Eilema to
+    Manulea, Wittia, Katha; Spilosoma lutea, ...). Those crops got a truth outside the list and
+    counted as wrong, and their genus truth was wrong too. Fixed by resolving in order: AMI's keys,
+    our table's synonym usages, our table's original names, a unique (family, epithet), else
+    unresolved (kept, counted wrong). W-Europe species crops in vocabulary: 92.3 % to 99.6 %
+    (98.5 % on north_europe). NE-America barely changed (98.4 % direct). Lesson: two GBIF backbone
+    versions make a key join look complete while silently re-labelling renamed genera; join through
+    synonym usages, never on accepted keys alone.
+  - **Pairs.** 898 AMI crops paired with their Flemming crop in the 448 shared frames (IoU median
+    0.85), 823 labelled to species by AMI. AMI crops are exactly their YOLO boxes, RGB, no alpha;
+    Flemming boxes are 16 % larger by area.
+  - **Labels.** After the fix the species labels agree on 93.2 % of pairs (family 98.8 %). The 56
+    disagreements are confusable pairs (Chilo phragmitella / Schoenobius gigantella, Pheosia tremula
+    / gnoma, Eilema lurideola / complana, ...). On them P5's prediction on the AMI crop matches the
+    Flemming label 73 % of the time and the AMI label 16 %.
+  - **Crops.** Against a common label (767 pairs) P5 scores 0.906 on the AMI crop and 0.913 on the
+    Flemming crop: the crop costs under 1 point. Preprocessing unchanged (the paper pads to square
+    with zeros; we keep each model's own, identical for both sources).
+  - **Corrected W-Europe species, micro / macro / calF1:**
+
+  | | no TTA | tta3bm |
+  |---|---|---|
+  | paper (single view) | 0.829 / 0.764 | |
+  | P5 | 0.712 / 0.656 / 0.525 | **0.793 / 0.732 / 0.576** |
+  | Nemo | 0.666 / 0.623 / 0.453 | 0.752 / 0.688 / 0.541 |
+  | Meghan | 0.628 / 0.594 / 0.417 | 0.707 / 0.645 / 0.492 |
+  | BioCLIP-2 zero-shot | 0.393 / 0.414 / 0.285 | |
+
+  tta3bm, micro / macro: W-Europe genus P5 0.795 / 0.758 (paper 0.825 / 0.760), family 0.910 /
+  0.800 (0.913 / 0.794). Not-in-Flemming frames (n = 685), species: P5 0.739 / 0.718, Nemo 0.714 /
+  0.630, Meghan 0.653 / 0.573. NE-America unchanged within 0.006 (P5 species 0.654 / 0.594).
+  - **Reading.**
+    - Like for like (single view), P5 is about 11 points below the paper on W-Europe species. With
+      tta3bm (3x the cost) the gap is 3.6 micro / 3.2 macro. P5 ties the paper at genus macro and at
+      family.
+    - Part of what remains is AMI's labels: on 7 % of shared crops AMI and Flemming's experts
+      disagree, and P5 sides with Flemming. The paper also drops order-rank crops, key -1 and 16
+      species; we keep all (0.4 % of W-Europe species crops out of vocabulary).
+    - NE-America keeps an 11-point species gap: 12,632-way against a ~2,500-way checklist, and their
+      model trained on that region's data. The two causes are not separated.
+  - **Predictions rescored:** P5 within 3 of the paper's W-Europe macro: falsified narrowly with
+    tta3bm (-3.2), clearly without (-10.8). Nemo 5-10 below P5: held at the margin (-4.4 micro,
+    -4.4 macro with tta3bm). NE-America 5-15 below: held.
