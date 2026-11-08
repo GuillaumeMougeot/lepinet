@@ -299,8 +299,9 @@ The only public light-trap benchmark with published numbers, so the one that mat
 - 2026-11-08: **Rare Species split by catalog presence: invalid as a seen/unseen test.** BioCLIP-2
   zero-shot on the 319 species found in our count of the ToL-200M catalog against the 81 not found:
   76.4 against 78.0 (difference -1.7, 95 % CI -6.7 to +3.9; `results_catalog.json`). No difference, but
-  the split does not separate seen from unseen. The 81 are 53 of the 53 reptiles, 28 of the 28
-  ray-finned fishes and 3 birds minus the synonym moves, and our count
+  the split does not separate seen from unseen. The 81 are exactly the 53 reptiles and the 28
+  ray-finned fishes (the 3 birds first counted as absent moved through synonyms); all 81 have a
+  bare-epithet key in the count (mt, checked), and our count
   (`tol256s/manifest/species_counts.json`) has no key at all for genera such as Anolis, Crotalus,
   Epinephelus or Thunnus. It does have 27,872 single-word lowercase keys (6.5 M images), such as
   `sagrei` (86,526) and `sirtalis` (125,127), and those epithets belong to reptile species. So
