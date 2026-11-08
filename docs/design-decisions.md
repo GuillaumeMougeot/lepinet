@@ -184,6 +184,8 @@ long tail from a *macro* average. With the filter removed it scored 0.9152, i.e.
 the baseline. A metric that improves when you change how it is computed has not improved.
 → [journal: 2026-07-24-src-lepinet-baseline-port](https://github.com/GuillaumeMougeot/lepinet/blob/main/journal/engineering/2026-07-24-src-lepinet-baseline-port.md)
 
+**Join external labels through GBIF synonym usages, never on accepted keys alone.** Scoring AMI-Traps, 170 W-Europe crops carried keys from a newer GBIF backbone; the key join looked 92 % complete, and the name fallback silently missed every renamed genus (Eilema to Manulea, ...). Those crops counted as wrong and P5 looked 5 points worse at species than it was. Resolve through the table's synonym and original-name usages, and check label agreement on a matched sample before reading a gap. → [journal: 2026-11-07-where-do-our-models-stand-on-public-benchmarks](https://github.com/GuillaumeMougeot/lepinet/blob/main/journal/2026-11-07-where-do-our-models-stand-on-public-benchmarks.md)
+
 **Derive a dataset's stored image size from the training transform, not from the input size.** The
 ToL crawl stored "256" on the long side; training crops a square from the *short* side, so every
 image reached the 256 px input upsampled and the 58 M-image crawl had to be redone. Stored short
