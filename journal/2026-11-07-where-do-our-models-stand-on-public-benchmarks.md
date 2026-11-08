@@ -113,3 +113,9 @@ The only public light-trap benchmark with published numbers, so the one that mat
 - 2026-11-07: opened; mt's plan journalled. Metadata only fetched so far (~1.1 GB, mt's scratchpad);
   nothing downloaded or submitted. AMI-Traps confirmed. Order: AMI-Traps, iNat21, Rare Species and
   Meta-Album Insects.
+- 2026-11-07 late: owner approved the ~29 GB downloads in mt's session (AMI v2 with md5 check,
+  iNat21 val, Rare Species, to `/data/au761367/benchmarks/`). Meta-Album not approved; mt checks its
+  licence and asks separately. Danish overlap: our 47,905 crops (12 traps, LV1-4, OH1-4, SS1-4,
+  2022-2023) cannot be hashed against AMI's full frames, so the match is on trap name and the
+  snapshot timestamp in the filenames. Calibrated macro-F1 on AMI needs (trap, night) groups from its
+  metadata; mt reports if they are missing.
