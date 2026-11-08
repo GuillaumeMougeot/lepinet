@@ -254,3 +254,26 @@ The only public light-trap benchmark with published numbers, so the one that mat
       images), among them *Loweia tityrus* with 1,836 *Brintesia circe*, so some classes are not
       coherent. [[2026-11-03-the-training-labels-inherit-gbif-backbone-errors]]
     - Not fixed now; the correction waits until the paper is submitted.
+- 2026-11-08: **Rare Species scored** (11,983 images, 400 species, only 2 Lepidoptera; BioCLIP-2's
+  own code ported, SimpleShot on frozen features, folds 0-4, top-1; files
+  `/data/au761367/benchmarks/rare_species/results.json`).
+  - **The protocol reproduces.** BioCLIP-2 ours against its paper's Table 1: 1-shot 60.4 / 59.5,
+    5-shot 77.0 / 77.2, zero-shot 76.7 / 76.8. The zero-shot match needs the text built without the
+    class rank and common name (the Hugging Face columns are named differently from what its
+    `Taxon` class reads); with both fields present zero-shot is 78.7. That the paper's run lost those
+    fields is an inference from the match.
+
+  | frozen features | dim | 1-shot | 5-shot |
+  |---|---|---|---|
+  | BioCLIP-2 | 768 | 60.4 +- 0.7 | 77.0 +- 0.3 |
+  | Meghan (head's pre-classification output) | 768 | 60.5 +- 0.8 | 78.0 +- 0.2 |
+  | P5 | 1024 | 25.4 +- 0.7 | 44.6 +- 0.4 |
+  | Nemo | 1280 | 13.7 +- 0.5 | 27.7 +- 0.3 |
+
+  - **Predictions scored:** "BioCLIP-2 first": falsified narrowly (Meghan +1.0 at 5-shot). "P5 and
+    Meghan within 5 points": held for Meghan, **falsified for P5** (-32.4). "Nemo loses 15 or more":
+    held (-49.3).
+  - **Not read yet.** P5's 1024-d feature is taken before the projection that gives BioCLIP-2 and
+    Meghan 768-d, so the -32 mixes fine-tuning with the feature layer. Check: BioCLIP-2's own 1024-d
+    pre-projection feature through the same protocol. Only 2 species here are moths, so this says
+    nothing against P5 on moths (AMI, iNat21).

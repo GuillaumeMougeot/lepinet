@@ -81,3 +81,8 @@ No default changes until the grid is read. Trap augmentation stays opt-in (owner
 
 - 2026-11-07: opened at the owner's suggestion. Implementation and plan asked of mt; submission
   through the owner in mt's session.
+- 2026-11-08: ag-v2s-384x10-geo finished (778 min, exit 0); its eval failed at submission (UCloud 502)
+  and was resubmitted (12450958). ag-v2s-384x10-trivial (12450735) was stopped before staging by the
+  new disk check, 501 GB free against 510 needed on a shared node, so the suspected full disk is
+  confirmed. Resubmitted as 12450957 (owner approved in mt's session). If the check stops it again,
+  mt reports instead of retrying.
