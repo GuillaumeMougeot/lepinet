@@ -67,6 +67,7 @@ incidents are in [`engineering/`](engineering/). The plan is [`../PLAN.md`](../P
 | [11-03](2026-11-03-the-training-labels-inherit-gbif-backbone-errors.md) | Are the training labels right? | No: 163 mixed classes and 281 duplicated, from the legacy GBIF Backbone. **OPEN**: correction after the paper |
 | [11-07](2026-11-07-can-augmentation-and-tta-be-the-generic-adaptation-method.md) | Can broad augmentation, longer training and TTA adapt to any dataset without target images? | **OPEN**, 4 runs at Otto's schedule (V2-S geo, geo+trap, TrivialAugmentWide; Otto + geo), TTA per view |
 | [11-07](2026-11-07-where-do-our-models-stand-on-public-benchmarks.md) | Where do our models stand on public benchmarks (AMI-Traps, iNat21 Lepidoptera, Rare Species)? | **OPEN**, plan and predictions; downloads await the owner |
+| [11-08](2026-11-08-does-a-margin-objective-make-a-better-pretrained-biodiversity-model.md) | Does a cosine-margin objective make a better pretrained biodiversity model? | **OPEN**, design; after the paper. Prerequisite found: a rank shift in the ToL labels |
 
 ## Engineering: side projects, cluster work, incidents
 

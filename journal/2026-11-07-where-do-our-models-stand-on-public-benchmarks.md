@@ -317,3 +317,6 @@ The only public light-trap benchmark with published numbers, so the one that mat
     affected rows are reptiles and fishes is an inference from the keys; a sample of five catalog
     row groups held no such rows. To check: which catalog rows lack a genus, and whether W3's join by
     uuid recovers their taxonomy.
+- 2026-11-08: cause of the bare-epithet keys found: a one-rank shift of the taxonomy columns, not missing
+  genera. It also explains why no row had `order` = Squamata (it sits in `class`).
+  [[2026-11-08-does-a-margin-objective-make-a-better-pretrained-biodiversity-model]]
