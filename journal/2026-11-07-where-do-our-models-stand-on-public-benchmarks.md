@@ -277,3 +277,22 @@ The only public light-trap benchmark with published numbers, so the one that mat
     Meghan 768-d, so the -32 mixes fine-tuning with the feature layer. Check: BioCLIP-2's own 1024-d
     pre-projection feature through the same protocol. Only 2 species here are moths, so this says
     nothing against P5 on moths (AMI, iNat21).
+- 2026-11-08: **Rare Species feature-layer check** (`/data/au761367/benchmarks/rare_species/results_layers.json`).
+  The first table mixed levels: P5 was read at the backbone, Nemo and Meghan at the head.
+
+  | 1-shot / 5-shot | backbone, class token, before projection | head embedding |
+  |---|---|---|
+  | BioCLIP-2 | 57.7 / 75.4 (projected 768-d: 60.4 / 77.0) | |
+  | P5 | 25.4 / 44.6 | 19.8 / 37.6 |
+  | Meghan | | 60.5 / 78.0 |
+  | Nemo | not run | 13.7 / 27.7 |
+
+  - **The layer explains only 1.6 of P5's 32 points at 5-shot.** At the same layer P5 is 30.8 below
+    stock BioCLIP-2 (32.3 at 1-shot). P5's release weights have no projection, so it cannot be read
+    at the 768-d level. The gap covers everything that differs between the two sets of weights;
+    preprocessing also differs (expected small on these 400x400 images, not measured).
+  - **Reading.** P5, fine-tuned and self-trained on moths, has given up most of BioCLIP-2's general
+    species discrimination. Meghan has not, and it scores lower on moth traps (AMI W-Europe species
+    macro with tta3bm: 0.645 against P5's 0.732). That fits a trade between specialising and staying
+    general, but it is two models that differ in much more than the amount of fine-tuning.
+  - The "P5 within 5 points" prediction stays falsified.
