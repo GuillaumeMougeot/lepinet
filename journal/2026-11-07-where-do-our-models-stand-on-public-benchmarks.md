@@ -296,3 +296,23 @@ The only public light-trap benchmark with published numbers, so the one that mat
     macro with tta3bm: 0.645 against P5's 0.732). That fits a trade between specialising and staying
     general, but it is two models that differ in much more than the amount of fine-tuning.
   - The "P5 within 5 points" prediction stays falsified.
+- 2026-11-08: **Rare Species split by catalog presence: invalid as a seen/unseen test.** BioCLIP-2
+  zero-shot on the 319 species found in our count of the ToL-200M catalog against the 81 not found:
+  76.4 against 78.0 (difference -1.7, 95 % CI -6.7 to +3.9; `results_catalog.json`). No difference, but
+  the split does not separate seen from unseen. The 81 are 53 of the 53 reptiles, 28 of the 28
+  ray-finned fishes and 3 birds minus the synonym moves, and our count
+  (`tol256s/manifest/species_counts.json`) has no key at all for genera such as Anolis, Crotalus,
+  Epinephelus or Thunnus. It does have 27,872 single-word lowercase keys (6.5 M images), such as
+  `sagrei` (86,526) and `sirtalis` (125,127), and those epithets belong to reptile species. So
+  these species are probably in the catalog, under keys without a genus. Whether BioCLIP-2 saw them
+  stays unknown.
+  - Still valid: BioCLIP-2's zero-shot gets the genus right on 83.1 % and the family on 86.9 % of images,
+    against 76.7 % species. Of the 23.3 points of species error, 6.4 stay in the genus and 13.1 go
+    to another family.
+  - **A flaw in the ToL crawl to resolve before W3.** `dev/082` builds its key as `genus + " " +
+    species`. A row without a genus gets a bare epithet, which merges unrelated taxa, the exact
+    failure its docstring warns about, and the 2,000-image cap then applies to the merged key. 6,082
+    of the crawl's 201,918 folders are bare epithets (`carolinensis`, `sagrei`, `scripta`). That the
+    affected rows are reptiles and fishes is an inference from the keys; a sample of five catalog
+    row groups held no such rows. To check: which catalog rows lack a genus, and whether W3's join by
+    uuid recovers their taxonomy.
