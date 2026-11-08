@@ -119,3 +119,50 @@ The only public light-trap benchmark with published numbers, so the one that mat
   2022-2023) cannot be hashed against AMI's full frames, so the match is on trap name and the
   snapshot timestamp in the filenames. Calibrated macro-F1 on AMI needs (trap, night) groups from its
   metadata; mt reports if they are missing.
+- 2026-11-08: **AMI-Traps scored** (mt, local GPU) for P5, Nemo, Meghan and BioCLIP-2 zero-shot. Files
+  in `/data/au761367/benchmarks/ami/` (`scores/<model>/summary.json`, `we_species_by_flemming_split.json`,
+  `flemming_name_matches.json`).
+  - **The Danish overlap is real.** 448 of AMI's 892 Denmark frames carry the same filename as a
+    Flemming source frame (10 of our 12 traps); template matching confirms 13 of 15 sampled crops
+    (correlation 0.93-1.00, against at most 0.70 for random frames). Of the 2,205 W-Europe
+    species-labelled crops, 1,089 come from our adapt-night frames, 373 from probe-night frames, 58
+    mixed or neither, and 685 from frames not in Flemming (UK and other Danish frames). Nothing
+    filtered; the split is a diagnostic.
+  - Protocol as run: the paper's 14,105 crops; top-1 micro / macro (macro = mean per-class recall)
+    at the labelled rank and above; north_europe list for W-Europe, full vocabulary elsewhere;
+    out-of-vocabulary labels count as wrong (Nemo knows 92.3 % of W-Europe species crops). Also
+    calibrated macro-F1 (calF1, `dev/093` `score_grouped`, 20 seeds, (trap, night) groups).
+
+  | W-Europe species, micro / macro / calF1 | no TTA | tta3bm |
+  |---|---|---|
+  | paper, ConvNeXt-B on AMI-GBIF, ~2.6k checklist | 0.829 / 0.764 | |
+  | P5 | 0.664 / 0.638 / 0.498 | **0.740 / 0.712 / 0.547** |
+  | Nemo | 0.616 / 0.600 / 0.426 | 0.701 / 0.665 / 0.509 |
+  | Meghan | 0.586 / 0.578 / 0.397 | 0.667 / 0.629 / 0.467 |
+  | BioCLIP-2 zero-shot | 0.362 / 0.403 / 0.272 | |
+
+  | tta3bm, micro / macro | W-Eu genus | W-Eu family | NE-Am species | NE-Am genus | NE-Am family |
+  |---|---|---|---|---|---|
+  | paper | 0.825 / 0.760 | 0.913 / 0.794 | 0.767 / 0.686 | 0.855 / 0.783 | 0.911 / 0.769 |
+  | P5 | 0.754 / 0.752 | 0.909 / 0.770 | 0.654 / 0.591 | 0.761 / 0.730 | 0.908 / 0.683 |
+  | Nemo | 0.718 / 0.696 | 0.859 / 0.653 | 0.594 / 0.526 | 0.700 / 0.648 | 0.826 / 0.626 |
+  | Meghan | 0.682 / 0.664 | 0.848 / 0.672 | 0.557 / 0.498 | 0.664 / 0.622 | 0.852 / 0.620 |
+
+  - W-Europe species by the Flemming split of the frame, no TTA, micro / macro: P5 adapt 0.735 /
+    0.678, probe 0.729 / 0.688, not in Flemming 0.518 / 0.549. P5 scores the same on probe frames,
+    which it never trained on, as on adapt frames, so its advantage on our traps is domain match, not
+    memorised nights. The independent W-Europe number is the not-in-Flemming line: P5 tta3bm 0.664 /
+    0.692.
+  - P5 with tta3bm is our best model everywhere; family micro ties the paper (0.909 / 0.913,
+    0.908 / 0.911). At species, every model is 9-15 points below on micro. tta3bm adds 5-11 points
+    at species and genus for every model.
+  - **Predictions scored, provisionally:** P5 within 3 of the paper's W-Europe macro: **falsified**
+    (-5.2 with tta3bm, -12.6 without). Nemo 5-10 below P5: just under (-4.7 tta3bm, -3.8 none).
+    NE-America 5-15 below the paper: held (-9.5 macro for P5); genus and family closer: held.
+  - **Suspect the measurement before the model.** On probe-night frames, P5 scores 0.729 top-1 with
+    the north_europe list on AMI's crops, against 0.836 with the full vocabulary on our own probe
+    crops (teacher check, Otto journal). Same traps, same nights, a smaller list, and 10 points
+    lower. That points at the crops (AMI's YOLO boxes against our crops, PNG mode, resizing) or the
+    labels, not at the model. The gap to the paper is not read as a model gap until a matched
+    check is done: the same insects in the 448 shared frames, AMI crop against Flemming crop, and
+    AMI label against Flemming label.
