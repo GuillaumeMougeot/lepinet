@@ -48,8 +48,8 @@ import pandas as pd
 
 
 def referenced_paths(parquet, min_img_per_spc, family_filter):
-    """The exact set of `<speciesKey>/<filename>` a training run reads, as dev/028.gen_df builds
-    it: drop the held-out test fold ('0'), apply family_filter and min_img_per_spc, then form
+    """The (destination, source) relative paths of the `<speciesKey>/<filename>` a training run
+    reads, as dev/028.gen_df builds it: drop the held-out test fold ('0'), apply family_filter and min_img_per_spc, then form
     image_path. Kept in lockstep with filter_df/prepare_df -- if those change, this must too."""
     df = pd.read_parquet(parquet)
     df = df[~df["set"].isin(["0"])]                       # remove_in=["0"] (held-out test)
@@ -57,15 +57,17 @@ def referenced_paths(parquet, min_img_per_spc, family_filter):
         df = df[df["familyKey"].astype(str).isin(family_filter)]
     if min_img_per_spc > 0:
         df = df[df.groupby("speciesKey")["speciesKey"].transform("count") >= min_img_per_spc]
-    rel = (df["speciesKey"].astype(str) + "/" + df["filename"]).unique().tolist()
-    return rel
+    dst = df["speciesKey"].astype(str) + "/" + df["filename"]
+    # A relabelled parquet (dev/101) keeps the images in their original folders.
+    src = df["legacySpeciesKey"].astype(str) + "/" + df["filename"] if "legacySpeciesKey" in df else dst
+    return list(dict(zip(dst, src)).items())
 
 
 def copy_chunk(chunk, src_root, dst_root):
     """Copy one chunk of relative paths. Returns (copied, skipped, bytes, errors)."""
     copied = skipped = nbytes = errors = 0
-    for rel in chunk:
-        s, d = os.path.join(src_root, rel), os.path.join(dst_root, rel)
+    for rel, src_rel in chunk:
+        s, d = os.path.join(src_root, src_rel), os.path.join(dst_root, rel)
         try:
             size = os.path.getsize(s)
             if os.path.exists(d) and os.path.getsize(d) == size:
@@ -99,7 +101,7 @@ def main():
           f"family_filter={fam or 'none'}) listed in {time.time()-t0:.1f}s", flush=True)
 
     # Pre-create every species dir once, so the copy threads never race on makedirs.
-    for sp in {r.split("/", 1)[0] for r in rel}:
+    for sp in {r.split("/", 1)[0] for r, _ in rel}:
         os.makedirs(os.path.join(args.dst, sp), exist_ok=True)
 
     # Chunk for load balance: equal-size chunks keep every thread busy to the end, unlike

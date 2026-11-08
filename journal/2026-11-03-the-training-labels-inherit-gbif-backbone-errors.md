@@ -67,6 +67,35 @@ iNat21) gives the label the models trained on, which is correct for scoring them
 6. Re-run the public benchmarks with the new labels.
 7. Any new training at Tree-of-Life scale starts from the corrected taxonomy.
 
+## The one command (2026-11-08)
+
+`.venv/bin/python dev/101_colxr_relabel.py apply --upload`, offline, from tables frozen in `dev/colxr/`
+(COL XR as served on 2026-11-08). It writes new files to `data/global/colxr/` and to a new UCloud folder, and
+changes nothing that exists. The images stay in their folders: `legacySpeciesKey` names the folder, and
+`ucloud/stage.py` copies to `<new speciesKey>/<filename>` on the node. To change a decision, add a row to
+`dev/colxr/overrides.csv`. Afterwards a training spec only needs to point at the new parquet.
+
+Decisions:
+- A class goes to its COL XR species. An image goes elsewhere only if its own name is another species
+  (23,306 rows, the mixed classes), not for homonyms that only carry the class's name, and not for duplicate
+  COL XR records of the class's species.
+- Classes sharing a COL XR species are merged. COL XR's duplicate records are not merged automatically:
+  no rule tried was safe (epithet and author match unrelated species; *Heliconius erato* and *Tirumala erato*
+  are linked by a shared record). The confirmed one, the Nutmeg, is in the overrides.
+- The 54 unresolved classes and the 15 low-confidence decisions stay as they are, keyed `gbif:<legacy>`.
+- Every row is kept, test fold included. The training floor stays with training.
+- 140 species have no chain from COL XR under their key (usageKey lookup returns nothing, or a homonym in
+  another order): parents come from a genus of the same name, or the legacy genus or family.
+  `parents_from` in `taxonomy.csv` records which. 6 trap species outside the training table go through
+  GBIF's crosswalk.
+
+Trial on the real data (2026-11-08, 26 s, 1.3 GB peak), output checked against the source: 6,329,994 rows, order,
+`filename` and `set` identical; no null keys; species to genus and genus to family are trees; 12,632 classes
+become about 12,635 (139 merged away, 143 new from mixed classes). *Brintesia circe*'s 1,836 images get
+their own key while staying in folder 1924494. 686 new species fall under the 50-image floor. Trap
+species 486 to 484; `north_europe` 1,977 to 1,988. mini_trainer's side (string keys, staging of set 0) is
+on the branch.
+
 ## Log
 
 - 2026-11-03 and 04: investigation (mapping, manual review of 325 classes, audit of GBIF's
