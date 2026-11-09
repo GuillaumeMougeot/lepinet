@@ -99,3 +99,10 @@ No default changes until the grid is read. Trap augmentation stays opt-in (owner
     said trap crops need. Geometric training hurts under shift while geometric TTA helps, which is
     surprising enough to check the augmentation as trained before reading it (probability, magnitudes, a
     grid of training batches).
+- 2026-11-09: **geometric checked: no pipeline bug.** It trained with the border-mean fill (the run's own
+  example image shows it). It applied to every training image (p = 1.0): rotation uniform in +-45 degrees on an
+  expanded canvas, then 0-25 % padding per edge, before the recipe's own affine. The moth shrinks to a median
+  0.63 of the frame width (p10 0.52). It never applied at validation or prediction. So the model never saw a
+  tight upright image in training, while trap crops are tight and upright. TTA differs: it averages the
+  views with the original, at prediction only. Grids: `/data/au761367/benchmarks/ag_check/`. The obvious next
+  setting (p about 0.5, +-30 degrees, padding up to 0.15) is untested and not planned before the paper.
