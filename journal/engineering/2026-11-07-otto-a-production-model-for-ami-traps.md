@@ -355,3 +355,17 @@ student learns TTA's output at 1x cost.
   support > 5 over the compared pipelines), three series and no runtime labels, each model in its best setting
   (north_europe, tta3bm), on the probe crops (half A calibrates, half B reports). The probe crops replace his
   52,788-crop set because P5 self-trained on the adapt nights.
+- 2026-11-09: **the release chart, rebuilt** with Asger's code (threshold_report optimiser, promoted_report.quality,
+  tail_report.collect, tail_charts.render_paired; pinned mini_metrics 70cc69a); only the driver changed (A/B halves
+  instead of his 90/10 split, support > 5 over these three pipelines, a three-row axis).
+  `/data/au761367/otto_eval/figure/promoted/` (SVG, PNG, mambo-promoted-* JSON/CSV, quality-tables.md, COMMANDS.md).
+  Species on half B (7,217 crops), north_europe + tta3bm, macro accuracy full / >5, macro-F1 full / >5, coverage:
+
+  | model | unthresholded | calibrated |
+  |---|---|---|
+  | Meghan (V2) | 74.3 / 85.0 %, 0.385 / 0.871, 100 % | 87.0 / 95.9 %, 0.573 / 0.851, 74.7 % |
+  | Nemo (V3) | 80.7 / 89.4 %, 0.436 / 0.902, 100 % | 90.6 / 97.5 %, 0.671 / 0.876, 80.0 % |
+  | Otto (V4 = P5) | **84.2 / 93.0 %, 0.599 / 0.925**, 100 % | **92.2 / 98.3 %, 0.736 / 0.913, 82.7 %** |
+
+  Images outside the support > 5 average: 9.34 / 4.53 / 0.15 % (species / genus / family) unthresholded, 12.91 /
+  12.69 / 0.33 % calibrated.
