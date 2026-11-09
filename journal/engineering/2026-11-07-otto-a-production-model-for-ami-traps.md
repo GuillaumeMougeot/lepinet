@@ -349,3 +349,9 @@ student learns TTA's output at 1x cost.
 - 2026-11-09: U1-U4 submitted (owner approved the 70 % gate set: 19,061 crops, 314 species, 98.6 % correct,
   x7 = 2.57 % of training rows): u1 12451866 (gated labels), u2 12451870 (TrivialAugmentWide), u3 12451880
   (both), u4 12451889 (DINOv3 twin, both).
+- 2026-11-09, owner: **"Otto" is the name of our best model, whichever that is,** until the owner fixes it.
+  Today that is P5, so V4 = P5 under the name Otto (Meghan V2, Nemo V3). The release figure is a new version of
+  Asger's `docs/assets/mambo-promoted-quality.svg`, built with his pipeline (`promoted_report`, `tail_charts`,
+  support > 5 over the compared pipelines), three series and no runtime labels, each model in its best setting
+  (north_europe, tta3bm), on the probe crops (half A calibrates, half B reports). The probe crops replace his
+  52,788-crop set because P5 self-trained on the adapt nights.
