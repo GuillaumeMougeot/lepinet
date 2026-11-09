@@ -1,16 +1,16 @@
-%% title: Open-set scoring rules do not transfer across scale
+%% title: Open-set scoring rules: entropy, not the largest logit
 %% target: Sections/Results.tex
 %% anchor: A macro-$\text{F}_1$ on a subset of the label space is therefore uninterpretable unless the class set is stated.
 %% action: after
-%% why: The best novelty score changes with model size, with the margin, and between museum-style and trap images; carrying one rule silently inverts rankings (a 7.7-point "capacity penalty" is mostly the rule).
-%% source: paper/DRAFT.md §4.3, §4.9 (A1 vs A2, five rules); journal/2026-10-23-does-the-model-know-when-a-trap-image-is-too-poor.md (part B: C3b max-logit 0.42, energy 0.39 on traps; B8 best margin)
-%% check: Paste after step 16. | AUROCs are independent of the macro-F1 convention.
+%% why: With the recipe's cosine head, the rule order is the same for every head at both scales: entropy best, the largest logit and energy worst by 24 to 38 points. The earlier rule changes came from the margin head and the old recipe.
+%% source: /data/au761367/paper_numbers/17.md (os_* runs, seed 42, five rules, dev/099); RESULTS VO, VO2
+%% check: Rewritten 2026-11-09: the old thesis (the best rule changes with head and scale) does not reproduce; it rested on the margin head, which has no rerun (appendix). | TODO: the domain paragraph waits for the trap rerun of the five rules (mt, local GPU); if it does not come, drop the paragraph and the domain clause of step 08. | Paste after step 16. | AUROCs are independent of the macro-F1 convention.
 %% status: ready
-\subsection{Open-set scoring rules do not transfer across scale or domain}\label{sec:results_rules}
-The five rules of \cref{sec:evaluation} are computed from the same forward pass on the same images, and the best one changes three times.
-\emph{With the head.} A flat cosine head is best read by entropy (0.899) and worst by the largest logit (0.626), a 27-point spread; with an angular margin the largest logit is best (0.907) and the spread is 1.2 points.
-The margin moves the novelty signal from the shape of the logit vector into the size of its maximum, which makes the rule nearly irrelevant, at a cost of 1.0 point of species macro-$\text{F}_1$ for 0.8 points of AUROC.
-\emph{With the scale.} The largest logit wins at 20\,M parameters and is beaten by MSP by 6 to 8 points at 198\,M; read with each model's best rule, the apparent loss of novelty detection with capacity falls from 7.7 to 1.6 points.
-In a well-fitted embedding every image reaches a high cosine to some prototype, so the maximum saturates, and what still separates known from novel is whether one prototype dominates, which only MSP, entropy and the top-2 margin see.
-\emph{With the domain.} On trap images the flat head's best rule becomes MSP, and the largest logit and energy fall below chance (0.42 and 0.39), because shift lowers every logit, known species included; B8's best rule changes from entropy to the top-2 margin.
-Open-set results are therefore reported with the rule named, and the rule is re-selected whenever the model or the domain changes.
+\subsection{Which open-set scoring rule}\label{sec:results_rules}
+The five rules of \cref{sec:evaluation} are computed from the same forward pass on the same images.
+With the recipe's cosine head their order is the same for every head on both backbones: entropy, then MSP, then the top-2 margin, then the largest logit, then energy.
+For the flat head on EfficientNetV2-S, entropy gives 0.915 and energy 0.599, a 31.6-point spread, and the largest logit, a common default, is 24 to 38 points below MSP at 20\,M parameters and 8 to 31 points below it at 198\,M.
+In a well-fitted cosine embedding every image reaches a high cosine to some prototype, so the maximum saturates; what still separates known from novel images is whether one prototype dominates, which only MSP, entropy and the top-2 margin see.
+The choice of rule also decides what capacity appears to buy: from 20\,M to 198\,M parameters the flat head gains 1.0 point read by entropy and 17.6 read by the largest logit.
+\textbf{TODO (trap rerun): whether the order holds on trap images.}
+Open-set results are therefore reported with the rule named.
