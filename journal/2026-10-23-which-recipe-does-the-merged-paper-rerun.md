@@ -1,6 +1,6 @@
 # Which recipe does the merged paper rerun? (decision sheet)
 
-**Kind:** research · **Status:** **OPEN** (2026-10-23). Decisions to pin, with both drafts' settings
+**Kind:** research · **Status:** **RESOLVED** (2026-11-09): one recipe, the campaign's; decisions at the end. Decisions to pin, with both drafts' settings
 and the evidence; nothing is rerun until every row has an owner's decision.
 
 > **Reframed 2026-11-03 (owner):** the code base is mini_trainer, with lepinet's recipe and findings
@@ -47,3 +47,87 @@ grouped by trap and night, and the reconciled trap export.
 2. The shift results on one backbone with the pinned recipe: no adaptation, self-training (row 14),
    real labels (T1, T1rep), a trap and a site held out (X1, X2), cRT (row 3).
 3. Open-set on the withheld-taxa split, museum-style and trap images (N2's design).
+
+## Decisions (owner, 2026-11-09)
+
+All five recommendations accepted:
+1. **C1** keeps its in-distribution half; its trap half is restated: under shift the head ranking depends on
+   the backbone, and the independent head stays at or near the top.
+2. **C2** (interventions belong in the classifier) is dropped as the spine; self-training (C3) takes its place.
+   Truly frozen trunks lose to whole-network adaptation (T2 probe 0.509 against 0.619, VK).
+3. "cRT removes the trade" and the staged recipe are dropped, with one line in the appendix.
+4. **One recipe**, the campaign's: cross-entropy, uniform sampling, no species floor (Merge Desk 04).
+5. This weekend's results (augmentation, public benchmarks, Otto) stay out of this paper.
+
+### Discussion point 1: oversampling, and when to rebalance
+
+The owner's framing: a generic recipe, plus a short list of settings to change by dataset, each with a
+measurable trigger ("heavy tail" quantified).
+
+Rebalancing on Pl@ntNet (V2-S, seed 42 against the three-seed mean of no rebalancing, test fold species):
+
+| head | none | sqrt-oversampling | EMLA |
+|---|---|---|---|
+| F | 0.466 | 0.479 | **0.514** |
+| BU | 0.457 | **0.500** | 0.478 |
+| I | 0.453 | **0.500** | 0.494 |
+| TD | 0.407 | **0.504** | 0.345 |
+
+- **Oversampling stays, and is the safer of the two:** it helps every head (+1.3 to +9.7) and closes TD's gap.
+  EMLA is best for the flat head (+4.8) but breaks TD (-6.2). One seed per rebalanced arm; the F gain of
+  oversampling (+1.3) is near the seed spread.
+- On Lepidoptera, rebalancing pays little in-distribution and costs under shift: EMLA +0.6 on the test fold,
+  -4 to -5.5 on trap images (VS). Oversampling was not rerun on Lepidoptera in mini_trainer. The lepinet
+  evidence, from end-to-end runs, is +1.9 in-distribution and -2.9 under shift at 198 M (L0).
+
+How heavy each tail is (training split, species counts):
+
+| statistic | Lepidoptera (sets 2-9) | Pl@ntNet-300K (train) |
+|---|---|---|
+| classes / images | 12,632 / 5.06 M | 987 / 244 k |
+| median images per class | 163 | 22 |
+| largest / median class | 32 | 328 |
+| classes under 50 images | 9.7 % | 62.4 % |
+| Gini of class counts | 0.59 | 0.84 |
+| effective classes, exp(entropy) / K | 0.54 | 0.19 |
+| share of classes holding half the images | 13.4 % | 3.7 % |
+
+The Lepidoptera corpus was capped at about 2,000 images per species when built, which already flattens its
+head; Pl@ntNet has no cap.
+
+**Proposed rule, a hypothesis from two datasets:** rebalance with square-root oversampling when the tail is
+heavy (for example, more than half the classes under 50 images, or exp(entropy)/K below about 0.3), and not
+when the model is deployed under a domain shift, where every rebalancing tested lost. Two datasets cannot
+place the threshold. What would: the same three statistics and one oversampling run on more datasets (the
+public benchmarks are candidates), and mini_trainer printing the statistics at the start of training.
+
+### Discussion point 2: does marginal supervision, or marginalisation at inference, still pay?
+
+This is the colleague's central point, so it needs evidence beyond the species score. F and BU both read genus
+and family by marginalising species at inference; BU adds a loss at every rank (marginal supervision); I and
+TD predict coarse ranks with their own parameters. Three-seed means, campaign:
+
+| backbone | head | test species / genus / family | trap species / genus / family (calibrated) |
+|---|---|---|---|
+| V2-S | F | 0.889 / 0.949 / 0.969 | 0.354 / 0.468 / 0.522 |
+| | BU | 0.887 / **0.956 / 0.976** | 0.331 / 0.459 / 0.511 |
+| | I | 0.881 / 0.947 / 0.965 | **0.378 / 0.484 / 0.534** |
+| | TD | 0.842 / 0.930 / 0.960 | 0.327 / 0.433 / 0.525 |
+| B0 | F | **0.875** / 0.940 / 0.961 | 0.280 / 0.391 / 0.423 |
+| | BU | 0.864 / 0.940 / **0.965** | **0.332 / 0.447 / 0.496** |
+| | I | 0.854 / 0.923 / 0.940 | 0.326 / 0.433 / 0.455 |
+| | TD | 0.788 / 0.887 / 0.934 | 0.267 / 0.360 / 0.482 |
+| DINOv3 | F | **0.920** / 0.966 / 0.981 | 0.405 / 0.516 / 0.544 |
+| | BU | 0.918 / **0.968 / 0.984** | 0.416 / **0.548 / 0.587** |
+| | I | 0.917 / 0.966 / 0.981 | **0.424** / 0.534 / 0.571 |
+| | TD | 0.906 / 0.963 / 0.980 | 0.402 / 0.528 / 0.572 |
+
+- **Marginalisation at inference holds, in-distribution, everywhere:** F or BU is best at every rank on
+  every backbone, and separate coarse parameters (I, TD) never help there.
+- **Marginal supervision is a coarse-rank tool.** BU over F in-distribution: genus and family +0.2 to +0.7, at
+  a species cost of 0.1 to 1.1. On trap images at genus and family: +5.6 / +7.3 on B0 and +3.2 / +4.3 on
+  DINOv3, larger than the trap seed spread; on V2-S -0.9 / -1.1, within it.
+- **At species under shift the ranking depends on the backbone,** and I is near the top on all three.
+- **The argument for the colleague:** the claim survives where it matters for deployment. Coarse predictions
+  are what back-off and abstention fall back on, and marginal supervision makes them better on two of three
+  backbones under shift and on all three in-distribution. It is not a species-accuracy method.

@@ -1,20 +1,18 @@
-%% title: Training: two recipes, one to be kept
+%% title: Training: one recipe, and what it leaves to the dataset
 %% target: Sections/Methods.tex
 %% anchor: \subsection{Loss function}\label{sec:loss_function}
 %% action: before
-%% why: The two drafts trained with different recipes. Until one is chosen, every result has to say which one it used. The lepinet recipe is the baseline of every shift, self-training and long-tail result.
-%% source: configs/20260729_ucloud_singlehead_species_effnetv2s.yaml; src/lepinet/data.py (sample_weights); docs/design-decisions.md section 1 for the ladder
-%% check: ON HOLD: rewritten once the decision sheet is pinned (journal/2026-10-23-which-recipe-does-the-merged-paper-rerun.md); the owner gave priority to the colleague's settings. | \cref{sec:results_heads} arrives with a results step; Overleaf shows ?? until then. | Asger's settings for the head comparison (epochs, image size, optimiser): marked X. | The recipe names (M and L) are placeholders.
-%% status: hold
+%% why: Every result now comes from one recipe in mini_trainer, chosen by single-factor runs; the few settings that should change with the dataset are named here and measured in the results.
+%% source: mini_trainer dev/lepinet/lepinet-{F,BU,I}.yaml with the campaign's pinned overrides (.agents/local/campaign/build.py: no floor, no oversampling); mini_trainer/builders.py build_lr_scheduler; RESULTS VS, VP, VR, VD, VV; journal/2026-10-23-which-recipe-does-the-merged-paper-rerun.md (decisions, 2026-11-09)
+%% check: Replaces the two-recipe text (owner, 2026-11-09). | EMLA and the prototype regulariser become results, not the default: \cref{sec:loss_function} and \cref{sec:regularization} need one sentence each saying so (Asger to word). | \cref{sec:results_longtail} and \cref{sec:results_selftraining} are labels the results steps define. | Pl@ntNet's settings (10 epochs at 384 px) follow the colleague's draft.
+%% status: ready
 \subsection{Training}\label{sec:training}
-% TODO(GM, AS): one of the two recipes will be kept for the final paper. Until then every table and figure names the recipe it used.
-Two training recipes are used in this draft, and every result names the one it used.
+All models are trained with one recipe, implemented in mini\_trainer, whose settings were fixed by single-factor comparisons before the experiments reported here.
+Every species with a training image is a class (12,632 for Lepidoptera, no minimum count), sampling is uniform over images and the loss is cross-entropy, so the recipe applies no class rebalancing.
+The whole network is optimised with AdamW (learning rate $10^{-3}$, weight decay 0.01, batches of 64) under a cosine schedule that warms up linearly over half an epoch from 1\,\% of the learning rate and anneals to zero.
+Images are read at 460 pixels, augmented by flips, rotations up to $15^\circ$ and zoom up to 1.1 (applied with probability 0.75), and cropped to 256 pixels; Lepidoptera models train for 5 epochs and Pl@ntNet models for 10 epochs at 384 pixels.
+The classifier is a cosine head with a trainable scale and bias, kept in fp32 while the rest of the network trains in fp16 mixed precision.
+Every configuration is trained with three seeds (42, 43, 44).
+Two backbones need their own optimiser settings: ViT-L/16 trains with a learning rate of $10^{-4}$, and the DINOv3 ConvNeXt-L with Muon at $8\times10^{-4}$ on 320-pixel crops ($2\times10^{-4}$ on Pl@ntNet).
 
-\textbf{Recipe M} (mini\_trainer) trains with the EMLA loss (\cref{sec:loss_function}) and the prototype regulariser (\cref{sec:regularization}) for \textbf{X} epochs at \textbf{X} pixels with \textbf{X}.
-It is used for the comparison of head architectures (\cref{sec:results_heads}).
-
-\textbf{Recipe L} (lepinet) trains EfficientNetV2-S for 5 epochs with plain cross-entropy and square-root class oversampling: each image of a species with $n$ training images is drawn with weight $n^{-1/2}$, so the species as a whole carries weight $n^{1/2}$.
-Two-dimensional backbone weights are optimised with Muon and all other parameters, the classification head included, with AdamW; EfficientNetV2-S has no two-dimensional weights, so it is trained with AdamW alone, under a one-cycle schedule with half an epoch of warm-up, a learning rate of $10^{-3}$, batches of 64 and gradient clipping at 5.
-Images are resized to 460 pixels and augmented by flips, rotations up to $15^\circ$ and zoom up to 1.1, then cropped to 256 pixels.
-Training uses fp16 mixed precision with the head kept in fp32; heads with an additive angular margin overflow in fp16 and are trained in bf16.
-Recipe L is used for all results on domain shift, self-training and the long tail.
+The recipe deliberately leaves two choices to the dataset, each measured in the results: class rebalancing, for training sets with a heavy tail (\cref{sec:results_longtail}), and unlabelled images of the target domain, when the deployment domain differs from the training photographs (\cref{sec:results_selftraining}).
