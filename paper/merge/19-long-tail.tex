@@ -1,44 +1,37 @@
-%% title: Long-tail rebalancing inverts under shift; cRT removes the trade
+%% title: Long-tail rebalancing: worth it for a heavy tail, costly under shift
 %% target: Sections/Results.tex
 %% anchor: A representation trained on 43 times more images of the same domain is better before adaptation, and the adaptation recipe closes the difference.
 %% action: after
-%% why: Every push of probability mass toward rare species lowers accuracy under shift monotonically, invisibly on the test fold; the cost grows with capacity; rebalancing only the classifier keeps most of the in-distribution gain without it. Same shape for the per-species image cap.
-%% source: paper/DRAFT.md §4.13, §4.13.1; journal/2026-08-01-imbalance-methods-bench.md; journal/2026-10-22-rescoring-in-the-mini-metrics-convention.md (in-distribution calibrated; full-trap rows); data/rescore/trap-grouped.csv (L0 0.3490, base 0.2836, L1 0.2241, L2 0.1834); probe-grouped.csv (base-probef 0.2875, L4 0.3433, F1 0.4909, L5 0.5364, cap250 0.2734, cap500 0.3202, cap1000 0.3597, c1000b 0.3436); probe-ho-grouped.csv (base 0.2394, F1 0.3900, L5 0.4384, cap 0.2285 / 0.2613 / 0.2745 / 0.2863)
-%% check: HOLD (2026-11-05): the frozen-backbone runs behind this step trained the whole network (journal/engineering/2026-11-05-the-frozen-stages-were-not-frozen.md); waits for the mini_trainer reruns. | Paste after step 18. | Decision sheet row 3 recommends Asger's no-oversampling plus cRT as a reported stage; this piece is the evidence. | L0 was not scored on the probe set and L4 not on the full trap set, so cRT is compared with the oversampled baseline on the probe set only. | Uncapped in-distribution: 0.9135 (this baseline) or 0.9148 (DRAFT §3.1 ladder); use one. | Balanced softmax equals logit adjustment at tau 1 and EMLA is a logit adjustment: say how EMLA relates to L1 once Asger's runs are scored on traps (decision sheet row 4).
-%% status: hold
-\subsection{Long-tail rebalancing inverts under shift}\label{sec:results_longtail}
-Long-tailed recognition is usually validated on held-out splits of the training distribution.
-\Cref{tab:longtail} crosses square-root oversampling with balanced softmax, which is logit adjustment at $\tau = 1$ \textbf{(REF: Ren et al. 2020; Menon et al. 2021)}, on one backbone with recipe L.
-Ordered by how hard they push probability mass toward rare species, the four cells lose accuracy on the trap images at every step, 16.6 points from first to last against a 1.0-point difference between identical trainings.
-On the test fold they do not order at all.
-What a model learns from a species' few dozen photographs is largely about those photographs (one photographer, background and camera), so tail reweighting up-weights the least transferable part of the training signal, which the test fold, sharing those artefacts, cannot see.
+%% why: Rebalancing is the first setting the generic recipe leaves to the dataset. On Pl@ntNet's heavy tail it pays up to 9.7 points; on Lepidoptera it buys little in-distribution and costs 4 to 5.5 points on trap images. The tail statistics say which case a dataset is in.
+%% source: RESULTS VR (Pl@ntNet rebalancing, V2-S, seed 42), VS and VS2 (Lepidoptera, EMLA against cross-entropy; three-seed baselines); journal/2026-10-23-which-recipe-does-the-merged-paper-rerun.md (discussion point 1: tail statistics); data/rescore/trap-grouped.csv (recipe L: L0 0.3490, base 0.2836, L1 0.2241, L2 0.1834); journal/2026-08-01-imbalance-methods-bench.md
+%% check: Rewritten 2026-11-09 (owner's decisions). cRT and the 198 M capacity paragraph are gone: their runs were not frozen (journal/engineering/2026-11-05-the-frozen-stages-were-not-frozen.md); the appendix keeps one line. | The rebalanced Pl@ntNet arms and EMLA on Lepidoptera are one seed each; the baselines are three-seed means. | The monotone ordering is recipe L, end-to-end runs (not affected by the frozen-stage incident), rescored in the current convention. | The image-cap sweep is dropped: recipe L, and not needed for the message. | Paste after step 18.
+%% status: ready
+\subsection{Long-tail rebalancing}\label{sec:results_longtail}
+Rebalancing is the first choice the recipe leaves to the dataset, and the two datasets answer it differently.
+On Pl@ntNet-300K, whose test fold shares the training distribution, both rebalancing methods pay (\cref{tab:longtail}).
+Square-root oversampling raises every head, by 1.3 to 9.7 points, and removes the top-down head's deficit; EMLA gives the best flat head (+4.8) but lowers the top-down head by 6.2 points.
 
 \begin{table}[htb]
     \centering
-    \caption{Rebalancing the long tail (EfficientNetV2-S, recipe L except for the factor varied). Test fold: zero threshold and calibrated. Traps: all 47,905 crops; probe: the probe set; both calibrated on 10\,\% of the (trap, night) groups.}
+    \caption{Rebalancing on Pl@ntNet-300K (EfficientNetV2-S), species macro-$\text{F}_1$ on the test fold at zero threshold. No rebalancing: mean of three seeds; rebalanced: one seed.}
     \label{tab:longtail}
     \begin{tabular}{lcccc}
         \toprule
-        & \multicolumn{2}{c}{test fold} & traps & probe \\
-        rebalancing & zero & calibrated & & \\
+        rebalancing & F & BU & I & TD \\
         \midrule
-        none (L0) & 0.8949 & 0.8828 & 0.349 & -- \\
-        square-root oversampling & 0.9135 & 0.9117 & 0.284 & 0.288 \\
-        balanced softmax (L1) & 0.8970 & 0.9028 & 0.224 & -- \\
-        both (L2) & 0.8689 & 0.8877 & 0.183 & -- \\
-        classifier only, cRT (L4) & 0.9068 & 0.9045 & -- & 0.343 \\
+        none & 0.466 & 0.457 & 0.453 & 0.407 \\
+        square-root oversampling & 0.479 & \textbf{0.500} & \textbf{0.500} & \textbf{0.504} \\
+        EMLA & \textbf{0.514} & 0.478 & 0.494 & 0.345 \\
         \bottomrule
     \end{tabular}
 \end{table}
 
-The cost grows with capacity.
-At 198\,M parameters, removing oversampling costs 1.6 points on the test fold and gains 4.6 on the probe set and 4.8 on its held-out species.
-Constraints on the objective weaken with capacity (at 198\,M, trap-like augmentation no longer costs anything on the test fold, and marginal supervision no longer helps under shift); oversampling changes which data the model sees, and a larger model fits the reweighted distribution, and its bias, better.
+On Lepidoptera EMLA buys 0.6 points on the test fold (BU, 0.894 against a three-seed mean of 0.887) and costs 3.9 points on the trap images, 5.5 on the probe set and 4.9 on its held-out species, each below all three seeds of the unweighted model.
+The earlier recipe showed the same direction more sharply: ordered by how hard they push probability mass toward rare species, no rebalancing, square-root oversampling, balanced softmax \textbf{(REF: Ren et al. 2020; Menon et al. 2021)} and both together lose accuracy on the trap images at every step (0.349, 0.284, 0.224, 0.183), while the test fold does not order them.
+What a model learns from a species' few dozen photographs is largely about those photographs (one photographer, background and camera); up-weighting them helps on a test fold that shares those artefacts and hurts on images that do not.
 
-The trade is not intrinsic.
-Training the representation on the natural distribution and rebalancing only the classifier on the frozen backbone (cRT, \cref{sec:selftraining}) recovers 64\,\% of oversampling's gain on the test fold (75\,\% calibrated) and scores 5.6 points above the oversampled model on the probe set.
-The damage is done in the representation.
-
-The number of images per species behaves the same way.
-Capping training at 250, 500 and 1,000 images per species instead of about 2,000 raises the test fold monotonically with the cap (0.878, 0.896, 0.906, 0.914), while the probe set and its held-out species peak at 1,000 (probe 0.273, 0.320, 0.352 and 0.288 for the full cap; mean of two runs at 1,000).
-Images of species that already have a thousand buy accuracy on the saturated axis and cost it under shift.
+The two training sets differ in how heavy their tail is.
+In Pl@ntNet-300K the median species has 22 training images, 62\,\% of species have fewer than 50, and the effective number of classes, $\exp(H)$ for the entropy $H$ of the class frequencies, is 19\,\% of the number of classes.
+In Lepidoptera, whose corpus is capped at about 2,000 images per species, the median species has 163, 10\,\% have fewer than 50, and the effective number of classes is 54\,\%.
+We therefore recommend square-root oversampling for training sets with a heavy tail, for instance when most classes have fewer than 50 images or the effective number of classes is below a third of the total, and no rebalancing when the model will be used under a domain shift.
+Two datasets cannot place these thresholds precisely; they mark where each of our datasets falls.
