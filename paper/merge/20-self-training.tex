@@ -1,50 +1,48 @@
 %% title: Self-training: dose, labels against pseudo-labels, new traps
 %% target: Sections/Results.tex
-%% anchor: Images of species that already have a thousand buy accuracy on the saturated axis and cost it under shift.
+%% anchor: Two datasets cannot place these thresholds precisely; they mark where each of our datasets falls.
 %% action: after
-%% why: The largest lever in the paper: unlabelled trap images, gated by confidence, gain 21 points on the probe set at no cost on the test fold and transfer to a new trap; real labels gain more on the labelled species and close the world on the rest; the dose optimum survives on unseen species only.
-%% source: journal/2026-10-22-rescoring-in-the-mini-metrics-convention.md (probe table, amendment); data/rescore/probe-grouped.csv and probe-ho-grouped.csv (B1, B3rep1x/5x, B3, B3rep26x, lab500/2500/12230, T1rep, X1/X2 pooled, F1); paper/DRAFT.md §4.11 (error shares 6/9/26/59/91 %, teacher accuracy 98.15 %, in-distribution 0.9003)
-%% check: Paste after step 19. | The interior optimum on the probe set, a headline of our earlier draft, does not survive the current convention; this piece states it for held-out species only. | Rerun: the dose sweep (1x, 11x, 26x) with the pinned recipe (decision sheet row 14). | The error-share percentages are counts of where errors land, independent of the convention.
+%% why: The largest lever in the paper (C3, now its spine): unlabelled trap images raise the probe set by 22 points at no cost on the test fold; over-replication memorises and costs the unseen species; real labels gain more on labelled species and close the world on the rest.
+%% source: RESULTS VX (st1x, st26, st123, X1, X2, dinov3_bu_st26), VT (t1rep, gated true labels), VS2 and VD (three-seed no-adaptation baselines); /data/au761367/paper_numbers/20.md (X1/X2 pooled, error shares, pseudo-label set)
+%% check: Rewritten 2026-11-09 with the campaign recipe. | TODO markers (bold) wait for sheet 20 (mt): pseudo-label count and accuracy, X1/X2 pooled on the held-out trap or site, error shares. | Every adaptation arm is one seed; probe ranges across seeds reach 3.5 points and held-out species 5.1 (step 11), so differences under those are not claimed. | The 500 / 2,500-label arms have no rerun and are dropped. | Paste after step 19.
 %% status: ready
 \subsection{Self-training on unlabelled trap images}\label{sec:results_selftraining}
-\Cref{tab:selftraining} varies the target-domain data added to recipe L at 20\,M parameters.
-Self-training with 12,230 gated pseudo-labels, each repeated 11 times (2.6\,\% of training rows), raises the probe set from 0.424 to 0.631 and its held-out species from 0.356 to 0.414, without a single trap label, and moves the test fold by 0.04 points (0.8999 to 0.9003).
+\Cref{tab:selftraining} adds target-domain data to the recipe on EfficientNetV2-S with the BU head.
+The teacher is the same model trained without trap images; its confident predictions on the adaptation nights give \textbf{N} pseudo-labelled crops of \textbf{N} species, \textbf{N}\,\% of them correct.
+Repeated to 2.6\,\% of the training rows, they raise the probe set from 0.371 to 0.593 and its held-out species from 0.306 to 0.365, without a single trap label, and change the test fold by 0.07 points.
 
 \begin{table}[htb]
     \centering
-    \caption{Target-domain data added to recipe L (EfficientNetV2-S with margin and trap-like augmentation, B1). Species macro-$\text{F}_1$, calibrated on 10\,\% of the (trap, night) groups.}
+    \caption{Target-domain data added to the recipe (EfficientNetV2-S, BU). Species macro-$\text{F}_1$; probe and held-out species calibrated on 10\,\% of the (trap, night) groups. One seed per row; the three-seed range reaches 3.5 points on the probe set and 5.1 on held-out species.}
     \label{tab:selftraining}
-    \begin{tabular}{lccc}
+    \begin{tabular}{lcccc}
         \toprule
-        trap data added & share of rows & probe & held-out species \\
+        trap data added & share of rows & test fold & probe & held-out species \\
         \midrule
-        none & 0 & 0.424 & 0.356 \\
-        12,230 pseudo-labels, once & 0.24\,\% & 0.531 & 0.389 \\
-        12,230 pseudo-labels, 11 copies & 2.6\,\% & 0.631 & \textbf{0.414} \\
-        12,230 pseudo-labels, 27 copies & 6.2\,\% & 0.624 & 0.348 \\
-        12,230 pseudo-labels, 58 copies & 12.3\,\% & 0.606 & 0.306 \\
+        none & 0 & 0.888 & 0.371 & 0.306 \\
+        pseudo-labels, once & \textbf{N} & 0.888 & 0.469 & 0.331 \\
+        pseudo-labels, repeated & 2.6\,\% & 0.887 & 0.593 & \textbf{0.365} \\
+        pseudo-labels, repeated more & 12.3\,\% & 0.885 & 0.568 & 0.274 \\
         \midrule
-        500 / 2,500 real labels, once & & 0.488 / 0.492 & 0.357 / 0.342 \\
-        12,230 real labels, once & 0.24\,\% & 0.609 & 0.379 \\
-        12,230 real labels, 11 copies & 2.6\,\% & \textbf{0.723} & 0.312 \\
+        the same crops, true labels, repeated & 2.6\,\% & 0.887 & 0.682 & 0.343 \\
+        12,205 true labels, all species, repeated & 2.6\,\% & 0.887 & \textbf{0.722} & 0.305 \\
         \midrule
-        pseudo-labels, 11 copies, trap held out & 2.6\,\% & 0.627 & 0.404 \\
-        pseudo-labels, 11 copies, site held out & 2.6\,\% & 0.592 & 0.391 \\
+        pseudo-labels, trap held out (12 folds) & 2.6\,\% & 0.886--0.888 & \textbf{TODO} & \textbf{TODO} \\
+        pseudo-labels, site held out (3 folds) & 2.6\,\% & 0.887--0.889 & \textbf{TODO} & \textbf{TODO} \\
         \bottomrule
     \end{tabular}
 \end{table}
 
-\emph{Dose.} One copy of each pseudo-labelled image, a quarter of a percent of the rows, buys half of the gain.
-Beyond 11 copies the probe set stays flat (0.631, 0.624, 0.606) while the held-out species fall from 0.414 to 0.306: over-replication turns adaptation into memorisation of the pseudo-labelled species, visible only on the species that adaptation did not cover.
+\emph{Dose.} One copy of each pseudo-labelled crop buys 44\,\% of the probe gain.
+Repeating them beyond 2.6\,\% of the rows keeps the probe set within the seed spread (0.593 to 0.568) while the held-out species fall from 0.365 to 0.274, below the model without trap data: over-replication turns adaptation into memorisation of the pseudo-labelled species, visible only on the species that adaptation did not cover.
 
-\emph{Labels against pseudo-labels.} At equal dose, real labels beat pseudo-labels (0.609 against 0.531 once; 0.723 against 0.631 with 11 copies).
-That bounds the price of label noise from above, since the real labels also span every capture night while the gate keeps the teacher's easiest, 98\,\% correct, images.
-But replicated real labels lose 10.2 points to self-training on the held-out species, falling below the model without any trap data.
-The share of held-out species' errors that land on a species labelled at the traps rises with the label budget, from 6\,\% with no labels to 9, 26, 59 and 91\,\% for 500, 2,500, 12,230 and 12,230 labels with 11 copies; self-training sits at 42\,\%.
+\emph{Labels against pseudo-labels.} On the same crops at the same dose, true labels beat pseudo-labels on the probe set by 8.9 points, which bounds the price of label noise from above; on held-out species the two are within the seed spread.
+Labels drawn over every species, as an annotation campaign would, gain a further 4 points on the probe set and lose all of self-training's gain on held-out species (0.305 against 0.306 without trap data).
+\textbf{TODO (sheet 20): the share of held-out species' errors that land on a labelled species, without trap data, with self-training and with labels.}
 Replicated labels teach the model that anything on a trap sheet is one of the labelled species, which is the wrong lesson for a deployment that meets unknown species.
 
-\emph{New traps.} Removing every pseudo-label of the trap a crop came from (twelve folds), or of its site's four traps (three folds), keeps 98\,\% and 81\,\% of the probe gain respectively.
-Self-training adapts to capture conditions, not only to particular traps, and since it needs no labels it can be repeated for each new deployment.
+\emph{New traps.} \textbf{TODO (sheet 20): removing every pseudo-label of the trap a crop came from, or of its site, keeps N\,\% and N\,\% of the probe gain.}
+Since self-training needs no labels, it can be repeated for each new deployment.
 
-\emph{Capacity.} The 20\,M model with self-training (0.631) is far above a 198\,M model without trap data (0.491) on the probe set, and slightly above it on held-out species (0.414 against 0.390).
-Combined with the larger backbone and without oversampling (\cref{sec:results_longtail}), self-training gives B8 (0.647 and 0.452).
+\emph{Capacity.} The 20\,M model with self-training is far above the 198\,M DINOv3 ConvNeXt-L without trap data on the probe set (0.593 against 0.457, three-seed mean) and below it on held-out species (0.365 against 0.381, within the spread).
+Self-training the larger backbone in the same way gives 0.627 and 0.431.
