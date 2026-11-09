@@ -1,6 +1,6 @@
 %% title: Long-tail rebalancing: worth it for a heavy tail, costly under shift
 %% target: Sections/Results.tex
-%% anchor: A representation trained on 43 times more images of the same domain is better before adaptation, and the adaptation recipe closes the difference.
+%% anchor: The broader pretraining helps most on the species that adaptation did not cover.
 %% action: after
 %% why: Rebalancing is the first setting the generic recipe leaves to the dataset. On Pl@ntNet's heavy tail it pays up to 9.7 points; on Lepidoptera it buys little in-distribution and costs 4 to 5.5 points on trap images. The tail statistics say which case a dataset is in.
 %% source: RESULTS VR (Pl@ntNet rebalancing, V2-S, seed 42), VS and VS2 (Lepidoptera, EMLA against cross-entropy; three-seed baselines); journal/2026-10-23-which-recipe-does-the-merged-paper-rerun.md (discussion point 1: tail statistics); data/rescore/trap-grouped.csv (recipe L: L0 0.3490, base 0.2836, L1 0.2241, L2 0.1834); journal/2026-08-01-imbalance-methods-bench.md
