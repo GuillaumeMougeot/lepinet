@@ -9,6 +9,7 @@ this script repairs what the crawl already wrote, and fetches what the corrected
     python dev/102_tol_fix_ranks.py delta   --build B   # rows the corrected keys select that were never queued
     # fetch them with dev/082 fetch --manifest <out> (fix/run.sh), then:
     python dev/102_tol_fix_ranks.py add     --build B   # their rows: B/metadata_final.parquet, B/added_files.parquet
+    python dev/102_tol_fix_ranks.py colxr   --build C   # dry run of the Lepidoptera labels' move to COL XR (dev/101); apply --build C runs it
     python dev/102_tol_fix_ranks.py apply   --build B   # link new paths and added files, swap metadata.parquet, unlink old
     python dev/102_tol_fix_ranks.py check   --build B   # tree, keys and counts of the shared copy
 
@@ -440,6 +441,125 @@ def add(a):
     print(f"metadata_final: {n:,} rows ({len(d):,} added) -> {build / 'metadata_final.parquet'}")
 
 
+def _binomial(name: str, genus: str) -> str:
+    """COL XR's "Anarta (Calocestra) trifolii (Hufnagel, 1766)" as this dataset's "Anarta trifolii"."""
+    words = re.sub(r"\([^)]*\)", " ", name).split()
+    return f"{genus} {next(w for w in words[1:] if w[0].islower())}"
+
+
+def colxr(a):
+    """Dry run of PLAN row TAX on the Lepidoptera rows: dev/101's frozen tables, B/metadata.parquet + B/file_moves.parquet.
+
+    An occurrence that is in our GBIF download (by file, else gbifID) takes dev/101's decision for its own
+    (speciesKey, taxonKey). A catalog row carries no taxonKey: it takes its class's name change, where the
+    occurrences above tie its name to one legacy class (MAJORITY of them), so a species does not split
+    between "our rows" and "catalog rows". Classes dev/101 leaves unresolved keep their name. A row
+    without a class keeps its name and takes its genus's COL XR family when that is unique. Nothing else
+    changes; `exclude` follows the floor for the species a rename touches. `apply --build B` then runs it."""
+    relabel = _load("dev101_colxr", "101_colxr_relabel.py")
+    MAJORITY = 0.9
+    names, tax = relabel.load_tables()
+    build, meta = Path(a.build), Path(a.dataset) / "metadata.parquet"
+    ranks = {"genus": "genus_name", "family": "family_name", "order": "order_name", "class": "class_name",
+             "phylum": "phylum_name", "kingdom": "kingdom_name"}
+    resolved = {k for k in tax if not k.startswith("gbif:")}
+    binom = {k: _binomial(tax[k]["species_name"], tax[k]["genus_name"]) for k in resolved}
+
+    rows = []
+    for t in _row_groups(meta, ["uuid", "species", "genus", "family", "order", "gbif_id", "exclude", "path", "class", "phylum", "kingdom"]):
+        rows.append(t.filter(pc.equal(t["order"], "Lepidoptera")))
+    d = pa.concat_tables(rows).to_pandas()
+    del rows
+    g = pq.read_table(a.global_lepi, columns=["gbifID", "filename", "speciesKey", "taxonKey"]).to_pandas()
+    g["pair"] = g["speciesKey"].astype("int64").astype(str) + "|" + g["taxonKey"].astype("int64").astype(str)
+    by_file = pd.Series(g["pair"].to_numpy(), index="gl-" + g["filename"].str.rsplit(".", n=1).str[0])
+    by_id = pd.Series(g["pair"].to_numpy(), index=g["gbifID"].astype("int64").astype(str))
+    del g
+    pair = d["uuid"].map(by_file)
+    pair = pair.where(pair.notna(), d["gbif_id"].map(by_id))
+    del by_file, by_id
+    log_mem("joined", a.log_mem)
+
+    decided = {f"{k[0]}|{k[1]}": v for k, v in names.items()}
+    key = pair.map(lambda x: decided[x]["new_species_key"], na_action="ignore")
+    why = pair.map(lambda x: decided[x]["reason"], na_action="ignore")
+    is_sp = d["species"].notna()
+    # A catalog row: its name -> the legacy class most of its occurrences are in -> that class's decision.
+    seen = pd.DataFrame({"species": d["species"], "legacy": pair.str.split("|").str[0]}).dropna()
+    n = seen.groupby(["species", "legacy"]).size().reset_index(name="n").sort_values("n", ascending=False)
+    share = n.groupby("species")["n"].transform(lambda x: x / x.sum())
+    top = n[(share >= MAJORITY)].drop_duplicates("species").set_index("species")["legacy"]
+    primary = {k[0]: v["new_species_key"] for k, v in names.items() if v["reason"] != "other_species"}
+    by_name = pair.isna() & is_sp
+    key[by_name] = d.loc[by_name, "species"].map(top).map(primary)
+    why[by_name & key.notna()] = "by_name"
+    del pair, seen, n, top
+
+    usable = is_sp & key.isin(resolved)
+    after = d["species"].where(~usable, key.map(binom))
+    renamed = after.notna() & (after != d["species"])
+    out = d.copy()
+    out["species"] = after
+    for c, col in ranks.items():
+        out.loc[usable, c] = key[usable].map(lambda k: tax[k][col])
+    # Rows without a class: only the family, so the genus keeps one parent.
+    col_rows = [r for r in tax.values() if r["parents_from"] == "col_xr"]
+    fam: dict = defaultdict(set)
+    for r in col_rows:
+        fam[r["genus_name"]].add(r["family_name"])
+    fam = {g: next(iter(v)) for g, v in fam.items() if len(v) == 1}
+    rest = ~usable & d["genus"].isin(set(fam))
+    out.loc[rest, "family"] = d.loc[rest, "genus"].map(fam)
+    # The floor, for the species a rename touches. Counted in this dataset: the catalog has no such key.
+    count = out["species"].value_counts()
+    touched = set(d.loc[renamed, "species"]) | set(after[renamed])
+    t = out["species"].isin(touched)
+    big = out["species"].map(count).fillna(0) >= MIN_IMG
+    out.loc[t & ~big & out["exclude"].isna(), "exclude"] = "below_floor"
+    out.loc[t & big & (out["exclude"] == "below_floor"), "exclude"] = None
+    out.loc[renamed, "path"] = out.loc[renamed, "species"].map(folder_name) + "/" + out.loc[renamed, "uuid"] + ".jpg"
+
+    cols = ["species", "genus", "family", "order", "class", "phylum", "kingdom", "exclude", "path"]
+    same = (out[cols].fillna("") == d[cols].fillna("")).all(axis=1)
+    chg = out.loc[~same, ["uuid", *cols]].set_index("uuid")
+    chg = {u: {c: None if pd.isna(x) else x for c, x in zip(cols, v)} for u, v in zip(chg.index, chg.itertuples(index=False, name=None))}
+    stats = {"lepidoptera_rows": len(d), "rows_changed": len(chg), "rows_renamed": int(renamed.sum()), "by_decision": why[renamed].value_counts().to_dict(),
+             "mapped": why.value_counts().to_dict(), "no_class_rows": int((is_sp & key.isna()).sum()), "no_class_species": int(d.loc[is_sp & key.isna(), "species"].nunique()),
+             "species_before": int(d["species"].nunique()), "species_after": int(out["species"].nunique()),
+             "old_names_renamed": int(d.loc[renamed, "species"].nunique()), "new_names": int(after[renamed].nunique()),
+             "new_folders": len(set(after[renamed]) - set(d["species"].dropna())),
+             "family_changed": int((out["family"].fillna("") != d["family"].fillna("")).sum()), "genus_changed": int((out["genus"].fillna("") != d["genus"].fillna("")).sum()),
+             "order_changed": int((out["order"].fillna("") != d["order"].fillna("")).sum()),
+             "over_cap_species": int((count > a.cap).sum()), "over_cap_rows_above_cap": int((count[count > a.cap] - a.cap).sum()), "largest": int(count.max()),
+             "below_floor_set": int(((out["exclude"] == "below_floor") & d["exclude"].isna()).sum()), "below_floor_cleared": int(((d["exclude"] == "below_floor") & out["exclude"].isna()).sum())}
+    moves = pa.table({"old": d.loc[renamed, "path"].tolist(), "new": out.loc[renamed, "path"].tolist()})
+    pq.write_table(moves, build / "file_moves.parquet")
+    (build / "plan_summary.json").write_text(json.dumps(stats, indent=1))
+    print(json.dumps(stats, indent=1))
+    del d, out, after, key, why
+    log_mem("decided", a.log_mem)
+
+    schema = pq.read_schema(meta)
+    wanted = pa.array(list(chg), pa.string())
+
+    def tables():
+        for t in _row_groups(meta):
+            hit = pc.is_in(t["uuid"], value_set=wanted)
+            if not pc.any(hit).as_py():
+                yield t
+                continue
+            where = np.flatnonzero(hit.to_numpy(zero_copy_only=False))
+            uuids = t["uuid"].take(pa.array(where)).to_pylist()
+            for c in cols:
+                v = t[c].to_pylist()
+                for i, u in zip(where, uuids):
+                    v[i] = chg[u][c]
+                t = t.set_column(t.schema.get_field_index(c), t.schema.field(c), pa.array(v, t.schema.field(c).type))
+            yield t
+    n = _write_sorted(tables, build / "metadata.parquet", schema, build / "work")
+    print(f"colxr plan: {n:,} rows -> {build / 'metadata.parquet'}; {moves.num_rows:,} moves")
+
+
 # --------------------------------------------------------------------------------------------- #
 def apply(a):
     build, dataset = Path(a.build), Path(a.dataset)
@@ -540,7 +660,7 @@ def check(a):
 
 if __name__ == "__main__":
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("step", choices=["catalog", "plan", "delta", "add", "apply", "check"])
+    p.add_argument("step", choices=["catalog", "plan", "delta", "add", "colxr", "apply", "check"])
     p.add_argument("--build", required=True, help="working directory for this script's outputs")
     p.add_argument("--dataset", default="/data/datasets/tol256", help="the shared copy")
     p.add_argument("--hf", default="/data/au761367/tol256s/hf", help="local TreeOfLife-200M metadata")
@@ -553,4 +673,4 @@ if __name__ == "__main__":
     p.add_argument("--log-mem", action="store_true", help="print resident memory after each stage")
     a = p.parse_args()
     Path(a.build).mkdir(parents=True, exist_ok=True)
-    {"catalog": catalog, "plan": plan, "apply": apply, "check": check, "delta": delta, "add": add}[a.step](a)
+    {"catalog": catalog, "plan": plan, "apply": apply, "check": check, "delta": delta, "add": add, "colxr": colxr}[a.step](a)

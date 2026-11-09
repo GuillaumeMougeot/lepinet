@@ -169,6 +169,27 @@ Legacy GBIF Backbone errors: [[2026-11-03-the-training-labels-inherit-gbif-backb
     `Xerophyta`, `Ceropales`) are real genera. A re-crawl with `dev/082` would fetch these keys again.
     **Final:** 65,602,738 rows, 0 missing, 0 extra, 0 duplicate paths; 214,338 folders; genus-level
     2,603,097 rows; shards re-planned (1,059).
+- 2026-11-09: **the Lepidoptera labels in ToL moved to COL XR** (owner; `dev/102 colxr`, on `dev/101`'s
+  frozen tables, `/data/au761367/tol256s/colxr_build`). `data/global` and TAX are untouched: until TAX
+  runs, ToL and the Lepidoptera models name these species differently.
+  - `dev/101` works per image from (speciesKey, taxonKey), which only our GBIF download has. Of 8,853,386
+    Lepidoptera rows, 5,482,609 are occurrences in that download (by file, else gbifID) and take its
+    decision for their own record. Catalog rows take their class's name change where at least 90 % of
+    their name's occurrences sit in one legacy class (2,534,254 rows), so 10,286 species with both
+    kinds of row do not split. Rows with no class keep their name and take their genus's COL XR family
+    where unique.
+  - **Result, applied and validated:** 507,927 rows renamed and moved, 569,625 changed in all; Lepidoptera
+    species 18,201 -> 17,952 (1,621 old names, 1,586 new, 702 new folders); family changed on 81,054 rows,
+    order on none. 134 species exceed the 2,000 cap after merging (largest 5,369; 64,892 rows above
+    it), all kept (owner). 1,256 rows newly `below_floor`, counted in this dataset for touched names.
+    **Final:** 65,602,738 rows in 201,645 species, 214,089 folders, 0 paths missing, 0 extra files, 0
+    duplicate paths. Genus names under several paths 663 (660 before).
+  - **Not fixed:** 436,332 rows in 5,539 species are outside the 12.6 k classes the frozen tables cover
+    and stay on legacy names; catalog rows cannot be checked for mixed classes (they carry no original
+    name); 69 classes `dev/101` leaves unresolved or low-confidence keep theirs. The Riodinidae gap
+    above stands: those genera are not in the tables either.
+  - Undo: `colxr_build/metadata_before.parquet`, `colxr_build/applied.tsv`. The `dev/087` lists now name
+    old paths and wait for the freeze.
 - 2026-11-09: target start of the full ToL training: Mon 23 Nov 2026, after a pilot on 16-20 Nov at the full class
   count (192 k species, up to 50 images each, about 8 M images; arms: baseline DINOv3 ConvNeXt-L, margin 0.3,
   TrivialAugmentWide, ViT-L). In mini_trainer (branch, 6f6a3cf): shard loading with virtual epochs, shard predict,
