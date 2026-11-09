@@ -2,12 +2,14 @@
 %% target: Sections/Methods.tex
 %% anchor: On the trap images the split is made by capture group: a random 10\,\% of the (trap, night) groups calibrates the thresholds and the rest is scored, so that no moth photographed on one night appears on both sides.
 %% action: after-paragraph
-%% why: Bootstrap intervals over test images miss the variation between training runs, which is larger, so several "clear winners" in the current tables may be retraining noise. The rerun's three seeds measure it.
-%% source: journal/2026-08-01-how-noisy-are-our-numbers.md (A5: identical retrain, 0.0069 on trap images, 0.0000 species in-distribution); journal/2026-08-27-the-noise-floor-does-not-transfer-across-training-regimes.md (G3b: 3.74 pt between identical frozen-backbone runs)
-%% check: The two spreads quoted were measured in the old metric convention; replace with the three-seed spread of the rerun (TODO in the piece). | Paste below step 10.
+%% why: A bootstrap over test images and a retraining with another seed measure different things, and on trap images they are of the same size, so a difference is claimed only when it survives both.
+%% source: /data/au761367/paper_numbers/11.md (campaign, seeds 42-44, 12 configurations: V2-S, B0, DINOv3 x F, BU, I, TD; bootstrap over 1,960 (trap, night) groups, 1,000 resamples)
+%% check: Rewritten 2026-11-09 with the rerun's three seeds; the old text said retraining spread is larger, which the rerun does not support on trap images. | The frozen-backbone 3.7-point example is gone: no rerun has three seeds of it. | Paste below step 10.
 %% status: ready
 Two sources of variation are reported separately.
-Bootstrap resampling of the test images measures how much a score depends on which images were drawn.
-Retraining with another seed measures how much it depends on the training run, and it is larger: in our earlier runs, two identical trainings differed by 0.7 points of macro-$\text{F}_1$ on trap images, and two identical 2-epoch fine-tunings of a frozen backbone by 3.7 points on the held-out species.
-A difference between two heads is therefore claimed only when it exceeds the spread across three training seeds, not only the bootstrap interval.
-% TODO: replace the two spreads with the three-seed spread of the rerun, in the mini_metrics convention.
+Retraining with another seed measures how much a score depends on the training run; we train every configuration with three seeds (42, 43, 44) and report the range.
+On the test fold it is negligible: across twelve configurations (three backbones, four heads) the species macro-$\text{F}_1$ varies by a median of 0.07 points and at most 0.14.
+On the trap images it is not: the calibrated species score varies by a median of 1.2 points and up to 2.7, and on the held-out-species probe by up to 5.1.
+Calibration contributes to this, since the same configurations vary by only 0.2 to 0.5 points at zero threshold.
+Bootstrap resampling of whole (trap, night) groups measures how much a score depends on which capture events were drawn, and on the trap images it is of the same size as retraining: a standard deviation of 0.25 to 0.30 points at zero threshold, against a three-seed range of 0.19 to 0.50.\footnote{Percentile intervals of this bootstrap sit above the point estimate, because a resample drops rare species that are only ever predicted and score zero; we therefore quote its standard deviation.}
+A difference between two configurations is claimed only when their three-seed ranges do not overlap, and on the trap images only when it also exceeds twice the bootstrap standard deviation.
