@@ -4,7 +4,7 @@
 %% action: after
 %% why: With the recipe's cosine head, the rule order is the same for every head at both scales: entropy best, the largest logit and energy worst by 24 to 38 points. The earlier rule changes came from the margin head and the old recipe.
 %% source: /data/au761367/paper_numbers/17.md (os_* runs, seed 42, five rules, dev/099); RESULTS VO, VO2
-%% check: Rewritten 2026-11-09: the old thesis (the best rule changes with head and scale) does not reproduce; it rested on the margin head, which has no rerun (appendix). | TODO: the domain paragraph waits for the trap rerun of the five rules (mt, local GPU); if it does not come, drop the paragraph and the domain clause of step 08. | Paste after step 16. | AUROCs are independent of the macro-F1 convention.
+%% check: Rewritten 2026-11-09: the old thesis (the best rule changes with head and scale) does not reproduce; it rested on the margin head, which has no rerun (appendix). | Domain from the trap rerun (sheet 17, Domain section: 8 os_ checkpoints, all 47,905 crops). | Paste after step 16. | AUROCs are independent of the macro-F1 convention.
 %% status: ready
 \subsection{Which open-set scoring rule}\label{sec:results_rules}
 The five rules of \cref{sec:evaluation} are computed from the same forward pass on the same images.
@@ -12,5 +12,6 @@ With the recipe's cosine head their order is the same for every head on both bac
 For the flat head on EfficientNetV2-S, entropy gives 0.915 and energy 0.599, a 31.6-point spread, and the largest logit, a common default, is 24 to 38 points below MSP at 20\,M parameters and 8 to 31 points below it at 198\,M.
 In a well-fitted cosine embedding every image reaches a high cosine to some prototype, so the maximum saturates; what still separates known from novel images is whether one prototype dominates, which only MSP, entropy and the top-2 margin see.
 The choice of rule also decides what capacity appears to buy: from 20\,M to 198\,M parameters the flat head gains 1.0 point read by entropy and 17.6 read by the largest logit.
-\textbf{TODO (trap rerun): whether the order holds on trap images.}
-Open-set results are therefore reported with the rule named.
+On trap images the rules that read the size of the logits fail: the largest logit and energy fall below chance for seven of the eight heads (0.295 and 0.272 for the flat head on EfficientNetV2-S), because shift lowers every logit, known species included.
+The rules that read the shape of the softmax keep working, and on trap images MSP, entropy and the top-2 margin are within 3 points of each other for seven of eight heads; every rule loses most of its power there (best AUROC 0.54 to 0.66, against 0.87 to 0.93 on museum-style images).
+Open-set results are therefore reported with the rule named, and the size of the logits is never used as a novelty score.
