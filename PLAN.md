@@ -34,21 +34,28 @@ On free GPUs, after the paper's jobs. [[2026-11-07-otto-a-production-model-for-a
 
 Postponed (owner, 2026-11-07): the Tree of Life run (W3); first step when it resumes is the upload, the parquets and a one-epoch throughput pilot.
 
-## 1. The goal: a submittable paper
+## 1. The paper: to-do list (this week, owner 2026-11-09)
 
-Every experiment [`paper/DRAFT.md`](paper/DRAFT.md) uses is closed. What remains is scoping, writing
-and two evaluation-only runs. **Target: finished next week** (owner, 2026-11-04); GPU time goes only
-to what the paper needs.
+One paper: Svenning et al.'s Overleaf draft, with our pieces inserted through the
+[Merge Desk](https://claude.ai/artifact/KFNuRZrWnf39pLdUwvPyTP) (`paper/merge/NN-*.tex`, `dev/094`). Claims and
+recipe decided 2026-11-09: [[2026-10-23-which-recipe-does-the-merged-paper-rerun]]. Numbers for every piece:
+`/data/au761367/paper_numbers/NN.md` (mt, from the campaign).
 
-| # | step | who | state |
-|---|---|---|---|
-| 1 | **One paper, merged with Svenning et al.'s draft** (`~/Documents/hierarchical_classification.pdf`; owner, 2026-10-22: no second paper). Proposed outline: methods = data (Lepidoptera, Pl@ntNet, traps with the grouped split), HGLL head, the five heads, one recipe, evaluation (metric conventions, retrain noise); results = hierarchy (parameters vs supervision, alignment, novelty by taxonomic distance), evaluating under shift (conventions, scoring rules, contamination), long tail, target-domain data, classifier stage, abstention; appendix = margin, nuisance augmentation, head scaling, recipe ladder, AR decoder, EMLA and regulariser. Open: one training recipe for both drafts (EMLA vs √-oversampling), the colleague's raw trap predictions rescored with `dev/092` | owner + colleague | open |
-| 1b | **Pin the rerun recipe before any rerun** (owner, 2026-10-23: the colleague's settings have priority; some experiments will be redone). 16 decisions with both drafts' settings and our evidence: species floor, sampling, loss (EMLA vs CE), regulariser, epochs, image size, backbones, heads, margin, seeds, dose, open-set split, budget. [[2026-10-23-which-recipe-does-the-merged-paper-rerun]] | owner + colleague | reframed 2026-11-03: settled by measurement in mini_trainer (§0, phase 3) |
-| 2 | Insert our pieces into the Overleaf draft through the Merge Desk (`paper/merge/`, `dev/094`): all 23 steps drafted (02 pasted; 04 on hold for 1b). Results steps 13-22 and the appendix (23) carry recipe-L numbers in mini_metrics' current convention, trap scores calibrated on grouped splits; each says in its check line what the rerun replaces | owner, agent | ongoing |
-| 3 | Re-score §4.5 with each head's own rule; measure open-set under shift for B8 and P5 | GPU, eval only | done (N2, N3; Merge Desk step 14) |
-| 4 | Verify every citation in §1b and the references (written from memory) | owner | open |
-| 5 | Consistency pass: every number against its journal entry | agent | — |
-| 6 | Re-run A2's scoring rules: `rules-A2.json` was overwritten on 2026-08-03; §4.9 uses the 2026-08-01 file | GPU, eval only | open |
+**Owner**
+- [ ] Paste the ready pieces into Overleaf, in order: 01, 04, 05, 07-20 (except 18 as it stands), 22, 23. Do not paste 06 or 21 (dropped).
+- [ ] Verify the citations written from memory: Kang et al. 2020 (cRT), Ren et al. 2020 and Menon et al. 2021 (balanced softmax / logit adjustment), Deng et al. 2012, the AMI hardware reference, Dodge et al. 2021.
+- [ ] Agree the message with Asger: one recipe plus two dataset-dependent settings (rebalancing for heavy tails, self-training under shift); marginal supervision as a coarse-rank and abstention tool. A note for him can be drafted on request.
+- [ ] Asger to word one sentence each in his loss and regulariser sections: EMLA and the prototype regulariser are results, not the default (step 04).
+- [ ] Pl@ntNet's role in the evaluation section (step 07, marked X).
+
+**Agent**
+- [x] Rewrite every results piece on the rerun (2026-11-09): 04, 05, 09-17, 19, 20, 22, 23; 01 and 07 checked; C1 restated; C2, C6, the staged recipe and recipe L cut.
+- [ ] Consistency pass: every number against its sheet, cross-references (`\cref` labels), no remaining mention of recipe L, the margin head or the classifier stage, anchors after the owner's pastes.
+- [ ] Piece 18 (contamination): reread against the new framing; shorten if it does not carry the message.
+- [ ] Intro and discussion: contribution list rewritten to match (C3 self-training as the spine; C1 restated; C4 as rebalancing by dataset; C5 contamination).
+- [ ] Re-run A2's scoring rules: obsolete (the margin head is cut); close it.
+
+**Not in this paper** (owner, 2026-11-09): the augmentation runs, the public benchmarks, Otto and its successors.
 
 ## 2. Running now
 
