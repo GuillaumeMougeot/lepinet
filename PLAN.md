@@ -50,10 +50,10 @@ recipe decided 2026-11-09: [[2026-10-23-which-recipe-does-the-merged-paper-rerun
 
 **Agent**
 - [x] Rewrite every results piece on the rerun (2026-11-09): 04, 05, 09-17, 19, 20, 22, 23; 01 and 07 checked; C1 restated; C2, C6, the staged recipe and recipe L cut.
-- [ ] Consistency pass: every number against its sheet, cross-references (`\cref` labels), no remaining mention of recipe L, the margin head or the classifier stage, anchors after the owner's pastes.
-- [ ] Piece 18 (contamination): reread against the new framing; shorten if it does not carry the message.
+- [x] Consistency pass (2026-11-09): cross-references resolve (the only outside labels are Asger's `sec:regularization`, `sec:tune_tau`); baselines are three-seed means everywhere; recipe L, margin and classifier-stage mentions gone except where labelled. Anchors to recheck after the owner's pastes.
+- [x] Piece 18 (contamination): reworked on campaign numbers (P5 against the self-trained DINOv3).
 - [ ] Intro and discussion: contribution list rewritten to match (C3 self-training as the spine; C1 restated; C4 as rebalancing by dataset; C5 contamination).
-- [ ] Re-run A2's scoring rules: obsolete (the margin head is cut); close it.
+- [x] Re-run A2's scoring rules: closed, obsolete (the margin head is cut).
 
 **Not in this paper** (owner, 2026-11-09): the augmentation runs, the public benchmarks, Otto and its successors.
 
