@@ -369,3 +369,15 @@ student learns TTA's output at 1x cost.
 
   Images outside the support > 5 average: 9.34 / 4.53 / 0.15 % (species / genus / family) unthresholded, 12.91 /
   12.69 / 0.33 % calibrated.
+- 2026-11-09: **diagnostics.**
+  - **Class set ruled out:** Otto's logits masked to P5's 12,041 species give probe / probe-HO 0.5883 / 0.4503
+    against 0.5883 / 0.4497 on the full set. Prediction ("at most 1 point") held: 0.0. The gap to P5 is the model.
+  - **Inference ensembles** (probabilities averaged by GBIF key; choose on half A, report on half B;
+    `/data/au761367/benchmarks/ens/ens2b_results.json`):
+    - north_europe + tta3bm: the pick is all three (P5, the self-trained DINOv3, Otto), B 0.744 / 0.580, against
+      P5 alone 0.732 / 0.580: +1.2 probe, +0.0 probe-HO, at 3x the cost.
+    - full vocabulary, single view: the pick is P5 + DINOv3, B 0.677 / 0.539, against P5 0.645 / 0.511: +3.2 /
+      +2.8 at 2x the cost.
+    - The self-trained DINOv3 alone at north_europe + tta3bm reaches probe 0.716, above P5's 0.711, and stays
+      below it on held-out species (0.512 against 0.546).
+  - **Reading:** with the list and TTA, ensembling adds little; the student models are what can still move.
