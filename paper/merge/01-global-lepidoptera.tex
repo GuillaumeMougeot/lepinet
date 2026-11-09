@@ -4,9 +4,8 @@
 %% action: after
 %% why: Fills an empty subsection, with the colleague's settings (all 12,632 species, no image floor), as the owner asked. The 50-image floor of the lepinet runs is a recipe decision for the rerun, not a dataset property.
 %% source: counts recomputed 2026-10-22 from the global_lepi parquet (6,329,994 rows; fold 0 632,913, folds 2-9 5,063,857); the ~2,000-image cap from paper/DRAFT.md section 4.13.1
-%% check: Every lepinet number so far used a 50-image floor (12,041 species); they hold only until the rerun (journal/2026-10-23-which-recipe-does-the-merged-paper-rerun.md). | The open-set benchmark of the lepinet runs used the species below that floor; without a floor it needs withheld species instead (TODO in the piece). | Is the split by GBIF observation for the whole corpus (Asger's README says so for his 512-species cohort)?
+%% check: Counts checked against the campaign (2026-11-09): 6,329,994 images, 12,632 / 4,476 / 104 taxa, fold sizes. | Unseen species for open set come from withheld taxa (step 07), since every species is trained on. | Is the split by GBIF observation for the whole corpus (Asger's README says so for his 512-species cohort)?
 %% status: ready
 Global Lepidoptera is assembled from GBIF occurrence images of adult moths and butterflies \autocite{gbif}, capped at about 2,000 images per species when the corpus was built.
 After quality filtering it holds 6.33\,M images of 12,632 species, 4,476 genera and 104 families.
 The images are split into ten folds of equal size: fold 0 is the test set (632,913 images), fold 1 the validation set and folds 2--9 the training set (5.06\,M images).
-% TODO: open-set benchmark. The lepinet runs drew unseen species from those below a 50-image floor; with every species trained on, unseen species must be withheld on purpose (as in the C3b run). Decide with the rerun.
