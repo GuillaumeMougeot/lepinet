@@ -9,7 +9,7 @@
 \subsection{Accuracy on the test fold does not predict accuracy under shift}\label{sec:results_axes}
 \Cref{tab:axes} scores the models of the shift experiments on every axis.
 The eight EfficientNetV2-S models lie within 0.9 points on the test fold and span 35.6 points on the trap probe set and 9.1 on its held-out species.
-Self-training, worth 22.7 points on the probe set (\cref{sec:results_selftraining}), changes the test fold by 0.07.
+Self-training, worth 22.7 points on the probe set (\cref{sec:results_selftraining}), changes the test fold by less than 0.1 points.
 Across the ten models the test-fold ranking is unrelated to the probe ranking (Spearman $\rho = -0.04$) and only loosely related to the held-out-species ranking ($\rho = 0.54$, not significant).
 The axes also pick different models: true trap labels over every species give the best model on the probe set, which is eighth of ten on the test fold and seventh on held-out species, while the self-trained DINOv3 ConvNeXt-L is best on the test fold and on held-out species and third on the probe set, 9.5 points below the best.
 

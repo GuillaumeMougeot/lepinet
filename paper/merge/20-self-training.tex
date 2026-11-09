@@ -9,7 +9,7 @@
 \subsection{Self-training on unlabelled trap images}\label{sec:results_selftraining}
 \Cref{tab:selftraining} adds target-domain data to the recipe on EfficientNetV2-S with the BU head.
 The teacher is the same model trained without trap images; its most confident predictions on the adaptation nights give 8,169 pseudo-labelled crops of 274 species, 98.7\,\% of them correct (\cref{sec:selftraining}).
-Repeated to 2.5\,\% of the training rows, they raise the probe set from 0.366 to 0.593 and its held-out species from 0.301 to 0.365 (three-seed means without trap data), without a single trap label, and change the test fold by 0.07 points.
+Repeated to 2.5\,\% of the training rows, they raise the probe set from 0.366 to 0.593 and its held-out species from 0.301 to 0.365 (three-seed means without trap data), without a single trap label, and change the test fold by less than 0.1 points.
 
 \begin{table}[htb]
     \centering
