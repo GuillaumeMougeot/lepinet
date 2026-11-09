@@ -58,6 +58,7 @@ kept as a record. Long-term tooling does not live here: the documentation check 
 | `099_openset_c3b.py` | open-set AUROC on C3b's withheld taxa (near, mid, far) from mini_trainer's per-image summaries (`dev/lepinet/openset.py`), dev/061's five rules at every rank, degenerate rules flagged | campaign open-set block |
 | `100_campaign_autoscore.py` | cron scorer for the campaign: every finished output in mini_trainer's `tmp-runs/eval` (test fold, traps, open-set) scored once into `data/campaign/scores.csv` and `summary.md`, retried three times on failure | campaign |
 | `101_colxr_relabel.py` | one command (`apply --upload`) that moves the Lepidoptera labels to Catalogue of Life XR from frozen tables in `dev/colxr/`: a new parquet (every row kept), trap labels, regional lists, report; writes new files only. `prepare` rebuilt the tables. Plan row TAX, [the labels](../journal/2026-11-03-the-training-labels-inherit-gbif-backbone-errors.md) |
+| `102_tol_fix_ranks.py` | undo the ToL catalog's rank shift in `/data/datasets/tol256` (bare-epithet folders -> `Genus_epithet`, ranks realigned, `taxon_rank`), re-fetch what the corrected keys select (`delta`, `add`), journalled hard-link apply | TF |
 
 **Conventions.** Never `uv sync` or `uv run` (the venv is hand-managed); use `.venv/bin/python`
 from the repo root.

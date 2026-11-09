@@ -152,3 +152,29 @@ def test_a_host_that_never_stops_throttling_is_blocked(monkeypatch):
     assert b.blocked and b.reason == "throttled"
     assert [r[1] for r in res] == [tol.SKIPPED_BLOCKED] * 3   # rows stay unattempted, not exhausted
     assert n_sent < 20                                        # paused, not hammered
+
+
+def test_realign_undoes_the_catalogs_rank_shift():
+    """Rows from TreeOfLife-200M's catalog.parquet, as published (2026-11-08)."""
+    r = tol.realign
+    # no class (ray-finned fish): order, family, genus and epithet each one column up
+    assert r(["Animalia", "Chordata", "Perciformes", "Cichlidae", "Oreochromis", "mossambicus", None]) == \
+        ("Animalia", "Chordata", "", "Perciformes", "Cichlidae", "Oreochromis", "mossambicus")
+    # GBIF ranks Squamata as a class and gives reptiles no order
+    assert r(["Animalia", "Chordata", "Squamata", "Colubridae", "Thamnophis", "butleri", None]) == \
+        ("Animalia", "Chordata", "", "Squamata", "Colubridae", "Thamnophis", "butleri")
+    # no order (ammonite): the class stays a class
+    assert r(["Animalia", "Mollusca", "Cephalopoda", "Hildoceratidae", "Pleydellia", "aalensis", None]) == \
+        ("Animalia", "Mollusca", "Cephalopoda", "", "Hildoceratidae", "Pleydellia", "aalensis")
+    # no family (fungus)
+    assert r(["Fungi", "Ascomycota", "Sordariomycetes", "Hypocreales", "Stilbella", "byssiseda", None]) == \
+        ("Fungi", "Ascomycota", "Sordariomycetes", "Hypocreales", "", "Stilbella", "byssiseda")
+    # two ranks missing: the crawl's key was empty and the rows were dropped
+    assert tol.species_key(["Animalia", "Mollusca", "Bivalvia", "Phygraea", "newberryi", None, None]) == \
+        "Phygraea newberryi"
+    # unshifted rows and genus-only records come back unchanged; placeholders are not species
+    full = ("Animalia", "Arthropoda", "Insecta", "Lepidoptera", "Nymphalidae", "Vanessa", "atalanta")
+    assert r(full) == full
+    assert tol.species_key(["Animalia", "Arthropoda", "Insecta", "Diptera", "Phoridae", "Megaselia", None]) == \
+        "Megaselia"
+    assert tol.species_key(["incertae sedis", "sedis", None, None, None, None, None]) == ""

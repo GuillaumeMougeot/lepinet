@@ -99,8 +99,55 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 CATALOG = "datasets/imageomics/TreeOfLife-200M/dataset/catalog.parquet"
-PLAN_COLS = ["uuid", "source_url", "kingdom", "phylum", "class", "order", "family",
-             "genus", "species", "data_source", "source_id"]
+RANKS = ["kingdom", "phylum", "class", "order", "family", "genus", "species"]
+PLAN_COLS = ["uuid", "source_url", *RANKS, "data_source", "source_id"]
+
+# The catalog left-packs its rank columns: a row whose taxonomy lacks a rank has every lower name moved
+# up one column, so a reptile reads class=Squamata, order=Colubridae, family=Thamnophis, genus=butleri and
+# species empty (GBIF's backbone gives reptiles and ray-finned fishes no order or no class). Keying on
+# genus + species turned 6.5 M such rows into bare-epithet keys that merge genera (2026-11-08,
+# journal/2026-11-08-does-a-margin-objective-make-a-better-pretrained-biodiversity-model.md).
+RANK_SUFFIX = [(re.compile(r"(idae|aceae)$"), 4), (re.compile(r"(iformes|ales)$"), 3),
+               (re.compile(r"(opsida|mycetes|phyceae)$"), 2), (re.compile(r"(phyta|mycota)$"), 1)]
+GBIF_CLASSES_THAT_ARE_ORDERS = {"Squamata", "Testudines", "Crocodylia", "Sphenodontia"}
+
+
+def rank_of(name: str, kinds: dict[str, int] | None = None) -> int | None:
+    """Index into RANKS[:5] of a higher-rank name, or None: a fixed exception list, then what the rest
+    of the catalog says (`kinds`, name -> most frequent column among complete rows), then the ending."""
+    if name in GBIF_CLASSES_THAT_ARE_ORDERS:
+        return 3
+    if kinds and name in kinds:
+        return kinds[name]
+    return next((r for rx, r in RANK_SUFFIX if rx.search(name)), None)
+
+
+def realign(vals, kinds: dict[str, int] | None = None) -> tuple[str, ...]:
+    """The seven rank values (kingdom..species) with a left-packing shift undone.
+
+    The shift shows as a lowercase name (the epithet) in the last filled column with `species` empty:
+    that name is the epithet and the one before it the genus. The names above go back into kingdom..family
+    in order, each at its known rank where `rank_of` knows it, otherwise in the next free column; a rank
+    with no name stays empty. Rows without the shift come back unchanged (genus-only records included)."""
+    v = [(x or "").strip() for x in vals]
+    filled = [i for i, x in enumerate(v) if x]
+    if not filled or v[6] or filled[-1] < 1 or not v[filled[-1]][:1].islower() or v[0] == "incertae sedis":
+        return tuple(v)
+    names = v[:filled[-1] + 1]
+    out = [""] * 5 + names[-2:]
+    lo = 0
+    for j, name in enumerate(names[:-2]):
+        r = 0 if j == 0 else rank_of(name, kinds)
+        room = 4 - (len(names) - 3 - j)                    # leave a column for each name still to place
+        p = r if r is not None and lo <= r <= room else lo
+        out[p], lo = name, p + 1
+    return tuple(out)
+
+
+def species_key(vals) -> str:
+    """`genus + " " + epithet` after `realign`: a bare epithet is not a species."""
+    r = realign(vals)
+    return f"{r[5]} {r[6]}".strip()
 
 CONTACT = os.environ.get("TOL_CRAWLER_CONTACT", "guillaumemougeot1@gmail.com")
 # The "Mozilla/5.0 (compatible; <name>; +<contact>)" form is what Googlebot, bingbot and every other
@@ -303,11 +350,9 @@ def stage_plan(a):
               f"({a.readers} readers) ...")
         counts = Counter()
         t0 = time.monotonic()
-        for i, tb in iter_row_groups(CATALOG, ["genus", "species"], 0, nrg,
+        for i, tb in iter_row_groups(CATALOG, RANKS, 0, nrg,
                                      a.readers, a.prefetch):
-            g = tb["genus"].to_pylist(); s = tb["species"].to_pylist()
-            counts.update(f"{(gg or '').strip()} {(ss or '').strip()}".strip()
-                          for gg, ss in zip(g, s))
+            counts.update(map(species_key, zip(*(tb[c].to_pylist() for c in RANKS))))
             if i % 100 == 0:
                 el = time.monotonic() - t0
                 print(f"  row-group {i}/{nrg}: {len(counts):,} species "
@@ -331,7 +376,8 @@ def stage_plan(a):
             t = _tb.to_pydict()
             rows_by_host: dict[str, list] = defaultdict(list)
             for j in range(len(t["uuid"])):
-                sp = f"{(t['genus'][j] or '').strip()} {(t['species'][j] or '').strip()}".strip()
+                r = realign([t[c][j] for c in RANKS])
+                sp = f"{r[5]} {r[6]}".strip()
                 if sp not in keep or emitted[sp] >= a.cap:
                     continue
                 url = t["source_url"][j]
@@ -341,9 +387,7 @@ def stage_plan(a):
                 n_rows += 1
                 rows_by_host[host_of(url)].append(
                     {"uuid": t["uuid"][j], "url": url, "species": sp,
-                     "genus": (t["genus"][j] or "").strip(),
-                     "family": (t["family"][j] or "").strip(),
-                     "order": (t["order"][j] or "").strip(),
+                     "genus": r[5], "family": r[4], "order": r[3],
                      "data_source": t["data_source"][j] or "",
                      "source_id": str(t["source_id"][j] or "")})
             for h, rows in rows_by_host.items():
@@ -441,7 +485,8 @@ def stage_substitute(a):
     for i, tb in iter_row_groups(CATALOG, cols, 0, nrg, a.readers, a.prefetch):
         d = tb.to_pydict()
         for j in range(len(d["uuid"])):
-            sp = f"{(d['genus'][j] or '').strip()} {(d['species'][j] or '').strip()}".strip()
+            r = realign([d[c][j] for c in RANKS])
+            sp = f"{r[5]} {r[6]}".strip()
             if sp not in keep:
                 continue
             url = d["source_url"][j]
@@ -449,7 +494,7 @@ def stage_substitute(a):
                 continue
             host = host_of(url)
             if sp not in tax:
-                tax[sp] = (d["kingdom"][j] or "?", d["class"][j] or "?", d["order"][j] or "?")
+                tax[sp] = (r[0] or "?", r[2] or "?", r[3] or "?")
             if emitted[sp] < a.cap:                       # replay of the plan's selection
                 emitted[sp] += 1
                 comp["kingdom"][tax[sp][0]] += 1; comp["class"][tax[sp][1]] += 1
@@ -473,9 +518,7 @@ def stage_substitute(a):
                     if d["uuid"][j] in prior:
                         continue                          # queued by an earlier pass
                     emit(host, {"uuid": d["uuid"][j], "url": url, "species": sp,
-                                "genus": (d["genus"][j] or "").strip(),
-                                "family": (d["family"][j] or "").strip(),
-                                "order": (d["order"][j] or "").strip(),
+                                "genus": r[5], "family": r[4], "order": r[3],
                                 "data_source": d["data_source"][j] or "",
                                 "source_id": str(d["source_id"][j] or "")})
         if i % 100 == 0:
