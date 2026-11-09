@@ -86,3 +86,16 @@ No default changes until the grid is read. Trap augmentation stays opt-in (owner
   new disk check, 501 GB free against 510 needed on a shared node, so the suspected full disk is
   confirmed. Resubmitted as 12450957 (owner approved in mt's session). If the check stops it again,
   mt reports instead of retrying.
+- 2026-11-09: **trainings done, single-view scores** (autoscore; TTA per view pending, the evals failed at
+  submission with UCloud 502s). Test / trap / probe / probe-HO, calibrated: control 0.9116 / 0.388 / 0.418 /
+  0.326; TrivialAugmentWide 0.8946 / 0.462 / 0.504 / 0.411; geometric 0.9026 / 0.299 / 0.314 / 0.281; geometric
+  + trap 0.8920 / 0.353 / 0.384 / 0.323; Otto + geometric 0.9134 / 0.368 / 0.582 / 0.439 against Otto 0.9184 /
+  0.359 / 0.589 / 0.450.
+  - **Predictions scored.** geo +3 to +6 probe: **falsified, -10.5**. trivial +1 to +3: **falsified upwards,
+    +8.6** (and +8.5 probe-HO), the largest gain without target images in the project. geotrap best: falsified.
+    Otto + geo +1 to +3: falsified (-0.7). The bar "lose more than 0.5 on the test fold": crossed by every
+    arm (-0.9, -2.0, -1.7).
+  - **Reading, provisional.** A generic policy chosen for no dataset beat the policies built from what TTA
+    said trap crops need. Geometric training hurts under shift while geometric TTA helps, which is
+    surprising enough to check the augmentation as trained before reading it (probability, magnitudes, a
+    grid of training batches).
