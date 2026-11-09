@@ -131,3 +131,8 @@ TD predict coarse ranks with their own parameters. Three-seed means, campaign:
 - **The argument for the colleague:** the claim survives where it matters for deployment. Coarse predictions
   are what back-off and abstention fall back on, and marginal supervision makes them better on two of three
   backbones under shift and on all three in-distribution. It is not a species-accuracy method.
+
+Owner, 2026-11-09, later: **C6 (ArcFace x z-score, the margin relocating the open-set signal) is cut**: the paper is
+already too long and the message must be clearer. The margin has no rerun; its appendix section goes too.
+The open-set scoring-rule claim is restated from the rerun (step 17): entropy is best for every head at both
+scales.
