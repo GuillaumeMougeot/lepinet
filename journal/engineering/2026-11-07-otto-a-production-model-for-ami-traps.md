@@ -340,3 +340,12 @@ student learns TTA's output at 1x cost.
     pseudo-labels into one 10-epoch run. Not tested this week.
   - **Predictions:** the CPU mask recovers at most 1 point. Otto with gated pseudo-labels from the same
     ensemble teacher (one factor) recovers most of the gap: probe within 1 point of P5 or above.
+- 2026-11-09: **the comparison figure**, Asger's metrics (pinned mini_metrics 70cc69a, `metrics.measure`) and chart
+  style, four models (his `comparison_charts.py` is wired to 2-3 models, so mt rendered a 4-model version in his
+  style). Probe crops, threshold 0, known_only False: `/data/au761367/otto_eval/figure/comparison-probe-all.png`
+  (also known-only, all 47,905 crops, a rough speed panel, SVGs and COMMANDS.md). Species macro-F1, northern
+  Europe, single view -> tta3bm: P5 0.50 -> 0.54, Otto 0.46 -> 0.51, Nemo 0.30 -> 0.38, Meghan 0.30 -> 0.34. Not
+  Asger's image set (his Flemming set has 58,640 images). B8 left out: no saved logits on this machine.
+- 2026-11-09: U1-U4 submitted (owner approved the 70 % gate set: 19,061 crops, 314 species, 98.6 % correct,
+  x7 = 2.57 % of training rows): u1 12451866 (gated labels), u2 12451870 (TrivialAugmentWide), u3 12451880
+  (both), u4 12451889 (DINOv3 twin, both).
