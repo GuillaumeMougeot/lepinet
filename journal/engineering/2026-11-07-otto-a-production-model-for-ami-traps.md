@@ -303,3 +303,24 @@ student learns TTA's output at 1x cost.
 - 2026-11-08: the tta3bm decision is for trap crops. On iNat21 photos it costs 1.2 to 3.9 points
   (public benchmarks entry), as Nemo's card found for its TTA. The deployment default is per
   domain: tta3bm on trap crops, single view on photos.
+- 2026-11-09: **Otto scored; it is below P5.** Both through one scorer (the TTA study's path reproduces the
+  campaign autoscore on Otto to 0.0005; argmax agrees on 99.92 % of crops). Species calibrated, probe /
+  probe-HO:
+
+  | setting | Otto | P5 | Nemo |
+  |---|---|---|---|
+  | full, single view | 0.588 / 0.450 | 0.622 / 0.488 | 0.338 / 0.293 |
+  | full, tta3bm | 0.633 / 0.495 | 0.661 / 0.519 | 0.489 / 0.371 |
+  | north_europe, single view | 0.661 / 0.500 | 0.679 / 0.500 | 0.546 / 0.448 |
+  | north_europe, tta3bm | 0.688 / 0.540 | 0.711 / 0.546 | 0.660 / 0.519 |
+  | north_europe, Nemo's card TTA | | | 0.646 / 0.491 |
+
+  - **Headline against Nemo** (north_europe with TTA): Otto +4.2 / +4.9 over Nemo's card setting, +2.8 / +2.1
+    over Nemo with tta3bm.
+  - **Prediction scored:** probe 0.70-0.75 and probe-HO 0.50-0.53, north_europe with TTA: probe falsified
+    (0.688), probe-HO held (0.540).
+  - **Otto trails P5 by 1.8 to 3.4 on probe in every setting;** on probe-HO from level to -3.9. P5 and Otto
+    differ in many factors (recipe, floor, oversampling, teacher, pseudo-label count, epochs), so nothing is
+    attributable. The site folds agree with the candidate (probe 0.583-0.592).
+  - Site-fold pooled scoring and the release wait for the owner's choice between Otto and P5 as the
+    production model.
