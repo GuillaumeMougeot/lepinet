@@ -169,3 +169,10 @@ Legacy GBIF Backbone errors: [[2026-11-03-the-training-labels-inherit-gbif-backb
     `Xerophyta`, `Ceropales`) are real genera. A re-crawl with `dev/082` would fetch these keys again.
     **Final:** 65,602,738 rows, 0 missing, 0 extra, 0 duplicate paths; 214,338 folders; genus-level
     2,603,097 rows; shards re-planned (1,059).
+- 2026-11-09: target start of the full ToL training: Mon 23 Nov 2026, after a pilot on 16-20 Nov at the full class
+  count (192 k species, up to 50 images each, about 8 M images; arms: baseline DINOv3 ConvNeXt-L, margin 0.3,
+  TrivialAugmentWide, ViT-L). In mini_trainer (branch, 6f6a3cf): shard loading with virtual epochs, shard predict,
+  and an opt-in species margin applied in the loss only, so genus and upper ranks are unchanged (a CPU test
+  asserts it; not lepinet's `marginal_arcface`, which applied the margin before marginalising). The head at 192 k
+  classes and seven ranks: 1.1 GB, 5.75 GB GPU peak with optimiser state. Open: /work throughput and DDP head
+  sync (benchmark jobs 12452221 and after).
