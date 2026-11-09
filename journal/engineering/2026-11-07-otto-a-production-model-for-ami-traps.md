@@ -324,3 +324,19 @@ student learns TTA's output at 1x cost.
     attributable. The site folds agree with the candidate (probe 0.583-0.592).
   - Site-fold pooled scoring and the release wait for the owner's choice between Otto and P5 as the
     production model.
+- 2026-11-09: **why is Otto below P5? Hypotheses before any run** (owner asked whether mini_trainer or the
+  dataset change is responsible).
+  - **mini_trainer itself: unlikely to be most of it.** It reproduced lepinet where tested (T1rep 0.722 against
+    0.723, C3b open-set), and the DINOv3 student self-trained in mini_trainer (0.627 / 0.431) is within 2 points
+    of lepinet's B8 (0.647 / 0.452).
+  - **The pseudo-label set: the prime suspect.** P5 trained on 12,230 confidence-gated crops, 98 % correct.
+    Otto trained on a per-species top-K set (K = 35): 8,305 crops over 913 species, 71.3 % correct. The top-K
+    rule came from R3 (+4.24 over a global gate in a second round), but here it trades accuracy for
+    coverage at 29 % wrong labels, on a student that memorises what it is given (the dose results).
+  - **The class set: a small part.** No floor adds 591 rare species to confuse at the traps, and every
+    predicted-only species costs a calibrated macro-F1. Testable on CPU: mask Otto's logits to P5's 12,041
+    species and rescore.
+  - **The schedule.** P5 adapted in a second stage (2 epochs on the fine-tuned model); Otto mixed the
+    pseudo-labels into one 10-epoch run. Not tested this week.
+  - **Predictions:** the CPU mask recovers at most 1 point. Otto with gated pseudo-labels from the same
+    ensemble teacher (one factor) recovers most of the gap: probe within 1 point of P5 or above.
