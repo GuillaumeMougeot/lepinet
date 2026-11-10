@@ -1,6 +1,6 @@
 # PLAN — what we are doing now
 
-**Kind:** living · **Last updated:** 2026-11-09 · **Supersedes:** [2026-07-28-landscape-and-plan](archive/journal/engineering/2026-07-28-landscape-and-plan.md)
+**Kind:** living · **Last updated:** 2026-11-10 · **Supersedes:** [2026-07-28-landscape-and-plan](archive/journal/engineering/2026-07-28-landscape-and-plan.md)
 
 The one file about *today*. Experiment IDs resolve in [`RESULTS.md`](RESULTS.md); reasons are in
 the linked journal entries; older versions of this file are in git history.
@@ -34,28 +34,39 @@ On free GPUs, after the paper's jobs. [[2026-11-07-otto-a-production-model-for-a
 
 Postponed (owner, 2026-11-07): the Tree of Life run (W3); first step when it resumes is the upload, the parquets and a one-epoch throughput pilot.
 
-## 1. The paper: to-do list (this week, owner 2026-11-09)
+## 1. Two papers (owner, 2026-11-10: the merged paper is split)
 
-One paper: Svenning et al.'s Overleaf draft, with our pieces inserted through the
-[Merge Desk](https://claude.ai/artifact/KFNuRZrWnf39pLdUwvPyTP) (`paper/merge/NN-*.tex`, `dev/094`). Claims and
-recipe decided 2026-11-09: [[2026-10-23-which-recipe-does-the-merged-paper-rerun]]. Numbers for every piece:
-`/data/au761367/paper_numbers/NN.md` (mt, from the campaign).
+The merged draft had two storylines and two recipes; the owner split it (memo to Asger, 2026-11-10).
+Merge Desk pieces are tagged `[A]`, `[B]` or `[A+B]` in their title: [Merge Desk](https://claude.ai/artifact/KFNuRZrWnf39pLdUwvPyTP).
+Numbers per piece: `/data/au761367/paper_numbers/NN.md`. Decisions: [[2026-10-23-which-recipe-does-the-merged-paper-rerun]].
+
+### Paper A: hierarchical heads and metrics (Asger leads, his Overleaf draft)
+
+Our pieces for it: 01, 02, 09, 10, 11, 12, 13, 16, 19, 22.
 
 **Owner**
-- [ ] Paste the ready pieces into Overleaf, in order: 01, 04, 05, 07-20 (except 18 as it stands), 22, 23. Do not paste 06 or 21 (dropped).
-- [ ] Verify the citations written from memory: Kang et al. 2020 (cRT), Ren et al. 2020 and Menon et al. 2021 (balanced softmax / logit adjustment), Deng et al. 2012, the AMI hardware reference, Dodge et al. 2021.
-- [ ] Agree the message with Asger: one recipe plus two dataset-dependent settings (rebalancing for heavy tails, self-training under shift); marginal supervision as a coarse-rank and abstention tool. A note for him can be drafted on request.
-- [ ] Asger to word one sentence each in his loss and regulariser sections: EMLA and the prototype regulariser are results, not the default (step 04).
-- [ ] Pl@ntNet's role in the evaluation section (step 07, marked X).
+- [ ] Send the memo; agree with Asger: split, author order, deadline.
+- [ ] Decide with Asger the one head grid (his EMLA runs, or the three-seed campaign) and EMLA's status.
+- [ ] In Overleaf: delete the old self-training section (stale, moves to B) and the open-set TODO in Global Lepidoptera.
+- [ ] Hand over the A pieces (paste, or let Asger paste) once the grid is decided.
+- [ ] Verify the citations written from memory in A's pieces (Ren 2020, Menon 2021, Deng 2012, AMI hardware).
 
 **Agent**
-- [x] Rewrite every results piece on the rerun (2026-11-09): 04, 05, 09-17, 19, 20, 22, 23; 01 and 07 checked; C1 restated; C2, C6, the staged recipe and recipe L cut.
-- [x] Consistency pass (2026-11-09): cross-references resolve (the only outside labels are Asger's `sec:regularization`, `sec:tune_tau`); baselines are three-seed means everywhere; recipe L, margin and classifier-stage mentions gone except where labelled. Anchors to recheck after the owner's pastes.
-- [x] Piece 18 (contamination): reworked on campaign numbers (P5 against the self-trained DINOv3).
-- [ ] Intro and discussion: contribution list rewritten to match (C3 self-training as the spine; C1 restated; C4 as rebalancing by dataset; C5 contamination).
-- [x] Re-run A2's scoring rules: closed, obsolete (the margin head is cut).
+- [ ] If Asger keeps his grid: recompute the A pieces' analyses on his runs (13, 19, 22, 12; mini_metrics pipeline shared).
+- [ ] Draft for Asger on request: results text around his figures, the hierarchy discussion.
 
-**Not in this paper** (owner, 2026-11-09): the augmentation runs, the public benchmarks, Otto and its successors.
+### Paper B: species classifiers under domain shift (owner leads; base: our pieces and `paper/DRAFT.md`)
+
+Pieces: 03, 04, 05, 07, 08, 14, 15, 17, 18, 20, 23 (plus 01, 02, 10, 11 shared).
+
+**Agent**
+- [ ] Outline and standalone LaTeX draft (intro, methods, results, discussion) from the pieces.
+- [ ] Add: test-time augmentation (VY), TrivialAugmentWide (AG), AMI-Traps as a second, public shift set (PB), the label-noise paragraph.
+- [ ] One external adaptation baseline (test-time adaptation or a FixMatch-style method): GPU, to plan.
+- [ ] Full draft to the owner in about two weeks (target 2026-11-24).
+
+**Owner**
+- [ ] Target venue; author list.
 
 ## 2. Running now
 

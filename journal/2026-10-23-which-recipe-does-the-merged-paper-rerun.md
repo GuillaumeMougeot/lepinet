@@ -136,3 +136,10 @@ Owner, 2026-11-09, later: **C6 (ArcFace x z-score, the margin relocating the ope
 already too long and the message must be clearer. The margin has no rerun; its appendix section goes too.
 The open-set scoring-rule claim is restated from the rerun (step 17): entropy is best for every head at both
 scales.
+
+Owner, 2026-11-10: **the merged paper is split in two.** Paper A, hierarchical heads and metrics, Asger
+leads, on his Overleaf draft. Paper B, species classifiers under domain shift, the owner leads. The
+reasons: two storylines and two recipes in one draft (about 15,000 words); the hierarchy claim survives
+only for coarse ranks and abstention, while the largest effect (self-training, +22.7) is unrelated to the
+hierarchy. Pieces are tagged [A], [B] or [A+B]; PLAN.md section 1 holds both to-do lists. Open with Asger:
+one head grid for A and EMLA's status.
