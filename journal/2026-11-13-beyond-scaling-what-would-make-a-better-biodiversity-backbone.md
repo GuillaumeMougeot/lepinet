@@ -4,7 +4,11 @@
 corrects this paragraph: against the regional list the pipeline already ships, the estimated prior
 adds +4.6 accuracy to Nemo and nothing to Otto; self-training's gain over the list is +6.5 to +8.0
 accuracy, not +15 to +17; the observer split re-ranks no model; marginal supervision makes
-congeners neighbours on every backbone). A review of the project for new scientific
+congeners neighbours on every backbone. Section 8, same day, on whether self-training repairs the
+images or the prior: mostly the prior. A regional list and an estimated prior, with no training,
+score level with self-training alone on the calibrated macro-F1, and 76 to 78 % of the crops
+self-training repairs are the same crops; only the small backbone also learned to read trap
+crops). A review of the project for new scientific
 routes, with six CPU checks run the same day on saved predictions and logits. Short version: under
 shift the models mostly fail by **leaving the local fauna** (87 % of trap errors name a species that
 occurs at no trap). That is a prior the model carries in its weights, and it can be estimated from
@@ -562,6 +566,15 @@ Steps 1 to 3 change no plan and no GPU queue. Nothing here is started without th
 - Mistakes of mine on 2026-11-15: the first commit placed PLAN's Z row under the wrong heading
   (fixed in 3f857e9); a wait loop matched its own command line and never ended (stopped by hand);
   and the first report's headline compared the EM with the full vocabulary instead of the list.
+- Section 8: one seed per backbone and the unadapted DINOv3 is seed 43 (the calibrated probe score of
+  three unadapted seeds spans 3 points on V2-S and 1 on DINOv3). No unadapted BioCLIP-2 BU exists,
+  so nothing in it is a like-for-like statement about Otto. The EM prior is estimated on the same
+  traps and summers. Z9d and the EM on self-trained models count their own trap prior twice. Z10b
+  cannot see absent species. Probe-HO moves with the threshold convention.
+- A mistake of mine on 2026-11-15, section 8: Z10 was computed on logits stored minus their
+  per-crop maximum for six models and reported for an hour in this entry as -61 % and -39 %. I had
+  not read the dump tool's `fp16s` note. Caught when a second view was dumped; Z10b replaces it,
+  and DINOv3's result changed from a clear gain to none.
 - Routes 5.4, 4 (taxon dropout) and 6 are designs with no measurement behind them.
 
 ## 7. First steps (opened 2026-11-15, at the owner's request)
@@ -882,8 +895,395 @@ pseudo-label accuracy and species coverage logged per epoch (the adapt crops hav
 are measurable). My expectation, not a measurement: within 1.5 probe points of the two-step run
 with its own teacher, and under the ensemble-teacher version.
 
+## 8. Does self-training repair the images or the label prior? (opened 2026-11-15, owner's question)
+
+The owner read section 7 as "self-training is tackling a label shift, not a domain shift" and asked
+how that can be affirmed. Section 7 does not show it. This section states the two shifts, what
+section 7 does show, and three checks that can separate them on saved logits.
+
+**The two shifts.** A classifier's answer is `p(y|x) ∝ p(x|y) · π(y)`: what the image says about
+each species, times how common each species is assumed to be.
+- **Label shift**: `π(y)` changes, `p(x|y)` does not. Training holds 12,041 species worldwide,
+  sampled to be nearly even; a Danish trap holds 486, a few of them most nights. It can be repaired
+  at prediction time with no labels and no training: multiply the posteriors by the new prior.
+- **Appearance shift** (what "domain shift" usually means): `p(x|y)` changes. The same species
+  looks different on a trap crop (resting posture, white sheet, flash, low resolution) from a
+  photograph. No prior repairs it: the model has to be trained on such images, or shown better views.
+- They interact. Weak evidence makes the prior decide, so a wrong prior costs little on photographs
+  and a lot on trap crops. Either side can therefore repair part of the other's damage, and an
+  accuracy gain does not say which side moved.
+
+Self-training moves both at once: the pseudo-labelled crops are trap images (appearance), and they
+come in the trap's species and frequencies (prior). Z8 shows that a prior alone, with no training,
+brings an unadapted model to the self-trained model's accuracy (0.835 against 0.824 on V2-S, 0.847
+against 0.846 on DINOv3). That bounds the prior's share from below. It does not show that
+self-training learned nothing about the images.
+
+### Predictions (written before any of these ran)
+
+**Z9, Z8 on the papers' metric.** The same pairs scored with the campaign's scorer
+(`flemming.py score`, species macro-F1 calibrated by (trap, night), 20 splits), the prior added to
+the species logits as a log-prior, genus and family by logsumexp as `score.py` does. Harness check
+first: OT3 with the list must reproduce 0.742 / 0.675 (one view) and 0.749 / 0.674 (tta3bm).
+- Z9a. With the list on both models, self-training's gain in calibrated macro-F1 on probe is 40 to
+  55 % of its gain with the full vocabulary (in accuracy: 39 % on V2-S, 54 % on DINOv3).
+- Z9b. The EM prior does **not** close the gap on this metric. Calibration already drops the
+  low-confidence predictions of absent species, and the EM takes rare species away. List and EM on
+  the unadapted model lands within 2 points of the list alone; on the self-trained model it costs 2
+  to 6. Best label-free rule against best: at least 8 points of calibrated macro-F1 stay with
+  self-training, where accuracy left 2 to 3.
+- Z9c. On probe-HO the EM costs every model more than on probe (its species are rare in the pool).
+- Z9d, a diagnostic and not a method: with the probe's own species frequencies as the prior on both
+  models, the accuracy gap falls under 3 points (from 16.7 and 14.7) and the calibrated macro-F1 gap
+  under 6.
+
+**Z10, discrimination that no prior can move.** The one-vs-rest AUROC of a species' raw logit over
+the probe crops is unchanged by any constant added to that species, so by any label prior, a list
+included. What self-training changes there, it learned about trap images. Prediction: it lowers
+the mean ranking error (1 - AUROC, species with at least 5 probe crops) by 20 to 40 % on both
+backbones. Not zero, because a third of the pseudo-labels' gain needed the trunk (VK); less than
+the 49 % by which it cuts the error rate on both. Against congeners only (negatives restricted to
+the same genus) the cut is smaller, under 20 %. On the held-out species it is under 10 %.
+
+**Z11, is there appearance shift at all?** Under label shift alone a species keeps its row of the
+confusion matrix, so its recall with a fixed model is the same on photographs and on trap crops.
+For the unadapted V2-S BU, over the probe's species: recall above 0.90 on the test fold and 0.62 on
+the probe (Z8), a gap above 25 points. Z7b already points there (53 % of errors name a congener on
+the test fold, 19 % on the probe).
+
+**Z12, do the labels' frequencies decide whether a prior still helps?** (added after Z10 and Z11
+were read, before OT1's and OT2's logits were downloaded.) Otto, OT1, OT2 and OT3 are a two-by-two
+on one backbone and seed: labels drawn as the top 35 crops per species (Otto, OT2) or as the 70 %
+most confident crops at their natural frequencies (OT1, OT3), without or with TrivialAugmentWide.
+Section 7's reading says the gated labels carry the site's frequencies and the top-35 labels do
+not. Prediction, one view, accuracy of list and EM over the list alone: +2 to +4 on Otto and OT2,
+within 1 point of zero on OT1 and OT3. If OT1 gains as much as Otto, the reading is wrong.
+
+**Z13, are they the same errors?** (added after Z10, Z11 and the first rows of Z9 were read.) Z10
+says self-training learned about the images; Z8 and Z9 say a prior alone reaches about the same
+score. Both can be true if the two remove the same wrong answers by different means. Crop by crop
+on the probe, V2-S and DINOv3, one view: of the crops the unadapted model gets wrong and the
+self-trained one gets right (full vocabulary on both), 70 to 85 % are also right for the unadapted
+model with the list and the EM prior, and 55 to 70 % with the list alone. At least 80 % of the
+errors that self-training repairs named a species that occurs at no trap. Of the errors that
+remain after self-training, under half do.
+
+**Z14, the shipped setting and the seed** (added after Z9's one-view rows were read). The papers
+quote tta3bm with the list, and Z9 is one view and one seed. More views sharpen the evidence, so
+a prior should weigh less (Nemo: the EM adds 7.1 calibrated points over the list with one view,
+3.4 with tta3bm). Predictions for the two pairs with tta3bm, calibrated probe macro-F1: with the
+list on both, self-training's gain is 45 to 60 % of its full-vocabulary gain; the unadapted model
+with the list and the EM (probe nights included) lands within 3 points of the self-trained model
+with the full vocabulary; best rule against best, 4 to 8 points stay with self-training. Seeds 43
+and 44 of the unadapted V2-S BU, one view, list and EM with the probe nights: within 2 points of
+seed 42's 0.618.
+
+**Z10b, the same question with a measure that is actually free of the prior** (added after Z10
+was found to be measured wrongly, see the results). For two species k and j of the probe, the
+choice between them on a crop rests on `z_k(x) - z_j(x)`. The AUROC of that difference, crops of
+k against crops of j, is unchanged by a constant per species (any prior, any list) and by a
+constant per crop (which the softmax ignores). Mean of 1 - AUROC over all pairs of the 243 species.
+I have seen two contaminated versions of the number, so this is an informed guess: self-training
+lowers it by 20 to 50 % on V2-S and by 0 to 30 % on DINOv3; on pairs of congeners by under 20 % on
+both.
+
+**Z15, a new site, on the papers' metric** (the owner asked whether a prior travels better than
+self-training; Z8's answer was in accuracy only). For each site in turn, calibrated macro-F1 on
+that site's probe crops, V2-S BU, one view: the model that never saw a trap with the list and an EM
+prior from that site's own unlabelled crops; the fold self-trained on the two other sites, with the
+list; the model self-trained on all three, with the list. Prediction: the first is within 3
+points of the second at every site, and 3 to 8 points under the third.
+
+If Z10 and Z11 both hold, the answer is: the traps have a large appearance shift, self-training
+repairs a part of it that is measurable, and most of its accuracy gain is nonetheless the prior.
+
+### Results (2026-11-15)
+
+Outputs in `data/population_probes/`: `z9_pairs.csv`, `z9_shipped.csv`, `z10_discrimination.csv`
+(and `_per_species.csv`), `z11_invariance.csv`, `z12_labels.csv`, `z13_overlap.csv`,
+`z14_v2s_tta.csv`, `z14_dinov3_tta.csv`, `z14_v2s_seeds.csv`, `z15_newsite.csv`; the scorer's own
+tables under `z9/` and `z15/`.
+
+#### Z11: the appearance shift is real and large
+
+Same model, same 243 species (those with at least 5 probe crops), full vocabulary, no prior, one
+view. Under label shift alone the two recalls would be equal.
+
+| model (seed 42) | recall, test fold | recall, probe crops | gap (95 % interval) | species lower on the probe |
+|---|---|---|---|---|
+| V2-S BU, never saw a trap | 0.947 | 0.662 | 28.6 (25.4 to 31.7) | 89 % |
+| V2-S F | 0.948 | 0.640 | 30.8 | 89 % |
+| B0 BU | 0.941 | 0.636 | 30.6 | 92 % |
+| V2-S BU, real labels of the gated crops | 0.946 | 0.830 | 11.6 (8.8 to 14.5) | 63 % |
+| V2-S BU, real labels at 11 copies (T1rep) | 0.948 | 0.863 | 8.5 (5.8 to 11.4) | 52 % |
+
+- **Held** (above 0.90 and a gap above 25 points). A species that is recognised 95 times in 100 on
+  photographs is recognised 66 times in 100 on trap crops by the same model. That cannot be a
+  change of frequencies; the crops are harder to read. The destination of the errors moves too: 50 %
+  name a congener on the test fold, 18 % on the probe.
+- This number alone does not say what closes the gap: a model trained on trap labels raises probe
+  recall to 0.83 to 0.86, and its implicit prior moved together with its features.
+
+#### Z10: measured wrongly, replaced by Z10b
+
+A mistake of mine, caught before it left this entry. Six of the logit sets (the campaign pairs and
+Otto) are stored with each crop's maximum subtracted (`fp16s`), so for them the "raw logit" was the
+gap to the top class, which a prior does move. With the maxima added back the number changed sign
+on DINOv3 (ranking error +80 % after self-training instead of -39 %), because a raw logit compared
+across crops also carries a per-crop offset that the softmax ignores. Neither version measures what
+Z10 claimed. Its first table (-61 % and -39 %) is withdrawn; Z10b replaces it.
+
+#### Z10b: self-training taught the small backbone to read trap crops, and the large one almost nothing
+
+For two species of the probe, the AUROC of `z_k - z_j`, crops of k against crops of j. No prior, no
+list and no per-crop offset can move it. Mean of 1 - AUROC over the 29,403 pairs of the 243 species
+with at least 5 probe crops; one view.
+
+| model | all pairs | pairs of congeners (122) | same family, other genus | other family |
+|---|---|---|---|---|
+| V2-S BU, never saw a trap | 0.00132 | 0.0260 | 0.00137 | 0.00118 |
+| V2-S BU self-trained (st26) | 0.00063 | 0.0249 | 0.00076 | 0.00048 |
+| DINOv3 BU, never saw a trap (seed 43) | 0.00045 | 0.0225 | 0.00054 | 0.00032 |
+| DINOv3 BU self-trained (st26) | 0.00040 | 0.0266 | 0.00059 | 0.00022 |
+| Nemo | 0.00046 | 0.0196 | 0.00065 | 0.00032 |
+| P5 | 0.00030 | 0.0166 | 0.00032 | 0.00021 |
+| Otto (top 35 per species) | 0.00044 | 0.0196 | 0.00064 | 0.00029 |
+| OT2 (Otto + TrivialAugmentWide) | 0.00024 | 0.0177 | 0.00033 | 0.00013 |
+| OT1 (gated labels) | 0.00017 | 0.0150 | 0.00028 | 0.00008 |
+| OT3 (gated labels + TrivialAugmentWide) | 0.00014 | 0.0145 | 0.00021 | 0.00006 |
+
+- **V2-S: -52 %** (paired over species, interval of the difference -0.00090 to -0.00050; 66 % of
+  species improve). This is knowledge of trap images that no prior gives. It is all between
+  unrelated species (-59 % across families); among congeners nothing (-4 % over pairs).
+- **DINOv3: -13 %, interval -0.00014 to +0.00002.** Not distinguishable from no change, and worse
+  among congeners (+18 % over pairs; per species +28 %, interval excluding zero). The unadapted model
+  is seed 43 and the self-trained one seed 42. For this backbone, self-training's probe gain is
+  close to all prior.
+- **Scored:** V2-S fell 2 points outside my range (20 to 50 %); DINOv3 inside (0 to 30 %);
+  congeners under 20 % held on both.
+- **The Otto two-by-two is not only the prior.** Gated labels lower the pairwise error by 60 %
+  against the top-35 labels (interval excluding zero), 22 % among congeners; TrivialAugmentWide by
+  45 % and 13 %. So Z12's "two thirds is recovered by a prior" is about accuracy; in what the
+  model can tell apart, the better labels and the augmentation both bought something real.
+- **What the measure cannot see:** an absent species has no crops, so no pair. An answer from the
+  wrong fauna is, by this construction, an error that some prior can always remove.
+- **The prior self-training learns is tied to the domain.** After self-training the model names a
+  species that occurs at no trap on 8.0 % of probe crops (V2-S; DINOv3 7.4 %), against 29.6 % and
+  25.1 % before. Its test-fold macro-F1 over all species does not move (V2-S: 0.8870 against
+  0.8866 to 0.8877 for three unadapted seeds; DINOv3: 0.9181 against 0.9174 to 0.9179). So it did not learn "these species are rare"; it
+  learned "on an image that looks like a trap crop, answer from the trap fauna". A list and an
+  estimated prior at prediction time are the same thing, kept outside the weights.
+
+#### Z13: the two repair the same crops
+
+Probe crops (15,200), one view, full vocabulary unless a rule is named.
+
+| | V2-S BU | DINOv3 BU |
+|---|---|---|
+| crops the unadapted model gets wrong | 5,209 | 4,576 |
+| of those, right after self-training | 2,780 | 2,565 |
+| of those, right for the unadapted model with the list | 2,018 | 1,487 |
+| of those, right for the unadapted model with list and EM | 2,855 | 2,456 |
+| crops self-training repairs that list and EM also repair | **78 %** | **76 %** |
+| crops self-training repairs that the list alone also repairs | 56 % | 47 % |
+| crops list and EM repair that self-training also repairs | 76 % | 79 % |
+| errors self-training repairs: named a species at no trap | 92 % | 89 % |
+| errors self-training leaves: name a species at no trap | 45 % | 48 % |
+| errors that name a congener: unadapted / left by self-training | 18 % / 23 % | 20 % / 26 % |
+| wrong under both best rules (unadapted with list and EM; self-trained with list) | 1,682 | 1,451 |
+
+- **Held:** 70 to 85 % for list and EM (78 and 76 %), at least 80 % absent species among the repaired
+  errors (92 and 89 %), under half among those left (45 and 48 %, close to the bound). The list
+  alone is at 56 % (held) and 47 % (under my range) for DINOv3.
+- So Z10 and Z8 do not contradict each other. The dominant trap error is an answer from the wrong
+  fauna (86 and 83 % of the unadapted model's errors name a species that occurs at no trap). It has
+  two cures. A prior removes the candidates. Training on trap crops stops the model preferring
+  them. Three quarters of the crops are cured by either.
+- What neither cures is the same set too: 1,682 and 1,451 crops are wrong under both best rules,
+  62 to 77 % of what each model still gets wrong (V2-S: 2,507 and 2,210 crops).
+
+#### Z9: on the papers' metric, a prior with no training equals self-training alone; the two together are best
+
+Harness: OT3 with the list reproduces `ot_scores.md` to four digits (probe 0.7423 / 0.6753
+calibrated / zero, probe-HO 0.4941 / 0.3910); Nemo, P5 and Otto reproduce their journalled rows.
+Species macro-F1 calibrated by (trap, night), probe / probe-HO, one view. "With probe nights" is
+the EM run on every unlabelled crop, the scored nights included (it uses no label). The last
+column gives each model the probe's true species frequencies; it is a ceiling for any label
+prior, not a method.
+
+| model | nothing | list | list and EM | list and EM, with probe nights | probe's own frequencies |
+|---|---|---|---|---|---|
+| V2-S BU, never saw a trap | 0.372 / 0.303 | 0.553 / 0.458 | 0.585 / 0.461 | 0.618 / 0.479 | 0.727 / 0.569 |
+| V2-S BU self-trained (st26) | 0.592 / 0.365 | **0.669** / 0.379 | 0.574 / 0.343 | 0.606 / 0.361 | 0.685 / 0.434 |
+| DINOv3 BU, never saw a trap | 0.464 / 0.390 | 0.619 / 0.478 | 0.626 / 0.482 | 0.649 / 0.513 | 0.742 / 0.571 |
+| DINOv3 BU self-trained (st26) | 0.627 / 0.430 | **0.691** / 0.463 | 0.634 / 0.406 | 0.673 / 0.431 | 0.736 / 0.494 |
+
+- **Z9a held.** Self-training is worth +22.1 (V2-S) and +16.3 (DINOv3) with the full vocabulary,
+  and +11.6 and +7.1 once both models use the list: 53 % and 44 %.
+- **The whole gain, two ways.** From the unadapted model with nothing to the self-trained model
+  with the list is +29.8 (V2-S) and +22.7 (DINOv3). With no training, the list gives 61 and 69 % of
+  it, the list and the EM 72 and 72 %, with the probe nights 83 and 82 %. Self-training with no
+  prior gives 74 and 72 %. So a regional list and an estimated prior, on a model that never saw a
+  trap, score level with self-training alone (0.585 to 0.618 against 0.592; 0.626 to 0.649 against
+  0.627), and the two overlap for the most part.
+- **Z9b: wrong on the unadapted model, and in my favour on the gap.** The EM adds +3.2 (V2-S) and
+  +0.7 (DINOv3) over the list, +6.5 and +3.0 with the probe nights; I predicted within 2. On the
+  self-trained models it costs 9.5 and 5.7 (predicted 2 to 6). Best label-free rule against best,
+  self-training keeps 5.2 to 8.5 points (V2-S) and 4.2 to 6.5 (DINOv3); I predicted at least 8.
+  The calibration spread on probe is 0.5 to 1 point; the seed range of the unadapted V2-S BU is 3
+  points (0.349 to 0.378), and each row is one seed.
+- **Z9c held for the unadapted models only.** The EM gains less on probe-HO than on probe (+0.3
+  against +3.2 on V2-S). On the self-trained models it costs as much or less there.
+- **Z9d held on the letter and says less than I hoped.** With the probe's own frequencies the
+  self-trained models are not ahead: -0.8 and +0.5 in accuracy, -4.2 and -0.6 in calibrated
+  macro-F1. But a self-trained model already carries a trap prior, so this diagnostic counts it
+  twice for that model; the EM hurting it (above) is the same double counting. It cannot rank the
+  two. Z10 and Z13 are the tests that can.
+- **Held-out species, mixed.** With the list on both, the self-trained V2-S is 7.9 calibrated points
+  under the unadapted one on probe-HO (0.379 against 0.458, calibration spread 1.6 and 2.7) and 3.7
+  above it at zero threshold (0.224 against 0.187). DINOv3: -1.5 and +3.6. Not a finding yet.
+
+The models the papers quote, calibrated probe / probe-HO:
+
+| model, views | nothing | list | list and EM | list and EM, with probe nights |
+|---|---|---|---|---|
+| Nemo, tta3bm | 0.489 / 0.371 | 0.660 / 0.519 | 0.694 / 0.492 | 0.713 / 0.523 |
+| P5, tta3bm | 0.661 / 0.519 | 0.711 / 0.546 | 0.732 / 0.556 | **0.741** / 0.557 |
+| OT3, tta3bm | 0.739 / 0.564 | 0.749 / 0.562 | 0.713 / 0.528 | **0.752** / 0.543 |
+| Nemo, one view | 0.338 / 0.293 | 0.546 / 0.448 | 0.618 / 0.475 | 0.631 / 0.485 |
+| P5, one view | 0.622 / 0.488 | 0.679 / 0.500 | 0.687 / 0.526 | 0.703 / 0.511 |
+| OT3, one view | 0.729 / 0.479 | **0.742** / 0.494 | 0.689 / 0.473 | 0.733 / 0.481 |
+| Otto, one view | 0.588 / 0.450 | 0.661 / 0.500 | 0.654 / 0.472 | **0.679** / 0.484 |
+
+- The shipped model is untouched: on OT3 the EM from other nights costs 3.6 points and the EM with
+  the probe nights gives the list's score back.
+- **P5 with the list and the EM scores 0.741, against OT3's 0.749 with the list.** P5's labels were
+  balanced over species (as Otto's), so the prior was still missing; adding it closes most of what
+  OT3 gained over P5 on probe (3.8 points to 0.8). Not on probe-HO (0.557 against 0.562 is level).
+- Nemo, which never saw a trap, moves from 9 points under OT3 (list on both) to 3.6 with the EM.
+
+#### Z14: in the shipped setting the two are within 1.5 points, and the prior is steadier across seeds
+
+Calibrated probe / probe-HO with tta3bm (the two rotated views dumped today for the four models).
+
+| model | nothing | list | list and EM | list and EM, with probe nights |
+|---|---|---|---|---|
+| V2-S BU, never saw a trap (seed 42) | 0.499 / 0.409 | 0.624 / 0.475 | 0.667 / 0.533 | **0.691** / 0.544 |
+| V2-S BU self-trained (st26) | 0.632 / 0.450 | 0.682 / 0.479 | 0.658 / 0.484 | **0.706** / 0.515 |
+| DINOv3 BU, never saw a trap (seed 43) | 0.591 / 0.481 | 0.694 / 0.540 | 0.683 / 0.568 | **0.718** / 0.587 |
+| DINOv3 BU self-trained (st26) | 0.662 / 0.480 | 0.716 / 0.512 | 0.688 / 0.512 | **0.724** / 0.530 |
+
+Three seeds of the unadapted V2-S BU (42 / 43 / 44), calibrated probe:
+
+| views | nothing | list | list and EM | list and EM, with probe nights |
+|---|---|---|---|---|
+| one | 0.372 / 0.378 / 0.349 | 0.553 / 0.557 / 0.544 | 0.585 / 0.593 / 0.594 | 0.618 / 0.631 / 0.621 |
+| tta3bm | 0.499 / 0.536 / 0.487 | 0.624 / 0.627 / 0.633 | 0.667 / 0.657 / 0.654 | 0.691 / 0.694 / 0.689 |
+
+- **All three predictions falsified, each in the prior's favour.** With the list and tta3bm on both
+  models, self-training is worth +5.8 (V2-S) and +2.2 (DINOv3), against +13.3 and +7.2 with the full
+  vocabulary: 44 % and 30 % (predicted 45 to 60 %). The unadapted model with the list and the EM is
+  5.9 and 5.6 above its self-trained twin at full vocabulary (predicted within 3), and above its
+  twin with the list (0.691 against 0.682; 0.718 against 0.716). Best rule against best, 1.5 and 0.6
+  points stay with self-training (predicted 4 to 8).
+- On the held-out species the unadapted model with the prior is ahead: 0.544 against 0.515 and
+  0.587 against 0.530 (calibration spread on this set 2 to 5 points).
+- **Seeds held, and say more than asked.** With nothing the three seeds span 2.9 points (one view)
+  and 4.9 (tta3bm); with the list and the EM they span 1.3 and 0.5. The seed noise of a trap score
+  at full vocabulary is mostly answers from the wrong fauna. The self-trained models are still one
+  seed each.
+- With three views the EM that includes the scored nights helps the self-trained models too
+  (+2.4 and +0.8 over the list); from other nights only it still costs.
+- Everything scored today with tta3bm, best label-free rule, probe / probe-HO: OT3 0.752 / 0.543
+  (list alone 0.749 / 0.562), P5 0.741 / 0.557, DINOv3 st26 0.724 / 0.530, DINOv3 unadapted 0.718 /
+  0.587, Nemo 0.713 / 0.523, V2-S st26 0.706 / 0.515, V2-S unadapted 0.691 / 0.544.
+
+#### Z12: a prior still helps when the pseudo-labels were evened out per species, and not otherwise
+
+BioCLIP-2, seed 42, one view, probe accuracy / macro recall:
+
+| labels | augmentation | nothing | list | list and EM | EM over the list |
+|---|---|---|---|---|---|
+| top 35 per species (Otto) | none | 0.773 / 0.772 | 0.827 / 0.796 | 0.862 / 0.769 | **+3.5** |
+| top 35 per species (OT2) | TrivialAugmentWide | 0.775 / 0.788 | 0.827 / 0.811 | 0.864 / 0.777 | **+3.6** |
+| most confident 70 %, natural frequencies (OT1) | none | 0.892 / 0.797 | 0.901 / 0.813 | 0.898 / 0.764 | -0.3 |
+| most confident 70 %, natural frequencies (OT3) | TrivialAugmentWide | 0.903 / 0.808 | 0.910 / 0.815 | 0.901 / 0.759 | -0.9 |
+
+- **Held** (+2 to +4 on Otto and OT2; within a point of zero on OT1 and OT3). One factor, twice.
+  Pseudo-labels at their natural frequencies teach the site's frequencies; the same crops evened
+  out per species do not, and the prior can then be added afterwards.
+- It re-reads OT1 against Otto. The gated labels were worth 11.9 points of accuracy with the full
+  vocabulary and 3.9 once each model has its best label-free rule (0.901 against 0.862). The gain
+  was credited to label accuracy (98.6 % against 71 %); two thirds of it is recovered by a prior with
+  no training, so it was the fauna and the frequencies the labels carried.
+
+#### Z15: at a new site, the site's own prior equals self-training done elsewhere
+
+V2-S BU, one view, calibrated macro-F1 on each site's probe crops.
+
+| | LV | OH | SS |
+|---|---|---|---|
+| never saw a trap, list | 0.553 | 0.566 | 0.570 |
+| never saw a trap, list and EM from the site's other nights | 0.593 | 0.571 | 0.606 |
+| never saw a trap, list and EM from all of the site's crops | 0.629 | 0.615 | 0.648 |
+| self-trained on the two other sites, list | 0.639 | 0.605 | 0.632 |
+| self-trained on all three sites, list | 0.668 | 0.653 | 0.653 |
+
+- **Held with the prior from all of the site's crops** (-1.0, +1.0, +1.6 against the fold; 3.9, 3.9
+  and 0.5 under the model self-trained on the site). **Not with the prior from other nights** (2.6
+  to 4.6 under the fold, 4.7 to 8.2 under the all-site model). The estimate needs the nights it is
+  applied to, which costs nothing: it uses no label.
+- So a prior travels as well as self-training does. A model that never saw any trap, given the
+  new site's unlabelled crops and no training, scores what a model self-trained at two other
+  Danish sites scores. Self-training on the site itself adds 0.5 to 3.9 points more. One seed, one
+  view, three sites of one country.
+
+### What section 8 says
+
+**To the owner's question.** It is not "label shift instead of domain shift". The traps have both
+(Z11). What the measurements say about self-training is narrower and, I think, more useful:
+1. Most trap errors are answers from the wrong fauna (83 to 86 %). They exist because the crops
+   are hard to read, and they can be removed without reading the crops better.
+2. Self-training removes them by learning, inside the weights, a prior that it applies to images
+   that look like trap crops (Z13: absent species named on 8 % of crops instead of 25 to 30 %, test
+   fold unchanged). A regional list and an estimated prior do the same outside the weights, and
+   three quarters of the repaired crops are the same crops.
+3. On top of that, the small backbone learned to tell trap species apart (-52 % on a measure no
+   prior can move), the large one did not (-13 %, not significant), and neither improved on
+   congeners (Z10b).
+4. On the papers' metric, in the shipped setting, the difference between a model that never saw a
+   trap and its self-trained twin is 1.5 (V2-S) and 0.6 (DINOv3) calibrated points once both have a
+   list, three views and an estimated prior; on held-out species the unadapted model is ahead.
+
+**What I cannot affirm.** Anything like-for-like about Otto: no BioCLIP-2 BU was trained without
+pseudo-labels, and OT3 stays the best model here, 3 to 6 points above every model that never saw a
+trap (0.749 against 0.718 for the unadapted DINOv3, 0.713 for Nemo, 0.691 for the unadapted V2-S). The self-trained models are one
+seed. It is one country. And OT3's better labels did buy real discrimination (Z10b).
+
+**What would confirm it,** in order of value per run: (a) Otto's recipe with no pseudo-labels, one
+run, the missing control for the production model; (b) two more seeds of `v2s_bu_st26`; (c) a
+labelled trap set from another country, for the list and the EM as much as for self-training.
+
+**For paper B.** The headline for self-training should be quoted against the baseline a pipeline
+ships: +5.8 and +2.2 calibrated points (list, tta3bm), or +11.6 and +7.1 with one view, not +13 to
++22. The stronger story is the decomposition: how much of the photograph-to-trap gap is the fauna
+(a list and an unsupervised prior: 72 to 83 % of the whole gain with one view, no training), how
+much is reading the crops (what self-training adds beyond), and what stays (species that are
+present, congeners first; 1,451 to 1,682 crops wrong under both best rules). It also gives a practical
+order: list always, estimated prior where no adapted model exists, self-training where it can be
+afforded, with gated labels at natural frequencies if no prior will be applied afterwards.
+
 ## Log
 
+- 2026-11-15, evening: second batch committed and pushed as b63eeb6 (this session's hunks). The
+  owner asked whether self-training is tackling label shift and not domain shift: section 8, Z9 to
+  Z15. Of its predictions: held Z9a, Z9c for unadapted models, Z9d on the letter, Z11, Z12, Z13
+  (except the list alone on DINOv3), Z10b for DINOv3 and for congeners, Z14's seeds, Z15 with the
+  prior from all of the site's crops; falsified Z9b in most parts, Z10b for V2-S by 2 points, Z14's
+  three predictions on tta3bm (each in the prior's favour), Z15 with the prior from other nights. Z10
+  was measured wrongly and is withdrawn. Six checkpoints and OT1's and OT2's logits downloaded from
+  UCloud (files only, no job); checkpoints deleted, 15 logit sets kept (33 GB). The
+  congener finding was handed to the `lepinet` session for the Merge Desk of paper A.
 - 2026-11-15: committed and pushed as 7efcf65 (this session's hunks only), reported to the
   `lepinet` session. Section 7 opened with its predictions.
 - 2026-11-15: Z5 to Z8 run and scored. Of section 7's predictions: held Z5e, Z6b, Z6c, Z8a, Z7's

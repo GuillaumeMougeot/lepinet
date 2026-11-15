@@ -28,7 +28,15 @@ Journal: journal/2026-11-13-beyond-scaling-what-would-make-a-better-biodiversity
   congeners  Z7: Z3's statistic on the campaign's heads (checkpoints in data/campaign_weights).
   severity   Z7b: among wrong species answers, the share naming a congener, per head.
 
-Run from the repo root:  .venv/bin/python dev/107_population_probes.py {observer,prior,ghosts,presence,siteprior,geometry,siteprior2,siteprior3,observers,congeners,severity}
+  calibrated     Z9: Z8's rules scored with the campaign's scorer (species macro-F1 calibrated by
+                 (trap, night)), the prior added to the species logits.
+  discrimination Z10b: AUROC of the logit difference between two species of the probe, crops of one
+                 against crops of the other; no prior and no per-crop offset can move it.
+  invariance     Z11: recall per species on the test fold against the probe crops, one model.
+  overlap        Z13: crop by crop, whether the errors self-training repairs are the ones a prior repairs.
+  newsite        Z15: each site as a new site, on the calibrated macro-F1 of its own probe crops.
+
+Run from the repo root:  .venv/bin/python dev/107_population_probes.py {observer,prior,ghosts,presence,siteprior,geometry,siteprior2,siteprior3,observers,congeners,severity,calibrated,discrimination,invariance,overlap,newsite}
 """
 from __future__ import annotations
 
@@ -794,6 +802,327 @@ def severity(args) -> None:
     res.to_csv(OUT / "z7b_severity.csv", index=False)
 
 
+# ----------------------------------------------------------------------------- Z9-Z11
+MT = Path.home() / "codes/mini_trainer/.worktrees/lepinet-integration"
+MM = ROOT / "data/tools/mini_metrics-61db373"
+
+
+def _group_logsumexp(x: np.ndarray, inv: np.ndarray, n: int) -> np.ndarray:
+    order = np.argsort(inv, kind="stable")
+    starts = np.searchsorted(inv[order], np.arange(n))
+    xo = x[:, order]
+    m = np.maximum.reduceat(xo, starts, axis=1)
+    return np.log(np.add.reduceat(np.exp(xo - m[:, inv[order]]), starts, axis=1)) + m
+
+
+def _campaign_score(folder: str, views: list[str], w: np.ndarray, dest: Path, probe_rows: np.ndarray,
+                    crops: list, keys: np.ndarray, truth: np.ndarray, genus_of: np.ndarray,
+                    family_of: np.ndarray, extra_sets: dict | None = None) -> dict:
+    """The campaign's score.py for one rule, on the probe crops: w multiplies the species posteriors
+    (species with w = 0 are dropped, as a list does), genus and family are logsumexp over the kept
+    species, confidence is the top-1 softmax. Then flemming.py score on probe and probe-HO (species
+    macro-F1 at zero threshold and calibrated by (trap, night))."""
+    import subprocess
+    sel = np.flatnonzero(w > 0)
+    logw = np.log(w[sel] / w[sel].max()).astype(np.float32)
+    g_codes, g_inv = np.unique(genus_of[sel], return_inverse=True)
+    fam_of_genus = pd.Series(family_of[sel], index=genus_of[sel]).groupby(level=0).first().loc[g_codes].to_numpy()
+    f_codes, f_inv = np.unique(fam_of_genus, return_inverse=True)
+    vocab = [set(keys), set(genus_of), set(family_of)]
+    zs = [np.load(LOGITS / folder / f"{v}.npy", mmap_mode="r") for v in views]
+    parts = []
+    for start in range(0, len(probe_rows), 2048):
+        ids = probe_rows[start:start + 2048]
+        leaf = np.zeros((len(ids), len(keys)), np.float32)
+        for z in zs:
+            leaf += np.asarray(z[ids], dtype=np.float32) / np.float32(len(zs))
+        sp = leaf[:, sel] + logw
+        ge = _group_logsumexp(sp, g_inv, len(g_codes))
+        fa = _group_logsumexp(ge, f_inv, len(f_codes))
+        for lvl, (x, labels) in enumerate(((sp, keys[sel]), (ge, g_codes), (fa, f_codes))):
+            i = x.argmax(1)
+            conf = 1.0 / np.exp(x - x[np.arange(len(i)), i][:, None]).sum(1)
+            lab = truth[ids, lvl]
+            parts.append(pd.DataFrame({"instance_id": ids, "filename": [crops[k] for k in ids], "level": lvl,
+                                       "label": lab, "prediction": labels[i], "confidence": conf, "threshold": 0.0,
+                                       "known_label": [int(t in vocab[lvl]) for t in lab]}))
+    df = pd.concat(parts).sort_values(["instance_id", "level"], kind="stable")
+    (dest / "trap").mkdir(parents=True, exist_ok=True)
+    csv = dest / "trap" / "mini_metric.csv"
+    df.to_csv(csv, index=False)
+    import os
+    subprocess.run([str(ROOT / ".venv/bin/python"), str(MT / "dev/lepinet/flemming.py"), "score", "--predictions", str(csv),
+                    "--lepinet", str(ROOT), "--seeds", "20", "--sets", "probe", "probe-ho",
+                    *[x for k, v in (extra_sets or {}).items() for x in ("--set-file", f"{k}={v}")]],
+                   env={**os.environ, "PYTHONPATH": str(MM)}, capture_output=True, text=True, check=True)
+    out = {}
+    for st in ("probe", "probe-ho", *(extra_sets or {})):
+        sc = pd.read_csv(dest / "trap" / st / "scores.csv")
+        f1 = sc[(sc.metric == "f1") & (sc.level == 0)].iloc[0]
+        out[f"{st}, zero"], out[f"{st}, calibrated"] = float(f1.zero), float(f1.calg_mean)
+    sp0 = df[df.level == 0]
+    out["_pred"] = sp0.set_index("instance_id").prediction
+    return out
+
+
+def _trap_setup(folder: str):
+    """Crops, labels and taxonomy of one folder of saved logits; the pool (not probe) is ordered first."""
+    lab = trap_preds("C3b-shift")[["image_path", "label", "trap", "split"]]
+    lab = lab.merge(pd.read_parquet(GROUPS, columns=["image_path", "species_heldout"]), on="image_path")
+    keys = np.array(json.load(open(LOGITS / folder / "keys.json")))
+    crops = json.load(open(LOGITS / folder / "crops.json"))
+    meta = pd.DataFrame({"image_path": crops}).merge(lab, on="image_path", how="left")
+    assert meta.label.notna().all()
+    is_probe = (meta.split == "probe").to_numpy()
+    order = np.concatenate([np.where(~is_probe)[0], np.where(is_probe)[0]])
+    tax = pd.read_parquet(META, columns=["speciesKey", "genusKey", "familyKey"]).astype(str)
+    tax = tax.drop_duplicates("speciesKey").set_index("speciesKey")
+    return keys, crops, meta, order, int((~is_probe).sum()), tax
+
+
+def calibrated(args) -> None:
+    """Z9: Z8's rules on the papers' metric. --folders name=folder=views,... (views: r0 or tta3bm)."""
+    ne = set(open(NE_LIST).read().split())
+    n2i = pd.read_csv(ROOT / "data/flemming/name2id.csv").astype(
+        {k: str for k in ("speciesKey", "genusKey", "familyKey")}).set_index("verbatimScientificName")
+    rows = []
+    for item in args.folders.split(","):
+        name, folder, vname = item.split("=")
+        views = TTA3BM if vname == "tta3bm" else ["r0"]
+        keys, crops, meta, order, n_pool, tax = _trap_setup(folder)
+        genus_of, family_of = tax.loc[keys, "genusKey"].to_numpy(), tax.loc[keys, "familyKey"].to_numpy()
+        truth = n2i.loc[[c.split("/")[0] for c in crops], ["speciesKey", "genusKey", "familyKey"]].to_numpy()
+        p = posteriors(folder, views, order)
+        pool, pp = p[:n_pool], p[n_pool:]
+        probe_rows = order[n_pool:]
+        yp = meta.label.to_numpy()[probe_rows]
+        in_list = np.isin(keys, list(ne)).astype(float)
+        rules = {"nothing": np.ones(len(keys)), "list": in_list,
+                 "list and EM": em_prior(pool, eps=0.01) * in_list,
+                 "list and EM, probe nights included": em_prior(p, eps=0.01) * in_list,
+                 "the probe's own frequencies (diagnostic)":
+                     pd.Series(yp).value_counts().reindex(keys).fillna(0).to_numpy(float)}
+        if args.rules:
+            rules = {k: v for k, v in rules.items() if k in args.rules.split(";")}
+        for rule, w in rules.items():
+            pred = keys[top1(pp, w)]
+            f, r, _ = f1_all(yp, pred, np.ones(len(yp), bool))
+            sc = _campaign_score(folder, views, w, OUT / "z9" / f"{name}_{vname}" / rule.split(" (")[0].replace(" ", "_").replace(",", "").replace("'", ""),
+                                 np.sort(probe_rows), crops, keys, truth, genus_of, family_of)
+            agree = (sc.pop("_pred").loc[probe_rows].to_numpy() == pred).mean()
+            assert agree > 0.999, (name, rule, agree)  # the scorer's table and this script name the same species
+            rows.append({"model": name, "views": vname, "rule": rule, "accuracy": (pred == yp).mean(),
+                         "macro recall (labelled)": r, "macro-F1 (labelled + predicted)": f, **sc})
+            print(f"  {name:24s} {vname:7s} {rule:42s} acc {rows[-1]['accuracy']:.4f} recall {r:.4f}  probe cal "
+                  f"{sc['probe, calibrated']:.4f} zero {sc['probe, zero']:.4f}  probe-HO cal {sc['probe-ho, calibrated']:.4f} "
+                  f"zero {sc['probe-ho, zero']:.4f}", flush=True)
+        del p, pool, pp
+    res = pd.DataFrame(rows)
+    res.to_csv(OUT / f"{args.out}.csv", index=False)
+    print("written", OUT / f"{args.out}.csv")
+
+
+def discrimination(args) -> None:
+    """Z10b: pairwise discrimination among the probe's species, free of any prior. Whatever constants a
+    prior adds to the logits of species k and j, the choice between them on a crop rests on
+    z_k(x) - z_j(x). Its AUROC, crops of k against crops of j, is unchanged by a constant per species
+    (a prior, a list) and by a constant per crop (the softmax ignores it, and fp16s dumps subtract one).
+    Mean of 1 - AUROC over pairs of species with at least 5 probe crops; per species, the mean over
+    its pairs."""
+    rows, per = [], []
+    for item in args.folders.split(","):
+        name, folder, vname = item.split("=")
+        views = TTA3BM if vname == "tta3bm" else ["r0"]
+        keys, crops, meta, order, n_pool, tax = _trap_setup(folder)
+        probe_rows = np.sort(order[n_pool:])
+        y = meta.label.to_numpy()[probe_rows]
+        held = set(meta.label[meta.species_heldout.to_numpy()])
+        counts = pd.Series(y).value_counts()
+        col = {k: i for i, k in enumerate(keys)}
+        species = sorted(k for k in counts.index[counts >= 5] if k in col)
+        cols = np.array([col[k] for k in species])
+        z = np.zeros((len(probe_rows), len(cols)), np.float32)
+        for v in views:
+            zz = np.load(LOGITS / folder / f"{v}.npy", mmap_mode="r")
+            for i in range(0, len(probe_rows), 2048):
+                z[i:i + 2048] += np.asarray(zz[probe_rows[i:i + 2048]], dtype=np.float32)[:, cols] / len(views)
+        genus = tax.genusKey.reindex(species).to_numpy()
+        family = tax.familyKey.reindex(species).to_numpy()
+        # margin of each species over every other one, on its own crops
+        d = [z[y == k][:, [a]] - z[y == k] for a, k in enumerate(species)]
+        n = len(species)
+        err = np.full((n, n), np.nan)
+        for a in range(n):
+            for b in range(a + 1, n):
+                err[a, b] = err[b, a] = 1 - auroc(d[a][:, b], -d[b][:, a])
+        iu = np.triu_indices(n, 1)
+        same_g = (genus[:, None] == genus[None, :])[iu]
+        same_f = (family[:, None] == family[None, :])[iu] & ~same_g
+        e = err[iu]
+        per_species = np.nanmean(err, axis=1)
+        cong = np.array([np.nanmean(err[a][(genus == genus[a]) & (np.arange(n) != a)]) if ((genus == genus[a]).sum() > 1) else np.nan
+                         for a in range(n)])
+        for a, k in enumerate(species):
+            per.append({"model": name, "species": k, "crops": int(counts[k]), "held out": k in held,
+                        "pairwise error": per_species[a], "pairwise error, congeners": cong[a]})
+        is_held = np.array([k in held for k in species])
+        rows.append({"model": name, "views": vname, "species": n, "pairs": len(e), "pairwise error": e.mean(),
+                     "pairs with error > 0.01": float((e > 0.01).mean()),
+                     "congener pairs": int(same_g.sum()), "pairwise error, congeners": e[same_g].mean(),
+                     "same family, other genus": e[same_f].mean(), "other family": e[~same_g & ~same_f].mean(),
+                     "held-out species (mean over their pairs)": per_species[is_held].mean()})
+        print({k: (round(v, 5) if isinstance(v, float) else v) for k, v in rows[-1].items()}, flush=True)
+        del z, d
+    pd.DataFrame(per).to_csv(OUT / f"{args.out}_per_species.csv", index=False)
+    res = pd.DataFrame(rows)
+    res.to_csv(OUT / f"{args.out}.csv", index=False)
+    pd.set_option("display.width", 250)
+    print(res.round(5).to_string(index=False))
+
+
+def invariance(args) -> None:
+    """Z11: under label shift alone a species keeps its recall, whatever the mix of species around
+    it. Recall per species on the test fold and on the probe crops, same model, full vocabulary."""
+    import pyarrow.compute as pc
+    import pyarrow.csv as pacsv
+    spec = json.load(open(ROOT / "data/campaign_weights/class_spec.json"))
+    genus = {k: v[1] for k, v in spec["labels"].items()}
+
+    def read(path: str) -> pd.DataFrame:
+        t = pacsv.read_csv(path, convert_options=pacsv.ConvertOptions(
+            include_columns=["level", "label", "prediction"], column_types={"label": "string", "prediction": "string"}))
+        return t.filter(pc.equal(t["level"], 0)).to_pandas()
+
+    rows = []
+    for folder in sorted(glob.glob(str(PREDS / "c-*/*_s42"))):
+        if not Path(f"{folder}/trap/probe/predictions.csv").exists() or not Path(f"{folder}/predictions.csv").exists():
+            continue
+        test, probe = read(f"{folder}/predictions.csv"), read(f"{folder}/trap/probe/predictions.csv")
+        n = probe.groupby("label").size()
+        sp = n.index[n >= 5].intersection(pd.Index(test.label.unique()))
+        r_test = (test.label == test.prediction).groupby(test.label).mean().reindex(sp)
+        r_probe = (probe.label == probe.prediction).groupby(probe.label).mean().reindex(sp)
+
+        def congener_share(d: pd.DataFrame) -> float:
+            w = d[d.label.isin(sp) & (d.label != d.prediction) & d.prediction.isin(genus.keys())]
+            return float((w.label.map(genus).to_numpy() == w.prediction.map(genus).to_numpy()).mean())
+
+        lo, hi = boot_ci((r_test - r_probe).to_numpy())
+        rows.append({"run": Path(folder).name, "species": len(sp), "recall, test fold": r_test.mean(),
+                     "recall, probe": r_probe.mean(), "gap": (r_test - r_probe).mean(), "gap lo": lo, "gap hi": hi,
+                     "species with lower recall on the probe": float((r_probe < r_test).mean()),
+                     "errors naming a congener, test fold": congener_share(test),
+                     "errors naming a congener, probe": congener_share(probe)})
+    res = pd.DataFrame(rows)
+    pd.set_option("display.width", 250)
+    print(res.round(4).to_string(index=False))
+    res.to_csv(OUT / "z11_invariance.csv", index=False)
+
+
+def overlap(args) -> None:
+    """Z13: crop by crop on the probe, are the errors that self-training repairs the ones a prior
+    repairs with no training? --pairs name=unadapted folder=self-trained folder;..."""
+    ne = set(open(NE_LIST).read().split())
+    rows = []
+    for pair in args.pairs.split(";"):
+        name, fa, fb = pair.split("=")
+        keys, crops, meta, order, n_pool, tax = _trap_setup(fa)
+        assert json.load(open(LOGITS / fb / "keys.json")) == list(keys) and json.load(open(LOGITS / fb / "crops.json")) == crops
+        yp = meta.label.to_numpy()[order[n_pool:]]
+        fauna = set(meta.label)  # every species labelled at the traps, adapt and probe nights
+        genus = tax.genusKey
+        in_list = np.isin(keys, list(ne)).astype(float)
+        p = posteriors(fa, ["r0"], order)
+        pool, pp = p[:n_pool], p[n_pool:]
+        a0, a_list = keys[top1(pp)], keys[top1(pp, in_list)]
+        a_em = keys[top1(pp, em_prior(pool, eps=0.01) * in_list)]
+        del p, pool, pp
+        pb = posteriors(fb, ["r0"], order[n_pool:])
+        b0, b_list = keys[top1(pb)], keys[top1(pb, in_list)]
+        del pb
+
+        def kind(pred: np.ndarray, m: np.ndarray) -> dict:
+            absent = ~np.isin(pred[m], list(fauna))
+            cong = genus.reindex(pred[m]).to_numpy() == genus.reindex(yp[m]).to_numpy()
+            return {"n": int(m.sum()), "name an absent species": float(absent.mean()),
+                    "name a species outside the list": float((~np.isin(pred[m], list(ne))).mean()),
+                    "name a congener": float(cong.mean())}
+
+        wrong = a0 != yp
+        fixed_st = wrong & (b0 == yp)
+        left_st = b0 != yp
+        r = {"pair": name, "probe crops": len(yp), "wrong, unadapted": int(wrong.sum()),
+             "repaired by self-training": int(fixed_st.sum()),
+             "repaired by the list": int((wrong & (a_list == yp)).sum()),
+             "repaired by list and EM": int((wrong & (a_em == yp)).sum()),
+             "of those self-training repairs: also the list": float((a_list == yp)[fixed_st].mean()),
+             "of those self-training repairs: also list and EM": float((a_em == yp)[fixed_st].mean()),
+             "of those list and EM repair: also self-training": float((b0 == yp)[wrong & (a_em == yp)].mean()),
+             "broken by self-training (right before)": int((~wrong & (b0 != yp)).sum()),
+             "broken by list and EM (right before)": int((~wrong & (a_em != yp)).sum()),
+             "wrong for both best rules": int(((a_em != yp) & (b_list != yp)).sum()),
+             "wrong, unadapted with list and EM": int((a_em != yp).sum()),
+             "wrong, self-trained with list": int((b_list != yp).sum())}
+        for label, pred, m in [("errors of the unadapted model", a0, wrong), ("errors self-training repairs", a0, fixed_st),
+                               ("errors self-training leaves", b0, left_st),
+                               ("errors left, unadapted with list and EM", a_em, a_em != yp),
+                               ("errors left, self-trained with list", b_list, b_list != yp)]:
+            for k, v in kind(pred, m).items():
+                r[f"{label}: {k}"] = v
+        rows.append(r)
+    res = pd.DataFrame(rows).set_index("pair").T
+    pd.set_option("display.width", 200)
+    print(res.round(4).to_string())
+    res.to_csv(OUT / "z13_overlap.csv")
+
+
+def newsite(args) -> None:
+    """Z15: each site as a new site, on the calibrated macro-F1 of its own probe crops. --unadapted,
+    --selftrained and --fold are folders of saved logits ({site} in --fold is replaced by lv, oh, ss)."""
+    ne = set(open(NE_LIST).read().split())
+    n2i = pd.read_csv(ROOT / "data/flemming/name2id.csv").astype(
+        {k: str for k in ("speciesKey", "genusKey", "familyKey")}).set_index("verbatimScientificName")
+    keys, crops, meta, order, n_pool, tax = _trap_setup(args.unadapted)
+    genus_of, family_of = tax.loc[keys, "genusKey"].to_numpy(), tax.loc[keys, "familyKey"].to_numpy()
+    truth = n2i.loc[[c.split("/")[0] for c in crops], ["speciesKey", "genusKey", "familyKey"]].to_numpy()
+    in_list = np.isin(keys, list(ne)).astype(float)
+    site = meta.trap.str[:2].to_numpy()
+    is_probe = (meta.split == "probe").to_numpy()
+    probe_rows = np.sort(order[n_pool:])
+    sets = {}
+    (OUT / "z15").mkdir(parents=True, exist_ok=True)
+    for s_ in ("LV", "OH", "SS"):
+        sets[f"site{s_.lower()}"] = OUT / "z15" / f"probe_{s_}.parquet"
+        pd.DataFrame({"image_path": np.array(crops)[is_probe & (site == s_)]}).to_parquet(sets[f"site{s_.lower()}"])
+    p = posteriors(args.unadapted, ["r0"], np.arange(len(crops)))
+    rows = []
+
+    def run(model: str, folder: str, rule: str, w: np.ndarray, only: str | None = None) -> None:
+        sc = _campaign_score(folder, ["r0"], w, OUT / "z15" / model.replace(" ", "_") / rule.replace(" ", "_").replace(",", ""),
+                             probe_rows, crops, keys, truth, genus_of, family_of, extra_sets=sets)
+        sc.pop("_pred")
+        for s_ in ("LV", "OH", "SS"):
+            if only in (None, s_):
+                rows.append({"site": s_, "model": model, "rule": rule, "calibrated": sc[f"site{s_.lower()}, calibrated"],
+                             "zero": sc[f"site{s_.lower()}, zero"]})
+                print(rows[-1], flush=True)
+
+    run("never saw a trap", args.unadapted, "list", in_list)
+    for s_ in ("LV", "OH", "SS"):
+        own = p[~is_probe & (site == s_)]
+        run("never saw a trap", args.unadapted, f"list and EM from {s_}'s other nights", em_prior(own, eps=0.01) * in_list, s_)
+        run("never saw a trap", args.unadapted, f"list and EM from all of {s_}'s crops", em_prior(p[site == s_], eps=0.01) * in_list, s_)
+        run(f"self-trained without {s_}", args.fold.replace("{site}", s_.lower()), "list", in_list, s_)
+    run("self-trained on all sites", args.selftrained, "list", in_list)
+    res = pd.DataFrame(rows)
+    res["rule"] = res.rule.str.replace(r"(LV|OH|SS)'s", "the site's", regex=True)
+    res["model"] = res.model.str.replace(r"without (LV|OH|SS)", "without the site", regex=True)
+    pd.set_option("display.width", 200)
+    print(res.pivot_table(index=["model", "rule"], columns="site", values="calibrated", sort=False).round(4).to_string())
+    print(res.pivot_table(index=["model", "rule"], columns="site", values="zero", sort=False).round(4).to_string())
+    res.to_csv(OUT / "z15_newsite.csv", index=False)
+
+
 def geometry(args) -> None:
     from safetensors import safe_open
     rows = []
@@ -819,7 +1148,8 @@ def geometry(args) -> None:
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
-    for fn in (observer, prior, ghosts, presence, siteprior, geometry, siteprior2, siteprior3, observers, congeners, severity):
+    for fn in (observer, prior, ghosts, presence, siteprior, geometry, siteprior2, siteprior3, observers, congeners, severity,
+               calibrated, discrimination, invariance, overlap, newsite):
         sp = sub.add_parser(fn.__name__)
         sp.set_defaults(fn=fn)
         if fn is siteprior2:
@@ -827,5 +1157,16 @@ if __name__ == "__main__":
         if fn is siteprior3:
             sp.add_argument("--folders", required=True, help="name=folder,... under the logits root, or absolute")
             sp.add_argument("--out", default="z8_siteprior")
+        if fn in (calibrated, discrimination):
+            sp.add_argument("--folders", required=True, help="name=folder=views,... (views: r0 or tta3bm)")
+            sp.add_argument("--out", default="z9_calibrated" if fn is calibrated else "z10_discrimination")
+        if fn is newsite:
+            sp.add_argument("--unadapted", required=True)
+            sp.add_argument("--selftrained", required=True)
+            sp.add_argument("--fold", required=True, help="folder with {site} for lv, oh, ss")
+        if fn is overlap:
+            sp.add_argument("--pairs", required=True, help="name=unadapted folder=self-trained folder;...")
+        if fn is calibrated:
+            sp.add_argument("--rules", default="", help="subset of the rules, separated by ';'")
     a = ap.parse_args()
     a.fn(a)
