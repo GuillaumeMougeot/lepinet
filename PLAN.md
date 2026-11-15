@@ -1,6 +1,6 @@
 # PLAN — what we are doing now
 
-**Kind:** living · **Last updated:** 2026-11-10 · **Supersedes:** [2026-07-28-landscape-and-plan](archive/journal/engineering/2026-07-28-landscape-and-plan.md)
+**Kind:** living · **Last updated:** 2026-11-13 · **Supersedes:** [2026-07-28-landscape-and-plan](archive/journal/engineering/2026-07-28-landscape-and-plan.md)
 
 The one file about *today*. Experiment IDs resolve in [`RESULTS.md`](RESULTS.md); reasons are in
 the linked journal entries; older versions of this file are in git history.
@@ -95,6 +95,7 @@ Pieces: 03, 04, 05, 07, 08, 14, 15, 17, 18, 20, 23 (plus 01, 02, 10, 11 shared).
 
 ## 4. Decided not to do — each closed for a reason
 
+| Z | **proposed, nothing started (owner to choose):** routes beyond scaling, from the 2026-11-13 review. First steps are CPU or eval only: a site prior estimated by EM on every model with saved logits; the observer split of every saved prediction file; the congener-neighbour rate of the campaign's F and BU checkpoints; tail-weighted models re-read with the site prior | CPU, then about 1 GPU-day of evals; four 20 M runs if the owner wants the training tests | 87 % of an unadapted model's trap errors name a species absent from the traps; a site prior estimated on unlabelled crops gives Nemo +14.4 probe accuracy with no training (Z4), and +2.4 to P5, which has already learned it. [[2026-11-13-beyond-scaling-what-would-make-a-better-biodiversity-backbone]] |
 - **More in-distribution accuracy**: saturated; the headroom is under shift.
 - **LDAM, background suppression**: classifier adaptation subsumes that family (T2b; on hold, its trunk was not frozen: [[2026-11-05-the-frozen-stages-were-not-frozen]]).
 - **Re-tuning the ArcFace margin**: two cheap proxies failed for principled reasons; the margin is worth ~0.8 pt.
@@ -107,7 +108,7 @@ Pieces: 03, 04, 05, 07, 08, 14, 15, 17, 18, 20, 23 (plus 01, 02, 10, 11 shared).
 - **The conv-backbone "frozen" stages trained the whole network** (2026-11-05): L4, T2, F2, the G and R series. The claims built on them are on hold until the mini_trainer reruns: the spine (C2), "cRT removes the trade", the staged recipe. BioCLIP-2's frozen stages held. [[2026-11-05-the-frozen-stages-were-not-frozen]]
 - **Noise floors depend on the training regime.** Probe spread is ~0.004 between end-to-end runs and ~0.012 between short fine-tuning stages (the "frozen" stages above); identical 198 M staged runs differed by 3.74 pt once (G3b). On the test fold, retraining moves species macro-F1 by ~0.000 and family by ~0.002 (A5, V2). Claim nothing under ~3x the matching floor.
 - **Thresholds do not transfer between models or embedding spaces.** Rankings do; abstention, novelty and temperature values must be refitted.
-- **The labels mix species.** The classes are legacy GBIF Backbone `speciesKey`s: 163 contain images of another species and 281 share a species with another class. 19 of the 486 trap species are affected (1,876 crops). Comparisons between models stand; the absolute scores of those species do not. The correction waits until after the paper (owner, 2026-11-04). [[2026-11-03-the-training-labels-inherit-gbif-backbone-errors]]
+- **The labels mix species.** The classes are legacy GBIF Backbone `speciesKey`s: 163 contain images of another species and 281 share a species with another class. 19 of the 486 trap species are affected (1,876 crops). Comparisons between models stand; the absolute scores of those species do not. The correction waits until after the paper (owner, 2026-11-04). [[2026-11-03-the-training-labels-inherit-gbif-backbone-errors]] One result did not stand (2026-11-13): N2's near-novel trap stratum is 92 % *Pleuroptya ruralis*, a duplicate of *Patania ruralis*, which the model was trained on. Check any withheld-species set against COL XR before reading it. [[2026-11-13-beyond-scaling-what-would-make-a-better-biodiversity-backbone]]
 - **Every lepinet head learned a per-class scale and bias.** fastai's optimiser setup trains the head's "frozen" `g` and bias (found 2026-11-03), so the rows are not unit-norm (species `g` mean 1.88). No reported number changes; mini_trainer keeps them frozen, so parity needs an option and phase 3 tests learned against frozen. [[2026-08-06-the-cosine-head-is-not-unit-norm]]
 
 ## 6. How to run things
