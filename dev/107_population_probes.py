@@ -1,4 +1,4 @@
-"""Three CPU checks on files already on the workstation (no GPU, a few GB at most).
+"""CPU checks on files already on the workstation (no GPU, a few GB at most).
 
 Journal: journal/2026-11-13-beyond-scaling-what-would-make-a-better-biodiversity-backbone.md
 (predictions written there before these ran). RESULTS section 2, group Z.
@@ -19,7 +19,16 @@ Journal: journal/2026-11-13-beyond-scaling-what-would-make-a-better-biodiversity
   presence   Z2c: a label-free presence filter (species with a confident crop on the adapt nights),
              scored on the probe nights in mini_metrics' zero-threshold convention.
 
-Run from the repo root:  .venv/bin/python dev/107_population_probes.py {observer,prior,ghosts,presence,siteprior,geometry}
+  siteprior2 Z5: the same prior on Nemo, P5 and OT3, one view and tta3bm, against the north_europe
+             list, with the training prior divided out, with a temperature, and per site and season.
+  siteprior3 Z5g, Z8: list, EM, both, and the EM inside the list, overall and per site, for any
+             folder of saved logits (--folders name=path,...).
+  observers  Z6: the observer split on every saved test-fold prediction file, next to each run's
+             probe accuracy.
+  congeners  Z7: Z3's statistic on the campaign's heads (checkpoints in data/campaign_weights).
+  severity   Z7b: among wrong species answers, the share naming a congener, per head.
+
+Run from the repo root:  .venv/bin/python dev/107_population_probes.py {observer,prior,ghosts,presence,siteprior,geometry,siteprior2,siteprior3,observers,congeners,severity}
 """
 from __future__ import annotations
 
@@ -59,7 +68,8 @@ def species_preds(run: str) -> pd.DataFrame:
     return pd.DataFrame({"key": d.filename.to_numpy(), "correct": (d.label == d.prediction).to_numpy()})
 
 
-def observer(args) -> None:
+def observer_groups() -> pd.DataFrame:
+    """One row per test image: its key, species, observer group (S, O, N or missing)."""
     cols = ["filename", "speciesKey", "set", "recordedBy", "eventDate"]
     m = pd.read_parquet(META, columns=cols)
     m["obs"] = m.recordedBy.astype("string").str.strip().str.lower()
@@ -88,7 +98,11 @@ def observer(args) -> None:
     t["sameday"] = in_trip & has
     t["n_train"] = t.speciesKey.map(n_train).fillna(0).astype(int)
     t["rare"] = t.n_train < 200
+    return t
 
+
+def observer(args) -> None:
+    t = observer_groups()
     runs = {"L0": "L0-eval", "singlehead": "singlehead"}
     for name, run in runs.items():
         p = species_preds(run)
@@ -339,17 +353,21 @@ def softmax_rows(z, idx: np.ndarray) -> np.ndarray:
     return out
 
 
-def em_prior(p: np.ndarray, iters: int = 50, eps: float = 0.0) -> np.ndarray:
-    """Maximum-likelihood class prior of an unlabelled set, the model's posteriors held fixed."""
+def em_prior(p: np.ndarray, iters: int = 50, eps: float = 0.0, source: np.ndarray | None = None,
+             base: np.ndarray | None = None, m: float = 0.0) -> np.ndarray:
+    """Maximum-likelihood class prior of an unlabelled set, the model's posteriors held fixed
+    (Saerens et al. 2002). `source` is the model's training prior; None means uniform, which is
+    what Z4 assumed. `eps` adds that many pseudo-crops to every class; `base` and `m` shrink toward
+    a base prior with the weight of m crops. Each iteration is two matrix-vector products."""
     n, c = p.shape
-    pi = np.full(c, 1.0 / c)
+    src = np.full(c, 1.0 / c) if source is None else source
+    extra = np.full(c, float(eps)) + (m * base if base is not None else 0.0)
+    pi = np.full(c, 1.0 / c) if base is None else base.copy()
     for _ in range(iters):
-        s = np.zeros(c)
-        for i in range(0, n, 4096):
-            q = p[i:i + 4096] * pi
-            q /= q.sum(axis=1, keepdims=True)
-            s += q.sum(axis=0)
-        pi = (s + eps) / (n + c * eps)
+        r = (pi / src).astype(np.float32)
+        d = np.maximum(p @ r, 1e-30)
+        s = r.astype(np.float64) * (p.T @ (1.0 / d).astype(np.float32))
+        pi = (s + extra) / (s.sum() + extra.sum())
     return pi
 
 
@@ -414,7 +432,368 @@ def siteprior(args) -> None:
     res.to_csv(OUT / "z4_siteprior.csv", index=False)
 
 
+# ----------------------------------------------------------------------------- Z5
+NE_LIST = Path.home() / "codes/mini_trainer/dev/releases/mambo_v3/presets/north_europe.classes"
+TTA3BM = ["r0", "rot-30bm_pad25", "rot30bm_pad25"]
+GROUPS = ROOT / "data/flemming/splits/flemming_groups.parquet"
+
+
+def posteriors(folder: str, views: list[str], rows: np.ndarray, temp: float = 1.0) -> np.ndarray:
+    """softmax(mean logits over the views / temp) for the given crops, float32."""
+    zs = [np.load(LOGITS / folder / f"{v}.npy", mmap_mode="r") for v in views]
+    out = np.empty((len(rows), zs[0].shape[1]), np.float32)
+    for i in range(0, len(rows), 2048):
+        idx = rows[i:i + 2048]
+        a = np.asarray(zs[0][idx], dtype=np.float32)
+        for z in zs[1:]:
+            a += z[idx]
+        a *= 1.0 / (len(zs) * temp)
+        a -= a.max(axis=1, keepdims=True)
+        np.exp(a, out=a)
+        a /= a.sum(axis=1, keepdims=True)
+        out[i:i + 2048] = a
+    return out
+
+
+def top1(p: np.ndarray, w: np.ndarray | None = None) -> np.ndarray:
+    if w is None:
+        return p.argmax(axis=1)
+    w = (w / w.max()).astype(np.float32)
+    out = np.empty(len(p), np.int64)
+    for i in range(0, len(p), 4096):
+        out[i:i + 4096] = (p[i:i + 4096] * w).argmax(axis=1)
+    return out
+
+
+def siteprior2(args) -> None:
+    lab = trap_preds("C3b-shift")[["image_path", "label", "trap", "split"]]
+    lab = lab.merge(pd.read_parquet(GROUPS, columns=["image_path", "species_heldout", "night"]), on="image_path")
+    m = pd.read_parquet(META, columns=["speciesKey", "set"])
+    n_train = m[m.set.astype(str) != "0"].groupby("speciesKey").size()
+    n_train.index = n_train.index.astype(str)
+    ne = set(open(NE_LIST).read().split())
+    rows = []
+    models = [("Nemo", "nemo17"), ("P5", "p517"), ("OT3", "ot3")]
+    if args.models:
+        models = [x for x in models if x[0] in args.models.split(",")]
+    for name, folder in models:
+        keys = np.array(json.load(open(LOGITS / folder / "keys.json")))
+        meta = pd.DataFrame({"image_path": json.load(open(LOGITS / folder / "crops.json"))})
+        meta = meta.merge(lab, on="image_path", how="left")
+        assert meta.label.notna().all()
+        is_probe = (meta.split == "probe").to_numpy()
+        order = np.concatenate([np.where(~is_probe)[0], np.where(is_probe)[0]])  # the pool first
+        n_pool = int((~is_probe).sum())
+        y = meta.label.to_numpy()[order]
+        site = meta.trap.str[:2].to_numpy()[order]
+        day = pd.to_datetime(meta.night).map(pd.Timestamp.toordinal).to_numpy()[order]
+        ho = meta.species_heldout.to_numpy()[order]
+        yp, hop, sitep, dayp = y[n_pool:], ho[n_pool:], site[n_pool:], day[n_pool:]
+        sitepool, daypool = site[:n_pool], day[:n_pool]
+        src = np.maximum(n_train.reindex(keys).fillna(0).to_numpy(float), 1.0)
+        in_list = np.isin(keys, list(ne)).astype(float)
+        counts = pd.Series(y[:n_pool]).value_counts().reindex(keys).fillna(0).to_numpy(float) + 1e-9
+        oracle = counts / counts.sum()
+        key_index = {k: i for i, k in enumerate(keys)}
+        y_idx = np.array([key_index.get(k, -1) for k in y])
+
+        def score(view: str, rule: str, pred_idx: np.ndarray, **extra) -> None:
+            pred = keys[pred_idx]
+            f, r, n = f1_all(yp, pred, np.ones(len(yp), bool))
+            hit = pred == yp
+            rows.append({"model": name, "views": view, "rule": rule, "accuracy": hit.mean(),
+                         "macro-F1 (labelled + predicted)": f, "macro recall (labelled)": r,
+                         "species predicted": n, "accuracy, held-out species": hit[hop].mean(),
+                         "accuracy, other species": hit[~hop].mean(), **extra})
+            print(f"  {name:5s} {view:9s} {rule:62s} acc {hit.mean():.4f}  F1 {f:.4f}  recall {r:.4f}  species {n}",
+                  flush=True)
+
+        for view, views in [("one view", ["r0"]), ("tta3bm", TTA3BM)]:
+            p = posteriors(folder, views, order)
+            pool, pp = p[:n_pool], p[n_pool:]
+            score(view, "no prior", top1(pp))
+            score(view, "north_europe list", top1(pp, in_list))
+            score(view, "EM, not smoothed (Z4)", top1(pp, em_prior(pool)))
+            pi = em_prior(pool, eps=0.01)
+            score(view, "EM", top1(pp, pi), species_in_prior=int((pi > 1.0 / n_pool).sum()))
+            score(view, "north_europe list and EM", top1(pp, pi * in_list))
+            for a in (0.5, 1.0):
+                s_a = src ** a / (src ** a).sum()
+                pia = em_prior(pool, eps=0.01, source=s_a)
+                score(view, f"EM, training prior^{a} divided out", top1(pp, pia / s_a),
+                      species_in_prior=int((pia > 1.0 / n_pool).sum()))
+                score(view, f"true adapt-night frequencies / training prior^{a}", top1(pp, oracle / s_a))
+            score(view, "true adapt-night frequencies (Z4's oracle)", top1(pp, oracle))
+            score(view, "EM on the probe crops themselves", top1(pp, em_prior(pp, eps=0.01)))
+            score(view, "EM on all crops, adapt and probe nights", top1(pp, em_prior(p, eps=0.01)))
+            if view == "one view":
+                if name == "Nemo":
+                    score(view, "EM, 200 iterations", top1(pp, em_prior(pool, iters=200, eps=0.01)))
+                # per site and season: one prior per (site, night) of the probe, shrunk to the pooled one
+                windows = {
+                    "EM per site, all nights, shrunk to pooled (100 crops)": lambda s_, d_: sitepool == s_,
+                    "EM all sites, nights within 15, shrunk": lambda s_, d_: np.abs(daypool - d_) <= 15,
+                    "EM per site, nights within 15, shrunk": lambda s_, d_: (sitepool == s_) & (np.abs(daypool - d_) <= 15),
+                    "EM per site, the 30 nights before, shrunk": lambda s_, d_: (sitepool == s_) & (daypool < d_) & (daypool >= d_ - 30),
+                }
+                for rule, select in windows.items():
+                    pred = np.empty(len(yp), np.int64)
+                    sizes, cache = [], {}
+                    for s_, d_ in sorted(set(zip(sitep, dayp))):
+                        sel = np.where(select(s_, d_))[0]
+                        key = sel.tobytes()
+                        if key not in cache:
+                            cache[key] = em_prior(pool[sel], iters=30, base=pi, m=100.0) if len(sel) else pi
+                        g = (sitep == s_) & (dayp == d_)
+                        pred[g] = top1(pp[g], cache[key])
+                        sizes.append(len(sel))
+                    score(view, rule, pred, median_pool=float(np.median(sizes)))
+            del p, pool, pp
+            if view == "one view" and name in ("Nemo", "OT3"):
+                known = y_idx[:n_pool] >= 0
+                for temp in (0.5, 0.7, 1.4, 2.0):
+                    p = posteriors(folder, views, order, temp)
+                    pool, pp = p[:n_pool], p[n_pool:]
+                    nll = -np.log(np.maximum(pool[np.where(known)[0], y_idx[:n_pool][known]], 1e-30)).mean()
+                    score(view, f"T = {temp}: no prior", top1(pp), adapt_nll=float(nll))
+                    score(view, f"T = {temp}: EM", top1(pp, em_prior(pool, eps=0.01)))
+                    del p, pool, pp
+    res = pd.DataFrame(rows)
+    OUT.mkdir(parents=True, exist_ok=True)
+    out = OUT / ("z5_siteprior.csv" if not args.models else f"z5_siteprior_{args.models.replace(',', '_')}.csv")
+    res.to_csv(out, index=False)
+    print("written", out)
+
+
+def em_in_list(pool: np.ndarray, in_list: np.ndarray, eps: float = 0.01) -> np.ndarray:
+    """The EM estimate when only the list's species can receive mass."""
+    idx = np.where(in_list > 0)[0]
+    w = np.zeros(pool.shape[1])
+    w[idx] = em_prior(np.ascontiguousarray(pool[:, idx]), eps=eps)
+    return w
+
+
+def siteprior3(args) -> None:
+    """Z5g and Z8: list, EM, both, and the EM inside the list; overall and per site, with the prior
+    taken from the site's own unlabelled crops. --folders name=path,... (path under LOGITS or absolute)."""
+    lab = trap_preds("C3b-shift")[["image_path", "label", "trap", "split"]]
+    ne = set(open(NE_LIST).read().split())
+    rows = []
+    for item in args.folders.split(","):
+        name, folder = item.split("=")
+        keys = np.array(json.load(open(LOGITS / folder / "keys.json")))
+        meta = pd.DataFrame({"image_path": json.load(open(LOGITS / folder / "crops.json"))})
+        meta = meta.merge(lab, on="image_path", how="left")
+        assert meta.label.notna().all()
+        is_probe = (meta.split == "probe").to_numpy()
+        order = np.concatenate([np.where(~is_probe)[0], np.where(is_probe)[0]])
+        n_pool = int((~is_probe).sum())
+        y = meta.label.to_numpy()[order]
+        site = meta.trap.str[:2].to_numpy()[order]
+        yp, sitep, sitepool = y[n_pool:], site[n_pool:], site[:n_pool]
+        in_list = np.isin(keys, list(ne)).astype(float)
+        p = posteriors(folder, ["r0"], order)
+        pool, pp = p[:n_pool], p[n_pool:]
+
+        def score(scope: str, rule: str, w: np.ndarray | None, mask: np.ndarray) -> None:
+            pred = keys[top1(pp[mask], w)]
+            f, r, n = f1_all(yp[mask], pred, np.ones(int(mask.sum()), bool))
+            acc = (pred == yp[mask]).mean()
+            rows.append({"model": name, "scope": scope, "rule": rule, "crops": int(mask.sum()), "accuracy": acc,
+                         "macro-F1 (labelled + predicted)": f, "macro recall (labelled)": r, "species predicted": n})
+            print(f"  {name:22s} {scope:4s} {rule:44s} acc {acc:.4f}  F1 {f:.4f}  recall {r:.4f}  species {n}", flush=True)
+
+        everything = np.ones(len(yp), bool)
+        pi = em_prior(pool, eps=0.01)
+        w_in = em_in_list(pool, in_list)
+        for scope, mask in [("all", everything)] + [(s_, sitep == s_) for s_ in ("LV", "OH", "SS")]:
+            score(scope, "no prior", None, mask)
+            score(scope, "north_europe list", in_list, mask)
+            score(scope, "EM, all sites", pi, mask)
+            score(scope, "list and EM, all sites", pi * in_list, mask)
+            score(scope, "EM inside the list, all sites", w_in, mask)
+            if scope != "all":
+                own = pool[sitepool == scope]
+                score(scope, "list and EM, own site", em_prior(own, eps=0.01) * in_list, mask)
+                score(scope, "EM inside the list, own site", em_in_list(own, in_list), mask)
+                other = pool[sitepool != scope]
+                score(scope, "EM inside the list, the two other sites", em_in_list(other, in_list), mask)
+        del p, pool, pp
+    res = pd.DataFrame(rows)
+    OUT.mkdir(parents=True, exist_ok=True)
+    res.to_csv(OUT / f"{args.out}.csv", index=False)
+    print("written", OUT / f"{args.out}.csv")
+
+
+# ----------------------------------------------------------------------------- Z6
+def _species_level(path: str) -> pd.DataFrame:
+    import pyarrow.compute as pc
+    import pyarrow.csv as pacsv
+    t = pacsv.read_csv(path, convert_options=pacsv.ConvertOptions(
+        include_columns=["filename", "level", "label", "prediction"]))
+    t = t.filter(pc.equal(t["level"], 0))
+    d = t.to_pandas()
+    return pd.DataFrame({"filename": d.filename, "correct": (d.label == d.prediction).to_numpy()})
+
+
+def _probe_accuracy(path: str, probe_paths: set) -> tuple[float, int]:
+    d = _species_level(path)
+    name = d.filename.str.split("/").str[-2:].str.join("/")
+    keep = name.isin(probe_paths).to_numpy()
+    return float(d.correct[keep].mean()), int(keep.sum())
+
+
+def observers(args) -> None:
+    t = observer_groups()[["key", "speciesKey", "group"]]
+    g = pd.read_parquet(GROUPS, columns=["image_path", "split"])
+    probe_paths = set(g.image_path[g.split == "probe"])
+    files = sorted(glob.glob(str(PREDS / "*/*/eval/predictions.csv")) + glob.glob(str(PREDS / "c-*/*/predictions.csv"))
+                   + glob.glob(str(PREDS / "*/whole-set0/predictions.csv")))
+    rows = []
+    for path in files:
+        if Path(path).stat().st_size < 100e6:      # trap files are small; the test fold is 170 MB or more
+            continue
+        rel = Path(path).relative_to(PREDS).parts
+        run = rel[1] if rel[0].startswith("c-") else rel[0]
+        d = _species_level(path)
+        d["key"] = d.filename.str.split("/").str[-2:].str.join("/")
+        d = d.merge(t, on="key", how="inner")
+        d["correct"] = d.correct.astype(float)
+        rec = {grp: sub.groupby("speciesKey").correct.mean() for grp, sub in d.groupby("group")}
+        row = {"run": run, "images": len(d), "macro recall": d.groupby("speciesKey").correct.mean().mean()}
+        for grp in "SON":
+            row[f"accuracy {grp}"] = d.correct[d.group == grp].mean()
+        for a, b in [("S", "N"), ("S", "O")]:
+            both = rec[a].index.intersection(rec[b].index)
+            row[f"recall {a} (paired with {b})"] = rec[a].loc[both].mean()
+            row[f"recall {b} (paired with {a})"] = rec[b].loc[both].mean()
+            row[f"gap {a}-{b}"] = (rec[a].loc[both] - rec[b].loc[both]).mean()
+        # the run's probe accuracy, from the nearest trap prediction file
+        base = rel[0]
+        for suffix in ("-eval", "-cleanfold", "-clean"):
+            base = base.removesuffix(suffix)
+        base = {"singlehead": "base", "marginal": "marg"}.get(base, base)
+        cands = ([str(Path(path).parent / "trap/probe/predictions.csv")] if rel[0].startswith("c-") else
+                 glob.glob(str(PREDS / f"{base}-probe/*/eval/predictions.csv")) +
+                 glob.glob(str(PREDS / f"{base}-shift/*/eval/predictions.csv")))
+        cands = [c for c in cands if Path(c).exists()]
+        if cands:
+            row["probe accuracy"], row["probe crops"] = _probe_accuracy(cands[0], probe_paths)
+        rows.append(row)
+        print(f"{run[:70]:70s} n {len(d):7d}  S-N {row['gap S-N']:+.4f}  S-O {row['gap S-O']:+.4f}  "
+              f"probe {row.get('probe accuracy', float('nan')):.4f}", flush=True)
+    res = pd.DataFrame(rows)
+    OUT.mkdir(parents=True, exist_ok=True)
+    res.to_csv(OUT / "z6_observers.csv", index=False)
+    print("written", OUT / "z6_observers.csv")
+
+
 # ----------------------------------------------------------------------------- Z3
+def prototype_stats(w: np.ndarray, s2g: np.ndarray, s2f: np.ndarray) -> dict:
+    """How taxonomic a set of species prototypes is: who is the nearest other prototype, and the
+    mean cosine to congeners, to the rest of the family, and to other families."""
+    w = w / np.linalg.norm(w, axis=1, keepdims=True)
+    c = len(w)
+    genus_size = np.bincount(s2g)[s2g]
+    has_cong = genus_size > 1
+    nn_cong = np.zeros(c, bool)
+    nn_fam = np.zeros(c, bool)
+    sums = np.zeros(3)
+    counts = np.zeros(3)
+    nn_cos = np.zeros(c, np.float32)
+    for i in range(0, c, 1024):
+        cos = w[i:i + 1024] @ w.T
+        idx = np.arange(i, min(i + 1024, c))
+        cos[np.arange(len(idx)), idx] = -2.0
+        j = cos.argmax(axis=1)
+        nn_cos[idx] = cos.max(axis=1)
+        nn_cong[idx] = s2g[j] == s2g[idx]
+        nn_fam[idx] = s2f[j] == s2f[idx]
+        same_g = s2g[idx][:, None] == s2g[None, :]
+        same_f = s2f[idx][:, None] == s2f[None, :]
+        valid = cos > -1.5
+        for k, mask in enumerate([same_g & valid, same_f & ~same_g, ~same_f]):
+            sums[k] += cos[mask].sum()
+            counts[k] += mask.sum()
+    chance = ((genus_size[has_cong] - 1) / (c - 1)).mean()
+    return {"dim": w.shape[1], "nearest is congener": nn_cong[has_cong].mean(), "chance": chance,
+            "nearest in family": nn_fam.mean(), "nearest cos": nn_cos.mean(),
+            "cos congener": sums[0] / counts[0], "cos same family": sums[1] / counts[1],
+            "cos other": sums[2] / counts[2], "species with a congener": int(has_cong.sum())}
+
+
+def congeners(args) -> None:
+    """Z7: the same statistic on the campaign's heads (F, BU, I, TD on three backbones, three seeds)."""
+    import torch
+    base = ROOT / "data/campaign_weights"
+    spec = json.load(open(base / "class_spec.json"))
+    order = sorted(spec["cls2idx"]["0"], key=spec["cls2idx"]["0"].get)
+    s2g = pd.factorize(np.array([spec["labels"][k][1] for k in order]))[0]
+    s2f = pd.factorize(np.array([spec["labels"][k][2] for k in order]))[0]
+    rows = []
+    for path in sorted(base.glob("*/last.pt")):
+        run = path.parent.name
+        sd = torch.load(path, map_location="cpu", weights_only=False)
+        sd = sd.get("model", sd) if isinstance(sd, dict) else sd
+        cands = {k: v for k, v in sd.items() if hasattr(v, "ndim") and v.ndim == 2 and v.shape[0] == len(order)
+                 and v.shape[1] > 1}
+        if not cands:
+            continue
+        key = sorted(cands)[-1]   # I and TD register the leaf layer twice (linear is layers.0): same tensor
+        bb, head, seed = run.split("_")[:3]
+        w = cands[key].float().numpy()
+        st = prototype_stats(w, s2g, s2f)
+        wn = w / np.linalg.norm(w, axis=1, keepdims=True)
+        ce = prototype_stats(wn - wn.mean(axis=0), s2g, s2f)   # the common direction removed
+        st["nearest is congener, centred"] = ce["nearest is congener"]
+        st["nearest in family, centred"] = ce["nearest in family"]
+        rows.append({"run": run, "backbone": bb, "head": head, "seed": seed, "tensor": key, **st})
+        print(f"{run:16s} dim {st['dim']:5d}  nearest is congener {st['nearest is congener']:.4f}  in family "
+              f"{st['nearest in family']:.4f}  cos {st['cos congener']:.3f} / {st['cos same family']:.3f} / "
+              f"{st['cos other']:.3f}   {key}", flush=True)
+    res = pd.DataFrame(rows)
+    OUT.mkdir(parents=True, exist_ok=True)
+    res.to_csv(OUT / "z7_congeners.csv", index=False)
+    if len(res):
+        print(res.groupby(["backbone", "head"])[["nearest is congener", "nearest is congener, centred",
+                                                  "nearest in family", "nearest in family, centred"]]
+              .agg(["mean", "min", "max"]).round(4).to_string())
+
+
+def severity(args) -> None:
+    """Z7b: among wrong species answers, how often is the named species a congener, or in the family?
+    The campaign's seed-42 heads with per-image predictions, on the test fold and the probe crops."""
+    spec = json.load(open(ROOT / "data/campaign_weights/class_spec.json"))
+    genus = {k: v[1] for k, v in spec["labels"].items()}
+    family = {k: v[2] for k, v in spec["labels"].items()}
+    import pyarrow.compute as pc
+    import pyarrow.csv as pacsv
+    rows = []
+    for folder in sorted(glob.glob(str(PREDS / "c-*/*_s42"))):
+        run = Path(folder).name
+        for scope, path in [("test fold", f"{folder}/predictions.csv"), ("probe", f"{folder}/trap/probe/predictions.csv")]:
+            if not Path(path).exists():
+                continue
+            t = pacsv.read_csv(path, convert_options=pacsv.ConvertOptions(
+                include_columns=["level", "label", "prediction"], column_types={"label": "string", "prediction": "string"}))
+            d = t.filter(pc.equal(t["level"], 0)).to_pandas()
+            d = d[d.label.isin(genus.keys())]
+            wrong = d[d.label != d.prediction]
+            same_g = wrong.label.map(genus).to_numpy() == wrong.prediction.map(genus).to_numpy()
+            same_f = wrong.label.map(family).to_numpy() == wrong.prediction.map(family).to_numpy()
+            # per true species, then averaged: the tail counts as much as the head
+            per = pd.DataFrame({"label": wrong.label.to_numpy(), "g": same_g, "f": same_f}).groupby("label").mean()
+            rows.append({"run": run, "scope": scope, "images": len(d), "accuracy": 1 - len(wrong) / len(d),
+                         "errors": len(wrong), "errors in the true genus": same_g.mean(),
+                         "errors in the true family": same_f.mean(), "same, macro over species: genus": per.g.mean(),
+                         "family": per.f.mean()})
+    res = pd.DataFrame(rows)
+    pd.set_option("display.width", 250)
+    print(res.round(4).to_string(index=False))
+    OUT.mkdir(parents=True, exist_ok=True)
+    res.to_csv(OUT / "z7b_severity.csv", index=False)
+
+
 def geometry(args) -> None:
     from safetensors import safe_open
     rows = []
@@ -429,35 +808,7 @@ def geometry(args) -> None:
         with safe_open(str(base / "model.safetensors"), "np") as f:
             w = f.get_tensor("1.head.layers.0.parametrizations.weight.original1").astype(np.float32)
             g = f.get_tensor("1.head.layers.0.parametrizations.weight.original0").astype(np.float32).ravel()
-        w /= np.linalg.norm(w, axis=1, keepdims=True)
-        c = len(w)
-        genus_size = np.bincount(s2g)[s2g]
-        has_cong = genus_size > 1
-        nn_cong = np.zeros(c, bool)
-        nn_fam = np.zeros(c, bool)
-        sums = np.zeros(3)
-        counts = np.zeros(3)
-        nn_cos = np.zeros(c, np.float32)
-        for i in range(0, c, 1024):
-            cos = w[i:i + 1024] @ w.T
-            idx = np.arange(i, min(i + 1024, c))
-            cos[np.arange(len(idx)), idx] = -2.0
-            j = cos.argmax(axis=1)
-            nn_cos[idx] = cos.max(axis=1)
-            nn_cong[idx] = s2g[j] == s2g[idx]
-            nn_fam[idx] = s2f[j] == s2f[idx]
-            same_g = s2g[idx][:, None] == s2g[None, :]
-            same_f = s2f[idx][:, None] == s2f[None, :]
-            valid = cos > -1.5
-            for k, mask in enumerate([same_g & valid, same_f & ~same_g, ~same_f]):
-                sums[k] += cos[mask].sum()
-                counts[k] += mask.sum()
-        chance = ((genus_size[has_cong] - 1) / (c - 1)).mean()
-        rows.append({"model": name, "dim": w.shape[1], "row scale mean": g.mean(),
-                     "nearest is congener": nn_cong[has_cong].mean(), "chance": chance,
-                     "nearest in family": nn_fam.mean(), "nearest cos": nn_cos.mean(),
-                     "cos congener": sums[0] / counts[0], "cos same family": sums[1] / counts[1],
-                     "cos other": sums[2] / counts[2], "species with a congener": int(has_cong.sum())})
+        rows.append({"model": name, "row scale mean": g.mean(), **prototype_stats(w, s2g, s2f)})
     res = pd.DataFrame(rows)
     pd.set_option("display.width", 250)
     print(res.round(4).T.to_string())
@@ -468,7 +819,13 @@ def geometry(args) -> None:
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
-    for fn in (observer, prior, ghosts, presence, siteprior, geometry):
-        sub.add_parser(fn.__name__).set_defaults(fn=fn)
+    for fn in (observer, prior, ghosts, presence, siteprior, geometry, siteprior2, siteprior3, observers, congeners, severity):
+        sp = sub.add_parser(fn.__name__)
+        sp.set_defaults(fn=fn)
+        if fn is siteprior2:
+            sp.add_argument("--models", default="", help="comma-separated subset of Nemo,P5,OT3")
+        if fn is siteprior3:
+            sp.add_argument("--folders", required=True, help="name=folder,... under the logits root, or absolute")
+            sp.add_argument("--out", default="z8_siteprior")
     a = ap.parse_args()
     a.fn(a)

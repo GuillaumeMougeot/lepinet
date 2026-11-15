@@ -1,6 +1,6 @@
 # PLAN — what we are doing now
 
-**Kind:** living · **Last updated:** 2026-11-13 · **Supersedes:** [2026-07-28-landscape-and-plan](archive/journal/engineering/2026-07-28-landscape-and-plan.md)
+**Kind:** living · **Last updated:** 2026-11-15 · **Supersedes:** [2026-07-28-landscape-and-plan](archive/journal/engineering/2026-07-28-landscape-and-plan.md)
 
 The one file about *today*. Experiment IDs resolve in [`RESULTS.md`](RESULTS.md); reasons are in
 the linked journal entries; older versions of this file are in git history.
@@ -91,7 +91,7 @@ Pieces: 03, 04, 05, 07, 08, 14, 15, 17, 18, 20, 23 (plus 01, 02, 10, 11 shared).
 | W2 | our objective trained on ToL-10M, compared with BioCLIP-1 on the same data | ~2.5 h/epoch | isolates the objective from the data. [[2026-08-28-two-directions-checklists-and-our-objective-on-tol]] |
 | O2 | open-set as enrolled taxa grow from 12 K to 204 K, on cached ToL embeddings | 1 GPU, no download | does the scoring-rule result hold across class count too? |
 | K1+ | regional checklist **plus** abstention | eval only | should recover the tail damage K1 measured |
-| Z | **proposed, nothing started (owner to choose):** routes beyond scaling, from the 2026-11-13 review. First steps are CPU or eval only: a site prior estimated by EM on every model with saved logits; the observer split of every saved prediction file; the congener-neighbour rate of the campaign's F and BU checkpoints; tail-weighted models re-read with the site prior | CPU, then about 1 GPU-day of evals; four 20 M runs if the owner wants the training tests | 87 % of an unadapted model's trap errors name a species absent from the traps; a site prior estimated on unlabelled crops gives Nemo +14.4 probe accuracy with no training (Z4), and +2.4 to P5, which has already learned it. [[2026-11-13-beyond-scaling-what-would-make-a-better-biodiversity-backbone]] |
+| Z | routes beyond scaling (2026-11-13 review). **First steps done 2026-11-15** (RESULTS Z5-Z8): the site prior on Otto and P5, the observer split on every run, congener neighbours on the campaign's heads, self-training before and after with the list. **Next, eval only:** the same before/after comparison on the calibrated macro-F1 with the campaign scorer (11 logit sets kept in `data/population_probes/logits/`); OT1's logits to separate label accuracy from label frequencies. Still proposed, owner to choose: routes 2, 5, 6 and the four 20 M runs | CPU and workstation GPU; four 20 M runs if wanted | the regional list is the prior that matters; self-training adds +6.5 to +8.0 accuracy on top of it, not +15 to +17 (paper B should report both); the estimated prior adds nothing to OT3; marginal supervision makes congeners neighbours on three backbones (a piece for paper A). [[2026-11-13-beyond-scaling-what-would-make-a-better-biodiversity-backbone]] |
 | — | trap order dataset | owner | owner is transferring it; needed to score W3's order classifier |
 
 ## 4. Decided not to do — each closed for a reason

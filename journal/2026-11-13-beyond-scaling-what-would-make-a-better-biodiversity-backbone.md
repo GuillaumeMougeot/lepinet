@@ -1,6 +1,10 @@
 # Beyond scaling what works: what would make a better biodiversity classifier and backbone?
 
-**Kind:** research · **Status:** OPEN (2026-11-13). A review of the project for new scientific
+**Kind:** research · **Status:** OPEN (2026-11-13; first steps run 2026-11-15, section 7, which
+corrects this paragraph: against the regional list the pipeline already ships, the estimated prior
+adds +4.6 accuracy to Nemo and nothing to Otto; self-training's gain over the list is +6.5 to +8.0
+accuracy, not +15 to +17; the observer split re-ranks no model; marginal supervision makes
+congeners neighbours on every backbone). A review of the project for new scientific
 routes, with six CPU checks run the same day on saved predictions and logits. Short version: under
 shift the models mostly fail by **leaving the local fauna** (87 % of trap errors name a species that
 occurs at no trap). That is a prior the model carries in its weights, and it can be estimated from
@@ -550,10 +554,345 @@ Steps 1 to 3 change no plan and no GPU queue. Nothing here is started without th
   same traps and summers as the probe nights; only the leave-one-site-out rows say anything about a
   new place.
 - All citations are from memory and marked [VERIFY].
+- Section 7: everything is the 12 Danish traps, accuracy and zero-threshold scores of my own, not
+  the calibrated (trap, night) macro-F1 the papers quote. Z8 is one seed per backbone, single view,
+  and the unadapted DINOv3 is another seed than its self-trained partner. The list was chosen on
+  these crops (VN). Nemo's training sampler is unknown to me, so Z5d cannot say whether the
+  division fails because of shift or because Nemo's training prior was already flat.
+- Mistakes of mine on 2026-11-15: the first commit placed PLAN's Z row under the wrong heading
+  (fixed in 3f857e9); a wait loop matched its own command line and never ended (stopped by hand);
+  and the first report's headline compared the EM with the full vocabulary instead of the list.
 - Routes 5.4, 4 (taxon dropout) and 6 are designs with no measurement behind them.
+
+## 7. First steps (opened 2026-11-15, at the owner's request)
+
+The owner asked to proceed with steps 1 and 2 of section 4, and noted that Nemo is not our best
+model. That is right: Otto (OT3) and P5 lead on trap crops, B8 on the test fold. Z4 used Nemo
+because it never saw a trap image, so the prior's effect is not mixed with self-training's. Whether
+the prior still pays on the models we would ship, in the setting we would ship them (TTA, a regional
+list), is the first thing to measure. CPU only, `dev/107` (`siteprior2`, `observers`).
+
+### A correction to Z4 before anything else
+
+Z4 computed `argmax p(y|x) · w(y)`, with `w` the point of the simplex that maximises the likelihood
+of the unlabelled crops. The label-shift rule is `p(y|x) · π_site(y) / π_train(y)`: the training
+prior has to be divided out. Z4's `w` equals `π_site / π_train` only for a model whose training
+prior is uniform, and its "oracle" row multiplied by the true trap frequencies without dividing
+either. The numbers of Z4 are what that procedure gives; the name "site prior" was loose. Z5d tests
+the rule as written.
+
+### Predictions (written before any of these ran)
+
+**Z5, the site prior on Otto and P5, in the shipped setting.** Saved logits of Nemo, P5 and OT3;
+one view, and tta3bm (mean logits of three views). Probe nights, same three scores as Z4. "EM" is
+Z4's smoothed estimate unless said otherwise.
+
+- Z5a. OT3 with one view gains +1 to +4 accuracy from the EM prior (P5 gained +2.4 to +2.8), and at
+  least +10 macro-F1 in mini_metrics' convention.
+- Z5b. The prior's accuracy gain is smaller with tta3bm than with one view, for every model; for
+  Nemo by at least 3 points. Reason: TTA sharpens `p(x|y)`, so the prior weighs less (section 2).
+  Falsified if the two gains are within 1 point.
+- Z5c. On Nemo the EM prior beats the north_europe list (1,977 species, a prior of zeros and ones)
+  by at least 3 points of accuracy; the list keeps the higher macro recall; list and EM together
+  are within 0.5 point of EM alone.
+- Z5d. Dividing by the training prior (class frequencies to the power 1, and 0.5 for a
+  square-root sampler) changes Nemo's accuracy by less than 2 points either way and raises macro
+  recall over the labelled species by at least 2 points, because a trap species that is rare on
+  GBIF is no longer handicapped. Same direction for the oracle row.
+- Z5e. With a temperature T on the logits before the EM, accuracy peaks at T between 1.4 and 2 and
+  the peak is worth at most 3 points over T = 1; macro recall falls as T rises. So the temperature
+  is not where the gap to the oracle is.
+- Z5f. A prior for each probe night from the same site's crops within 15 nights, shrunk toward
+  the pooled estimate with a weight of 100 crops, gives Nemo at least +2 accuracy over the pooled
+  prior (moths are seasonal). Falsified under +0.5. And a prior estimated on the probe crops
+  themselves, with no separate adaptation set, is within 1 point of the adapt-night estimate.
+
+**Z6, the observer split on every saved test-fold prediction file** (lepinet's runs and the
+campaign's seed-42 heads).
+
+- Z6a. The paired S - N recall gap is 5 to 10 points for every EfficientNetV2-S run, and at least
+  1.5 points smaller for the large pretrained backbones (DINOv3 ConvNeXt-L, BioCLIP-2).
+- Z6b. Across runs, recall on N follows recall on S (Spearman at least 0.95), and the S - N gap does
+  not predict probe accuracy among runs that never saw a trap image (absolute Spearman under 0.3).
+  That would mean observer shift and trap shift are different things, which Z1c already suggests.
+  If it is 0.5 or more, the split is a powered proxy for the trap probe.
+- Z6c. Trap augmentation and self-training leave the gap unchanged (within 1 point).
+
+**Z7, congener neighbours on the campaign's heads**: the predictions of route 4 stand (BU above
+60 % on every backbone, F and I under 35 %). Needs the checkpoints from UCloud.
+
+**Added after the first rows of Z5 were read (Nemo and OT3, one view), before these ran.** Those
+rows showed the list and the EM estimate together far above either alone on Nemo (0.867 against
+0.795 and 0.778), and no accuracy gain from the EM on OT3.
+
+- Z5g. The EM run inside the list (only the list's species can receive mass) is at least as good as
+  masking the unrestricted estimate: Nemo at or above 0.867, because mass the EM gave to a foreign
+  look-alike returns to the local species.
+- Z7b, added after Z7's table was read (flat 54 %, marginal 69 to 74 %) and before this ran: if the
+  geometry matters it shows in the errors. Among wrong species answers, the share that names a
+  congener is at least 3 points higher for the marginal head than for the flat one, on the test
+  fold and on the probe crops, for both backbones with per-image predictions (V2-S and B0, seed 42).
+  And the statistic survives centring the prototypes (they share a large common direction).
+- Z8a, the controlled decomposition: one recipe before and after self-training (V2-S BU seed 42 and
+  its st26; DINOv3 BU and its st26), single-view logits dumped on the workstation GPU. With the
+  list and the EM, the unadapted model gains at least +12 accuracy and the self-trained one at most
+  +3, so the prior closes at least 60 % of the gap between them. What is left (3 to 8 points) is
+  what self-training teaches that is not the species list.
+- Z8b, a new site: the site folds (self-trained without one site; V2-S and Otto's BioCLIP-2) scored
+  on the probe crops of the site they never saw, with the prior estimated on that site's own
+  unlabelled crops. The prior adds at least +3 accuracy and brings the fold within 2 points of the
+  model self-trained on all three sites, at that site. Falsified under +1. This is the claim of
+  route 1 that matters for deployment: a new trap needs its crops, not a retraining.
+
+### Results (2026-11-15)
+
+Outputs: `data/population_probes/z5_siteprior.csv`, `z5g_inlist.csv`, `z6_observers.csv`,
+`z7_congeners.csv`, `z7b_severity.csv`, `z8_v2s.csv`, `z8_large.csv`. Two checks that the harness
+is right: the faster EM reproduces Z4 to four decimals (Nemo 0.7768 and 0.7784, P5 0.8599 and
+0.8639; 200 iterations change nothing), and OT3 with the list scores macro-F1 0.675 (one view) and
+0.674 (tta3bm) at zero threshold, the campaign scorer's numbers (`ot_scores.md`).
+
+#### Z5: the regional list is the prior that matters; the EM adds accuracy only where nothing else has
+
+Probe nights, accuracy / macro-F1 over labelled and predicted species / macro recall over labelled
+species. "List" is north_europe (1,977 species, 480 of the 486 trap species). "True frequencies"
+uses the adapt nights' labels.
+
+| model | views | nothing | list | EM | list and EM | true frequencies |
+|---|---|---|---|---|---|---|
+| Nemo | one | 0.633 / 0.137 / 0.597 | 0.795 / 0.295 / 0.752 | 0.778 / 0.412 / 0.599 | **0.867** / 0.608 / 0.678 | 0.887 / 0.655 / 0.707 |
+| Nemo | tta3bm | 0.781 / 0.205 / 0.731 | 0.853 / 0.380 / 0.802 | 0.888 / 0.618 / 0.740 | **0.898** / 0.688 / 0.754 | 0.915 / 0.712 / 0.753 |
+| P5 | one | 0.836 / 0.394 / 0.792 | 0.879 / 0.504 / 0.812 | 0.864 / 0.575 / 0.774 | **0.901** / 0.649 / 0.783 | 0.915 / 0.688 / 0.747 |
+| P5 | tta3bm | 0.856 / 0.406 / 0.803 | 0.894 / 0.536 / 0.822 | 0.889 / 0.667 / 0.785 | **0.912** / 0.708 / 0.789 | 0.929 / 0.723 / 0.766 |
+| OT3 | one | 0.903 / 0.630 / 0.808 | **0.910** / 0.675 / 0.815 | 0.896 / 0.705 / 0.756 | 0.901 / 0.711 / 0.759 | 0.925 / 0.714 / 0.753 |
+| OT3 | tta3bm | 0.918 / 0.599 / 0.823 | **0.922** / 0.674 / 0.834 | 0.916 / 0.735 / 0.781 | 0.918 / 0.737 / 0.782 | 0.938 / 0.741 / 0.775 |
+
+- **My first report overstated the EM prior.** Its +14.4 for Nemo was measured against the full
+  vocabulary. The pipeline already ships a regional list, and the list alone gives Nemo +16.3 accuracy
+  **and** +15.5 macro recall. Against the shipped setting (list, tta3bm) the EM adds +4.6 to Nemo,
+  +1.8 to P5 and -0.5 to OT3, and it costs 3 to 5 points of macro recall on every model.
+- **Z5a is falsified.** On OT3 the EM gives no accuracy (-0.7 with one view, -0.2 with tta3bm). It
+  raises macro-F1 in mini_metrics' zero-threshold convention by 4 to 14 points depending on the
+  setting (list and tta3bm: 0.674 to 0.737) because it removes species that are predicted and not there. Not scored
+  with the calibrated (trap, night) protocol, where thresholds already do part of that.
+- **The three models converge.** With nothing: 0.633 / 0.836 / 0.903. With list, EM and tta3bm:
+  0.898 / 0.912 / 0.918. An EfficientNetV2-S that never saw a trap image ends 2 points of accuracy
+  under a BioCLIP-2 ViT-L self-trained on these traps (and 8 points under it in macro recall).
+- **Z5c: wrong in two parts of three.** The list alone beats the EM alone with one view, and the two
+  together are far above either. They do different jobs: the EM cannot tell a local species from a
+  foreign look-alike the model prefers, the list can (crops named as a species absent from the
+  traps: 33.1 % with nothing, 15.3 % with the EM, 1.3 % with both); the list cannot tell which of its
+  1,977 species are at the trap. The list does keep the higher macro recall, as predicted.
+- **Z5d is falsified, and it is the instructive one.** Dividing by the training prior, which is the
+  rule as the theory writes it, costs Nemo 7.0 points with the square-root exponent and 19.2 with
+  the full one (0.708 and 0.586 against 0.778). With the true trap frequencies the division changes
+  nothing (0.883 to 0.887), and on P5 and OT3 it changes nothing either (-0.8 to +0.1). Measured
+  cause: the EM then puts 34 % of its mass on rare species absent from the traps (7.5 % without the
+  division), and 35 % of crops are named as one. It is finding 5 again: whatever divides the GBIF
+  prior out hands the answer to the tail, because under shift the posteriors of rare classes are
+  noise and the division multiplies them by thousands. So the correction above was right as a
+  description and wrong as a recommendation.
+- **Z5b held for Nemo only** (gain of the EM +14.6 with one view, +10.7 with tta3bm). On P5 and
+  OT3 the two gains are within a point.
+- **Z5e held.** T = 1.4 is best for Nemo (+1.3 over T = 1) and macro recall falls with T (0.625 at
+  0.5, 0.406 at 2). On OT3 any T above 1 hurts. Both models are close to calibrated on the adapt
+  nights (lowest NLL between T = 1 and 1.4).
+- **Z5f: not met.** A prior per site and season adds at most +1.3 to Nemo (all sites, nights within
+  15), +0.8 per site, +0.4 with only the 30 nights before, and nothing to P5 and OT3. The pooled
+  estimate is nearly as good. A prior from the probe crops themselves: -1.4 (Nemo), +0.1 (P5), +0.3
+  (OT3), so an adapted model needs no separate adaptation set.
+- **Z5g falsified by a little.** The EM inside the list gives Nemo 0.860 against 0.867 for masking
+  the unrestricted estimate (macro recall 0.696 against 0.678); P5 and OT3 are unchanged.
+- **Headroom.** The true frequencies are worth +1.4 to +2.0 accuracy over the best label-free rule on
+  every model, OT3 included (0.922 to 0.938 with tta3bm). That bounds what any better estimate of
+  the prior can buy.
+
+#### Z8: self-training's accuracy gain is mostly the fauna, which a list gives for nothing
+
+One recipe before and after self-training (campaign checkpoints: V2-S BU seed 42 and its st26;
+DINOv3 BU and its st26, where the unadapted model is seed 43 because the seed-42 checkpoint is
+gone), single view, logits dumped on the workstation GPU with the campaign's
+`eval/tools/logits.py`. Probe nights, accuracy / macro recall:
+
+| | nothing | list | list and EM |
+|---|---|---|---|
+| V2-S BU, never saw a trap | 0.657 / 0.624 | 0.790 / 0.744 | **0.835** / 0.654 |
+| V2-S BU self-trained (st26) | 0.824 / 0.741 | **0.855** / 0.777 | 0.828 / 0.603 |
+| DINOv3 BU, never saw a trap | 0.699 / 0.689 | 0.797 / 0.774 | **0.847** / 0.658 |
+| DINOv3 BU self-trained (st26) | 0.846 / 0.757 | **0.877** / 0.784 | 0.859 / 0.658 |
+
+- **Z8a held** (+17.8 for the unadapted model, +0.4 for the self-trained one). Self-training is worth
+  +16.7 accuracy with the full vocabulary. The list alone gives the unadapted model +13.3 of them and
+  all of the macro recall (0.744 against 0.741). **On top of the list, self-training adds +6.5
+  accuracy and +3.3 macro recall**; the EM adds +4.5 accuracy and takes 9.0 of macro recall. Each
+  model with its best rule: 0.855 against 0.835, a gap of 2.0 where I predicted 3 to 8.
+- **DINOv3 says the same:** self-training is worth +14.7 with the full vocabulary, the list gives
+  +9.8 of it, and on top of the list self-training adds +8.0 accuracy and +1.0 macro recall (the
+  EM: +5.0 accuracy, -11.6 macro recall). Best rule each: 0.877 against 0.847.
+- So the two are not the same thing. The list and the EM buy crops of the common local species;
+  self-training also improves the rare ones. One seed per backbone.
+- **Z8b is falsified on V2-S.** The site folds (self-trained without one site), at the site they never saw,
+  accuracy with nothing / list / list and EM from that site's own crops: LV 0.820 / 0.850 / 0.829,
+  OH 0.762 / 0.803 / 0.750, SS 0.807 / 0.832 / 0.793. The site's prior adds nothing to a model that
+  was self-trained elsewhere (-1.4 to +0.9), and is 2 to 5 points under the list. The same holds
+  for the model self-trained on all sites.
+- What does hold at a new site: the model that never saw any trap, with the list and the site's own
+  EM prior, scores 0.850 / 0.805 / 0.841 (LV / OH / SS). That equals the folds with the list (0.850 /
+  0.803 / 0.832) and is 1 to 2 points under the model self-trained on the site itself (0.864 / 0.813
+  / 0.863), with 9 to 11 points less macro recall.
+- The folds lose little at the site they never saw (-0.8, -2.1, -3.4 accuracy against the all-site
+  model, full vocabulary). With the list on both, a fold keeps 81 / 77 / 51 % (LV / OH / SS) of what
+  self-training on the site itself adds over the unadapted model.
+
+- **On Otto's own folds the prediction mostly holds, and the contrast says why.** Otto (BioCLIP-2,
+  the first candidate, labels from the per-species top 35) and its three folds, one view:
+
+  | | nothing | list | list and EM |
+  |---|---|---|---|
+  | Otto, all probe crops | 0.773 / 0.772 | 0.827 / 0.796 | **0.862** / 0.769 |
+  | OT3, all probe crops (Z5) | 0.903 / 0.808 | **0.910** / 0.815 | 0.901 / 0.759 |
+
+  Folds at the site they never saw, accuracy with nothing / list / list and that site's EM (Otto
+  trained on all sites, same rules, in brackets): LV 0.788 / 0.835 / 0.874 (0.763 / 0.825 / 0.875),
+  OH 0.780 / 0.819 / 0.827 (0.793 / 0.824 / 0.837), SS 0.772 / 0.813 / 0.839 (0.778 / 0.831 /
+  0.863). The site's prior adds +3.9 / +0.8 / +2.6 over the list and leaves the fold 0.1 / 1.0 / 2.4
+  points under the all-site model.
+- **A reading, not yet a test:** whether self-training stores the fauna depends on how its labels
+  were drawn. Otto's were the top 35 crops per species, 8,305 crops over 913 species where the adapt
+  nights hold 451, so they taught no site frequencies and many absent species: the EM still helps
+  (+3.5 over the list). OT3's and st26's are the most confident crops at their natural frequencies
+  (19,061 crops, 314 species): the EM is redundant or harmful. Each with its best label-free rule,
+  the gap between Otto and OT3 falls from 13.0 points to 4.8. So part of what the gated labels bought over
+  the top-35 labels (attributed to label accuracy, 71 % against 98.6 %) may be the site's
+  frequencies. OT1's logits (gated labels alone) would separate the two; not on this machine.
+
+#### Z6: an unseen observer doubles the error rate, for every model alike
+
+58 test-fold prediction files (39 EfficientNetV2-S, 12 DINOv3 ConvNeXt-L, 6 B0, 1 FastViT; no
+BioCLIP-2 run has per-image test predictions on this machine). Paired macro recall as in Z1.
+
+| backbone | runs | S - N gap, points (range) | S - O gap | error rate N / S | error rate O / S |
+|---|---|---|---|---|---|
+| B0 | 6 | 9.3 (8.4 to 10.7) | 4.6 | 1.86 | 1.35 |
+| EfficientNetV2-S | 39 | 7.8 (6.7 to 9.1) | 4.0 | 1.96 | 1.46 |
+| DINOv3 ConvNeXt-L | 12 | 6.7 (6.3 to 7.3) | 3.7 | 2.08 | 1.54 |
+
+- **Z6a: first half held, second not.** The gap is 1.1 points smaller on DINOv3 (I predicted 1.5),
+  and only because it makes fewer errors. As a ratio the penalty is the same or larger: an unseen
+  observer multiplies the species error rate by 1.98 (sd 0.12 over 58 runs), a known observer with a
+  new species by 1.47 (sd 0.10). A large pretrained backbone is not less tied to the photographer.
+- **Z6b held.** Recall on N follows recall on S (Spearman 0.974), and among the 31 runs that never
+  saw a trap image the gap does not predict probe accuracy (Spearman -0.13, p 0.50; S - O: -0.09).
+  Observer shift and trap shift are different things, and the observer split re-ranks nothing.
+- **Z6c held.** Trap augmentation and self-training leave the gap where it was (B1 8.4 against A1
+  8.4; B3 8.2; B4 6.8 against A2 6.9; the campaign's gated and real-label runs 7.5 and 7.0 against
+  7.4). Repeats of one recipe differ by 0.03 (singlehead and A5) and 0.2 (the two cap-1000 runs).
+- **What it is good for:** an honest in-distribution number. On images from observers absent from
+  training the error rate is twice the published one, for every model. It is not a tool for
+  choosing between models. Route 3 shrinks to a caveat and one supplementary table.
+
+#### Z7: marginal supervision makes congeners neighbours, on every backbone
+
+The campaign's heads, three seeds each (DINOv3 BU has two: the seed-42 checkpoint is no longer on
+UCloud). These are cosine heads, so the direction of a prototype is the geometry. Share of species
+whose nearest other prototype is a congener (chance 0.1 %); in brackets, with the prototypes'
+common direction removed.
+
+| backbone | flat (F) | marginal (BU) | independent (I) | conditional (TD) |
+|---|---|---|---|---|
+| B0 | 54.0 (71.4) | **68.4 (81.5)** | 59.7 (74.0) | 68.1 (71.0) |
+| EfficientNetV2-S | 53.5 (70.5) | **69.2 (81.0)** | 56.9 (73.8) | 64.6 (68.7) |
+| DINOv3 ConvNeXt-L | 56.1 (70.0) | **74.4 (81.5)** | 57.1 (70.6) | 52.5 (61.8) |
+
+- **One factor, three backbones:** the marginal loss raises the rate by 14 to 18 points (10 to 12
+  centred). The seed range is at most 2.7 points, and at most 1.0 centred. Nearest in the same
+  family, centred: 92 % flat, 95 % marginal.
+- **Scored against route 4:** "marginal above 60 % on every backbone" held. "Flat and independent
+  under 35 %" is falsified: a flat head already puts a congener nearest for more than half of the
+  species. "The effect grows with crowding" is falsified: it is the same on the three backbones.
+- Z3's low rates (17 and 23 %) were margin heads in lepinet, the campaign's are plain cosine heads,
+  so the margin may be what lowers it; package and recipe differ too. Untested.
+- **Z7b: it shows in the errors on the test fold and not on the traps.** Among wrong species answers,
+  the share naming a congener (seed 42):
+
+  | | test fold, flat | test fold, marginal | probe, flat | probe, marginal |
+  |---|---|---|---|---|
+  | EfficientNetV2-S | 53.0 % | **57.2 %** | 19.1 % | 18.5 % |
+  | B0 | 48.5 % | **51.9 %** | 19.4 % | 19.2 % |
+
+  +4.2 and +3.4 on the test fold at equal accuracy (0.9316 and 0.9307 on V2-S), nothing on the probe
+  crops. So route 4's claim that the neighbourhood decides what happens under shift is not supported:
+  on trap crops four errors in five leave the genus whatever the head, because they go to species
+  that are not there (Z1d), not to neighbours.
+
+### What the first steps change
+
+| route | before | after |
+|---|---|---|
+| 1, site prior | "a first-class component, +14 for Nemo" | the fauna is the lever and the regional list already pulls most of it. The EM is a label-free baseline that brings a model with no trap exposure to within 2 points of accuracy of a self-trained one, at a cost in rare species. It adds nothing to a self-trained model, here or at a new site. Never divide by the training prior. |
+| 3, observer | "a second, well-powered robustness axis" | a constant factor of two on the error rate that no recipe of ours moves. A caveat for both papers. |
+| 4, geometry | confounded observation | confirmed one factor at a time; visible in test-fold errors, absent under trap shift. A piece for paper A. |
+| 2, 5, 6 | untouched | untouched |
+
+**Claims this touches.** Self-training's headline gain is measured against the full vocabulary. On
+V2-S BU it is +16.7 accuracy there and +6.5 once both models use the regional list (DINOv3 BU:
++14.7 and +8.0). Paper B should
+report both, or the reader who deploys with a list will find a third of the promised gain. The same
+recomputation on the calibrated macro-F1, with the campaign scorer, is the next thing to do and I
+have not done it.
+
+**For paper A (owner's question, 2026-11-15).** In order of what I would add:
+1. Z7 with Z7b, into the piece on heads, parameters and supervision. The paper's result is that
+   heads do not differ in accuracy; this says what the marginal loss does change, with one factor,
+   three backbones and three seeds: which classes are neighbours, and which errors are made on the
+   test fold. It is the mechanism behind the marginal head's higher genus and family scores at equal
+   species score. Stated with its limit: no effect on trap crops.
+2. Z1c and Z1d, into the long-tail piece: the cost of tail weighting under shift is predictions of
+   rare species that are absent (3.4 / 10.1 / 23.8 / 34.4 % of crops), not photograph-specific
+   features; Z5d shows the same mechanism from the other side.
+3. Z6, as one sentence and a supplementary table: the head ranking is the same for unseen
+   observers, and the test fold is 68 % "same observer, same species".
+4. Z1d and Z5 for the metric-conventions piece: at zero threshold the convention that counts
+   predicted-only species moves from 0.14 to 0.69 for one model when a list and a prior are applied
+   and nothing is retrained. It measures the fauna assumed as much as the classifier.
+
+**One-step self-training (owner's question, 2026-11-15).** Today's recipe trains a teacher, labels
+the trap crops, and trains a student on GBIF plus those labels. Folding the two into one run is an
+existing family of methods: the model labels the unlabelled crops itself during training, through
+a slow average of its own weights, and a crop joins the loss once its prediction is confident
+(FixMatch and Mean Teacher; AdaMatch for a shifted target; FreeMatch for a threshold that follows
+the model's confidence, which is the "as entropy falls" idea) [VERIFY, from memory]. What this
+project already knows about how it would go:
+- Entropy alone is the wrong gate here. R2 lost 3.8 points with cleaner labels because the confident
+  crops covered half the species; coverage of species matters more than label accuracy, and a
+  confidence gate keeps the sharp crops of common species (N1). The inclusion rule has to be per
+  species (a threshold per class, or a cap per class as in VE), and confidence on trap crops should
+  be read relative to confidence on GBIF, not on an absolute scale.
+- A teacher now exists. Otto, OT3 and any model trained from here on take their labels from an
+  ensemble of earlier models, so they are already one training run. One-step matters where there
+  is no teacher: a new taxon, a new camera.
+- Label rounds have saturated (OT5 against OT3), so a teacher that improves during training should
+  not be expected to beat a good fixed one.
+- Z8a: most of what self-training buys in accuracy, the regional list buys for nothing. What is
+  specific to it (+6.5 accuracy, +3.3 macro recall over the list on V2-S BU) is the part worth
+  making cheaper or better.
+If wanted, the test is one 20 M run against st26: trap crops in every batch from the first epoch,
+labels from the weight average, a per-species confidence rule, the loss weight ramped up, and
+pseudo-label accuracy and species coverage logged per epoch (the adapt crops have labels, so both
+are measurable). My expectation, not a measurement: within 1.5 probe points of the two-step run
+with its own teacher, and under the ensemble-teacher version.
 
 ## Log
 
+- 2026-11-15: committed and pushed as 7efcf65 (this session's hunks only), reported to the
+  `lepinet` session. Section 7 opened with its predictions.
+- 2026-11-15: Z5 to Z8 run and scored. Of section 7's predictions: held Z5e, Z6b, Z6c, Z8a, Z7's
+  "marginal above 60 %", Z7b on the test fold and under centring, Z5b for Nemo, Z6a's range;
+  falsified Z5a, Z5c (two parts of three), Z5d, Z5g, Z7's "flat under 35 %" and its crowding effect,
+  Z7b on the probe, Z6a's backbone effect, Z8b on V2-S (it holds on Otto's folds at two sites of
+  three); not met Z5f. 44 checkpoints were downloaded from UCloud (no job submitted) and deleted
+  after use; 11 single-view logit sets stay in `data/population_probes/logits/` (13 GB) for the
+  calibrated rescoring. Not committed.
 - 2026-11-13: opened at the owner's request. Predictions written before each check; Z1, Z1d, Z2,
   Z2c, Z3 and Z4 run and scored the same day. Scoreboard of my 13 predictions: held Z1a, Z1b, Z1d,
   Z2a (on the letter), Z2b, Z2c's first half, Z4a, Z4b; held at two sites of three Z4c; falsified
