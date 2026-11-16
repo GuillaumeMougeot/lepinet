@@ -1,45 +1,84 @@
-%% title: [A] Hierarchy: coarse parameters against coarse supervision
+%% title: [A] Robustness: the heads under a second recipe and three seeds
 %% target: Sections/Results.tex
 %% anchor: \autoresulttable{main_comparison_calibrated}
 %% action: after
-%% why: Splits the head comparison into its two questions. Per-level parameters never help in-distribution; per-level losses help genus and family, in-distribution on every backbone and under shift on two of three. At species under shift the ranking depends on the backbone.
-%% source: /data/au761367/paper_numbers/13.md (campaign, seeds 42-44); journal/2026-10-23-which-recipe-does-the-merged-paper-rerun.md (discussion point 2, the per-rank table); RESULTS VS, VS2, VB0, VD
-%% check: Rewritten 2026-11-09 with the rerun (owner's decision on C1). | The old trap claim (coarse supervision +2.9 on traps) reversed on V2-S; it is now stated per backbone. | Rename \subsection{Experiment 1} to \subsection{Hierarchical heads}\label{sec:results_heads}, which step 04 references. | AR: no rerun; the row is dropped; say in one clause that AR lost by 20 points in earlier runs if Asger wants it kept. | Trap ranges follow step 11's rule (non-overlapping three-seed ranges).
+%% why: Tests the main comparison against a second recipe with three seeds. In-distribution the conclusions hold (coarse supervision helps genus and family; coarse parameters do not help; TD lowest). Under shift they do not fully: TD's win on AMI does not reproduce at 5 epochs, partly reproduces (family) at Asger's 10 epochs and 384 px.
+%% source: RESULTS Z7 (congeners, error severity); /data/au761367/paper_numbers/13.md (campaign, seeds 42-44); journal/2026-10-23-which-recipe-does-the-merged-paper-rerun.md (discussion point 2, the per-rank table); RESULTS VS, VS2, VB0, VD; RESULTS VL (V2-S 384 px x 10 epochs, seed 42; trap scores from data/campaign/scores.csv, runs v2s_*_384x10_s42); journal/engineering/2026-11-03-moving-the-recipe-into-mini-trainer.md (TD validation gap by epoch; one-epoch EMLA check)
+%% check: 2026-11-15 added the paragraph 'What coarse supervision changes' and tab:heads_congeners (RESULTS Z7, journal 2026-11-13-beyond-scaling section 7; data/population_probes/z7_congeners.csv, z7b_severity.csv). Method sentence may move to Methods. Not stated: lepinet's margin heads give 17-23 % (Z3, different package and recipe). Seed-42 DINOv3 hierarchical checkpoint gone. | Rewritten 2026-11-09 with the rerun (owner's decision on C1). | The old trap claim (coarse supervision +2.9 on traps) reversed on V2-S; it is now stated per backbone. | Rename \subsection{Experiment 1} to \subsection{Hierarchical heads}\label{sec:results_heads}, which step 04 references. | AR: no rerun; the row is dropped; say in one clause that AR lost by 20 points in earlier runs if Asger wants it kept. | Trap ranges follow step 11's rule (non-overlapping three-seed ranges). | Paper A (2026-11-10): reframed as the robustness check of Asger's comparison; compares with his V2-S calibrated table; adds the 384 px x 10 epoch run. The 'Rename Experiment 1' item is done in the local Results.tex. | The 10-epoch run is one seed; its trap differences (2.5-7 points) are above the median three-seed range (1.2) but the BU-F ones are near the maximum (2.7).
 %% status: ready
-\paragraph{Coarse parameters against coarse supervision.}
-The heads differ in two ways that the comparison above confounds: whether genus and family have parameters of their own (I and TD), and whether they receive a loss of their own (every head except F).
-F and BU read genus and family by summing species probabilities, so they differ only in the coarse loss.
-\Cref{tab:heads_ranks} separates the two questions on three backbones, at every rank, in-distribution and on the trap images.
+\paragraph{Robustness to the recipe and the training run.}
+The main comparison trains each configuration once, with EMLA.
+\Cref{tab:heads_ranks} repeats it on Global Lepidoptera with the second recipe of \cref{sec:training} (cross-entropy, three seeds, and a DINOv3 ConvNeXt-L in place of ViT-L/16).
+It also separates two ways the heads differ: whether genus and family have parameters of their own (the independent and conditional heads), and whether they receive a loss of their own (every head except the flat one).
+The flat and hierarchical heads read genus and family by summing species probabilities, so they differ only in the coarse loss.
 
 \begin{table}[htb]
     \centering
-    \caption{Heads on three backbones, mean of three seeds. Test fold: macro-$\text{F}_1$ at zero threshold. Traps: macro-$\text{F}_1$ on all 47,905 trap crops, calibrated on 10\,\% of the (trap, night) groups. Bold: best on that backbone and column.}
+    \caption{The heads under the second recipe (cross-entropy, 5 epochs, three seeds; \cref{sec:training}), mean of three seeds. Test fold: macro-$\text{F}_1$ at zero threshold. Traps: macro-$\text{F}_1$ on all 47,905 trap crops, calibrated on 10\,\% of the (trap, night) groups. Bold: best on that backbone and column.}
     \label{tab:heads_ranks}
     \begin{tabular}{llcccccc}
         \toprule
         & & \multicolumn{3}{c}{test fold} & \multicolumn{3}{c}{traps} \\
         backbone & head & species & genus & family & species & genus & family \\
         \midrule
-        EfficientNetV2-S & F & \textbf{0.889} & 0.949 & 0.969 & 0.354 & 0.468 & 0.522 \\
-        & BU & 0.887 & \textbf{0.956} & \textbf{0.976} & 0.331 & 0.459 & 0.511 \\
-        & I & 0.881 & 0.947 & 0.965 & \textbf{0.378} & \textbf{0.484} & \textbf{0.534} \\
-        & TD & 0.842 & 0.930 & 0.960 & 0.327 & 0.433 & 0.525 \\
+        EfficientNetV2-S & Flat & \textbf{0.889} & 0.949 & 0.969 & 0.354 & 0.468 & 0.522 \\
+        & Hierarchical & 0.887 & \textbf{0.956} & \textbf{0.976} & 0.331 & 0.459 & 0.511 \\
+        & Independent & 0.881 & 0.947 & 0.965 & \textbf{0.378} & \textbf{0.484} & \textbf{0.534} \\
+        & Conditional & 0.842 & 0.930 & 0.960 & 0.327 & 0.433 & 0.525 \\
         \midrule
-        EfficientNet-B0 & F & \textbf{0.875} & \textbf{0.940} & 0.961 & 0.280 & 0.391 & 0.423 \\
-        & BU & 0.864 & \textbf{0.940} & \textbf{0.965} & \textbf{0.332} & \textbf{0.447} & \textbf{0.496} \\
-        & I & 0.854 & 0.923 & 0.940 & 0.326 & 0.433 & 0.455 \\
-        & TD & 0.788 & 0.887 & 0.934 & 0.267 & 0.360 & 0.482 \\
+        EfficientNet-B0 & Flat & \textbf{0.875} & \textbf{0.940} & 0.961 & 0.280 & 0.391 & 0.423 \\
+        & Hierarchical & 0.864 & \textbf{0.940} & \textbf{0.965} & \textbf{0.332} & \textbf{0.447} & \textbf{0.496} \\
+        & Independent & 0.854 & 0.923 & 0.940 & 0.326 & 0.433 & 0.455 \\
+        & Conditional & 0.788 & 0.887 & 0.934 & 0.267 & 0.360 & 0.482 \\
         \midrule
-        DINOv3 ConvNeXt-L & F & \textbf{0.920} & 0.966 & 0.981 & 0.405 & 0.516 & 0.544 \\
-        & BU & 0.918 & \textbf{0.968} & \textbf{0.984} & 0.416 & \textbf{0.548} & \textbf{0.587} \\
-        & I & 0.917 & 0.966 & 0.981 & \textbf{0.424} & 0.534 & 0.571 \\
-        & TD & 0.906 & 0.963 & 0.980 & 0.402 & 0.528 & 0.572 \\
+        DINOv3 ConvNeXt-L & Flat & \textbf{0.920} & 0.966 & 0.981 & 0.405 & 0.516 & 0.544 \\
+        & Hierarchical & 0.918 & \textbf{0.968} & \textbf{0.984} & 0.416 & \textbf{0.548} & \textbf{0.587} \\
+        & Independent & 0.917 & 0.966 & 0.981 & \textbf{0.424} & 0.534 & 0.571 \\
+        & Conditional & 0.906 & 0.963 & 0.980 & 0.402 & 0.528 & 0.572 \\
         \bottomrule
     \end{tabular}
 \end{table}
 
-Coarse parameters do not help in-distribution: on every backbone F or BU is best at every rank of the test fold, and TD is lowest at every rank.
-Coarse supervision raises family on the test fold on every backbone (BU over F by 0.3 to 0.7 points) and genus on two (0.2 and 0.7; unchanged on EfficientNet-B0), at a small cost at species (0.2 to 1.1 points, larger than the three-seed spread of at most 0.14).
-On the trap images it raises genus and family by 5.6 and 7.3 points on EfficientNet-B0 and by 3.2 and 4.3 on DINOv3, beyond the three-seed spread; on EfficientNetV2-S the difference is within it.
-At species under shift no head wins everywhere: coarse supervision is worth 5.2 points on EfficientNet-B0, 1.1 (within the seed spread) on DINOv3 and $-2.3$ on EfficientNetV2-S, while the independent head is best or within the spread of the best on all three.
-Summing species probabilities therefore gives the best coarse predictions in-distribution, and supervising those sums gives better genus and family predictions on two of three backbones under shift: the predictions that back-off and abstention (\cref{sec:results_backoff}) fall back on.
+In-distribution the two recipes agree.
+Coarse supervision raises family on the test fold on every backbone (the hierarchical head over the flat head by 0.3 to 0.7 points) and genus on two (0.2 and 0.7; unchanged on EfficientNet-B0), at a small cost at species (0.2 to 1.1 points, larger than the three-seed spread of at most 0.14), as the hierarchical head's wins at genus and family in \cref{fig:main_winners}.
+Coarse parameters do not help: the flat or the hierarchical head is best at every rank of the test fold, and the conditional head is lowest at every rank, as it is the most frequent loser of the main comparison.
+
+On the trap images the recipes agree only in part.
+Coarse supervision raises genus and family by 5.6 and 7.3 points on EfficientNet-B0 and by 3.2 and 4.3 on DINOv3, beyond the three-seed spread; on EfficientNetV2-S the difference is within it, and at species the hierarchical head is below the flat head on EfficientNetV2-S under both recipes (by 2.3 points here, 1.4 in \cref{tab:main_comparison_calibrated}).
+At species no head wins on every backbone: coarse supervision is worth 5.2 points on EfficientNet-B0, 1.1 (within the seed spread) on DINOv3 and $-2.3$ on EfficientNetV2-S, while the independent head is best or within the spread of the best on all three.
+The main comparison's clearest result under shift, the conditional head winning at every rank on EfficientNetV2-S, does not reproduce: under the second recipe the conditional head leads at no rank on any backbone, and at species it is the lowest head, or within the spread of the lowest, on all three.
+
+Training length explains part of this.
+The conditional head converges more slowly than the others: on EfficientNetV2-S its validation gap to the flat head shrinks every epoch, from 10.4 points after the first to 4.7 after the fifth, and the second recipe stops at 5 epochs on 256-pixel crops where the main recipe trains for 10 at 384 pixels.
+Trained for 10 epochs at 384 pixels (EfficientNetV2-S, one seed), the conditional head becomes the best at family on the trap images (0.601 against 0.533 for the hierarchical head) but stays the lowest at species (0.337) and genus (0.448), and the hierarchical head then leads the flat head under shift at every rank (by 2.9, 2.5 and 3.0 points).
+The loss is not the cause: in a one-epoch comparison the conditional head trails the flat head by more with EMLA than with cross-entropy (7.0 against 5.1 points).
+
+Under both recipes, then, summing species probabilities gives the best coarse predictions in-distribution, and supervising those sums improves genus and family.
+Under shift the ranking of heads depends on the recipe, the training length and the backbone, and differences of one to three points between single runs are within what retraining alone produces on these images (\cref{sec:tune_tau}).
+
+\paragraph{What coarse supervision changes.}
+The heads barely differ in species accuracy, but coarse supervision changes how the species are arranged in the classifier.
+Every head of the second recipe is a cosine classifier, so each species has a prototype, the direction of its weight vector.
+For each species we take the nearest other prototype by cosine similarity and ask whether it is a species of the same genus (by chance, 0.1\,\% of species would be).
+
+\begin{table}[htb]
+    \centering
+    \caption{Share of species whose nearest other class prototype is a species of the same genus (\%), second recipe, mean of three seeds (two for the hierarchical head on DINOv3). In brackets: after subtracting the mean prototype before normalising. Seed range at most 2.7 points (1.0 in brackets).}
+    \label{tab:heads_congeners}
+    \begin{tabular}{lcccc}
+        \toprule
+        backbone & flat & hierarchical & independent & conditional \\
+        \midrule
+        EfficientNet-B0 & 54.0 (71.4) & \textbf{68.4 (81.5)} & 59.7 (74.0) & 68.1 (71.0) \\
+        EfficientNetV2-S & 53.5 (70.5) & \textbf{69.2 (81.0)} & 56.9 (73.8) & 64.6 (68.7) \\
+        DINOv3 ConvNeXt-L & 56.1 (70.0) & \textbf{74.4 (81.5)} & 57.1 (70.6) & 52.5 (61.8) \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+With the flat head more than half of the species already have a congener as their nearest neighbour, so much of the genus structure is learned from the images alone.
+Coarse supervision adds to it: the hierarchical head raises the share by 14 to 18 points on all three backbones (10 to 12 in brackets), far beyond the seed range (\cref{tab:heads_congeners}).
+Separate genus and family parameters do less: the independent head gains 1 to 6 points, and the conditional head gains on the two EfficientNets and loses on DINOv3.
+The arrangement shows in the errors.
+On the test fold, a wrong species answer names a congener of the true species more often with the hierarchical head than with the flat head (57.2 against 53.0\,\% on EfficientNetV2-S, 51.9 against 48.5\,\% on EfficientNet-B0, one seed), at equal species accuracy (0.931 and 0.932 on EfficientNetV2-S), so the same number of mistakes is less severe.
+On the trap images the effect is absent: whatever the head, about four wrong answers in five leave the true genus (a congener in 18.5 to 19.4\,\% of errors).

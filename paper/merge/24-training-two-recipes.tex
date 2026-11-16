@@ -1,0 +1,23 @@
+%% title: [A] Training: the main recipe, and a second recipe as a robustness check
+%% target: Sections/Methods.tex
+%% anchor: \subsection{Metrics for hierarchical and species classification}\label{sec:metrics}
+%% action: before
+%% why: The Methods describe the heads, the loss and the regulariser but never how the models were trained, and Results still says "X epochs". This subsection gives Asger's recipe (from his run configuration) and introduces our campaign as a second recipe, so every later robustness paragraph can refer to it.
+%% source: journal/engineering/2026-11-03-moving-the-recipe-into-mini-trainer.md (his runs: EMLA via --class_weighted, 10 epochs, 384 px, backbone lr 3.3e-4, 50-image floor; B0 at 224 px); Asger's run configuration on UCloud (mini-trainer-ablations, efficientnet_v2_s/flat_global_lepi config.yaml; local copy /data/au761367/asger_evidence/v2s_flat_config.yaml); paper/merge/04 (campaign recipe); RESULTS VS, VS2, VB0, VD, VR
+%% check: Main recipe read from ONE config (V2-S, flat, Global Lepidoptera); confirm it holds for every backbone, head and dataset, and for ViT-L/16. | Resolution (384 px, 224 for B0 and ViT-L/16?), backbone lr 3.3e-4 and the 50-image floor come from our journal's reading of his commands, not from his config; augmentation, schedule after warm-up and pretrained weights are unknown. All marked CHECK. | The 50-image floor means his Global Lepidoptera vocabulary is smaller than the 12,632 species in the dataset section: flagged there too. | fine_tune: false in the config: confirm what it means in mini_trainer (whole network trained or not). | train_proportion 0.9: read here as 10 % of the training split held out for validation; confirm. | Regulariser strength: 0.1 in the config against 10^-3 in the Methods text (marked there). | Second recipe: hidden layer of backbone width (1,280 on B0) under a cosine head with trainable scale and bias (journal 2026-11-03, table 'B0 grid'); no regulariser.
+%% status: ready
+\subsection{Training}\label{sec:training}
+All heads of the main comparison share one recipe.
+Each model is trained for 10 epochs with MuonAuxAdamW (Muon for the weight matrices, AdamW for the other parameters) at a learning rate of $10^{-3}$ ($3.3\times10^{-4}$ for the backbone \textbf{(CHECK)}) and weight decay 0.01, with a linear warm-up over the first quarter epoch \textbf{(CHECK: schedule after warm-up)}, in batches of 64 under fp16 mixed precision.
+Images are 384 pixels (224 for EfficientNet-B0 and ViT-L/16) \textbf{(CHECK: resolutions and augmentation)}.
+The backbone feeds the projection module of \cref{sec:projection} (dropout 0.1), and the head is trained with the EMLA loss (\cref{sec:loss_function}) and the prototype regulariser (\cref{sec:regularization}).
+Global Lepidoptera species with fewer than 50 training images are left out of the label set \textbf{(CHECK: number of species kept)}, and 10\,\% of the training split is held out for validation \textbf{(CHECK)}.
+Backbones are EfficientNet-B0, EfficientNetV2-S and ViT-L/16, initialised from ImageNet weights \textbf{(CHECK)}.
+Each configuration is trained once, so the uncertainty reported for the main comparison is that of the test images (\cref{sec:tune_tau}).
+
+To test whether the conclusions depend on this recipe or on the training run, we retrain the flat, hierarchical, independent and conditional heads on Global Lepidoptera with a second recipe and three seeds (42, 43, 44).
+It differs from the main recipe in the loss, the label set and the classifier: plain cross-entropy with uniform sampling over images, so no class rebalancing; no prototype regulariser; every species with a training image as a class (12,632); and a cosine classifier with a trainable scale and bias on a hidden layer of the backbone's width.
+The whole network is optimised with AdamW (learning rate $10^{-3}$, weight decay 0.01, batches of 64) under a cosine schedule that warms up linearly over half an epoch and anneals to zero, for 5 epochs on 256-pixel crops of images read at 460 pixels, augmented by flips, rotations up to $15^\circ$ and zoom up to 1.1.
+The backbones are EfficientNet-B0, EfficientNetV2-S and a DINOv3 ConvNeXt-L (198\,M parameters), which trains with Muon at $8\times10^{-4}$ on 320-pixel crops.
+On Pl@ntNet300K the same recipe trains for 10 epochs at 384 pixels.
+Where the two recipes agree, a conclusion depends neither on the loss and regulariser nor on the training run; where they disagree, we say so.

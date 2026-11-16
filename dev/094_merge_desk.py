@@ -6,12 +6,17 @@ into Overleaf and marks it on the page; the page stores that in the artifact dat
 (`steps/<NN>`). `apply` then mirrors the pasted text into the local copy of the Overleaf project
 (`archive/paper/asger`, gitignored), so the next pieces are written against what Overleaf holds.
 
-    python dev/094_merge_desk.py build                 # -> data/merge_desk/index.html
+    python dev/094_merge_desk.py build                 # -> data/merge_desk/{A,B}/index.html
     python dev/094_merge_desk.py apply --reviews DIR   # DIR/steps/<NN>.json, as saved by ArtifactData
 
 Piece header, one `%% key: value` line each: title, target (file in the Overleaf project), anchor
 (an exact line of LaTeX), action (before | after | after-paragraph), why, source, check (items
 separated by ' | '), status (ready | pasted | hold).
+
+Since the split (2026-11-10) there are two desks. A title starting with [A], [B] or [A+B] says which
+paper a piece belongs to; a piece goes on each desk its tag names, and DROPPED pieces on neither.
+Paper A goes into Asger's Overleaf draft, so its anchors are checked there. Paper B has no draft yet,
+so its anchors are not checked.
 """
 from __future__ import annotations
 
@@ -37,6 +42,7 @@ PLANNED = [
     ("06", "Methods", "Adapting the classifier only, on a frozen backbone"),
     ("07", "Methods", "Evaluation: three axes and the open-set benchmark"),
     ("08", "Methods", "Open-set scoring rules"),
+    ("24", "Methods", "Training: the main recipe, and a second recipe as a robustness check"),
     ("09", "Methods", "Which classes a macro average counts (predicted-only species)"),
     ("10", "Methods", "Calibration split grouped by trap and night"),
     ("11", "Methods", "Two kinds of noise: retraining spread and bootstrap"),
@@ -83,26 +89,45 @@ def anchor_state(step, earlier):
     return "not found"
 
 
+DESKS = {
+    "A": ("Merge Desk A", "Paper A, hierarchical heads and metrics: lepinet pieces into Asger's Overleaf draft"),
+    "B": ("Merge Desk B", "Paper B, domain shift: pieces for the owner's paper (no draft yet)"),
+}
+
+
+def papers(title):
+    m = re.match(r"\[(A\+B|A|B)\]\s*", title)
+    return (set(m.group(1).split("+")), title[m.end():]) if m else (set(), title)
+
+
 def build(a):
     drafted = {p["id"]: p for p in map(parse, sorted(PIECES.glob("[0-9][0-9]-*.tex")))}
-    steps, earlier = [], []
-    for sid, part, title in PLANNED:
-        if sid in drafted:
-            s = dict(drafted[sid], part=part)
-            s["anchor_state"] = anchor_state(s, earlier)
-            earlier.append(s)
-        else:
-            s = {"id": sid, "part": part, "title": title, "status": "planned"}
-        steps.append(s)
     for sid in sorted(set(drafted) - {p[0] for p in PLANNED}):
         sys.exit(f"piece {sid} is not in PLANNED")
-    OUT.mkdir(parents=True, exist_ok=True)
-    data = {"steps": steps, "built": a.stamp}
-    html = TEMPLATE.read_text().replace("/*__DATA__*/null", json.dumps(data).replace("</", "<\\/"))
-    (OUT / "index.html").write_text(html)
-    n = sum(1 for s in steps if s.get("status") != "planned")
-    bad = [s["id"] for s in steps if s.get("anchor_state") == "not found"]
-    print(f"{n} drafted of {len(steps)} steps -> {OUT / 'index.html'}" + (f"; anchors NOT FOUND: {bad}" if bad else ""))
+    for paper in a.paper:
+        steps, earlier = [], []
+        for sid, part, _ in PLANNED:
+            if sid not in drafted:
+                continue
+            on, title = papers(drafted[sid].get("title", ""))
+            if paper not in on:
+                continue
+            s = dict(drafted[sid], part=part, title=title, papers="+".join(sorted(on)))
+            if paper == "A":
+                s["anchor_state"] = anchor_state(s, earlier)
+                earlier.append(s)
+            else:
+                s["anchor_state"] = "note:Paper B has no draft yet; the place is where the piece sat in the merged draft."
+            steps.append(s)
+        name, sub = DESKS[paper]
+        out = OUT / paper
+        out.mkdir(parents=True, exist_ok=True)
+        data = {"steps": steps, "built": a.stamp, "name": name, "sub": sub}
+        html = TEMPLATE.read_text().replace("/*__DATA__*/null", json.dumps(data).replace("</", "<\\/"))
+        html = html.replace("<title>Merge Desk</title>", f"<title>{name}</title>")
+        (out / "index.html").write_text(html)
+        bad = [s["id"] for s in steps if s.get("anchor_state") == "not found"]
+        print(f"{name}: {len(steps)} pieces -> {out / 'index.html'}" + (f"; anchors NOT FOUND: {bad}" if bad else ""))
 
 
 def insert(text, anchor, action, latex):
@@ -147,6 +172,7 @@ def main():
     sub = ap.add_subparsers(dest="cmd", required=True)
     q = sub.add_parser("build")
     q.add_argument("--stamp", default="")
+    q.add_argument("--paper", nargs="+", choices=list(DESKS), default=list(DESKS))
     q.set_defaults(fn=build)
     q = sub.add_parser("apply")
     q.add_argument("--reviews", required=True)

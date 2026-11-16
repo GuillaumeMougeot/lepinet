@@ -1,15 +1,17 @@
 %% title: [A+B] Two kinds of noise: retraining spread and test resampling
 %% target: Sections/Methods.tex
-%% anchor: On the trap images the split is made by capture group: a random 10\,\% of the (trap, night) groups calibrates the thresholds and the rest is scored, so that no moth photographed on one night appears on both sides.
-%% action: after-paragraph
+%% anchor: The random split used for the main comparison therefore does not favour one head over another.
+%% action: after
 %% why: A bootstrap over test images and a retraining with another seed measure different things, and on trap images they are of the same size, so a difference is claimed only when it survives both.
 %% source: /data/au761367/paper_numbers/11.md (campaign, seeds 42-44, 12 configurations: V2-S, B0, DINOv3 x F, BU, I, TD; bootstrap over 1,960 (trap, night) groups, 1,000 resamples)
-%% check: Rewritten 2026-11-09 with the rerun's three seeds; the old text said retraining spread is larger, which the rerun does not support on trap images. | The frozen-backbone 3.7-point example is gone: no rerun has three seeds of it. | Paste below step 10.
+%% check: Rewritten 2026-11-09 with the rerun's three seeds; the old text said retraining spread is larger, which the rerun does not support on trap images. | The frozen-backbone 3.7-point example is gone: no rerun has three seeds of it. | Paste below step 10. | Paper A (2026-11-10): leads with the main comparison's bootstrap; the probe-HO clause (paper B) is gone; last sentence states the limit of one seed on traps. Anchor moved to the new last line of step 10.
 %% status: ready
 Two sources of variation are reported separately.
-Retraining with another seed measures how much a score depends on the training run; we train every configuration with three seeds (42, 43, 44) and report the range.
-On the test fold it is negligible: across twelve configurations (three backbones, four heads) the species macro-$\text{F}_1$ varies by a median of 0.07 points and at most 0.14.
-On the trap images it is not: the calibrated species score varies by a median of 1.2 points and up to 2.7, and on the held-out-species probe by up to 5.1.
+Bootstrap resampling of the test images measures how much a score depends on which images were drawn; it is the uncertainty of the main comparison, whose models are trained once.
+Retraining with another seed measures how much a score depends on the training run; the second recipe trains every configuration with three seeds and reports the range.
+On the Global Lepidoptera test fold retraining is negligible: across twelve configurations (three backbones, four heads) the species macro-$\text{F}_1$ varies by a median of 0.07 points and at most 0.14.
+On the trap images it is not: the calibrated species score varies by a median of 1.2 points and up to 2.7.
 Calibration contributes to this, since the same configurations vary by only 0.2 to 0.5 points at zero threshold.
-Bootstrap resampling of whole (trap, night) groups measures how much a score depends on which capture events were drawn, and on the trap images it is of the same size as retraining: a standard deviation of 0.25 to 0.30 points at zero threshold, against a three-seed range of 0.19 to 0.50.\footnote{Percentile intervals of this bootstrap sit above the point estimate, because a resample drops rare species that are only ever predicted and score zero; we therefore quote its standard deviation.}
-A difference between two configurations is claimed only when their three-seed ranges do not overlap, and on the trap images only when it also exceeds twice the bootstrap standard deviation.
+Bootstrap resampling of whole (trap, night) groups is of the same size on the trap images: a standard deviation of 0.25 to 0.30 points at zero threshold, against a three-seed range of 0.19 to 0.50.\footnote{Percentile intervals of this bootstrap sit above the point estimate, because a resample drops rare species that are only ever predicted and score zero; we therefore quote its standard deviation.}
+For the second recipe, a difference between two configurations is claimed only when their three-seed ranges do not overlap, and on the trap images only when it also exceeds twice the bootstrap standard deviation.
+On the trap images, a single training run per configuration, as in the main comparison, can therefore rank two heads whose difference is within the retraining spread.

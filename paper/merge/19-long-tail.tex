@@ -1,23 +1,24 @@
-%% title: [A] Long-tail rebalancing: worth it for a heavy tail, costly under shift
+%% title: [A] Rebalancing: worth it for a heavy tail, to be tested under shift
 %% target: Sections/Results.tex
-%% anchor: The broader pretraining helps most on the species that adaptation did not cover.
-%% action: after
-%% why: Rebalancing is the first setting the generic recipe leaves to the dataset. On Pl@ntNet's heavy tail it pays up to 9.7 points; on Lepidoptera it buys little in-distribution and costs 4 to 5.5 points on trap images. The tail statistics say which case a dataset is in.
+%% anchor: \label{fig:ablation_vs_standard}
+%% action: after-paragraph
+%% why: Complements Asger's EMLA ablation (in-distribution) with the second recipe: square-root oversampling as an alternative, and the cost of EMLA on trap images. EMLA stays the default loss of paper A; this states where it pays and where to check it.
 %% source: RESULTS VR (Pl@ntNet rebalancing, V2-S, seed 42), VS and VS2 (Lepidoptera, EMLA against cross-entropy; three-seed baselines); journal/2026-10-23-which-recipe-does-the-merged-paper-rerun.md (discussion point 1: tail statistics); data/rescore/trap-grouped.csv (recipe L: L0 0.3490, base 0.2836, L1 0.2241, L2 0.1834); journal/2026-08-01-imbalance-methods-bench.md
-%% check: Rewritten 2026-11-09 (owner's decisions). cRT and the 198 M capacity paragraph are gone: their runs were not frozen (journal/engineering/2026-11-05-the-frozen-stages-were-not-frozen.md); the appendix keeps one line. | The rebalanced Pl@ntNet arms and EMLA on Lepidoptera are one seed each; the baselines are three-seed means. | The monotone ordering is recipe L, end-to-end runs (not affected by the frozen-stage incident), rescored in the current convention. | The image-cap sweep is dropped: recipe L, and not needed for the message. | Paste after step 18.
+%% check: Rewritten 2026-11-09 (owner's decisions). cRT and the 198 M capacity paragraph are gone: their runs were not frozen (journal/engineering/2026-11-05-the-frozen-stages-were-not-frozen.md); the appendix keeps one line. | The rebalanced Pl@ntNet arms and EMLA on Lepidoptera are one seed each; the baselines are three-seed means. | The monotone ordering is recipe L, end-to-end runs (not affected by the frozen-stage incident), rescored in the current convention. | The image-cap sweep is dropped: recipe L, and not needed for the message. | Paste after step 18. | Paper A (2026-11-10): placed after Asger's EMLA and regulariser ablation figures, as the dataset-dependent counterpart to them. | Paper A (2026-11-10): placed after Asger's ablation; probe and held-out-species numbers (paper B) replaced by all trap crops (EMLA 0.300 vs three-seed BU 0.331 [0.316-0.339]); the recipe-L ordering sentence (third recipe, balanced softmax) is cut to avoid introducing a third recipe; the recommendation is softened from 'no rebalancing under shift' to 'test on target images', since EMLA is paper A's default.
 %% status: ready
-\subsection{Long-tail rebalancing}\label{sec:results_longtail}
-Rebalancing is the first choice the recipe leaves to the dataset, and the two datasets answer it differently.
-On Pl@ntNet-300K, whose test fold shares the training distribution, both rebalancing methods pay (\cref{tab:longtail}).
-Square-root oversampling raises every head, by 1.3 to 9.7 points, and removes the top-down head's deficit; EMLA gives the best flat head (+4.8) but lowers the top-down head by 6.2 points.
+\paragraph{Rebalancing depends on the dataset and on the deployment.}
+The ablation above measures rebalancing on test sets drawn from the training distribution.
+The second recipe, which applies no rebalancing, adds two comparisons: square-root oversampling as an alternative to EMLA, and the cost of rebalancing under shift.
+On Pl@ntNet300K both methods pay (\cref{tab:longtail}).
+Square-root oversampling raises every head, by 1.3 to 9.7 points, and removes the conditional head's deficit; EMLA gives the best flat head (+4.8) but lowers the conditional head by 6.2 points, as in the main comparison, where the conditional head trails on Pl@ntNet300K.
 
 \begin{table}[htb]
     \centering
-    \caption{Rebalancing on Pl@ntNet-300K (EfficientNetV2-S), species macro-$\text{F}_1$ on the test fold at zero threshold. No rebalancing: mean of three seeds; rebalanced: one seed.}
+    \caption{Rebalancing on Pl@ntNet300K under the second recipe (EfficientNetV2-S), species macro-$\text{F}_1$ on the test fold at zero threshold. No rebalancing: mean of three seeds; rebalanced: one seed.}
     \label{tab:longtail}
     \begin{tabular}{lcccc}
         \toprule
-        rebalancing & F & BU & I & TD \\
+        rebalancing & Flat & Hierarchical & Independent & Conditional \\
         \midrule
         none & 0.466 & 0.457 & 0.453 & 0.407 \\
         square-root oversampling & 0.479 & \textbf{0.500} & \textbf{0.500} & \textbf{0.504} \\
@@ -26,12 +27,12 @@ Square-root oversampling raises every head, by 1.3 to 9.7 points, and removes th
     \end{tabular}
 \end{table}
 
-On Lepidoptera EMLA buys 0.6 points on the test fold (BU, 0.894 against a three-seed mean of 0.887) and costs 3.9 points on the trap images, 5.5 on the probe set and 4.9 on its held-out species, each below all three seeds of the unweighted model.
-The earlier recipe showed the same direction more sharply: ordered by how hard they push probability mass toward rare species, no rebalancing, square-root oversampling, balanced softmax \textbf{(REF: Ren et al. 2020; Menon et al. 2021)} and both together lose accuracy on the trap images at every step (0.349, 0.284, 0.224, 0.183), while the test fold does not order them.
-What a model learns from a species' few dozen photographs is largely about those photographs (one photographer, background and camera); up-weighting them helps on a test fold that shares those artefacts and hurts on images that do not.
+On Global Lepidoptera EMLA buys 0.6 points on the test fold (hierarchical head, 0.894 against a three-seed mean of 0.887) and costs 3.1 points on the trap images (0.300 against 0.331), below all three seeds of the unweighted model.
+What a model learns from a species' few dozen photographs is largely about those photographs (one photographer, background and camera); up-weighting them helps on a test set that shares those artefacts and can hurt on images that do not.
+The trap scores of the main comparison, all trained with EMLA, may therefore be lower than an unweighted recipe would give.
 
 The two training sets differ in how heavy their tail is.
-In Pl@ntNet-300K the median species has 22 training images, 62\,\% of species have fewer than 50, and the effective number of classes, $\exp(H)$ for the entropy $H$ of the class frequencies, is 19\,\% of the number of classes.
-In Lepidoptera, whose corpus is capped at about 2,000 images per species, the median species has 163, 10\,\% have fewer than 50, and the effective number of classes is 54\,\%.
-We therefore recommend square-root oversampling for training sets with a heavy tail, for instance when most classes have fewer than 50 images or the effective number of classes is below a third of the total, and no rebalancing when the model will be used under a domain shift.
+In Pl@ntNet300K the median species has 22 training images, 62\,\% of species have fewer than 50, and the effective number of classes, $\exp(H)$ for the entropy $H$ of the class frequencies, is 19\,\% of the number of classes.
+In Global Lepidoptera, whose corpus is capped at about 2,000 images per species, the median species has 163, 10\,\% have fewer than 50, and the effective number of classes is 54\,\%.
+Rebalancing is worth most for a training set with a heavy tail, for instance when most classes have fewer than 50 images or the effective number of classes is below a third of the total, and is worth testing on target images before a model is deployed under a domain shift.
 Two datasets cannot place these thresholds precisely; they mark where each of our datasets falls.

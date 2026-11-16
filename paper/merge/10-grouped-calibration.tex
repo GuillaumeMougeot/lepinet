@@ -4,7 +4,9 @@
 %% action: after
 %% why: A random split over trap crops puts frames of the same moth on both sides. Grouping removes that; measured, it moves calibrated scores by under a point and changes no conclusion.
 %% source: /data/au761367/paper_numbers/checks_01_07_10.md (92 campaign runs; head orders identical, Kendall tau 0.967 over all run pairs)
-%% check: Asger's own trap numbers need the same grouped split before they are compared with ours.
+%% check: Asger's own trap numbers need the same grouped split before they are compared with ours. | Paper A (2026-11-10): reframed: the main comparison used a random split on AMI, the second recipe a grouped one, and this paragraph shows the choice does not move head comparisons. The 15,200-crop subset is paper B's probe set, described here without the name; recomputing on all crops is possible if Asger prefers.
 %% status: ready
-On the trap images the split is made by capture group: a random 10\,\% of the (trap, night) groups calibrates the thresholds and the rest is scored, so that no moth photographed on one night appears on both sides.
-On the probe set this changes calibrated macro-$\text{F}_1$ by 1.0 point on average (between $-0.7$ and $+2.4$ over 92 models) and no comparison between heads; the only pairs of models that change order are less than 1.7 points apart.
+Thresholds for the trap images need care, because the traps photograph each moth many times per night, so a random split of crops puts near-identical images on both sides.
+For the second recipe we therefore split by capture group: a random 10\,\% of the (trap, night) groups calibrates the thresholds and the rest is scored.
+Against a random split of crops, on a subset of 15,200 crops of 368 species, this changes calibrated species macro-$\text{F}_1$ by 1.0 point on average (between $-0.7$ and $+2.4$ over 92 models) and reverses no comparison between heads; the only pairs of models that change order are less than 1.7 points apart.
+The random split used for the main comparison therefore does not favour one head over another.

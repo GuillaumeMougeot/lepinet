@@ -27,12 +27,16 @@ On free GPUs, after the paper's jobs. [[2026-11-07-otto-a-production-model-for-a
 |---|---|---|
 | 1 | schedule and trap augmentation | done: 10 epochs (384x10 +4.7 probe); trap aug **off** (test -0.75, 7x seed spread) |
 | 2 | BioCLIP-2 trains in mini_trainer | done (normalisation bug fixed, MT ce5b7e7); ensemble teacher checked (0.670 / 0.503 probe / probe-HO) |
-| 3 | candidate: BioCLIP-2 ViT-L, BU, 12,632 species, Muon 1e-5, 224 px, 10 epochs, ensemble pseudo-labels K=35 at x16; DINOv3 twin | **running**: candidate 12450599, c-otto-dinov3 12450503 (1 B200 each); ~32-40 h |
-| 4 | three site folds (LV, OH, SS), so that every Danish crop is scored by a model that never saw its site | x2lv 12450600 running, x2oh 12450601 and x2ss 12450602 queued (1 B200 each) |
+| 3 | candidate (Otto, BioCLIP-2 ViT-L BU, ensemble pseudo-labels K=35) and DINOv3 twin | done (RESULTS OT): Otto trailed P5 on probe; cause found in the labels (71 % correct) |
+| 4 | three site folds (LV, OH, SS) | done (RESULTS OT) |
+| 4a | round 1, one factor each from Otto: OT1 gated labels (70 % gate, 98.6 % correct), OT2 TrivialAugmentWide, OT3 both, OT4 OT3 on DINOv3 | done (RESULTS OT1-OT4): OT3 best, probe / probe-HO 0.674 / 0.413 (ne, tta3bm, zero threshold), +0.14 over P5; OT4 ties on probe, below on probe-HO |
+| 4b | round 2 (OT5): OT3's recipe, labels re-gated with the P5 + OT3 + OT4 teacher (19,061 crops, 99.0 % correct, 1,041 swapped), seed 42 | done (RESULTS OT1-OT5): within noise of OT3 everywhere (probe 0.688, probe-HO 0.415); label rounds have saturated. Owner to choose the production model (OT3 or OT5) |
 | 5 | comparison with Meghan (MAMBO_v2) and Nemo (MAMBO_v3): their pipeline, Asger's figure plus Otto, speed and size; every model with and without the north_europe list and TTA, headline north_europe + TTA (Nemo's card setting; owner) | after 4 |
 | 6 | release through mini_trainer's release path, int8 and fp16, regional lists | after 5 |
 
 Postponed (owner, 2026-11-07): the Tree of Life run (W3); first step when it resumes is the upload, the parquets and a one-epoch throughput pilot.
+
+Side request (2026-11-11), done: OneStop figure, Nemo against MILA's UK & Denmark classifier on recent GBIF photos of invasive insects per Living Lab list, `data/onestop/onestop_per_list.png`. [[2026-11-11-onestop-nemo-against-mila-on-invasive-species]]
 
 ## 1. Two papers (owner, 2026-11-10: the merged paper is split)
 

@@ -1,15 +1,15 @@
 %% title: [A] Backing off to genus or family: thresholds per rank
 %% target: Sections/Methods.tex
-%% anchor: A difference between two configurations is claimed only when their three-seed ranges do not overlap, and on the trap images only when it also exceeds twice the bootstrap standard deviation.
+%% anchor: On the trap images, a single training run per configuration, as in the main comparison, can therefore rank two heads whose difference is within the retraining spread.
 %% action: after-paragraph
 %% why: Defines the abstention policy the results use (sec:results_backoff): one threshold per rank, each fitted on the images that reach that rank.
 %% source: /data/au761367/paper_numbers/12.md (v2s_bu: 15,372 test images below 0.40, genus precision 0.512 against 0.971); dev/097_backoff_policies.py
-%% check: Rewritten 2026-11-09. Cut for length: the expected-utility comparison (it loses for most heads in the rerun) and the temperature step (no campaign head saturates; it served margin heads only). | Paste below step 11.
+%% check: Rewritten 2026-11-09. Cut for length: the expected-utility comparison (it loses for most heads in the rerun) and the temperature step (no campaign head saturates; it served margin heads only). | Paste below step 11. | Paper A (2026-11-10): anchor moved to step 11's new last line; 'second recipe' named.
 %% status: ready
 \subsection{Backing off to a coarser rank}\label{sec:backoff}
 Summing the species posterior over each genus and family gives a posterior at every rank from one forward pass, so a model can answer at a coarser rank without a second model.
 The policy is greedy: answer at species if the top species confidence reaches a threshold $\tau_s$; otherwise at genus if the top genus confidence reaches $\tau_g$; otherwise at family if it reaches $\tau_f$; otherwise abstain.
 Each threshold is the lowest that gives 95\,\% precision on the calibration images that reach its rank, that is, the images that failed every finer rank.
-Fitting the coarse thresholds on all images instead lets them borrow reliability from easy images: on the 15,372 test images whose species confidence is below 0.40 (BU on EfficientNetV2-S), genus precision is 0.512, against 0.971 over all images.
+Fitting the coarse thresholds on all images instead lets them borrow reliability from easy images: on the 15,372 test images whose species confidence is below 0.40 (hierarchical head on EfficientNetV2-S, second recipe), genus precision is 0.512, against 0.971 over all images.
 On the trap images the thresholds are fitted on half of the (trap, night) groups and evaluated on the other half, over eleven random halvings.
 Each model is reported as the share of images answered at each rank, the precision of each returned rank, and the share answered correctly at some rank.

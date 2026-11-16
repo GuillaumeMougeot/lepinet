@@ -1,35 +1,47 @@
-%% title: [A] Metric conventions change the ranking
+%% title: [A] Metric conventions change the ranking of heads
 %% target: Sections/Results.tex
-%% anchor: What none of them shows is how a model abstains (\cref{sec:results_backoff}).
-%% action: after
-%% why: Shows that the class set of a macro average (step 09) decides how large an intervention looks on trap images: counting predicted-only species triples self-training's gain and turns a regional checklist from neutral into +15 points, while comparisons within one label space keep their order.
-%% source: /data/au761367/paper_numbers/16.md (campaign: v2s_bu and dinov3_bu three-seed means, st26, gatedtrue, t1rep; P5 and Otto restricted to the 464 trap species from their saved logits)
-%% check: Rewritten 2026-11-09. The old claim that real labels and self-training swap order between conventions does not reproduce (labels lead under all three); the checklist effect reproduces on P5 and Otto (B8's K1 has no rerun). | Paste after step 15. | Present-only is our old lepinet convention and mini_metrics before commit 1132a10; say so in one clause if Asger agrees.
+%% anchor: \subsection{Confidence calibration}
+%% action: before
+%% why: The metrics half of paper A. On data that cover a small part of the label set, whether predicted-only species count and whether a threshold is applied change which head wins: four head pairs reverse beyond the seed spread. So a macro-F1 under shift needs its class set and threshold stated, and the main comparison reports both settings for that reason.
+%% source: /data/au761367/paper_numbers/make16a.py and make16b.py (all 47,905 trap crops, campaign runs {v2s,b0,dinov3}_{f,bu,i,td}_s42..44; present and union at zero threshold recomputed from mini_metric.csv, union equals data/campaign/scores.csv's zero column to 2e-16; calibrated from scores.csv, (trap, night) groups); /data/au761367/paper_numbers/16.md (test-fold identity of the two conventions)
+%% check: Rewritten for paper A 2026-11-10: all trap crops instead of the probe set; the self-training and real-label rows (paper B) and the checklist sentence are gone (the checklist result, P5/Otto on the probe set, can come back as one sentence if wanted). | Reversal rule: three-seed ranges disjoint under both conventions with opposite order; 4 of 54 pairs. | That Asger's tables use the present-or-predicted convention is inferred from his AMI zero-threshold species macro-F1 (8-11 %) and the shared mini_metrics code; confirm.
 %% status: ready
-\subsection{Which classes are averaged changes the size of an effect}\label{sec:results_conventions}
-On the test fold every species occurs in the ground truth and none is predicted without occurring, so averaging over the species present and over the species present or predicted (\cref{sec:metrics}) give identical scores.
-On the probe set, which holds 368 of the 12,632 species, they do not (\cref{tab:conventions}).
+\subsection{Which classes are averaged changes the comparison}\label{sec:results_conventions}
+On a test fold drawn from the training distribution every species occurs and none is predicted without occurring, so averaging over the species present and over the species present or predicted (\cref{sec:metrics}) give identical scores; on the Global Lepidoptera test fold they agree exactly for every model we checked.
+On the trap images they do not.
+The 47,905 crops hold 486 species, and each model of the second recipe names between 1,725 and 2,540 species that are absent from them.
+Counting those species lowers the species macro-$\text{F}_1$ from 0.55--0.68 to 0.09--0.15, and a calibrated threshold restores part of it (0.27--0.42) by removing most low-confidence predictions of absent species (\cref{tab:conventions}).
 
 \begin{table}[htb]
     \centering
-    \caption{Probe-set species macro-$\text{F}_1$ under three conventions. Present only: the average runs over species in the ground truth. Present or predicted: species that are predicted but absent count with $\text{F}_1 = 0$, at zero threshold and calibrated on 10\,\% of the (trap, night) groups. Three-seed means where marked ($^\ast$).}
+    \caption{Macro-$\text{F}_1$ on all 47,905 trap crops under three conventions, second recipe, mean of three seeds. Present: average over the classes in the ground truth, zero threshold. Present or predicted: classes predicted but absent count with $\text{F}_1 = 0$, at zero threshold and with a threshold calibrated on 10\,\% of the (trap, night) groups.}
     \label{tab:conventions}
-    \begin{tabular}{lccc}
+    \begin{tabular}{llcccccc}
         \toprule
-        model & present only & present or predicted & calibrated \\
+        & & \multicolumn{3}{c}{species} & \multicolumn{3}{c}{genus} \\
+        & & & \multicolumn{2}{c}{present or predicted} & & \multicolumn{2}{c}{present or predicted} \\
+        backbone & head & present & zero & calibrated & present & zero & calibrated \\
         \midrule
-        EfficientNetV2-S, BU, no trap data$^\ast$ & 0.648 & 0.168 & 0.366 \\
-        \quad + pseudo-labels, 2.5\,\% & 0.717 & 0.381 & 0.593 \\
-        \quad + true labels, confident crops & 0.751 & 0.566 & 0.682 \\
-        \quad + true labels, every species & 0.777 & 0.696 & 0.722 \\
-        DINOv3 ConvNeXt-L, BU, no trap data$^\ast$ & 0.694 & 0.189 & 0.457 \\
+        EfficientNetV2-S & Flat & 0.637 & 0.134 & 0.354 & 0.702 & 0.189 & 0.468 \\
+         & Hierarchical & 0.643 & 0.133 & 0.331 & 0.709 & 0.187 & 0.459 \\
+         & Independent & 0.648 & 0.142 & 0.378 & 0.700 & 0.208 & 0.484 \\
+         & Conditional & 0.616 & 0.107 & 0.327 & 0.679 & 0.162 & 0.433 \\
+        \midrule
+        EfficientNet-B0 & Flat & 0.580 & 0.109 & 0.280 & 0.645 & 0.156 & 0.391 \\
+         & Hierarchical & 0.624 & 0.123 & 0.332 & 0.684 & 0.174 & 0.447 \\
+         & Independent & 0.621 & 0.133 & 0.326 & 0.672 & 0.198 & 0.433 \\
+         & Conditional & 0.545 & 0.088 & 0.267 & 0.609 & 0.135 & 0.360 \\
+        \midrule
+        DINOv3 ConvNeXt-L & Flat & 0.669 & 0.128 & 0.405 & 0.732 & 0.186 & 0.516 \\
+         & Hierarchical & 0.677 & 0.147 & 0.416 & 0.752 & 0.211 & 0.548 \\
+         & Independent & 0.684 & 0.136 & 0.424 & 0.732 & 0.198 & 0.534 \\
+         & Conditional & 0.672 & 0.119 & 0.402 & 0.729 & 0.175 & 0.528 \\
         \bottomrule
     \end{tabular}
 \end{table}
 
-Counting predicted-only species triples the gain from self-training (6.9 points present only, 21.3 at zero threshold, 22.7 calibrated) and multiplies the lead of true labels over self-training fivefold at zero threshold (6.0 against 31.5 points).
-Restricting a model to the 464 species recorded at the traps changes present-only scores of two fine-tuned BioCLIP-2 models by $-2.0$ and $+0.4$ points and gains 28 to 30 points at zero threshold and 15 to 16 calibrated.
-Both labels and checklists confine predictions to the local fauna.
-When only present species are averaged, a wrong answer outside the probe species lowers one species' recall and costs nothing else; when predicted species count, every absent species named adds a class with $\text{F}_1 = 0$, and confining predictions removes them.
-Comparisons between models with the same label space keep their direction under every convention: every model in \cref{tab:conventions} ranks in the same order under all three.
-A macro-$\text{F}_1$ on a subset of the label space is therefore uninterpretable unless the class set is stated.
+The heads differ in how many absent species they name, the conditional head the most on every backbone (2,266 to 2,540 at species), so the convention can change which head wins.
+Of the 54 pairs of heads (three backbones, three ranks), four change order between conventions with non-overlapping three-seed ranges.
+On EfficientNet-B0 at genus, the hierarchical head leads the independent head by 1.2 points when only the species present are averaged, trails it by 2.3 when predicted-only classes count, and leads it again by 1.5 after calibration; on EfficientNetV2-S at family, the hierarchical head leads the independent head by 2.8 points in the first convention and trails it by 2.3 in the last.
+The main comparison and \cref{tab:heads_ranks} count predicted-only classes and report both zero and calibrated thresholds for this reason.
+A macro-$\text{F}_1$ on evaluation data that cover a small part of the label set cannot be compared with another unless both state the class set and the threshold.

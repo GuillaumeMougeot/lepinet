@@ -78,7 +78,7 @@ button:focus-visible, textarea:focus-visible { outline: 2px solid var(--accent);
 </style>
 
 <header class="top">
-  <h1>Merge Desk</h1>
+  <h1 id="name">Merge Desk</h1>
   <span class="sub" id="sub">lepinet results into the Overleaf draft</span>
   <div class="meter"><button class="b navtoggle" id="navtoggle" aria-expanded="false">Steps</button><span id="count"></span></div>
 </header>
@@ -173,7 +173,7 @@ function render() {
   main.innerHTML = `${eyebrow}<h2 class="title">${esc(s.title)}</h2><p class="why">${esc(s.why || "")}</p>
     <div class="where"><span class="lbl">Where it goes</span><div>In Overleaf, open <code>${esc(s.target)}</code>. ${esc(WHERE[s.action] || s.action)}</div>
       <div class="anchor">${esc(s.anchor)}</div>
-      <div class="astate ${anc === "not found" ? "bad" : "good"}">${anc === "found" ? "This line is in the local copy of the Overleaf project." : anc === "not found" ? "This line is not in the local copy. Check the place by hand, and tell Claude." : "This line arrives with " + esc(anc.replace("created by ", "")) + "; paste that one first."}</div></div>
+      <div class="astate ${anc === "not found" ? "bad" : "good"}">${anc.startsWith("note:") ? esc(anc.slice(5)) : anc === "found" ? "This line is in the local copy of the Overleaf project." : anc === "not found" ? "This line is not in the local copy. Check the place by hand, and tell Claude." : "This line arrives with " + esc(anc.replace("created by ", "")) + "; paste that one first."}</div></div>
     <div class="codebox"><div class="codebar"><span class="lbl">LaTeX to paste</span><button class="b" id="edit">${editing ? "Discard edits" : "Edit before copying"}</button><button class="b primary" id="copy">Copy</button></div>
       ${editing ? `<label for="tex" hidden>LaTeX</label><textarea id="tex" spellcheck="false">${esc(text)}</textarea>` : `<pre class="latex" id="pre">${esc(text)}</pre>`}</div>
     <div class="preview" id="pv">${preview(text)}</div>
@@ -215,7 +215,8 @@ async function submit(s, status) {
 
 function soft() { if (document.activeElement?.tagName === "TEXTAREA") renderNav(); else render(); }
 $("#navtoggle").onclick = () => { const o = $("#nav").classList.toggle("open"); $("#navtoggle").setAttribute("aria-expanded", o); };
-if (DATA.built) $("#sub").textContent = `lepinet results into the Overleaf draft · built ${DATA.built}`;
+if (DATA.name) $("#name").textContent = DATA.name;
+$("#sub").textContent = (DATA.sub || "lepinet results into the Overleaf draft") + (DATA.built ? ` · built ${DATA.built}` : "");
 reviews = store.get("md.reviews") || {};
 { const i = steps.findIndex(s => s.id === store.get("md.cur")); cur = i >= 0 ? i : Math.max(0, steps.findIndex(s => statusOf(s) === "ready")); }
 render();

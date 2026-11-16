@@ -329,7 +329,7 @@ student learns TTA's output at 1x cost.
   - **mini_trainer itself: unlikely to be most of it.** It reproduced lepinet where tested (T1rep 0.722 against
     0.723, C3b open-set), and the DINOv3 student self-trained in mini_trainer (0.627 / 0.431) is within 2 points
     of lepinet's B8 (0.647 / 0.452).
-  - **The pseudo-label set: the prime suspect.** P5 trained on 12,230 confidence-gated crops, 98 % correct.
+  - **The pseudo-label set: the prime suspect.** P5 trained on 12,230 confidence-gated crops, 98 % correct. **Correction 2026-11-11: wrong.** P5's stage-2 parquet (configs/20260828_P5_bioclip2_adapted_unfrozen.yaml, combined_balanced_3lvl) holds all 27,230 adapt crops, no gate (B4 teacher, about 86 % correct), balanced replication to 2.1 % of rows; 12,230 was the round-1 gated set (F2).
     Otto trained on a per-species top-K set (K = 35): 8,305 crops over 913 species, 71.3 % correct. The top-K
     rule came from R3 (+4.24 over a global gate in a second round), but here it trades accuracy for
     coverage at 29 % wrong labels, on a student that memorises what it is given (the dose results).
@@ -346,7 +346,7 @@ student learns TTA's output at 1x cost.
   (also known-only, all 47,905 crops, a rough speed panel, SVGs and COMMANDS.md). Species macro-F1, northern
   Europe, single view -> tta3bm: P5 0.50 -> 0.54, Otto 0.46 -> 0.51, Nemo 0.30 -> 0.38, Meghan 0.30 -> 0.34. Not
   Asger's image set (his Flemming set has 58,640 images). B8 left out: no saved logits on this machine.
-- 2026-11-09: U1-U4 submitted (owner approved the 70 % gate set: 19,061 crops, 314 species, 98.6 % correct,
+- 2026-11-09: OT1-OT4 submitted (UCloud job names u1-u4; not the EU-trap experiment U in RESULTS §2) (owner approved the 70 % gate set: 19,061 crops, 314 species, 98.6 % correct,
   x7 = 2.57 % of training rows): u1 12451866 (gated labels), u2 12451870 (TrivialAugmentWide), u3 12451880
   (both), u4 12451889 (DINOv3 twin, both).
 - 2026-11-09, owner: **"Otto" is the name of our best model, whichever that is,** until the owner fixes it.
@@ -381,3 +381,44 @@ student learns TTA's output at 1x cost.
     - The self-trained DINOv3 alone at north_europe + tta3bm reaches probe 0.716, above P5's 0.711, and stays
       below it on held-out species (0.512 against 0.546).
   - **Reading:** with the list and TTA, ensembling adds little; the student models are what can still move.
+- 2026-11-11/12: **round 1 scored** (mt; sheet `/data/au761367/otto_eval/u/ot_scores.md`, RESULTS OT1-OT5). Species
+  macro-F1, north_europe, tta3bm, zero threshold, probe / probe-HO: P5 0.536 / 0.294, Otto 0.510 / 0.273, OT1 0.580 /
+  0.346, OT2 0.589 / 0.368, **OT3 0.674 / 0.413**, OT4 0.692 / 0.372.
+  - The 2026-11-09 prediction ("gated pseudo-labels recover most of the gap: probe within 1 point of P5 or above") held
+    and was beaten: OT1 is 4.4 points above P5 on probe. The labels were the cause.
+  - The two factors more than add: +0.070 (labels) and +0.079 (TrivialAugmentWide) alone, +0.163 together over Otto.
+  - OT4 against OT3: +0.018 [-0.012, +0.030] on probe, -0.041 [-0.079, +0.001] on probe-HO, -0.092 [-0.128, -0.067]
+    single view on probe-HO. The pre-fixed rule (highest probe species F1) picks OT4 only on a point estimate inside
+    its interval and had no tie rule; the two are treated as tied, decided after the scores were in. DINOv3 again
+    leads on adapt-seen species and trails on species the adaptation never saw, as the self-trained st26 did.
+- 2026-11-12: **round 2 (OT5) submitted** (owner: "round 2 only, go ahead"; no second seeds). OT3's recipe with one
+  change, the labels: P5 + OT3 + OT4 single-view softmax averaged by GBIF key, the 70 % most confident adapt crops
+  (19,061 crops, 298 species, cut at 0.998, 99.0 % correct against gate70's 98.6 %). 18,020 crops shared with gate70,
+  all with the same label; 1,041 swapped. `plans/otto/ensemble_gate_n.py` reproduces gate70 exactly from P5 + st26.
+  No probe or probe-HO data used. Job r2-otto-gate-trivial 12457556, eval queued after it.
+  - **Prediction, before the result:** OT5 within noise of OT3: probe and probe-HO paired differences inside
+    +-0.03. Reasons: 95 % of the labels are OT3's own; accuracy rises only 0.4 points, about 75 fewer wrong
+    labels; and two of the three teachers learned these crops' labels from gate70, so the new teacher mostly
+    confirms them (its 99.0 % is partly inherited). The swap drops 16 species (314 to 298), which could cost a
+    little on rare adapt species. A gain beyond 0.03 would mean the gate's marginal crops matter more than their
+    count suggests.
+  - Without a second seed, any difference under about 0.03 cannot be told from seed noise (VD's three seeds spread up
+    to 0.05 on probe-HO).
+- 2026-11-12: **OT5 attempt 1 stopped** (job 12457556, node bit-g26a-06). The training log is normal to 17.1 % of
+  the 10 epochs (04h03m elapsed, about 14:44; epoch 1 took 2h16m, the same pace as OT3) and then stops mid-line, with
+  no error. The job ran on, silent, until 16:18 and UCloud called it SUCCESS. run-one.sh never printed its "training
+  did not finish" line, so the shell and the trainer stopped writing together. That points to a stall in writing to the
+  job's shared drive (/work, where both the train log and the job's output live) or a node fault, not the training code;
+  a crash would have printed within 20 s. Not provable from our side. Owner to decide on a rerun.
+  - Rerun approved by the owner, unchanged, one attempt: job 12459397 (16:46), from scratch, run dir
+    otto_bioclip_bu_r2gate70_trivial_s42_1; training due about Fri 13 Nov 16:00, eval after it.
+- 2026-11-14: **OT5 scored** (attempt 2 trained cleanly, 10 epochs, 23h38m; eval 12461753 exit 0). Species macro-F1,
+  north_europe, calibrated / zero: probe tta3bm 0.761 / 0.688, probe-HO tta3bm 0.560 / 0.415, probe single 0.753 /
+  0.686, probe-HO single 0.527 / 0.376. Paired OT5 - OT3 at zero threshold: +0.014 [-0.008, +0.025], +0.002 [-0.033,
+  +0.035], +0.010 [-0.014, +0.026], -0.015 [-0.050, +0.019].
+  - **Prediction scored: held.** Every difference is inside +-0.03 and none is significant. The re-gated labels were
+    95 % OT3's own and mostly confirmed by teachers that had learned them, so a second round had little to add.
+  - **Reading:** with this adapt pool, label rounds have saturated at the 70 % gate. OT5 keeps OT3's level on species the
+    adaptation never saw, which OT4 (DINOv3) did not. More gain would need new data (more trap nights, the 50 M
+    European crops) or a different lever, not another round of the same.
+  - Under the pre-fixed rule OT4 0.692, OT5 0.688 and OT3 0.674 are inside each other's intervals: no winner by rule.
