@@ -332,3 +332,240 @@ recipe. The plain run answers that first, and is arm C of the original factorial
   levels and ~185 k species (the head alone is ~47 M parameters at width 256, larger than a 20 M
   trunk), and that the hierarchy built from the catalog is a tree (each child under one parent).
 
+
+## Fourth revision (2026-11-16, owner): the run plan
+
+> no TrivialAugmentWide, DINOv3 ConvNeXt-L, one-arm pilot
+
+**Standing rule (owner, 2026-11-16): on this dataset, one training run per configuration and one seed;
+no arms, no seed repeats.** So every choice below is fixed before the pilot, and the pilot tests the
+machinery, not the recipe. The 2026-11-09 pilot design (four arms: baseline, margin 0.3,
+TrivialAugmentWide, ViT-L) is replaced.
+
+### Data (frozen, nothing changes)
+
+tol256-v1 (`dev/103`; README in the dataset): 60,914,607 training samples in 1,832 shards at
+`/12383016/tol256` (1,648 train, 92 val, 92 test; SHA-256 verified where training reads it, job 12462945),
+190,199 species, seven ranks keyed by full path (kingdom to species), short side 256. Out of training:
+the 1,810 held-out species (`heldout_taxa.csv`: 1,200 species with a trained sibling, 300 whole genera,
+20 whole families), Rare Species near-duplicates (6-bit dHash within genus), lepinet's test fold, below-floor
+and duplicate rows. Genus- and family-level rows (2.6 M) are not trained on (no partial-label loss). Pilot
+set: `/12383016/tol256-pilot`, 9,337,505 samples in 262 shards, every species, up to 50 images each.
+
+### Recipe (one configuration)
+
+| choice | value | why |
+|---|---|---|
+| trunk | DINOv3 ConvNeXt-L (`timm:convnext_large.dinov3_lvd1689m`, 198 M), self-supervised start | has seen no labels and no text, so a later contrastive arm (ME) starts equal; not BioCLIP-2, trained on this same corpus |
+| head | hierarchical (species classifier, every coarser rank its sum, a loss at all seven ranks), cosine classifier as in the campaign | marginal supervision makes congeners neighbours on every backbone (RESULTS Z7) and gives the trap's order classifier for free |
+| loss | cross-entropy at every rank, no margin, no EMLA | the margin is ME's question; one factor at a time |
+| sampling | natural frequencies under the corpus's 2,000-per-species cap (`class_sampling_power` 0) | the cap already flattens the head; tail weighting costs robustness under shift (finding 5, Z1d) |
+| augmentation | the recipe's affine without dihedral turns (horizontal flip, rotation up to 15 degrees, zoom 1.0-1.1); **no TrivialAugmentWide** (owner) | TAW traded -1.7 on photos for +8.6 on traps (AG); a general backbone is judged on photos too |
+| resolution | 224 training crop from the 256 short side (read 256, train 224, as Otto and OT3) | storage is 256; 320 would upscale (mt agrees) |
+| batch | 96 per GPU, 8 GPUs, global 768 | the setting run on this trunk (OT4); 224 would fit 128 |
+| optimiser | MuonAuxAdamW, one-cycle, **lr 8e-4 unscaled** (below) | the one choice a one-arm pilot cannot settle |
+| seed | 42, one run | owner's rule |
+| epochs | set from the pilot's throughput and the GPU budget; target 5 passes of 60.9 M | the ME design's scale |
+
+**The learning rate (owner to choose before the pilot).** Evidence on this exact trunk, both at batch 96 on
+one GPU: 8e-4 on Lepidoptera (VD, OT4: 5 M images, 12 k species) and 2e-4 on Pl@ntNet-300K (VD: 4-8 points
+better than 8e-4 there; 306 k images, 1 k species). The small dataset wanted the lower rate; ToL (55 M training
+images, 190 k species) is far closer to Lepidoptera. mini_trainer does not scale lr with world size, so 8e-4 at
+global batch 768 is a lower rate per sample than OT4's. **Recommendation: 8e-4, unscaled.** (The plan's first
+draft said 2e-4 from the Pl@ntNet result; that read the dataset-size difference the wrong way round.)
+
+**Decided 2026-11-16: lr 8e-4, unscaled.** The owner asked for an lr finder, validated on our two datasets
+with measured rates and used on ToL only if credible (`dev/108_lr_finder.py`, RESULTS LF, plots in
+`data/lr_finder/`). Range test from the recipe's initial state, 200 steps, 1e-6 to 1e-1, mini_trainer's own
+training step with gradient accumulation to the recipe's batch:
+
+| dataset | batch | lr at smoothed minimum | minimum/10 | valley | measured |
+|---|---|---|---|---|---|
+| Pl@ntNet-300K (987 species) | 96 | 7.8e-4 | 7.8e-5 | 8.6e-5 | best 2e-4; 8e-4 cost 4-8 points |
+| Global Lepidoptera (12,632) | 96 | 8.7e-4 | 8.7e-5 | 9.1e-5 | 8e-4 trained (VD, OT4) |
+| ToL (190,199; 200 k sampled rows) | 768 | 1.1e-3 | 1.1e-4 | 1.1e-4 | none |
+
+Critical reading. The finder gives the same answer on Pl@ntNet and Lepidoptera, where the measured best rates
+differ 4x, so the difference is a long-horizon effect (a small dataset over 10 epochs) that 200 steps from the
+initial state cannot see; this is the project's rule about cheap proxies again. fastai's suggestion rules land
+near 1e-4 everywhere, 2x below Pl@ntNet's best and 9x below the rate Lepidoptera trained well at, so they are not
+used. The one thing the test does show is that ToL's 8x larger batch and 190 k-species head leave the stability
+edge where it was (raw loss lowest near 6e-4 and rising from 1e-3 on all three). ToL is a large dataset like
+Lepidoptera, so 8e-4, the default, stands.
+
+**Corrections from mt's spec build (2026-11-16).** `lepinet-BU.yaml` weights the loss of three ranks, and the loss
+zips weights with levels, so a seven-rank run would have trained species, genus and family only: the specs set
+`[1] * 7` (trainer log "[1.0 x 7]"). The recipe's standard augmentation includes dihedral turns and vertical flips;
+general photos have an upright orientation, so `dihedral: false` (horizontal flip, rotation up to 15 degrees, zoom
+1.0-1.1, affine_p 0.75 kept), which is what this plan meant by "crop, flip". Warmup counts virtual epochs (four per
+pass): half a virtual epoch in the pilot, 10 % of training (half a pass) in the full run, the campaign's proportion.
+The smoke also asserts identical weights on all ranks after its last step.
+
+### The pilot (one arm, 16-20 Nov)
+
+First a smoke of a few hundred steps (minutes). Then the same recipe on `tol256-pilot` (8.09 M training
+samples), on the 8 B200 planned for the full run, for one pass (about 20-35 min at the expected speed). It must show, before the full run is submitted:
+1. throughput (img/s per GPU and overall) at the full class count, with the head on GPU (1.1 GB, 5.75 GB peak
+   measured with optimiser state);
+2. DDP correctness: the head's gradient sync (about 3 ms per step at 4 GPUs, shard-bench-ddp) and identical
+   weights across ranks after a step;
+3. loss falling at all seven ranks, no non-finite values (fp16 vs bf16: no margin, so mt's default applies);
+4. checkpoint and resume across a job boundary (a multi-day run will be extended by `ucloud q`), and the
+   20-minute log-stall guard;
+5. the evaluation pipeline end to end on the pilot checkpoint (below), so no eval is first written after
+   the full run.
+Its scores are not compared with anything and do not choose anything.
+
+### Evaluation, fixed before training
+
+| what | measure | answers |
+|---|---|---|
+| val and test shards | macro-F1 and accuracy at every rank | does the run train |
+| the 1,810 held-out species | placement: right genus (1,200 species), right family (300 genera), right order (20 families), by the coarse marginals; few-shot species accuracy (1 and 5 shots, class centres) | a backbone's job on taxa it never saw |
+| Rare Species | 1- and 5-shot, BioCLIP-2's protocol (reproduced: 60.4 / 77.0 against 59.5 / 77.2) | comparison with BioCLIP-2 on a decontaminated set |
+| BioCLIP-2's other suite tasks | as published | to be built during training; not a blocker |
+| lepinet's test fold (Lepidoptera) | species macro-F1, against DINOv3 BU trained on Lepidoptera alone (VD) | does breadth cost or help in-distribution (W3 prediction: within 1 point) |
+| AMI trap crops | probe and probe-HO species macro-F1 (north_europe, tta3bm, calibrated by (trap, night)), before any adaptation; trap order accuracy | does breadth help under shift (W3 prediction: +1 to +4 on probe before adaptation) |
+| open-set | C3b's benchmark stratified near / mid / far, each with its best scoring rule | W3 prediction: far gains, near does not; labelled optimistic (novel species not removed) |
+| geometry | congener-neighbour rate (Z7), logged every pass with held-out 5-shot | the taxonomy as geometry at 190 k classes |
+
+### Compute
+
+Measured so far (mt, 2026-11-16): the loader alone reads 26-29 k img/s on a 96-vCPU node (330-490 img/s per
+CPU worker, decode-bound; 256-px shards decode faster than the 384-px benchmark); the 190 k-species head
+costs 1.11 GB (about 4.5 GB with gradients and AdamW states) and its all-reduce +3.0 ms per step at 4 GPUs,
+about 2 % of a step. Not measured: the trunk on shards, and anything at 8 GPUs; the pilot measures both.
+Nearest model number: OT4 (this trunk at 320 px, 1 B200) ran at about 509 img/s, so about 900-1,000 at 224
+(extrapolated). At 8 GPUs and 6,500-8,000 img/s: one pass of the 54.8 M training samples takes 1.9-2.3 h, five
+passes 10-12 h, about 80-100 B200-hours; the pilot a few B200-hours. The full spec goes to the owner with
+the pilot's measured numbers.
+
+### Still to build before the pilot
+
+- **A DDP launcher for shards** (mt): campaign jobs run one process per GPU and the production path reads
+  parquet only. A torchrun job spec (`--nproc_per_node 8 -m mini_trainer.train --input <shard root>
+  --class_spec class_spec.json`, seven levels) with the 20-minute stall guard. DDP on shards has never run end
+  to end, hence the smoke.
+- **class_spec.json** (101 MB) staged next to the shards or mounted, and passed explicitly.
+- **Evaluation on ToL class names** (lepinet side): ToL classes are full taxonomic paths, not GBIF keys, so
+  the trap scorer (keys -> north_europe list -> `flemming.py score`) and the Lepidoptera test fold need a
+  name-to-key map. ToL's Lepidoptera are on COL XR names and lepinet's on legacy keys, so the map goes
+  through `dev/101`'s tables. Also: held-out placement and few-shot, Rare Species and C3b's open-set from a
+  ToL checkpoint. All written and run on the pilot checkpoint, not after the full run.
+
+### Risks written down now
+
+- **The queue's login.** The UCloud refresh token expired twice (30 Aug, 11 Nov) and silently stopped
+  `ucloud q tick`, so `auto_extend` stops working. A multi-day run needs `ucloud q tick; echo $?` checked
+  daily, or `hours` set to the whole run.
+- **A silent freeze** (OT5 attempt 1): the stall guard now stops the job; resume from the last checkpoint.
+- **/work throughput** at 4 GPUs reading 1.8 TiB of shards: measured by mt's shard benchmark; the pilot
+  confirms it at scale.
+- **The levels caveat** (`levels` < 7 truncates the head): not hit by a seven-rank run.
+
+### Not in this run
+
+No margin (ME), no TrivialAugmentWide, no self-training on traps, no held-out-observer list (Z6: the
+observer factor re-ranks nothing), no second seed, no arm E or the A-D factorial.
+
+### Evaluation code for the pilot (2026-11-16)
+
+`dev/109_tol_eval.py`, written ahead of the pilot as the run plan asks; outputs in `data/tol_eval/`.
+- **Map** ToL species -> lepinet legacy keys (dev/101's `name_map.csv`, COL XR name, then legacy name):
+  11,879 of lepinet's 12,041 vocabulary species (98.7 %), 626,118 of the 629,742 test-fold images (99.4 %),
+  475 of 486 trap species (47,320 of 47,905 crops), 1,966 of 1,977 north_europe keys. All 162 unmapped
+  vocabulary species are absent from ToL training (138 not in tol256, 23 below its floor, 1 test fold only),
+  so the map misses nothing ToL trained on. 264 legacy keys share a ToL class with another (COL XR merged
+  them); `relabel` answers with the key that has the most training images. Genus and family keys by majority
+  (169 of 4,450 genus paths split over several keys).
+- **Route** for test fold and traps: `mt_hpredict --data_index index_<set>.json --class_list lepinet.tol.classes`
+  (or `north_europe.tol.classes`, 1,939 classes), then `relabel` to three GBIF-keyed ranks for `score.py` and
+  `flemming.py score`. `map_species.csv` also carries `tol_index` for the logit-level tta3bm path.
+- **Held out**: 89,706 images (at most 50 per species) of all 1,810 species. Placement at genus (1,200
+  species), family (300 genera) and order (20 families) by each rank's argmax, macro over species; 2 of the
+  1,200 have a genus that is not a model class (their trained sibling left in the freeze), reported apart.
+  Few-shot 1 and 5 with BioCLIP-2's SimpleShot, ported from the Rare Species run (60.4 / 77.0).
+- **Rare Species**: the same SimpleShot on the 11,983 images, split by whether the species is a ToL class.
+- **Z7** on the 190 k species prototypes, chunked, raw and centred.
+- Tested: `selftest` (known answers for few-shot, congeners, placement, names), a `relabel` round trip (all
+  three ranks exact), every index's image paths, and `embed` on CPU with OT3 on 16 test-fold images (15 right;
+  768-d head input, prototypes from the cosine head's weight direction). Not run: `embed` on a ToL checkpoint,
+  which waits for the pilot.
+- `embed` defaults to `min(4, effective_cpus())` loader workers (mt's default of one per host core, each with a
+  copy, reached 10 GB at 16 images and was killed; CLAUDE.md's oomd rule). On UCloud pass `--num_workers` with
+  the job's cgroup count.
+
+### Smoke (2026-11-16): passed; measured throughput
+
+tol-smoke (job 12463902, 8 B200, 21 min): train loss falling at all seven ranks over three short epochs (species
+11.29 -> 9.03, kingdom 0.31 -> 0.14); "DDP equality: OK over 8 ranks, 349 tensors"; a stopped launch resumed from
+`checkpoint_last.pth` and finished. **Throughput about 5,650 img/s on 8 B200 (about 710 per GPU)**, below the
+6,500-8,000 assumed above; GPU memory 27-30 GB of 180. Per-epoch boundary (eval, checkpoint, loader respawn) about
+4 min, a slow tail of about 2 min per epoch, 78 s to the first step. Full run at this speed: one pass of 54.8 M
+about 2.7 h, five passes about 14 h, about 110 B200-hours. 710 per GPU is about two thirds of what OT4's 320 px rate
+scales to at 224 px, so the pilot should log GPU utilisation to tell a loader limit from a compute limit before the
+full spec. Pilot submitted: tol-pilot 12464304 (one pass of tol256-pilot, worst case 24 B200-hours).
+
+### Pilot (2026-11-16): passed
+
+tol-pilot (job 12464304, 8 B200): one pass of the pilot set's 8.09 M samples in 41.0 min of training (four virtual
+epochs). Steady 5,709-5,753 img/s overall (714-719 per GPU), flat across epochs; each boundary (eval of 156 k val
+samples, checkpoint, loader respawn) 2.4 min; a tail of about 1.9 min lost at the end of every epoch, fixed in time.
+Losses finite and falling at all seven ranks; val species loss 6.41 -> 3.23, val acc1 5.2 -> 38.1 %, val macro-F1
+0.03 -> 0.34; weights equal on 8 ranks; 28 GB of GPU memory; about 7 B200-hours. mt's reading of the speed
+(arithmetic, not a measurement): compute-bound, since part of the step does not shrink with resolution (Muon's
+Newton-Schulz, the float32 190 k-species head, the gradient all-reduce on 8 GPUs); the full run logs GPU utilisation
+to settle it. Full run as specified (5 passes in 10 virtual epochs): about 14-14.5 h, about 115 B200-hours, 20 h limit
+without auto-extend (worst case 160). The evaluation scripts (`dev/109`) run next on the pilot checkpoint.
+
+**Full run submitted 2026-11-16 15:20** (owner, in mt): tol-full, job 12464522. Pilot weights for the eval test:
+`/12347837/repos/mini_trainer-campaign/tmp-runs/tol_pilot/weights/last.pt` (2.06 GB; loads with `Classifier.build`, seven outputs).
+
+### After the full run: proposed next steps, predictions written before any result (2026-11-16)
+
+Not approved; for the owner. The one-run rule holds: evaluations first, then at most two trainings.
+
+| step | what | cost | prediction |
+|---|---|---|---|
+| E1 | the frozen ToL model against BioCLIP-2 and against raw DINOv3 ConvNeXt-L (its starting point), same protocols: BioCLIP-2's suite (1- and 5-shot species tasks; the five non-species tasks), Rare Species, held-out 1,810 taxa (few-shot and placement) | eval only, a few GPU-hours | ToL model far above raw DINOv3 on species few-shot (+10 or more on the mean); below BioCLIP-2 on the suite mean (3x its data, longer training, text), within 5 points on Insects and Rare Species; further below on the non-species tasks, where a classification objective discards within-class variation (route 5, Z review). BioCLIP-2 has seen the held-out taxa, so that column favours it |
+| E2 | open-set on the held-out taxa: held-out images against val images of trained species, near (genus kept) / mid (genus withheld) / far (family withheld), each scoring rule | eval only | graded near < mid < far, as C3b; far above 0.95. This replaces C3b's benchmark for ToL models, whose novel species were trained on |
+| E3 | the ToL model's Lepidoptera head, no fine-tuning, on lepinet's test fold and the trap probe (dev/109 map) against DINOv3 BU trained on Lepidoptera alone (VD) | eval only | W3's committed predictions stand: test fold within 1 point; probe +1 to +4 before adaptation |
+| E4 | fine-tune the ToL model on global_lepi with VD's recipe (campaign, shards), one run, against VD (same trunk, DINOv3 start) | one run, 1 B200, about 14 h | test fold +0.5 to +1.5 over VD; probe and probe-HO +2 to +5 before any trap adaptation |
+| E5 | Otto's recipe (OT3/OT4: gated labels, TrivialAugmentWide) from the ToL model, one run, against OT4 (same trunk from DINOv3) and OT3 (production) | one run, 1 B200, about 28 h | probe level with OT4 and OT3; probe-HO above OT4 (OT4's weak point was species the adaptation never saw), so a candidate to replace OT3 only if both hold |
+| E6 | the trap order classifier (the order marginal) on the owner's trap order dataset | eval only, when the dataset arrives | |
+
+Order: E1-E3 the day the run lands (they decide whether E4 and E5 are worth running); E4 before E5. A model
+"better as an embedding" means E1's few-shot and placement, not accuracy on its own label set.
+
+**The owner's view on E1 (2026-11-16), recorded beside my prediction so both can be scored.** BioCLIP-2's extra data
+is mostly what our dataset cuts on purpose (the head above the 2,000-per-species cap, the tail below the 50-image
+floor), so it may add little, and our labels may be cleaner (COL XR, rank fixes, decontamination). Its text is
+largely the taxonomy, which our hierarchical head already supervises. The one difference the owner expects could
+matter is training length (epochs), to be measured if E1 shows a gap. So the owner's expectation is that the
+ToL model is level with BioCLIP-2 on species tasks, unless training length decides it. E1-E3 are queued to run as
+soon as tol-full ends (owner, 2026-11-16).
+
+### dev/109 end to end on the pilot checkpoint (2026-11-16): every step runs
+
+The pilot's `last.pt` (one pass of 8.09 M, val species macro-F1 0.34), locally on the shared 5090, 4 loader workers.
+The numbers test the code, not the model.
+- **embed**: held out 89,706 images in about 2 min, Rare Species 11,983; 1,536-d head input. The species
+  prototypes are the head's weight-norm direction (`head.fc.linear.parametrizations.weight.original1`,
+  190,199 x 1,536); the direction is what a cosine neighbour needs, so this is right for Z7.
+- **placement** (macro over species), falling from kingdom to the placement rank as it should. Near (1,200 species):
+  genus 46.9 %, family 70.1, order 80.1, class 94.9, kingdom 98.2. Whole genus (402): family 47.3, kingdom 97.9.
+  Whole family (208): order 41.1, class 83.4, kingdom 97.3. Held-out few-shot 1/5-shot 46.1 / 68.7 %
+  (near 50.9 / 74.0, mid 40.9 / 64.0, far 27.3 / 44.6).
+- **Rare Species** 1/5-shot 42.8 / 60.2 % (BioCLIP-2 in our port 60.4 / 77.0); 356 of its 400 species are ToL classes.
+- **Z7**: nearest prototype a congener 90.2 % (centred 92.2), chance 0.03 %; not comparable with lepinet's Z7
+  (12 k species, DINOv3 BU 74.4).
+- **Test-fold route** on a 3,000-image sample (2,281 species): `mt_hpredict --data_index --class_list
+  lepinet.tol.classes` ran unchanged, `relabel`, then mini_trainer's `dev/lepinet/score.py`: species accuracy
+  55.8 %, macro-F1 0.40 / 0.61 / 0.88 at species / genus / family (macro on a sample this size is noisy).
+- **Bug found and fixed**: `relabel` set `known_label` to "the ToL model can name this label", and `score.py` drops
+  every `known_label` 0 image, so the 1.4 % of test images whose species ToL lacks would have been silently removed:
+  a filtered test fold, about +0.8 points of accuracy here. `known_label` now means lepinet's vocabulary, as for
+  every lepinet model, and those images count wrong; the nameable share is printed only. `flemming.py score` drops nothing, and its `known_label` now
+  means lepinet's vocabulary too, as for lepinet's own trap scores.
+- mt writes two extra columns (`prediction_made`, `correct`); `relabel` drops them, since `correct` is stale
+  after relabelling. mt appends `_1` to an output folder name that is new (`pred_testfold_s3000_1`).

@@ -1273,8 +1273,38 @@ present, congeners first; 1,451 to 1,682 crops wrong under both best rules). It 
 order: list always, estimated prior where no adapted model exists, self-training where it can be
 afforded, with gated labels at natural frequencies if no prior will be applied afterwards.
 
+### Z16, the control for Otto (opened 2026-11-16, before OT6 has trained)
+
+The owner approved the first run of "what would confirm it": OT6, OT3's recipe with the
+pseudo-labels removed and nothing else (mini_trainer session, UCloud 12463508, about 24 h). The run,
+its plan row and its headline predictions live in the Otto entry
+([[2026-11-07-otto-a-production-model-for-ami-traps]], 2026-11-16): OT6 under OT3 by 2 to 6
+calibrated points with list and tta3bm, within 2 with an estimated prior, level or above on
+probe-HO. I would have said within 3; both get scored.
+
+What this entry adds is the part that needs OT6's per-view logits (`calibrated`, `overlap`,
+`discrimination` of `dev/107`, as for OT1), with predictions those lines do not cover:
+- **The headline shrinks as on the other pairs.** One view, full vocabulary, calibrated probe: OT6
+  at 0.50 to 0.58 against OT3's 0.729, a lead of 15 to 23 points that falls to the 2 to 6 above
+  once both have the list and three views.
+- **The same crops.** Of the probe crops OT6 gets wrong and OT3 gets right (one view, full
+  vocabulary), 65 to 80 % are right for OT6 with the list and the EM prior (V2-S 78 %, DINOv3 76 %).
+- **Discrimination, the prediction I am least sure of.** Z10b's pairwise error for OT6 between
+  0.00018 and 0.00035, with OT3 (0.00014) 20 to 60 % lower. DINOv3 says a large backbone gains
+  little there; OT1 against Otto says accurate labels gain a lot, but that was against bad labels,
+  not against none.
+- **The test fold does not move** (within 0.3 points of OT3's), as for st26.
+
+What would make me narrow finding 4b: OT6 with list, estimated prior and tta3bm more than 5 points
+under OT3 with the list on probe. Then self-training with gated labels on this backbone buys what
+no prior gives, and 4b holds for the campaign's st26 recipe only. Both models are one seed; three
+seeds of an unadapted V2-S span 0.5 points under that rule, so a gap above 2 would be read as real.
+
 ## Log
 
+- 2026-11-16: section 8 committed and pushed the evening before as abd3ccf and reported to the
+  `lepinet` session. The owner approved the control for Otto (OT6, submitted by the mini_trainer
+  session); Z16's predictions written before it trained. Not committed.
 - 2026-11-15, evening: second batch committed and pushed as b63eeb6 (this session's hunks). The
   owner asked whether self-training is tackling label shift and not domain shift: section 8, Z9 to
   Z15. Of its predictions: held Z9a, Z9c for unadapted models, Z9d on the letter, Z11, Z12, Z13

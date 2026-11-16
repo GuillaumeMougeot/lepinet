@@ -422,3 +422,13 @@ student learns TTA's output at 1x cost.
     adaptation never saw, which OT4 (DINOv3) did not. More gain would need new data (more trap nights, the 50 M
     European crops) or a different lever, not another round of the same.
   - Under the pre-fixed rule OT4 0.692, OT5 0.688 and OT3 0.674 are inside each other's intervals: no winner by rule.
+- 2026-11-16, owner: **OT3 is Otto for now.** One control approved: **OT6**, OT3's recipe with no pseudo-labels
+  (the merge block removed, nothing else; job 12463508, 1 B200; eval queued). It is the missing like-for-like
+  control for lepinet-fable's finding that most of self-training's probe gain is a fauna prior that a regional
+  list and an estimated site prior give without training ([[2026-11-13-beyond-scaling-what-would-make-a-better-biodiversity-backbone]],
+  Z9-Z15). mt's run-one.sh now stops a job whose train log has not grown in 20 minutes.
+  - **Prediction, before the result** (north_europe, tta3bm, species macro-F1, calibrated by (trap, night) / zero):
+    OT6 below OT3 on probe by 2 to 6 calibrated points (OT3 0.749), as for the two like-for-like pairs with the
+    list and tta3bm (+5.8 V2-S, +2.2 DINOv3); far below at zero threshold (OT3 0.674), where absent species
+    count. With list and an estimated prior, within 2 calibrated points of OT3. On probe-HO, level with OT3 or
+    above (0.562). If OT6 with list and prior reaches OT3 on probe, the trap recipe could drop self-training.
