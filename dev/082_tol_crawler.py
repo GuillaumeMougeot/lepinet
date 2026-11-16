@@ -159,7 +159,8 @@ CONTACT = os.environ.get("TOL_CRAWLER_CONTACT", "guillaumemougeot1@gmail.com")
 # mediaphoto.mnhn.fr, 3.6 %) return 403 to everything except a literal browser UA string. Those are
 # explicit bot blocks, and the correct response is `--on-blocked stop` plus an access request to the
 # institution, not a better disguise. See `blocked_hosts.json` written by `report`.
-USER_AGENT = f"Mozilla/5.0 (compatible; lepinet-tol-crawler/1.0; +mailto:{CONTACT})"
+# TOL_CRAWLER_CONTACT="" sends the bare name with no contact.
+USER_AGENT = f"Mozilla/5.0 (compatible; lepinet-tol-crawler/1.0{'; +mailto:' + CONTACT if CONTACT else ''})"
 BASE_HEADERS = {
     "User-Agent": USER_AGENT,
     "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",

@@ -370,6 +370,16 @@ def add(a):
         rows.append(t[t["status"] == "ok"])
     new = pd.concat(rows, ignore_index=True).drop_duplicates("uuid")
     print(f"{len(new):,} images fetched ok, from {sum(p.with_suffix('.meta.parquet').exists() for p in parts)} of {len(parts)} parts")
+    # A row the crawler recovered from disk (restart, --offline) has content_hash "" and width/height 0:
+    # it does not reopen the file. "" is not a hash (every such row matched every other as a pixel
+    # duplicate, 31,866 of retry4's 111,220), so it becomes missing; the size comes from the JPEG header.
+    rec = new["content_hash"].fillna("").eq("")
+    new.loc[rec, "content_hash"] = None
+    from PIL import Image
+    for i in new.index[rec & new["width"].fillna(0).eq(0)]:
+        with Image.open(fix_dir / "images" / new.at[i, "path"]) as im:
+            new.at[i, "width"], new.at[i, "height"] = im.size
+    print(f"{int(rec.sum()):,} recovered from disk: no content_hash, size read from the file")
     want = pa.array(new["uuid"].tolist())
 
     def by_uuid(path: Path, cols: list[str]) -> pd.DataFrame:
@@ -397,13 +407,23 @@ def add(a):
         d.loc[gaps, c] = d.loc[gaps, c].fillna(fill)
     print(f"{int(gaps.sum()):,} added rows lacked a rank; {sum(x is not None for x in got):,} filled from "
           f"their genus; still lacking one: {int(d[RANKS[1:5]].isna().any(axis=1).sum()):,}")
-    d["taxon_rank"] = "species"
-    d["path"] = (d["species"].map(folder_name) + "/" + d["uuid"] + ".jpg").to_numpy()
+    # A one-word key is a record not identified to species, as in `plan` (`_transform`): species empty,
+    # taxon_rank genus (family where the genus field holds the family). Marking every added row "species"
+    # put 42,767 genus-level rows (3,311 names such as "Bryum") into species training.
+    key = d["species"].fillna("")
+    one = ~key.str.contains(" ")
+    genus = d["genus"].where(~(one & d["genus"].isna()), key)
+    rank = np.where(~one, "species", np.where(genus == d["family"], "family", "genus"))
+    d["genus"] = genus.where(rank != "family", None)
+    d["taxon_rank"] = rank
+    d["path"] = (key.map(folder_name) + "/" + d["uuid"] + ".jpg").to_numpy()
+    d["species"] = key.where(~one, None)
+    print(f"added rows by rank: {pd.Series(rank).value_counts().to_dict()}")
     for c in SHARE.CATALOG_COLS[3:]:
         d[c] = cat[c].reindex(d["uuid"]).to_numpy()
     for c in SHARE.PROVENANCE_COLS.values():
         d[c] = prov[c].reindex(d["uuid"]).to_numpy() if c in prov else None
-    d["source"] = "fix_ranks"
+    d["source"] = a.source
     for c in ("data_source", "source_id", "url", "content_hash", "width", "height", "bytes"):
         d[c] = new[c].to_numpy()
     d["gbif_id"] = np.where(d["data_source"] == "gbif", d["source_id"], None)
@@ -671,6 +691,7 @@ if __name__ == "__main__":
     p.add_argument("--out", default="/data/au761367/tol256s/fix/manifest", help="delta: the new manifest")
     p.add_argument("--cap", type=int, default=2000, help="delta: images per species, as crawled")
     p.add_argument("--log-mem", action="store_true", help="print resident memory after each stage")
+    p.add_argument("--source", default="fix_ranks", help="add: the `source` value of the added rows")
     a = p.parse_args()
     Path(a.build).mkdir(parents=True, exist_ok=True)
     {"catalog": catalog, "plan": plan, "apply": apply, "check": check, "delta": delta, "add": add, "colxr": colxr}[a.step](a)

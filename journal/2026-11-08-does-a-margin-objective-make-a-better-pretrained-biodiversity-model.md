@@ -197,3 +197,151 @@ Legacy GBIF Backbone errors: [[2026-11-03-the-training-labels-inherit-gbif-backb
   asserts it; not lepinet's `marginal_arcface`, which applied the margin before marginalising). The head at 192 k
   classes and seven ranks: 1.1 GB, 5.75 GB GPU peak with optimiser state. Open: /work throughput and DDP head
   sync (benchmark jobs 12452221 and after).
+- 2026-11-10: ToL freeze checks (`dev/103_tol_freeze.py`, build dir `tol256s/freeze_build`), steps 1, 7, 8 and 4
+  of the freeze list.
+  - Decode: all 65,602,738 images decode; 0 corrupt, so no integrity exclusions.
+  - Names: 9,133 looked up in COL XR (5,536 Lepidoptera outside `dev/101`'s tables, 3,597 species with an
+    empty rank after filling from the same genus or family in the dataset). Accepted 7,922 (639 k rows):
+    exact species match, subgenus ignored, not an ambiguous synonym, kingdom equal to the dataset's, and order
+    Lepidoptera for a Lepidoptera name. 1,211 unresolved (71 k rows) keep their names. The kingdom check
+    rejected 11 (e.g. *Euglypha*: Protozoa here, Chromista in COL XR), the order check 1 (*Enantia spinifera*
+    came back as a flatworm).
+  - Shortfall: the crawl selected 94.3 M rows; 65.5 M are held. Of the 28.8 M missing, about 20 M sit on hosts
+    that refused us (403 bot blocks: mediaphoto.mnhn.fr, observation.org, EOL, naturalis, ALA, ...), which only
+    an access request fixes; 7.7 M on hosts dead on 1-3 Oct; 0.76 M retryable on open hosts; 0.6 M permanent
+    (404, size). A 5-request probe per dead host found 6 serving images again (Harvard, cch2, Colorado,
+    TACC, biodiversity.bt, rdu.unc). Re-fetch `tol256s/retry4` (workstation, plain UA): 725 k rows, species
+    below 50 images first (190 k rows, 19,219 species; 2,000 would reach 50), then under half of target
+    (535 k rows, 12,756 species). Arrivals by Thursday evening go into the freeze.
+  - My mistake: the first `shortfall` used `np.isin` against the 65 M held hashes, which re-sorts them for
+    each of 2,574 manifest parts; it ran 20 h on one core at 9 GB without passing the first part. With
+    `searchsorted` on the sorted array it took minutes.
+  - Held-out taxa (owner's choice): seeded draw (seed 20261113), stratified by kingdom share, common taxa only
+    (each species at least 200 usable images), each keeping a trained sibling, Lepidoptera not drawn so all of
+    lepinet's families stay in pretraining: 1,200 species (genus keeps a sibling), 300 whole genera (402
+    species; family keeps a sibling genus), 20 whole families (208 species; order keeps two others). 1,810
+    species (0.94 %), 1.50 M images (2.4 % of usable). List `freeze_build/heldout_taxa.csv`, draw
+    `freeze_build/heldout_draw.py`.
+  - Benchmark overlap: the dataset holds no EOL rows (EOL refused the crawl), so Rare Species' EOL content ids
+    match nothing; the same photographs arrive through GBIF instead. A 64-bit difference hash within the
+    same genus (`dev/103 bench`, 1.47 M dataset images in Rare Species' 316 genera, 5 min) finds 3,775 at
+    distance 0 and 5,883 within 6 bits, covering 4,995 of the 11,983 benchmark images (42 %). Pairs checked by
+    eye: up to 3 bits the same photograph, except museum specimen sheets on one printed template (QR code,
+    ruler, label) that match different specimens at 3-5 bits; 6-7 bits mixed. Cutoff 6 bits: the false
+    positives cost a few hundred of 62 M images, a missed duplicate biases every Rare Species score. Any
+    Rare Species number from a model trained on the pre-freeze ToL is contaminated.
+  - First dry run (`dev/103 plan`, before the re-fetched rows): 65,602,738 rows; 17,963 Lepidoptera files
+    move to their accepted names (138 new folders); exclude adds heldout_taxa 1,497,064, benchmark_overlap
+    5,834, bad_kingdom 235, below_floor +735. Usable species rows 60.85 M in 190,102 species (135,355 with
+    50 or more), plus 2.60 M genus- and 7.5 k family-level rows. 157 species had every observation hashed
+    into val or test; the plan now gives such a species its lowest-hash observation in train.
+- 2026-11-11: second dry run (`freeze_build/plan`): identical numbers, `species_moved_to_train` 157, and a pass
+  over the output finds every one of the 190,125 usable species keys (full path) with train rows. Owner
+  approved the apply (after the re-fetch fold-in, delta shown first), the upload (pilot first to
+  `/12383016/tol256-pilot`, then `/12383016/tol256`, nothing replaced) and the pilot caps (50 train, 5 val,
+  5 test per species).
+  - Harvard (data.huh) in retry4: 138,683 of its first 150,000 rows rejected by the 25 MB cap. They are 50 MP
+    baseline JPEGs of 25-38 MB on Harvard's S3 (`huhspecimenimages/JPG/<barcode>.jpg`); the bucket has no smaller
+    rendition we could find (an older `herbaria2/.../full/` set has 250 px thumbs, below 256), and baseline
+    encoding rules out reading a low-resolution prefix. Worth: 957 species reach 50 only with Harvard. The
+    narrowest pull (905 species, 12,847 images, about 0.4 TB; `tol256s/retry5`) ran at 6 images a minute, about
+    41 h, so it was stopped after 5 minutes (owner: Harvard is known slow, give up quickly). Its 32 images are
+    kept. These species stay below the floor in this freeze.
+  - Consumer check on the smoke set. mini_trainer (`feature/lepinet-integration`; shard format unchanged since
+    the pinned 6f6a3cf): `verify --full` passes, the 7-rank class spec loads with its hierarchical parser, and
+    `ShardDataset` streams every val/test sample with 7-rank labels. lepinet: `train.parquet` had no
+    `image_path`, so lepinet built `<speciesKey>/<filename>` from the full-path key and found 0 of 2,636 images;
+    `dev/103 train` now writes `image_path` (relative to `images/`) and lepinet finds all of them. lepinet has no
+    shard reader and its `gen_df` holds about 33 GB per copy of the 61 M-row frame (three copies), so it reads
+    the freeze from the image tree on the workstation, or a subset; the uploaded shards are for mini_trainer.
+- 2026-11-12: re-fetch stopped at 2 images/s (owner: not worth it against 63 M); an `--offline` pass recorded
+  the 31,807 images on disk that unfinished parts had not written to their meta. 111,220 images kept (TACC
+  39 k, unimus 28 k, Colorado 19 k, Harvard 15 k, others), all decode, none within 6 bits of Rare Species.
+  The fold-in found three defects, each in my code or the crawler's, none in the shared copy yet:
+  - The crawler records a row recovered from disk with `content_hash` "" and width/height 0. `dev/102 add`
+    took "" for a hash, so all 31,866 recovered rows matched each other as pixel duplicates; now null, with the
+    size from the file (27 real pixel duplicates remain). The original crawl has 1,636,542 such rows: their
+    duplicate check was right, but their size was 0; `dev/103 sizes` read them and the plan fills them in.
+  - `dev/102 add` marked every added row species-rank, so 42,767 genus-level rows (3,311 one-word names such as
+    *Bryum*) would have entered species training; now species empty and rank genus, as `dev/102 plan` does.
+  - The plan's "every species has a train row" was keyed by kingdom|species, training by full path, so two
+    names on two paths (*Dianella*, *Lycoperdon*) had a path with no train row; now keyed by full path.
+  - Checked and fine: the floor. `below_floor` means the crawl would not have selected the species (catalog
+    under 50), not fewer than 50 held; none of the 18,066 species with added rows has below-floor rows.
+- 2026-11-12: final plan (`freeze_build/plan_final`, after the three fixes) checked and applied.
+  - Checks on `metadata_final.parquet`: all 190,199 usable species paths have train rows; 0 rows of width 0;
+    0 empty hashes (1,668,381 null: no hash known); 0 usable one-word names at species rank; usable genus-rank
+    rows 2,600,088 -> 2,642,775 (+42,687).
+  - Against dry run 2: rows 65,602,738 -> 65,713,958 (+111,220); usable 63,454,710 -> 63,564,904 (+110,194;
+    Plantae train +95,392, every other kingdom under +2.2 k); held-out taxa +999, pixel duplicates +27, all
+    other exclusions unchanged (below_floor 76,473, benchmark_overlap 5,834); 17,963 file moves; 148 species
+    moved to train (was 157, now keyed by full path).
+  - Applied to `/data/datasets/tol256` (owner approval of 2026-11-11, delta shown first): 17,963 files linked
+    at new paths, 111,220 re-fetched files linked in, `metadata.parquet` swapped atomically (previous copy
+    hard-linked at `freeze_build/plan_final/metadata_before.parquet`), 17,963 old links removed, 139 emptied
+    folders removed. Log: `freeze_build/apply.log`, `plan_final/applied.tsv`.
+  - `dev/102 check` on the shared copy: 65,713,958 rows, 0 paths missing, 0 duplicate paths, 0 extra files;
+    201,694 species; tree as in the plan. New: 64 lowercase one-word folders (88 rows). They are retry4 rows
+    whose catalog key held only the epithet (*morhua*, *natrix*, *vulgata*); my one-word rule in `add` read
+    the epithet as a genus-level name, so they sit at genus rank with the right genus and empty species.
+    Not in training (species rank only); left as a known defect in the README rather than a second swap.
+  - Version **tol256-v1**: `metadata.parquet` sha256 `cea244d4...c5021e8d`; README rewritten (split, every
+    exclusion, `train/`, history); `train/` (hard links of `freeze_build/train`) and `heldout_taxa.csv`
+    added beside it.
+  - `dev/103 train`: 60,914,607 rows in 190,199 species (set 2: 54,818,719, 1: 3,050,136, 0: 3,045,752), 0
+    species without train rows; classes 190,199 / 40,797 / 5,039 / 1,144 / 313 / 64 / 7 (species to
+    kingdom); `none:` classes for missing ranks: 77 families, 751 orders, 202 classes, 5 phyla.
+  - Pilot (50/5/5 per species and set): 9,337,505 images, about 70 GB at the smoke set's 7.6 KB a sample;
+    `dev/103 shards --pilot` into `tol256s/shards/tol256-pilot`, `dev/104 --free --watch` to
+    `/12383016/tol256-pilot`.
+  - My mistake, caught before any upload: the pilot picked each species' 50 rows by the same uuid hash that
+    orders the stream, so large species kept only low-hash rows and the stream ran from head species to tail
+    species (first of 64 buckets 856 k rows in 131 k species, last 28 k rows in 21.5 k species; even buckets
+    would hold 126 k). Each shard would have held a different species mix. The pilot now picks by a second,
+    independent hash (`pilot<seed>`); the full set selects nothing and was never affected. Local pilot shards
+    deleted and rebuilt.
+  - UCloud's files API returned 502 for every drive from 15:44 (login, drive list and the job queue worked);
+    nothing was created on `/12383016`. The pilot upload now waits for the files API and resumes from its
+    ledger (`freeze_build/upload_pilot.sh`).
+- 2026-11-13: my mistake: the upload script's outage probe called `ucloud` by name, which is not on the
+  systemd service's PATH, so it reported "files API down" all night. The outage was real at 15:44, but I
+  cannot tell when it ended; at 09:15 the API answered. Fixed with the absolute path; upload started 09:20.
+  - Pilot rebuilt with the independent pick hash: 64 buckets of 125,734-127,108 rows, first and last
+    each about 90.5 k species. 9,337,505 samples in 262 shards (226 train, 18 val, 18 test), 260.5 GiB:
+    29 KiB a sample, not the 7.6 KiB I took from the smoke set (my 70 GB estimate was wrong by 3.7x).
+  - Upload rate 108 MiB/s (first batch: 16 shards, 16.1 GiB in 152 s). Pilot about 41 min; full set
+    about 1.66 TiB, about 4.5 h of upload. Shard build about 13 k samples/s (full set about 80 min), so the
+    upload sets the pace. Full build started; its upload (`freeze_build/upload_full.sh`) starts after the
+    pilot's, so the two do not share bandwidth.
+  - Pilot uploaded 09:20-10:03: 262 shards and `manifest.json` at `/12383016/tol256-pilot`, 261.5 GiB at
+    105.9 MiB/s; every remote `.tar` has the manifest's byte size (sha256: mini_trainer `verify --full` where it is
+    read). Paths, format, branch and the levels/num_classes caveat sent to mini-trainer-f4. Full upload to
+    `/12383016/tol256` started 10:03.
+  - mini-trainer-f4 confirmed the levels caveat at c4731a6: with `levels` < 7, `parse_class_spec` keeps the
+    7-entry `num_classes`, so the loss gets 7 levels against a truncated head; expected to crash at the first
+    step, not to mistrain silently. A 7-level run is unaffected. Fix (slice `num_classes` to `levels`, with a
+    test) deferred until a run with fewer levels is planned.
+- 2026-11-13 10:30: the full upload's websocket dropped mid-batch after 144 verified shards. UCloud kept the
+  in-flight files as partials (e.g. `train/000144.tar`, 543 MB of 1.07 GB); the retry, with overwrite off, landed
+  the full files beside them as `000144(1).tar`, and the size check stopped the run (8 such pairs). My
+  oversight: `dev/104` assumed an interrupted upload leaves nothing behind. The shard build then sat at its
+  200 GB floor until 2026-11-15, with `/data` at 98 %.
+- 2026-11-15: the owner approved deleting the partials. The 8 partials were trashed (drive Trash), the 8
+  full `(1)` copies renamed to their names (sizes equal to local), no `(1)` left. `dev/104` now overwrites a
+  remote file only when it is not in the ledger and smaller than the local one (its own interrupted
+  upload); a larger remote file stops the run. Upload resumed 12:17 at 105 MiB/s.
+  - Full shard build done: 60,914,607 samples in 1,832 shards (1,648 train, 92 val, 92 test), 1.79 TiB.
+  - 12:37 the uploader was OOM-killed at its 3 GB cgroup cap after 272 shards (cause not reconstructed; at
+    6 GB its anon memory is 116 MB, the rest reclaimable page cache from reading the tars, no OOM events).
+    Restarted at 6 GB; the new rule overwrote the 8 partial files the kill left, and the batch verified.
+    Remaining 1,512 shards, about 4 h.
+  - Full set complete 17:29: 1,832 shards and `manifest.json` at `/12383016/tol256`; every remote `.tar` has
+    the manifest's byte size, no renamed copies; 93.8 MiB/s over the run. Local `.tar` files all freed
+    (`/data` back to 1.9 TB free). mini-trainer-f4 told; sha256 is its `verify --full`.
+  - mini-trainer-f4: `verify --full` (sha256 of every shard) runs in a UCloud job where the shards are read;
+    it will put that job to the owner as the first step of the ToL run, not before.
+  - Full check passed where training reads it (mini-trainer-f4, owner-approved UCloud job 12462945, 1 MIG
+    slice, 6 vCPU, `/12383016/tol256` mounted read-only): per-shard sample counts, every sample's tar header
+    and CRC, every tar's SHA-256 against `manifest.json`: "60,914,607 samples OK (all 1832 shards)", exit 0,
+    1.788 TiB in 6.1 min. The 8 replaced files pass. Log:
+    `/12347837/repos/mini_trainer-campaign/tmp-runs/tol256_verify/verify.log`. TF closed.
