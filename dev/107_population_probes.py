@@ -35,8 +35,11 @@ Journal: journal/2026-11-13-beyond-scaling-what-would-make-a-better-biodiversity
   invariance     Z11: recall per species on the test fold against the probe crops, one model.
   overlap        Z13: crop by crop, whether the errors self-training repairs are the ones a prior repairs.
   newsite        Z15: each site as a new site, on the calibrated macro-F1 of its own probe crops.
+  tolgap         Z17: the test-fold gap between the ToL model's Lepidoptera head and VD, by group of species.
+  frozen_index   Z20: support and query images for comparing frozen encoders on Lepidoptera.
+  frozen         Z20: nearest class mean on the embeddings of dev/109 `embed`, test fold and probe.
 
-Run from the repo root:  .venv/bin/python dev/107_population_probes.py {observer,prior,ghosts,presence,siteprior,geometry,siteprior2,siteprior3,observers,congeners,severity,calibrated,discrimination,invariance,overlap,newsite}
+Run from the repo root:  .venv/bin/python dev/107_population_probes.py {observer,prior,ghosts,presence,siteprior,geometry,siteprior2,siteprior3,observers,congeners,severity,calibrated,discrimination,invariance,overlap,newsite,tolgap,frozen_index,frozen}
 """
 from __future__ import annotations
 
@@ -930,6 +933,9 @@ def discrimination(args) -> None:
     Mean of 1 - AUROC over pairs of species with at least 5 probe crops; per species, the mean over
     its pairs."""
     rows, per = [], []
+    common = None   # --common: only species every folder's model can name (models with different vocabularies)
+    if getattr(args, "common", False):
+        common = set.intersection(*[set(json.load(open(LOGITS / item.split("=")[1] / "keys.json"))) for item in args.folders.split(",")])
     for item in args.folders.split(","):
         name, folder, vname = item.split("=")
         views = TTA3BM if vname == "tta3bm" else ["r0"]
@@ -939,7 +945,7 @@ def discrimination(args) -> None:
         held = set(meta.label[meta.species_heldout.to_numpy()])
         counts = pd.Series(y).value_counts()
         col = {k: i for i, k in enumerate(keys)}
-        species = sorted(k for k in counts.index[counts >= 5] if k in col)
+        species = sorted(k for k in counts.index[counts >= 5] if k in col and (common is None or k in common))
         cols = np.array([col[k] for k in species])
         z = np.zeros((len(probe_rows), len(cols)), np.float32)
         for v in views:
@@ -1123,6 +1129,182 @@ def newsite(args) -> None:
     res.to_csv(OUT / "z15_newsite.csv", index=False)
 
 
+E3 = Path("/data/au761367/otto_eval/e3")   # the lepinet session's E3 files (W3), read only
+
+
+def _class_f1(path: Path) -> tuple[pd.Series, pd.Series, pd.Series]:
+    """Per-class F1 at zero threshold over the union of labelled and predicted species (mini_metrics'
+    convention), with each class's labelled and predicted counts, from a scorer's predictions.csv."""
+    d = pd.read_csv(path, usecols=["level", "label", "prediction"])
+    d = d[d["level"] == 0]
+    nl, npr = d["label"].value_counts(), d["prediction"].value_counts()
+    classes = nl.index.union(npr.index)
+    tp = (d["label"] == d["prediction"]).groupby(d["label"]).sum().reindex(classes, fill_value=0)
+    nl, npr = nl.reindex(classes, fill_value=0), npr.reindex(classes, fill_value=0)
+    return 2 * tp / (nl + npr), nl, npr
+
+
+def tolgap(args) -> None:
+    """Z17: the test-fold gap between the ToL model's Lepidoptera head (E3, line 1) and VD, split over groups of
+    species. Macro-F1 is a mean over classes, so each group's share of the gap is exact."""
+    m = pd.read_csv(ROOT / "data/tol_eval/map_species.csv")
+    cnt = pd.read_csv(OUT / "tol_train_counts.csv").set_index("tol_class")["tol_n_train"]
+    m["tol_n"] = m["tol_class"].map(cnt)
+    m = m.set_index("speciesKey")
+    f_t, nl, np_t = _class_f1(E3 / "tol/e3_testfold/line1/predictions.csv")
+    f_v, nl_v, np_v = _class_f1(E3 / "dinov3_bu_s42_test/e3/line1/predictions.csv")
+    assert (nl[nl > 0].sort_index() == nl_v[nl_v > 0].sort_index()).all()
+    print(f"macro-F1 recomputed: ToL {f_t.mean():.4f} over {len(f_t):,} classes, VD {f_v.mean():.4f} over {len(f_v):,} "
+          f"(sheet: 0.8751, 0.9120); predicted-only classes: ToL {(nl.reindex(f_t.index) == 0).sum()}, "
+          f"VD {(nl_v.reindex(f_v.index) == 0).sum()}")
+    lab = nl[nl > 0].index
+    d = pd.DataFrame({"tol": f_t.reindex(lab), "vd": f_v.reindex(lab), "n_test": nl.reindex(lab)}).join(
+        m[["how", "n_keys_on_class", "n_train", "tol_n", "tol_class"]])
+    d["pred_by_tol"] = np_t.reindex(lab, fill_value=0)
+    shared = d["n_keys_on_class"] >= 2
+    d["group"] = np.where(d["how"] == "unmapped", "1 no ToL class (never trained)",
+                 np.where(shared & (d["pred_by_tol"] == 0), "2 shares a ToL class, the key ToL never answers",
+                 np.where(shared, "3 shares a ToL class, the key ToL answers", "one to one")))
+    ratio = d["tol_n"] / d["n_train"]
+    one = d["group"] == "one to one"
+    bins = pd.cut(ratio[one], [0, 0.5, 0.9, 1.1, 2, 1e9], labels=["4 one to one, ToL images < 0.5x lepinet's", "5 one to one, 0.5-0.9x",
+                                                                   "6 one to one, 0.9-1.1x", "7 one to one, 1.1-2x", "8 one to one, > 2x"])
+    d.loc[one, "group"] = bins.astype(str)
+    rows = []
+    for g, x in list(d.groupby("group")) + [("all labelled species", d), ("one to one, all", d[one])]:
+        rows.append({"group": g, "species": len(x), "test images": int(x["n_test"].sum()),
+                     "lepinet train images, median": x["n_train"].median(), "ToL train images, median": x["tol_n"].median(),
+                     "F1 ToL": x["tol"].mean(), "F1 VD": x["vd"].mean(),
+                     "gap, points on these species": 100 * (x["tol"].mean() - x["vd"].mean()),
+                     "share of the total gap, points": 100 * (x["tol"].sum() / len(f_t) - x["vd"].sum() / len(f_v))})
+    res = pd.DataFrame(rows)
+    pd.set_option("display.width", 250)
+    print(res.round(3).to_string(index=False))
+    print(f"total gap {100 * (f_t.mean() - f_v.mean()):.2f} points; of it, the denominators (predicted-only classes) "
+          f"{100 * (d['vd'].sum() / len(f_v) - d['vd'].sum() / len(f_t)):.2f}")
+    # one-to-one species by lepinet training count, and by how much ToL's count differs
+    x = d[one].copy()
+    x["train bin"] = pd.cut(x["n_train"], [0, 100, 200, 500, 1000, 1e9], labels=["50-100", "100-200", "200-500", "500-1000", "> 1000"])
+    print(x.groupby("train bin", observed=True).agg(species=("tol", "size"), tol=("tol", "mean"), vd=("vd", "mean"),
+                                                    ratio=("tol_n", lambda s: (s / x.loc[s.index, "n_train"]).median())).round(3).to_string())
+    res.to_csv(OUT / "z17_tolgap.csv", index=False)
+    d.to_csv(OUT / "z17_tolgap_per_species.csv")
+
+
+Z20 = OUT / "z20"
+
+
+def frozen_index(args) -> None:
+    """Z20, step 1: the images three frozen encoders are compared on. Support: 10 training images of each of
+    lepinet's 12,041 vocabulary species. Queries: up to 8 test-fold images per species whose GBIF occurrence is
+    outside ToL-200M (unseen by BioCLIP-2; the ToL model excluded the whole fold). The trap crops come from
+    data/tol_eval/index_trap.json. Embed with dev/109 `embed --index data/population_probes/z20/index_global.json`."""
+    vocab = pd.read_csv(ROOT / "data/tol_eval/map_species.csv")
+    vocab = set(vocab.loc[vocab["vocab"], "speciesKey"].astype(str))
+    meta = pd.read_parquet(META, columns=["gbifID", "speciesKey", "filename", "set"])
+    meta["speciesKey"] = meta["speciesKey"].astype(str)
+    meta = meta[meta["speciesKey"].isin(vocab)]
+    clean = set(pd.read_parquet(ROOT / "data/tol_overlap/test_ids_clean_of_tol.parquet")["gbifID"])
+    sup = meta[meta["set"] != "0"].groupby("speciesKey", group_keys=False).sample(n=10, random_state=0).assign(role="support")
+    q = meta[(meta["set"] == "0") & meta["gbifID"].isin(clean)].sample(frac=1.0, random_state=0)
+    q = q[q.groupby("speciesKey").cumcount() < 8].assign(role="query")
+    side = pd.concat([sup, q], ignore_index=True)
+    side["path"] = [str(ROOT / "data/global/images" / k / f) for k, f in zip(side["speciesKey"], side["filename"])]
+    Z20.mkdir(parents=True, exist_ok=True)
+    side[["path", "role", "speciesKey"]].to_parquet(Z20 / "index_global.parquet")
+    n = len(side)
+    json.dump({"path": side["path"].tolist(), "label": [["-1"] * 7] * n, "class": [0] * n, "split": ["test"] * n},
+              open(Z20 / "index_global.json", "w"))
+    print(f"support {len(sup):,} images of {sup['speciesKey'].nunique():,} species; queries {len(q):,} images of "
+          f"{q['speciesKey'].nunique():,} species (clean test-fold images of the vocabulary: "
+          f"{int(((meta['set'] == '0') & meta['gbifID'].isin(clean)).sum()):,})")
+
+
+def _ncm(support: np.ndarray, sy: np.ndarray, query: np.ndarray, classes: np.ndarray) -> np.ndarray:
+    """SimpleShot as dev/109 `few_shot`: L2-normalise, subtract the support mean, L2-normalise, class centroids,
+    nearest centroid (Euclidean). Returns the predicted class of each query, among `classes`."""
+    n2 = lambda x: x / np.linalg.norm(x, axis=1, keepdims=True)  # noqa: E731
+    s, q = n2(support), n2(query)
+    mu = s.mean(0)
+    s, q = n2(s - mu), n2(q - mu)
+    idx = pd.Series(np.arange(len(classes)), index=classes)
+    code = idx.reindex(sy).to_numpy()
+    keep = ~np.isnan(code)
+    centre = np.zeros((len(classes), s.shape[1]), np.float32)
+    np.add.at(centre, code[keep].astype(int), s[keep])
+    centre /= np.bincount(code[keep].astype(int), minlength=len(classes))[:, None]
+    cn = (centre ** 2).sum(1)
+    return classes[np.concatenate([(cn[None] - 2 * q[i:i + 2048] @ centre.T).argmin(1) for i in range(0, len(q), 2048)])]
+
+
+def frozen(args) -> None:
+    """Z20, step 2: nearest class mean on frozen embeddings (--embs name=global folder=trap folder,...), 12,041-way on
+    the clean test-fold queries and on the probe crops (full vocabulary and the regional list). Beside them, the
+    trained heads of E3 on the same images (ToL's own head, VD, OT3)."""
+    side = pd.read_parquet(Z20 / "index_global.parquet")
+    sup, qry = (side["role"] == "support").to_numpy(), (side["role"] == "query").to_numpy()
+    sy, qy = side.loc[sup, "speciesKey"].to_numpy(), side.loc[qry, "speciesKey"].to_numpy()
+    classes = np.array(sorted(set(sy)))
+    ne = set(open(NE_LIST).read().split())
+    in_list = np.array([k in ne for k in classes])
+    lab = trap_preds("C3b-shift")[["image_path", "label", "split"]]
+    lab["path"] = [str(ROOT / "data/flemming/images" / x) for x in lab["image_path"]]
+    lab = lab.set_index("path")
+    held = pd.read_parquet(GROUPS, columns=["image_path", "species_heldout"]).set_index("image_path")["species_heldout"]
+    rows = []
+
+    def add(name, kind, pq_, pt_full, pt_list, ty, ho):
+        f, r, _ = f1_all(qy, pq_, np.ones(len(qy), bool))
+        row = {"model": name, "readout": kind, "test fold (clean): accuracy": (pq_ == qy).mean(), "macro-F1": f}
+        for tag, pt in (("full vocabulary", pt_full), ("regional list", pt_list)):
+            if pt is None:
+                continue
+            ft, _, _ = f1_all(ty, pt, np.ones(len(ty), bool))
+            row.update({f"probe, {tag}: accuracy": (pt == ty).mean(), f"probe, {tag}: macro-F1": ft,
+                        f"probe-HO, {tag}: accuracy": (pt == ty)[ho].mean()})
+        rows.append(row)
+        print({k: (round(v, 4) if isinstance(v, float) else v) for k, v in row.items()}, flush=True)
+
+    ty = ho = tp = None
+    for item in args.embs.split(","):
+        name, gdir, tdir = item.split("=")
+        e = np.load(Path(gdir) / "embeddings.npy").astype(np.float32)
+        assert json.load(open(Path(gdir) / "paths.json")) == side["path"].tolist()
+        t = np.load(Path(tdir) / "embeddings.npy").astype(np.float32)
+        tp = json.load(open(Path(tdir) / "paths.json"))
+        probe = (lab["split"].reindex(tp) == "probe").to_numpy()
+        ty = lab["label"].reindex(tp).to_numpy()[probe]
+        ho = held.reindex([x.split("/images/")[1] for x in tp]).to_numpy()[probe]
+        add(name, "nearest class mean, 10 images per species", _ncm(e[sup], sy, e[qry], classes),
+            _ncm(e[sup], sy, t[probe], classes), _ncm(e[sup][np.isin(sy, classes[in_list])], sy[np.isin(sy, classes[in_list])],
+                                                      t[probe], classes[in_list]), ty, ho)
+    # the trained heads on the same images (E3's files; single view)
+    qfile = pd.Series(qy, index=[Path(x).name for x in side.loc[qry, "path"]])
+    last2 = lambda f: "/".join(Path(f).parts[-2:])  # noqa: E731  (species folder / crop: crop names repeat across folders)
+    tfile = [last2(x) for x in np.array(tp)[probe]]
+    for name, test_csv, trap_dir in (("ToL", E3 / "tol/e3_testfold/line1/predictions.csv", E3 / "tol/scores"),
+                                     ("VD (DINOv3, Lepidoptera only, 320 px)", E3 / "dinov3_bu_s42_test/e3/line1/predictions.csv", E3 / "vd/scores"),
+                                     ("OT3 (BioCLIP-2, fine-tuned and self-trained)",
+                                      E3 / "otto_bioclip_bu_gate70_trivial_s42_test/e3/line1/predictions.csv", None)):
+        d = pd.read_csv(test_csv, usecols=["filename", "level", "prediction"])
+        d = d[d["level"] == 0]
+        pred = pd.Series(d["prediction"].astype(str).to_numpy(), index=[Path(x).name for x in d["filename"]])
+        pq_ = pred.reindex(qfile.index).to_numpy()
+        pts = []
+        for sub in ("full-none", "ne-none"):
+            if trap_dir is None:
+                pts.append(None)
+                continue
+            x = pd.read_csv(trap_dir / sub / "trap/mini_metric.csv", usecols=["filename", "level", "prediction"])
+            x = x[x["level"] == 0]
+            pts.append(pd.Series(x["prediction"].astype(str).to_numpy(), index=[last2(f) for f in x["filename"]]).reindex(tfile).to_numpy())
+        add(name, "its trained head (E3)", pq_, pts[0], pts[1], ty, ho)
+    res = pd.DataFrame(rows)
+    pd.set_option("display.width", 250)
+    print(res.round(4).T.to_string())
+    res.to_csv(OUT / "z20_frozen.csv", index=False)
+
+
 def geometry(args) -> None:
     from safetensors import safe_open
     rows = []
@@ -1149,7 +1331,8 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
     for fn in (observer, prior, ghosts, presence, siteprior, geometry, siteprior2, siteprior3, observers, congeners, severity,
-               calibrated, discrimination, invariance, overlap, newsite):
+               calibrated, discrimination, invariance, overlap, newsite, tolgap,
+               frozen_index, frozen):
         sp = sub.add_parser(fn.__name__)
         sp.set_defaults(fn=fn)
         if fn is siteprior2:
@@ -1168,5 +1351,9 @@ if __name__ == "__main__":
             sp.add_argument("--pairs", required=True, help="name=unadapted folder=self-trained folder;...")
         if fn is calibrated:
             sp.add_argument("--rules", default="", help="subset of the rules, separated by ';'")
+        if fn is discrimination:
+            sp.add_argument("--common", action="store_true", help="only species that every folder's model can name")
+        if fn is frozen:
+            sp.add_argument("--embs", required=True, help="name=folder of the global embed=folder of the trap embed,...")
     a = ap.parse_args()
     a.fn(a)

@@ -8,7 +8,9 @@ congeners neighbours on every backbone. Section 8, same day, on whether self-tra
 images or the prior: mostly the prior. A regional list and an estimated prior, with no training,
 score level with self-training alone on the calibrated macro-F1, and 76 to 78 % of the crops
 self-training repairs are the same crops; only the small backbone also learned to read trap
-crops). A review of the project for new scientific
+crops. Section 9, 2026-11-17, on the first Tree of Life model: frozen, it is a better encoder than
+BioCLIP-2 on Rare Species, on taxa only BioCLIP-2 has seen and on moths; its Lepidoptera head trails
+the specialist mainly through the label space, resolution and confidence, not sight). A review of the project for new scientific
 routes, with six CPU checks run the same day on saved predictions and logits. Short version: under
 shift the models mostly fail by **leaving the local fauna** (87 % of trap errors name a species that
 occurs at no trap). That is a prior the model carries in its weights, and it can be estimated from
@@ -1300,8 +1302,248 @@ under OT3 with the list on probe. Then self-training with gated labels on this b
 no prior gives, and 4b holds for the campaign's st26 recipe only. Both models are one seed; three
 seeds of an unadapted V2-S span 0.5 points under that rule, so a gap above 2 would be read as real.
 
+## 9. The first Tree of Life model: what to compare it with (opened 2026-11-17, owner's question)
+
+tol-full is trained (W3: DINOv3 ConvNeXt-L, hierarchical head over seven ranks, 190,199 species, 224
+px, five passes). TL3 scored its Lepidoptera head without fine-tuning against VD, the same trunk
+trained on Lepidoptera alone: test fold 0.875 against 0.912, probe 0.590 against 0.689 (list,
+tta3bm, calibrated). The owner doubts that this is the right comparison and asks which is, how
+good the embedding is, and whether more passes are the next step. The run, TL3 and their record are
+the `lepinet` session's ([[2026-10-01-does-seeing-the-whole-tree-teach-a-model-what-it-does-not-know]]);
+this section holds the checks I ran and my reading. TL1 (the frozen model against BioCLIP-2 and raw
+DINOv3) was planned there and had not run; I ran it at that session's request. (The W3 steps E1 to E6
+were renamed TL1 to TL6 on 2026-11-17, since E1 and E2 are taken in RESULTS.)
+
+### Predictions (written before any of these ran)
+
+**Z17, where the test-fold gap of 3.7 points sits.** Macro-F1 is a mean over species, so it splits
+exactly over groups of species. (a) The 162 vocabulary species ToL never trained on score zero for
+ToL and about 0.85 for VD: 1.0 to 1.3 of the 3.7 points. (b) The keys that share a ToL class: the
+losing key of each class scores zero in the protocol line: 0.5 to 1.0 point. (c) On species both
+models can name one to one the gap is 1.5 to 2.2 points, and it grows as ToL's training images for
+the species fall below lepinet's; where ToL has at least as many, under 1.5.
+
+**Z18, the trap gap under my rules** (`dev/107`, ToL's per-view logits against VD's). Read from
+TL3's sheet before any run: on the calibrated score the gap is 9.9 points with one view and 9.9 with
+tta3bm, so TTA does not favour VD on the papers' metric (the sheet's -2.9 is at zero threshold).
+(a) With the list and the prior estimated with the probe nights the gap narrows to 5 to 8 points,
+since a weaker model gains more from the prior (Nemo did). (b) Prior-free pairwise error (Z10b):
+ToL at 1.5 to 3 times VD's, so most of the gap is in telling trap species apart, not in the fauna.
+(c) 80 to 90 % of ToL's errors at its full Lepidoptera vocabulary name a species seen at no trap.
+
+**Z19, TL1 on the full model** (`dev/109`; BioCLIP-2's SimpleShot, five folds). Rare Species 1- and
+5-shot: ToL 50 to 56 and 68 to 73 (pilot 42.8 and 60.2; BioCLIP-2 60.4 and 77.0); raw DINOv3
+ConvNeXt-L 25 to 38 and 45 to 58. The 1,810 held-out species: ToL 54 to 62 and 75 to 82 (pilot
+46.1 and 68.7); BioCLIP-2, which trained on these species, 3 to 10 points above ToL at 5 shots,
+most on whole held-out families; raw DINOv3 more than 20 below ToL. Placement of held-out taxa by
+the coarse marginals: genus 62 to 70 %, family (whole genus held out) 58 to 66, order (whole family)
+50 to 60 (pilot 46.9, 47.3, 41.1). Nearest prototype a congener 93 to 96 % (pilot 90.2). Kingdom
+right on at least 98.5 % of held-out images (the last epochs' drift in val kingdom loss is noise).
+
+**Z20, the three encoders frozen, on Lepidoptera and on trap crops** (the comparison I would put
+beside TL3; run only if the shared GPU allows). Nearest class mean from the same training images per
+species, 224 px, each model's own preprocessing; scored on the part of the test fold outside
+ToL-200M and on the probe with the regional list. Test fold: ToL above BioCLIP-2 by 2 to 8 points
+of macro-F1 (BioCLIP-2 with a fitted classifier was 0.844, P1a), raw DINOv3 far below both (under
+0.55). Probe: BioCLIP-2 level with ToL or above it (0 to 8 points of accuracy), the three-axes
+pattern of finding 2. Least sure of the probe.
+
+### Results (2026-11-17)
+
+**Z17: of the 3.7 test-fold points, 1.6 are the label space and 2.1 are vision** (`dev/107 tolgap`,
+TL3's line-1 prediction files, per-species F1 at zero threshold; macro-F1 recomputed 0.8751 and
+0.9124 against the sheet's 0.8751 and 0.912; `data/population_probes/z17_tolgap.csv`).
+
+| species group | species | test images | F1 ToL | F1 VD | share of the 3.73-point gap |
+|---|---|---|---|---|---|
+| no ToL class (138 absent from tol256, 23 below its floor, 1 test fold only) | 162 | 3,624 | 0 | 0.831 | -1.11 |
+| share a ToL class, the key ToL never answers | 124 | 4,276 | 0 | 0.523 | -0.53 |
+| share a ToL class, the key ToL answers | 128 | 13,552 | 0.772 | 0.850 | -0.08 |
+| one to one | 11,627 | 608,290 | 0.906 | 0.927 | -2.01 |
+
+On the one-to-one species the gap barely depends on how many images ToL had: -1.3 points where
+ToL had more than twice lepinet's count, -2.0 at 1.1 to 2 times, -2.1 at parity, -3.5 at half (33
+species with under half: -16.5). By lepinet's count it is -2.9 under 100 images and -1.6 to -1.7
+above 200. So the in-distribution gap is not data per species; resolution (224 against 320 px),
+a head shared with 178 k other species and five passes over everything are the candidates, and TL4
+removes all three. The 162 species are a hole in the crawl (several with over 1,000 lepinet
+images, *Aedia acronyctoides*, *Lithosia quadra*, *Plusia festucae*), not a model property.
+Predictions: (a) 1.0 to 1.3 held (1.11); (b) 0.5 to 1.0 held (0.61); (c) 1.5 to 2.2 held (2.1),
+"under 1.5 where ToL has at least as many images" falsified (2.0 at 1.1 to 2 times).
+
+**Z18: on the traps ToL tells the species apart as well as VD; it is less sure of itself.**
+`dev/107 calibrated` on ToL's per-view logits (12,268 classes, fp32, UCloud `otto_eval/tol_full`)
+and VD's (TL3's local copy), same crops, same scorer (`z18_tol_trap.csv`):
+
+| probe, calibrated macro-F1 (ToL / VD / gap) | one view | tta3bm |
+|---|---|---|
+| nothing | 0.310 / 0.456 / -14.6 | 0.466 / 0.591 / -12.5 |
+| list | 0.518 / 0.617 / -9.9 | 0.590 / 0.689 / -9.8 |
+| list and EM | 0.534 / 0.633 / -9.8 | 0.601 / 0.682 / -8.1 |
+| list and EM, probe nights included | 0.561 / 0.662 / -10.1 | 0.642 / 0.714 / -7.2 |
+| accuracy, same four rules (gap) | -12.8, -4.8, -3.6, -3.4 | -8.0, -4.2, -1.9, -1.7 |
+
+By accuracy the prior closes most of the gap (ToL 87.0 % against 88.7 % with list, EM and tta3bm);
+by calibrated macro-F1 it does not. The reason is in two measurements:
+- *Discrimination is level* (Z10b on the 234 probe species with five or more crops that both
+  models can name, `--common`): pairwise error ToL 0.00060 against VD 0.00056 with one view,
+  0.00018 against 0.00014 with tta3bm; on congener pairs ToL is better, 0.0229 against 0.0243 and
+  0.0150 against 0.0174. Prediction (b), ToL at 1.5 to 3 times VD's error, falsified. At 224 px
+  the generalist separates trap species as well as the specialist at 320 px.
+- *Confidence is worse.* AUROC of the top-1 confidence for right against wrong answers on the probe:
+  ToL 0.867 against 0.905 (list, one view), 0.856 against 0.901 (list, tta3bm); share of crops
+  answerable at 95 % precision 52 against 69 % and 66 against 80 %. ToL is less confident overall
+  (median 0.89 against 0.95). The calibrated score abstains by confidence per (trap, night), so it
+  charges this to ToL; and the estimated prior, which multiplies the posteriors, pushes a model with
+  flatter posteriors harder toward the common species, so ToL's errors land on the rarer trap species
+  and cost macro-F1 far more than accuracy.
+
+The 12 probe species ToL has no class for cost 0.6 to 1.2 points of the macro-F1 gap; the four
+that share a class, nothing. Errors naming a species seen at no trap (full vocabulary): ToL 91.6 %
+(one view) and 81.6 % (tta3bm), VD 83.9 and 75.0; prediction (c) held with tta3bm, 1.6 above its
+range with one view. Prediction (a), the gap narrowing to 5 to 8 with list and estimated prior:
+held with tta3bm (7.2), falsified with one view (10.1).
+
+**Z19 (TL1): frozen, the ToL model is above BioCLIP-2 on its own benchmark, and on taxa only
+BioCLIP-2 has seen.** `dev/109` on tol_full's `last.pt` (head input, 1,536-d) and on the two frozen
+baselines, same images and protocol (outputs in `data/population_probes/tol_e1/`). `embed_frozen`
+crashes under Python 3.14 (forkserver workers cannot pickle its local Dataset class); run through a
+wrapper that sets the fork start method, `dev/109` left as it is. 1-shot / 5-shot accuracy:
+
+| | Rare Species (400 species) | held-out taxa (1,810 species) | near / mid / far, 5-shot |
+|---|---|---|---|
+| ToL (5 passes) | **62.9 / 79.1** | **68.9 / 86.3** | 91.5 / 82.5 / 61.0 |
+| ToL pilot (1 pass of 8 M, at most 50 per species) | 42.8 / 60.2 | 46.1 / 68.7 | 74.0 / 64.0 / 44.6 |
+| BioCLIP-2, frozen | 60.4 / 77.0 | 66.2 / 85.0 | 89.9 / 81.5 / 61.5 |
+| DINOv3 ConvNeXt-L, raw (ToL's start) | 44.2 / 54.0 | 26.3 / 39.5 | 43.1 / 36.9 / 21.9 |
+
+BioCLIP-2 reproduces our port to the digit. Paired bootstrap over species, ToL minus BioCLIP-2,
+1-shot / 5-shot: Rare Species +2.6 [1.6, 3.5] / +2.1 [1.4, 2.8]. On the 356 Rare Species that are ToL
+classes +3.2 / +2.8; on the 44 that are not, -3.0 [-6.2, +0.2] / -3.4 [-5.8, -0.8]. Held-out taxa
+(which BioCLIP-2 trained on and ToL did not): near +3.9 / +1.6, mid +0.5 / +1.0, far -0.2 / -0.1
+(far: confidence intervals include zero). **The lead falls with distance from the ToL model's own
+classes**: it is largest on species it trained on, smaller on unseen species of trained genera, and
+gone at unseen families. That gradient is what a classification objective predicts (route 5: it
+keeps what separates its labels). BioCLIP-2 is flatter across distance, and it has seen every one of
+these taxa.
+
+Placement of the held-out taxa by the coarse marginals (macro over species): genus 67.1 % (near),
+family 59.9 % (mid), order 45.6 % (far). Kingdom right on 98.8, 97.6 and 95.7 % of near, mid and far
+images (pilot 98.2, 97.9, 97.1). The errors are what is in the picture: gall wasps, gall mites and
+parasitoids photographed on their plants, cochineal on cactus (Dactylopiidae, 95 images) and a
+puffball-like fungus family (Calostomataceae, 127) go to Plantae. Whole held-out fungus families are
+right on only 58 % of images. The drift in val kingdom loss that mt saw is not a broken rank. In the
+run's summary the val loss rises over the last two or three half-pass epochs at kingdom
+(0.0295 to 0.0316), phylum (0.042 to 0.044) and class (0.064 to 0.066), with accuracy flat: the
+coarse ranks become slightly overconfident as the rate anneals. Species val loss still falls (0.94 to
+0.92), but the train species loss has been under val since epoch 7 (0.77 against 0.92 at the end).
+The prototypes became less taxonomic as the embedding improved: nearest prototype a congener
+78.2 % (centred 86.7), against 90.2 (92.2) at the pilot.
+
+Predictions scored. Rare Species 50 to 56 and 68 to 73, and held-out 54 to 62 and 75 to 82: both
+falsified, the model is better than I said. BioCLIP-2 3 to 10 points above ToL at 5 shots on the
+held-out taxa: falsified (ToL +1.3); "most on whole families": the only depth where BioCLIP-2 is not
+behind. Raw DINOv3 25 to 38 and 45 to 58 on Rare Species: 1-shot above (44.2), 5-shot in (54.0);
+"more than 20 below ToL on held-out": held (47). Placement: genus 62 to 70 held, family 58 to 66
+held, order 50 to 60 falsified (45.6). Congeners 93 to 96 falsified (78.2). Kingdom at least
+98.5 %: falsified (98.2 % of all held-out images). The owner's view, the ToL model level with BioCLIP-2
+on species tasks unless training length decides it: held, and better than level on the taxa near
+its classes.
+
+**Z20: frozen, on moths, ToL is the better encoder too, and by a wide margin on the traps once the
+list is applied** (`dev/107 frozen_index` and `frozen`; `z20_frozen.csv`). Support: 10 training
+images of each of lepinet's 12,041 vocabulary species. Queries: up to 8 test-fold images per species
+whose GBIF occurrence is outside ToL-200M (68,764 images of 11,537 species, of 217,856 such images;
+BioCLIP-2 never saw them), and the probe crops. SimpleShot's nearest class mean, each encoder at its
+own preprocessing (224 px for all three). Beside them, the trained heads on the same images.
+
+| readout | clean test fold, acc / macro-F1 | probe acc, full vocabulary / list | probe-HO acc, list |
+|---|---|---|---|
+| ToL, frozen, class means | 84.6 / 0.824 | 47.2 / **65.4** | 49.5 |
+| BioCLIP-2, frozen, class means | 82.8 / 0.798 | 46.4 / 57.0 | 45.8 |
+| DINOv3 raw, frozen, class means | 5.2 / 0.042 | 0.2 / 1.5 | 0.5 |
+| ToL's own head (TL3) | 89.3 / 0.860 | 57.5 / 75.4 | 68.5 |
+| VD's head (Lepidoptera only, 320 px) | 92.5 / 0.906 | 70.3 / 80.2 | 73.3 |
+| OT3's head | 92.9 / 0.910 | | |
+
+ToL minus BioCLIP-2, paired bootstrap: test fold accuracy macro over species +1.9 [1.6, 2.3]; probe
+with the list +8.5 [7.0, 10.0] over 588 (trap, night) groups. The harness reproduces TL3's
+sheet for ToL's head (probe 0.5747 and 0.7543, zero-threshold macro-F1 0.1421). Raw DINOv3 is not
+a bug: its features fail the same checks the other two pass (support images classified by class
+means that include them: 21 % against 94 and 94 %; 100 random species: 37 % against 99 and 99 %).
+Its pooled feature does not separate moth species at all, so everything in ToL's column was learnt
+in the five passes. Predictions: ToL above BioCLIP-2 by 2 to 8 macro-F1 on the test fold, held
+(+2.6); raw DINOv3 under 0.55, held; BioCLIP-2 level with ToL or above on the probe, held at full
+vocabulary (+0.8 for ToL), falsified with the list (ToL +8.5).
+
+One check of my own reading of Z18 failed. I suspected that restricting ToL's 190 k-species head to
+its Lepidoptera classes throws away an "is this a moth at all" signal. It does not: the full head
+calls 99.2 % of probe crops Lepidoptera (the rest are 4 % right), its order confidence ranks right
+against wrong far worse than the restricted species confidence (AUROC 0.73 against 0.87), and the
+product does not help (0.86). The confidence deficit is in the species posterior itself.
+
+### What section 9 says
+
+**On the comparison.** TL3 compares answers, not representations. It is the right comparison for
+"can the ToL model replace the Lepidoptera model as it is", and the answer is no (test fold -3.7,
+calibrated probe -7 to -10). As a measure of the backbone it is unfair three ways. 1.6 of its 3.7
+points are the label space: 162 species missing from the crawl, 124 keys merged by COL XR. The
+specialist reads 320 px, ToL 224. And the specialist spent its whole head on 12 k moths. Three
+comparisons answer three different questions, and each has its own fair setting:
+1. *Is it a good general biodiversity embedding?* Frozen, against BioCLIP-2 and its own starting
+   trunk, on BioCLIP-2's benchmarks (Z19). Answer: yes. It is above BioCLIP-2 on Rare Species and
+   on 1,810 taxa that only BioCLIP-2 has seen, and 25 to 47 points above raw DINOv3. BioCLIP-2's
+   other suite tasks are still to build.
+2. *Is it a good moth embedding?* Frozen, same support images, on the part of our test fold
+   outside ToL-200M (the owner's "subset within global_lepi", required for any BioCLIP-2 comparison
+   since BioCLIP-2 trained on 65 % of our test fold), and on the traps (Z20). Answer: yes. It is
+   ahead of BioCLIP-2 on photos (+1.9) and far ahead on trap crops with the list (+8.5).
+3. *Is it a better start for our task?* Fine-tuned with the same recipe at the same resolution
+   against the same trunk from DINOv3 (TL4 against VD) and against BioCLIP-2's start (P3c). This
+   is the like-for-like that paper B needs, and it is running.
+
+**On the traps, the gap is confidence, not sight.** ToL at 224 px tells trap species apart as well as
+VD at 320 px (prior-free pairwise error level, congeners better), and with list, estimated prior and
+tta3bm it is 1.7 points of accuracy behind. What it lacks is a confidence that ranks its own errors
+(AUROC 0.86 against 0.90), which the calibrated macro-F1 and the estimated prior both amplify. Two
+candidate causes, both testable: the resolution (blurrier inputs give flatter posteriors), which the
+288/320 px check tests; and a head whose softmax is spread over 190 k classes, which fine-tuning
+(TL4) replaces. If TL4 recovers VD's confidence AUROC, the generalist trunk is not the problem.
+
+**On generality.** The lead over BioCLIP-2 is largest on taxa near ToL's own classes and gone at
+whole held-out families; on the 44 Rare Species that are not ToL classes BioCLIP-2 is ahead (-3.4 at
+5 shots). The prototypes became less taxonomic as training went on (congeners 90 to 78 %), and
+far-family kingdom placement slipped (97.1 to 95.7 %). A classification objective keeps what
+separates its labels, as route 5 says. BioCLIP-2's text objective degrades less with distance.
+ME's margin arm should be read against this.
+
+**On more passes.** I would not buy more ToL passes now. (i) Nothing in these results needs them:
+on species tasks the model is already above BioCLIP-2, so training length is not what it lacks
+there. (ii) The moth gap is not lack of moth training: the in-distribution gap is the same
+whatever ToL's image count per species (Z17), and on the traps discrimination is level (Z18).
+More ToL passes address neither resolution, nor the label space, nor confidence. (iii) The run's own
+signals are mixed. Val species F1 was still rising, by about 3 points per half-pass before the anneal,
+so the 190 k-way task is under-trained. But train loss has been under val since epoch 7, coarse-rank
+val losses rose in the last epochs, and the prototypes and far placement got less taxonomic, so
+more passes may trade generality at distance for in-distribution accuracy. (iv) Five more passes cost about 110 B200-hours. If length is to be tested
+later, judge it on Rare Species, held-out few-shot by depth and Z20 rather than on val loss. A
+cheap bound first: TL1 on `checkpoint_5.pth` (two and a half passes; confounded by the rate, which
+had not annealed).
+
+**For the next ToL version, not now:** fill the 162 vocabulary species and 12 trap species missing
+from tol256 from global_lepi (the original design's "global_lepi fill"); kingdom errors are galls,
+hosts and fungi, the "two organisms in one picture" problem (S1a), not a broken rank.
+
 ## Log
 
+- 2026-11-17: section 9 opened (the first ToL model); predictions for Z17 to Z20 written before the
+  checks ran, then run the same morning at the owner's request and the `lepinet` session's (TL1 on
+  the workstation GPU, 4 loader workers; tol_full's `last.pt`, its training summary and its per-view
+  trap logits downloaded from UCloud, no job submitted). Scoreboard: held Z17a, Z17b, Z17c's gap,
+  Z18c (tta3bm), Z18a (tta3bm), Z19's raw-DINOv3 gap and placement at genus and family, Z20 on the
+  test fold and raw DINOv3; falsified Z17c's image-count dependence, Z18a (one view), Z18b (ToL
+  discriminates as well as VD), Z19's ToL ranges (too low), BioCLIP-2 ahead on held-out taxa,
+  placement at order, congeners and kingdom, Z20 on the probe with the list. Not committed.
 - 2026-11-16: section 8 committed and pushed the evening before as abd3ccf and reported to the
   `lepinet` session. The owner approved the control for Otto (OT6, submitted by the mini_trainer
   session); Z16's predictions written before it trained. Not committed.

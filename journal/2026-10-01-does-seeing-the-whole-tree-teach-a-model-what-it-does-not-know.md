@@ -494,6 +494,10 @@ observer factor re-ranks nothing), no second seed, no arm E or the A-D factorial
 - `embed` defaults to `min(4, effective_cpus())` loader workers (mt's default of one per host core, each with a
   copy, reached 10 GB at 16 images and was killed; CLAUDE.md's oomd rule). On UCloud pass `--num_workers` with
   the job's cgroup count.
+- `embed --model bioclip2|dinov3` crashed with any loader worker under Python 3.14 (found by lepinet-2a, 2026-11-17):
+  the DataLoader starts workers with forkserver, which pickles the dataset, and the dataset class was defined inside
+  the function. Now a module-level class; checked with 2 workers on 300 Rare Species images, features identical to
+  lepinet-2a's TL1 run (cosine 1.0) for both models.
 
 ### Smoke (2026-11-16): passed; measured throughput
 
@@ -523,26 +527,28 @@ without auto-extend (worst case 160). The evaluation scripts (`dev/109`) run nex
 
 ### After the full run: proposed next steps, predictions written before any result (2026-11-16)
 
+(IDs TL1-TL6, renamed 2026-11-17 from E1-E6, which RESULTS already uses for the margin and scoring-rule rows.)
+
 Not approved; for the owner. The one-run rule holds: evaluations first, then at most two trainings.
 
 | step | what | cost | prediction |
 |---|---|---|---|
-| E1 | the frozen ToL model against BioCLIP-2 and against raw DINOv3 ConvNeXt-L (its starting point), same protocols: BioCLIP-2's suite (1- and 5-shot species tasks; the five non-species tasks), Rare Species, held-out 1,810 taxa (few-shot and placement) | eval only, a few GPU-hours | ToL model far above raw DINOv3 on species few-shot (+10 or more on the mean); below BioCLIP-2 on the suite mean (3x its data, longer training, text), within 5 points on Insects and Rare Species; further below on the non-species tasks, where a classification objective discards within-class variation (route 5, Z review). BioCLIP-2 has seen the held-out taxa, so that column favours it |
-| E2 | open-set on the held-out taxa: held-out images against val images of trained species, near (genus kept) / mid (genus withheld) / far (family withheld), each scoring rule | eval only | graded near < mid < far, as C3b; far above 0.95. This replaces C3b's benchmark for ToL models, whose novel species were trained on |
-| E3 | the ToL model's Lepidoptera head, no fine-tuning, on lepinet's test fold and the trap probe (dev/109 map) against DINOv3 BU trained on Lepidoptera alone (VD) | eval only | W3's committed predictions stand: test fold within 1 point; probe +1 to +4 before adaptation |
-| E4 | fine-tune the ToL model on global_lepi with VD's recipe (campaign, shards), one run, against VD (same trunk, DINOv3 start) | one run, 1 B200, about 14 h | test fold +0.5 to +1.5 over VD; probe and probe-HO +2 to +5 before any trap adaptation |
-| E5 | Otto's recipe (OT3/OT4: gated labels, TrivialAugmentWide) from the ToL model, one run, against OT4 (same trunk from DINOv3) and OT3 (production) | one run, 1 B200, about 28 h | probe level with OT4 and OT3; probe-HO above OT4 (OT4's weak point was species the adaptation never saw), so a candidate to replace OT3 only if both hold |
-| E6 | the trap order classifier (the order marginal) on the owner's trap order dataset | eval only, when the dataset arrives | |
+| TL1 | the frozen ToL model against BioCLIP-2 and against raw DINOv3 ConvNeXt-L (its starting point), same protocols: BioCLIP-2's suite (1- and 5-shot species tasks; the five non-species tasks), Rare Species, held-out 1,810 taxa (few-shot and placement) | eval only, a few GPU-hours | ToL model far above raw DINOv3 on species few-shot (+10 or more on the mean); below BioCLIP-2 on the suite mean (3x its data, longer training, text), within 5 points on Insects and Rare Species; further below on the non-species tasks, where a classification objective discards within-class variation (route 5, Z review). BioCLIP-2 has seen the held-out taxa, so that column favours it |
+| TL2 | open-set on the held-out taxa: held-out images against val images of trained species, near (genus kept) / mid (genus withheld) / far (family withheld), each scoring rule | eval only | graded near < mid < far, as C3b; far above 0.95. This replaces C3b's benchmark for ToL models, whose novel species were trained on |
+| TL3 | the ToL model's Lepidoptera head, no fine-tuning, on lepinet's test fold and the trap probe (dev/109 map) against DINOv3 BU trained on Lepidoptera alone (VD) | eval only | W3's committed predictions stand: test fold within 1 point; probe +1 to +4 before adaptation |
+| TL4 | fine-tune the ToL model on global_lepi with VD's recipe (campaign, shards), one run, against VD (same trunk, DINOv3 start) | one run, 1 B200, about 14 h | test fold +0.5 to +1.5 over VD; probe and probe-HO +2 to +5 before any trap adaptation |
+| TL5 | Otto's recipe (OT3/OT4: gated labels, TrivialAugmentWide) from the ToL model, one run, against OT4 (same trunk from DINOv3) and OT3 (production) | one run, 1 B200, about 28 h | probe level with OT4 and OT3; probe-HO above OT4 (OT4's weak point was species the adaptation never saw), so a candidate to replace OT3 only if both hold |
+| TL6 | the trap order classifier (the order marginal) on the owner's trap order dataset | eval only, when the dataset arrives | |
 
-Order: E1-E3 the day the run lands (they decide whether E4 and E5 are worth running); E4 before E5. A model
-"better as an embedding" means E1's few-shot and placement, not accuracy on its own label set.
+Order: TL1-TL3 the day the run lands (they decide whether TL4 and TL5 are worth running); TL4 before TL5. A model
+"better as an embedding" means TL1's few-shot and placement, not accuracy on its own label set.
 
-**The owner's view on E1 (2026-11-16), recorded beside my prediction so both can be scored.** BioCLIP-2's extra data
+**The owner's view on TL1 (2026-11-16), recorded beside my prediction so both can be scored.** BioCLIP-2's extra data
 is mostly what our dataset cuts on purpose (the head above the 2,000-per-species cap, the tail below the 50-image
 floor), so it may add little, and our labels may be cleaner (COL XR, rank fixes, decontamination). Its text is
 largely the taxonomy, which our hierarchical head already supervises. The one difference the owner expects could
-matter is training length (epochs), to be measured if E1 shows a gap. So the owner's expectation is that the
-ToL model is level with BioCLIP-2 on species tasks, unless training length decides it. E1-E3 are queued to run as
+matter is training length (epochs), to be measured if TL1 shows a gap. So the owner's expectation is that the
+ToL model is level with BioCLIP-2 on species tasks, unless training length decides it. TL1-TL3 are queued to run as
 soon as tol-full ends (owner, 2026-11-16).
 
 ### dev/109 end to end on the pilot checkpoint (2026-11-16): every step runs
@@ -569,3 +575,160 @@ The numbers test the code, not the model.
   means lepinet's vocabulary too, as for lepinet's own trap scores.
 - mt writes two extra columns (`prediction_made`, `correct`); `relabel` drops them, since `correct` is stale
   after relabelling. mt appends `_1` to an output folder name that is new (`pred_testfold_s3000_1`).
+
+### Full run (2026-11-17): done
+
+tol-full (job 12464522, 8 B200): 13.2 h of training, about 106 B200-hours; weights equal on 8 ranks; GPU utilisation
+median 97 % over 37,904 `nvidia-smi dmon` samples, so compute-bound, as read from the pilot; steady about 5,850
+img/s. Val species macro-F1 by half-pass epoch (first half of tol256 val, in-distribution, a progress signal only):
+0.295, 0.426, 0.475, 0.506, 0.531, 0.558, 0.590, 0.619, 0.634, 0.640; acc1 51.9 -> 80.7 %; final train species loss
+0.773 against val 0.925. The last steps flatten as the one-cycle rate reaches zero, so the curve alone does not say
+whether more passes would help (the owner's open question on training length). Val kingdom loss drifted
+0.029 -> 0.032 over the last three epochs. TL3 runs as job 12465059; TL1-TL2 run on the workstation.
+
+### TL3 (2026-11-17): the ToL model's Lepidoptera head, no fine-tuning, against VD and OT3
+
+mt (job 12465059; sheet `/data/au761367/otto_eval/u/ot_scores.md`, section TL3). Species macro-F1, zero / calibrated.
+Line 1 = the protocol (full test fold, all crops); line 2 = keys sharing a ToL class merged, for every model.
+Test fold (629,742 images, the same for all):
+
+| model | line 1 | line 2 | line 1 - line 2 |
+|---|---|---|---|
+| ToL (224 px, no fine-tuning) | 0.875 / 0.869 | 0.886 / 0.879 | -0.010 |
+| VD, dinov3_bu_s42 (320 px, Lepidoptera only) | 0.912 / 0.906 | 0.918 / 0.911 | -0.005 |
+| OT3 | 0.916 / 0.911 | 0.920 / 0.915 | -0.004 |
+
+Traps, north_europe, line 1, calibrated / zero: ToL probe tta3bm 0.590 / 0.404, probe-HO tta3bm 0.446 / 0.258;
+VD 0.689 / 0.481 and 0.524 / 0.268; OT3 0.749 / 0.674 and 0.562 / 0.413. Paired ToL - VD at zero threshold: probe
+tta3bm -0.077 [-0.096, -0.062], probe-HO tta3bm -0.010 [-0.055, +0.007], probe single -0.029 [-0.047, -0.017],
+probe-HO single -0.029 [-0.055, -0.015]. Line 2 moves trap numbers by at most about 1 point.
+
+**Predictions scored: both falsified.** "Test fold within 1 point": -3.7 (line 1), -3.2 (line 2). "Probe +1 to +4
+before adaptation": -7.7 with tta3bm, -2.9 single view. The taxonomy mismatch is not the explanation (it costs ToL
+0.5 point more than VD).
+
+**What this does and does not say.** It is not yet "breadth hurts". Three confounds sit in the comparison, each
+large enough: (1) resolution: ToL trained and scored at 224 px, VD at 320 (read 384), and moth species are
+fine-grained; (2) Lepidoptera exposure and capacity: VD spent 5 epochs and a whole head on 12 k moth species, ToL
+shared five passes and its head with 190 k species, under a 2,000 cap and COL XR names; (3) TTA helps VD far more on
+probe (+13.5 against +8.7 points at zero threshold), so the gap shrinks to -2.9 single view. TL4 (the ToL model
+fine-tuned on global_lepi with VD's recipe at 320 px) removes (1) and (2) and is the test of whether ToL pretraining
+is a better start; a cheap eval-only check of (1) is the ToL model scored at 288 or 320 px input.
+
+### TL2 (2026-11-17): open set on the held-out taxa
+
+`dev/109 openset --root data/population_probes/tol_e1` on tol-full's final weights. Held out: the 89,706 images (at most
+50 per species) of the 1,810 held-out species, from lepinet-2a's TL1 embed. Known: 89,706 test-split images of trained
+species, a uniform sample by uuid hash (`index --set known`, 48,565 species, so head-heavy as deployment is), embedded
+here. Scores from the species head, higher = known. AUROC:
+
+| score | near (genus kept) | mid (genus withheld) | far (family withheld) | all |
+|---|---|---|---|---|
+| max softmax | **0.788** | **0.854** | **0.883** | **0.813** |
+| max logit | 0.730 | 0.817 | 0.883 | 0.766 |
+| energy (logsumexp) | 0.715 | 0.807 | 0.873 | 0.752 |
+
+- **The measurement checks out.** Species top-1 on the known sample is 80.9 %, as mt's val (80.7 %), so the known
+  side is in distribution. Held-out images are more often plants (59 % against 46 %), but AUROC within each kingdom
+  is about the same (max softmax: Animalia near / mid / far 0.80 / 0.85 / 0.88, Plantae 0.77 / 0.85 / 0.89, Fungi
+  0.73 / 0.80 / 0.90), so the kingdom mix does not make the result. Median max softmax: known 0.87, held out near 0.43,
+  mid 0.31, far 0.25.
+- **Predictions scored.** "Graded near < mid < far, as C3b": held, under every score. "Far above 0.95": falsified
+  (0.88). Lepidoptera-only C3 was 0.853 / 0.934 / 0.964 on lepinet's own split, a different known set and 12 k classes
+  rather than 190 k, so the comparison is indicative only: 6 to 8 points lower at every depth here.
+- **Max softmax beats max logit and energy, by 6 points at near**, as lepinet's own scoring-rule result found at
+  198 M (RESULTS.md E2, the scoring-rule row: +6.1 / +7.6). The ToL head's top logits sit near -44, a large
+  per-image offset that max logit and energy carry and softmax cancels. (W3's steps were renamed E1-E6 -> TL1-TL6 on
+  2026-11-17, because E1 and E2 were taken in RESULTS.md.)
+- **Reading.** Seeing the whole tree did not make far novelty easy: a held-out family is still often given a
+  confident species, with AUROC 0.88. Whether the hierarchy's upper ranks separate better is the check below.
+
+**Per-head check (2026-11-17, lepinet-f3's request).** Max softmax at each rank's head, same images. The per-rank
+values were already in `confidence.npy` (fp16; species-head AUROC identical to the fp32 scores to 4 decimals), so no
+re-embed; `embed` now also writes `rank_scores.npy` (every rank, fp32) and `openset` prints this table
+(`openset_heads.csv`).
+
+| max softmax at | near | mid | far | all |
+|---|---|---|---|---|
+| species head | **0.788** | 0.854 | 0.883 | 0.813 |
+| genus head | 0.753 | **0.906** | 0.924 | 0.806 |
+| family head | 0.750 | 0.888 | **0.940** | 0.801 |
+| order head | 0.754 | 0.883 | 0.931 | 0.802 |
+| kingdom head | 0.752 | 0.874 | 0.907 | 0.796 |
+| sum of log max softmax, all 7 heads (exploratory) | 0.792 | 0.893 | 0.927 | **0.829** |
+
+- **Each depth is best detected at the rank where its novelty begins.** A withheld genus (mid) separates best at the
+  genus head (+5.2 points over the species head), a withheld family (far) at the family head (+5.7). For near
+  species, whose genus is trained, the species head is best and every coarser head is about 0.75. Medians make it
+  concrete: a far image gets max softmax 0.26 at species, 0.40 at family, 0.90 at kingdom; known images get 0.87 /
+  0.995 / 0.999. The family head is unsure exactly where the family is new.
+- **A rule that needs no depth keeps most of it.** The sum of log max softmax over the seven heads gives 0.792 / 0.893
+  / 0.927, all 0.829 (+1.6 over species max softmax on all, +3.9 / +4.4 at mid / far). It was chosen after the
+  per-rank table was seen, so it is a candidate, not a result; it needs confirming on a second held-out set
+  (Lepidoptera C3b, or the trap crops) before it replaces species max softmax.
+- **For the back-off design**: the head-wise confidences carry the information to say "new genus" or "new family",
+  not just "unsure". A back-off that walks up the ranks until the head is confident would answer far images at
+  order or class (median max softmax 0.52 at order, 0.76 at class). Its threshold per rank is the open question,
+  the same "one constant at every level" trap the project has hit before.
+
+### TL1 (2026-11-17): the frozen ToL model against BioCLIP-2 and raw DINOv3
+
+lepinet-2a (dev/109 SimpleShot, 5 folds, the same protocol for all; files `data/population_probes/tol_e1/`).
+1-shot / 5-shot:
+
+| | ToL (tol_full, 1,536-d head input) | BioCLIP-2 (`encode_image`) | raw DINOv3 ConvNeXt-L |
+|---|---|---|---|
+| Rare Species (400 species) | **62.9 / 79.1** | 60.4 / 77.0 | 44.2 / 54.0 |
+| held-out taxa (1,810 species) | **68.9 / 86.3** | 66.2 / 85.0 (trained on these taxa) | 26.3 / 39.5 |
+
+Paired, ToL - BioCLIP-2: Rare Species +2.6 [1.6, 3.5] / +2.1 [1.4, 2.8]; on its 356 species that are ToL classes
++3.2 / +2.8, on the 44 that are not -3.0 [-6.2, +0.2] / -3.4 [-5.8, -0.8]. Held-out by depth: near +3.9 / +1.6, mid
++0.5 / +1.0, far -0.2 / -0.1 (intervals include 0 at far). Placement by the coarse marginals: genus 67.1 % (near),
+family 59.9 % (mid), order 45.6 % (far). Kingdom right on 98.8 / 97.6 / 95.7 % of near / mid / far images; the misses
+are image content (galls, parasitoids and cochineal on plants, a puffball-like fungus family), not a broken rank.
+The last half-pass epochs raise val loss slightly at kingdom, phylum and class at flat accuracy (mild end-of-training
+overconfidence at the coarse ranks); the species train loss sits below val from epoch 7. Congener-neighbour rate on the
+190 k prototypes 78.2 % (centred 86.7), down from the pilot's 90.2 while few-shot rose 18 to 23 points.
+
+**Predictions scored.** Mine ("below BioCLIP-2 on the mean, within 5 points on Rare Species") is falsified: the ToL
+model is above BioCLIP-2 on Rare Species and on held-out taxa that BioCLIP-2 trained on. The owner's ("level with
+BioCLIP-2; its extra data is the head and tail we cut, its text is the taxonomy our head supervises") is closer: level
+or slightly above, with the lead largest near the model's own classes and gone for whole unseen families. Not yet
+measured: BioCLIP-2's other suite tasks (birds, plankton, fungi..., and the non-species tasks).
+
+**TL3 decomposed** (lepinet-2a, Z17-Z18 in [[2026-11-13-beyond-scaling-what-would-make-a-better-biodiversity-backbone]]).
+Test fold, of the 3.73 points ToL - VD: 1.11 are the 162 vocabulary species ToL has no class for (a hole in the
+crawl, several with over 1,000 lepinet images), 0.53 the 124 keys merged into a shared ToL class, 2.01 the one-to-one
+species (0.906 against 0.927), a gap that barely depends on ToL's images per species, so resolution and the shared
+head remain the candidates (TL4 removes both). Traps: prior-free pairwise error is equal or better for ToL (congeners
+0.0150 against 0.0174 with tta3bm), so at 224 px it separates trap species as well as VD at 320 px. What it lacks is
+confidence ranking: AUROC of top-1 confidence for right against wrong 0.856 against 0.901 (tta3bm), coverage at 95 %
+precision 66 against 80 %; the calibrated macro-F1 abstains by confidence, so that costs far more than accuracy
+(accuracy gap -1.7 with list, prior and tta3bm).
+
+**Submitted 2026-11-17 (owner, in mt).** Resolution check: e-tol-res, job 12465337, tol_full at 288 px (read 320) and
+320 px (read 384) on all trap crops and at 320 on the test fold, the TL3 pipeline otherwise. TL4: job 12465338,
+tl4_tol_dinov3_bu_s42 = dinov3_bu_s42's config verbatim plus `model_args.pretrained_cfg_overlay.file` = tol_full's
+trunk (head.fc dropped, 342 tensors, 196.2 M parameters); checked before submission: trunk equal to tol_full's, head
+fresh and bit-identical to a hub-DINOv3 build's under the same seed, preprocessing identical (ImageNet mean/std,
+bicubic, crop_pct 1.0). Data: global_lepi_shards-v1, so TL4 is judged against VD's three-seed spread (seeds 42-44);
+it also partly stands in for the held shard check. TL4's prediction (above, written 2026-11-16) stands.
+
+**The frozen ToL model as a moth encoder** (lepinet-2a, Z20 in the beyond-scaling entry): class means from 10 training
+images per species, all three encoders at 224 px. On 68,764 test-fold images outside ToL-200M, accuracy ToL 84.6 %,
+BioCLIP-2 82.8 % (+1.9 [1.6, 2.3] macro over species), raw DINOv3 5.2 %; on probe crops with the list 65.4 against
+57.0 % (+8.5 [7.0, 10.0]). The trained heads on the same images: ToL 89.3 %, VD 92.5 %, OT3 92.9 %. So the three
+questions have three fair settings: general embedding (TL1, ToL ahead of BioCLIP-2), moth embedding (Z20, ToL ahead),
+and better start for our task (TL4, running). lepinet-2a recommends no more ToL passes before TL4: on species tasks
+ToL already leads, the moth gap is not moth data per species (Z17) and trap discrimination is level (Z18), and the end
+of training traded some taxonomic structure (congener neighbours 90 -> 78 %) for in-distribution accuracy. If training
+length is tested later, judge it on Rare Species, held-out few-shot by depth and Z20, not on val loss. TL4 will also be
+scored with list, estimated prior and tta3bm, on the confidence AUROC, and on Rare Species after fine-tuning.
+
+**Resolution check (2026-11-17, e-tol-res 12465337): a larger test-time input makes tol_full worse.** Species
+macro-F1, line 1, zero / calibrated. Test fold: 224 px 0.875 / 0.869, 320 px 0.865 / 0.857 (VD 0.912 / 0.906).
+Probe north_europe tta3bm: 224 0.404 / 0.590, 288 0.387 / 0.579, 320 0.376 / 0.551 (VD 0.481 / 0.689); single view
+224 0.317 / 0.518, 288 0.286 / 0.448, 320 0.272 / 0.408. Probe-HO and the full vocabulary order the same way. A model
+trained at 224 px does not gain from a larger test input here, so evaluation resolution does not explain TL3's gap;
+whether training at 320 does is part of TL4's answer (TL4 trains at 320 from the ToL trunk). Relabelling TL3's 224
+predictions with the later dev/109 gives a byte-identical file, so the comparison holds.

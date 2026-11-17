@@ -4,14 +4,20 @@ CPU steps run with lepinet's venv; `embed` needs mini_trainer on the path (branc
 and a GPU:
 
     python dev/109_tol_eval.py map                      # ToL species -> lepinet's legacy GBIF keys: data/tol_eval/map_*.csv
-    python dev/109_tol_eval.py index --set S            # S: testfold | trap | heldout | rare -> data/tol_eval/index_S.json
+    python dev/109_tol_eval.py index --set S            # S: testfold | trap | heldout | rare | known -> data/tol_eval/index_S.json
     python dev/109_tol_eval.py classlist [--keys F]     # lepinet keys (e.g. north_europe.classes) -> ToL classes, for --class_list
     python dev/109_tol_eval.py relabel --pred CSV       # a ToL model's mini_metric.csv -> lepinet's three ranks and keys
     PYTHONPATH=$MT python dev/109_tol_eval.py embed --weights last.pt --set S [--prototypes]   # GPU; loader workers min(4, CPUs) unless --num_workers
     python dev/109_tol_eval.py placement                # held-out taxa: right genus / family / order, 1- and 5-shot
     python dev/109_tol_eval.py rare                     # Rare Species 1- and 5-shot, BioCLIP-2's protocol
     python dev/109_tol_eval.py congeners                # Z7: is the nearest species prototype a congener?
+    python dev/109_tol_eval.py embed --model M --set S  # M: bioclip2 | dinov3, frozen baselines (TL1) -> data/tol_eval/baselines
+    python dev/109_tol_eval.py openset                  # TL2: held out against test-split images of trained species, AUROC by depth
+    python dev/109_tol_eval.py report                   # TL1-TL2 table -> <root>/results.md
     python dev/109_tol_eval.py selftest                 # the scoring code on synthetic data
+
+`--root DIR` keeps one checkpoint's outputs apart (pilot: data/tol_eval/pilot); `--model` picks a baseline for
+placement (few-shot only) and rare.
 
 Test fold and trap crops go through mini_trainer's own prediction (`mt_hpredict`) with `--data_index` from `index`
 and `--class_list` from `classlist` (the model restricted to ToL species that have a lepinet key), then
@@ -197,7 +203,7 @@ def index(a):
         print(f"{len(x):,} images of {x['key'].nunique():,} held-out species (of {len(ho):,}); by depth "
               f"{x.groupby('depth')['key'].nunique().to_dict()}")
     elif a.set == "known":
-        # E2's in-distribution side: test-split images of trained species, a uniform sample by uuid hash, as many
+        # TL2's in-distribution side: test-split images of trained species, a uniform sample by uuid hash, as many
         # as the held-out index has (held out is capped at 50 per species, this is not: head-heavy, as deployment)
         n = len(json.load(open(OUT / "index_heldout.json"))["path"])
         parts = []
@@ -327,8 +333,9 @@ def embed(a):
             top = [o.float().softmax(-1).max(-1) for o in outs]
             self.arg.append(np.stack([t.indices.cpu().numpy() for t in top], 1).astype(np.int32))
             self.conf.append(np.stack([t.values.cpu().numpy() for t in top], 1).astype(np.float16))
-            s = outs[0].float()   # species logits (class_spec order: species first), for E2's open-set scores
-            self.sp.append(torch.stack([s.softmax(-1).max(-1).values, s.max(-1).values, torch.logsumexp(s, -1)], 1).cpu().numpy())
+            # every rank's open-set scores (SCORES), fp32, class_spec order (species first): TL2 and its per-head check
+            self.sp.append(np.stack([torch.stack([o.float().softmax(-1).max(-1).values, o.float().max(-1).values,
+                                                  torch.logsumexp(o.float(), -1)], 1).cpu().numpy() for o in outs], 1))
             self.paths.extend(paths)
 
         def save(self, dst, *args, **kwargs):
@@ -336,14 +343,14 @@ def embed(a):
             np.save(out / "embeddings.npy", np.concatenate(self.emb))
             np.save(out / "argmax.npy", np.concatenate(self.arg))
             np.save(out / "confidence.npy", np.concatenate(self.conf))
-            np.save(out / "species_scores.npy", np.concatenate(self.sp).astype(np.float32))   # columns: SCORES
+            rk = np.concatenate(self.sp).astype(np.float32)
+            np.save(out / "rank_scores.npy", rk)           # images x ranks x SCORES
+            np.save(out / "species_scores.npy", rk[:, 0])  # images x SCORES
             (out / "paths.json").write_text(json.dumps(list(self.paths)))
             (out / "classes.json").write_text(json.dumps(self.cls2idx))
             print(f"{len(self.paths):,} images, embedding dim {self.emb[0].shape[1]} -> {out}")
 
     ix = Path(a.index) if a.index else OUT / f"index_{a.set}.json"
-    if a.set == "known":   # no labels: mt needs no class for them
-        pass
     sys.argv = [sys.argv[0], "--weights", a.weights, "--input", str(a.input or Path(json.load(open(ix))["path"][0]).parent),
                 "--data_index", str(ix), "--output", str(out.parent), "--name", f"{out.name}_mt",
                 "--class_spec", str(a.class_spec), *a.extra]   # extra: mt_hpredict flags, e.g. --batch_size 256
@@ -358,12 +365,25 @@ def embed(a):
         predict(**kwargs)
 
 
+class Images:
+    """Map-style dataset for embed_frozen. Module level, because Python 3.14's DataLoader starts workers with
+    forkserver, which pickles the dataset and cannot pickle a class defined inside a function (lepinet-2a, 2026-11-17)."""
+    def __init__(self, paths, tf):
+        self.paths, self.tf = paths, tf
+
+    def __len__(self):
+        return len(self.paths)
+
+    def __getitem__(self, i):
+        from PIL import Image
+        return self.tf(Image.open(self.paths[i]).convert("RGB"))
+
+
 def embed_frozen(a):
-    """E1's frozen baselines, no head: BioCLIP-2's projected image feature (768-d, `encode_image`, as the Rare
+    """TL1's frozen baselines, no head: BioCLIP-2's projected image feature (768-d, `encode_image`, as the Rare
     Species port that reproduced its paper) and raw DINOv3 ConvNeXt-L's pooled feature (timm, num_classes=0,
     1,536-d; the ToL model's starting trunk). Each model's own eval preprocessing, fp32 as the port."""
     import torch
-    from PIL import Image
     ix = Path(a.index) if a.index else OUT / f"index_{a.set}.json"
     paths = json.load(open(ix))["path"]
     out = Path(a.out) if a.out else _emb_dir(a, a.set)
@@ -379,17 +399,9 @@ def embed_frozen(a):
     model = model.eval().to("cuda")
     nw = next((int(x.split("=")[1]) if "=" in x else int(a.extra[i + 1]) for i, x in enumerate(a.extra)
                if x.split("=")[0] == "--num_workers"), min(4, effective_cpus()))
-
-    class Images(torch.utils.data.Dataset):
-        def __len__(self):
-            return len(paths)
-
-        def __getitem__(self, i):
-            return tf(Image.open(paths[i]).convert("RGB"))
-
     embs = []
     with torch.inference_mode():
-        for x in torch.utils.data.DataLoader(Images(), batch_size=128, num_workers=nw):
+        for x in torch.utils.data.DataLoader(Images(paths, tf), batch_size=128, num_workers=nw):
             embs.append(fwd(x.to("cuda", non_blocking=True)).float().cpu().numpy().astype(np.float16))
     out.mkdir(parents=True, exist_ok=True)
     e = np.concatenate(embs)
@@ -554,11 +566,11 @@ def congeners(a):
 
 
 # ------------------------------------------------------------------------------------------------ openset
-def openset_scores(known: np.ndarray, held: np.ndarray, depth: np.ndarray) -> pd.DataFrame:
-    """AUROC of known (positive) against held-out images, per score column (higher = known) and depth."""
+def openset_scores(known: np.ndarray, held: np.ndarray, depth: np.ndarray, names=SCORES) -> pd.DataFrame:
+    """AUROC of known (positive) against held-out images, per score column `names` (higher = known) and depth."""
     from sklearn.metrics import roc_auc_score
     rows = []
-    for i, name in enumerate(SCORES):
+    for i, name in enumerate(names):
         for dn in ["near", "mid", "far", "all"]:
             h = held[:, i] if dn == "all" else held[depth == dn, i]
             y = np.r_[np.ones(len(known)), np.zeros(len(h))]
@@ -568,7 +580,7 @@ def openset_scores(known: np.ndarray, held: np.ndarray, depth: np.ndarray) -> pd
 
 
 def openset(a):
-    """E2 (replaces C3b for ToL models): held-out images (near = genus kept, mid = genus withheld, far = family
+    """TL2 (replaces C3b for ToL models): held-out images (near = genus kept, mid = genus withheld, far = family
     withheld) against as many test-split images of trained species, by the species head's max softmax, max logit
     and energy."""
     dh, dk = _emb_dir(a, "heldout"), _emb_dir(a, "known")
@@ -578,11 +590,25 @@ def openset(a):
     tab = openset_scores(known, held, depth)
     print(tab.pivot(index="score", columns="held out", values="AUROC")[["near", "mid", "far", "all"]].round(4).to_string())
     tab.to_csv(Path(a.root) / "openset.csv", index=False)
+    # Max softmax at each rank's head (rank_scores.npy, else the fp16 confidence.npy: same AUROC to 4 decimals on
+    # tol_full), and the sum of log max softmax over all ranks, a rule that needs no depth (added after the
+    # per-rank table was seen, 2026-11-17: exploratory).
+    msp = lambda d: np.load(d / "rank_scores.npy")[:, :, 0] if (d / "rank_scores.npy").exists() else \
+        np.load(d / "confidence.npy").astype(np.float32)   # noqa: E731
+    hm, km = msp(dh), msp(dk)
+    cols = [*RANKS, "sum log, all ranks"]
+    def stack(m):
+        return np.c_[m, np.log(np.clip(m.astype(np.float64), 1e-6, 1)).sum(1)][:, :, None]
+    rows = [openset_scores(stack(km)[:, i], stack(hm)[:, i], depth, ["max softmax"]).assign(head=c)
+            for i, c in enumerate(cols)]
+    by = pd.concat(rows)
+    print(by.pivot(index="head", columns="held out", values="AUROC").loc[cols, ["near", "mid", "far", "all"]].round(4).to_string())
+    by.to_csv(Path(a.root) / "openset_heads.csv", index=False)
 
 
 # ------------------------------------------------------------------------------------------------ report
 def report(a):
-    """One markdown table of whatever E1-E2 outputs exist: <root> for the ToL model, data/tol_eval/baselines."""
+    """One markdown table of whatever TL1-TL2 outputs exist: <root> for the ToL model, data/tol_eval/baselines."""
     root, lines = Path(a.root), []
     dirs = {"ToL": (root / "emb_heldout", root / "emb_rare"),
             "BioCLIP-2": (BASE / "emb_heldout_bioclip2", BASE / "emb_rare_bioclip2"),
