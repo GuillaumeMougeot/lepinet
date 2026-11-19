@@ -1,7 +1,7 @@
 # Does the cosine head's clamp floor cost accuracy, and does the fix train as well?
 
 **Kind:** research · **Status:** OPEN (2026-11-19). The defect measured at 190 k classes (`dev/113`); the fix
-built in mini_trainer (mt, 1554c9c, CPU test passed); its tests (CF, and a 190 k-class head check) submitting, before any longer ToL training. Found at Lepidoptera scale by the
+built in mini_trainer (mt, 1554c9c, CPU test passed). The 190 k-class head check (cftol) does not support it as a swap on a trained head (-1.12 points), a test weighted against the fix; CF on V2-S (cfsh, on the shards) is running and decides, before any longer ToL training (owner: wait for it before discarding the fix). Found at Lepidoptera scale by the
 mt session on 2026-11-03 ([[2026-11-03-moving-the-recipe-into-mini-trainer]]); the floor itself was first seen in
 August ([[2026-08-06-the-cosine-head-is-not-unit-norm]]).
 
@@ -89,3 +89,36 @@ three seeds give a noise band, so:
   floor, the fixed arm gets at least 10 points more of them right than the current arm. If (b) fails by more than a
   point downward, the floor does useful work at 190 k classes and the next ToL run keeps the current head whatever
   CF says; if (c) fails, the stranded images are wrong for reasons the floor does not explain.
+
+## 190 k-class check: cftol (mt, job 12469979, 2026-11-19)
+
+Probe: the first 200,000 images of the pilot's validation split, the same images for all three models; paired 95 %
+intervals. It is harder than the 19,992 images of the measurement table above (tol_full's top-1 67.6 % against 81.3 %).
+
+| model | top-1 | true class on the current head's floor | top-1 on tol_full's floor subset (4,824 images) |
+|---|---|---|---|
+| tol_full (the start) | 67.58 | 2.41 % | 0.00 |
+| current arm, one more head-only pass | 64.83 | 3.73 % | 0.10 |
+| fixed arm, one more head-only pass | 63.70 | none (no floor by construction) | 4.66 |
+
+Fixed minus current: -1.12 points (+/-0.15); on the floor subset +4.56 (+/-0.60); off it -1.26 (+/-0.16). Median g:
+tol_full 1.41, current arm 1.23, fixed arm 2.18 (in the fixed form g multiplies the angle, so it means something else).
+
+**My predictions, scored.** (a) Failed: the current arm did not keep its floor unchanged; the floor share fell from 76.5
+to 75.7 % and the stranded share rose from 2.41 to 3.73 %, because the re-warmed pass degraded the head itself (-2.76
+points against tol_full). (b) Failed by a hair: -1.12, not within 1. (c) Failed: +4.56 points on the floor subset, not
++10. mt's decision rule (fix more than 0.5 below the current arm = not supported) gives: not supported at this size.
+
+**What it shows and what it does not.** The test was weighted against the fix, as its design said: both arms continued
+from tol_full's head with the learning rate re-warmed to 8e-4, which cost the current arm 2.76 points, and the fixed
+arm started from parameters trained for the other form (1.3 points lower at step 0) with one pass to re-scale g. So
+the fix is not a free swap on a trained head. Whether a head trained with the fix from the start is worse is not
+answered here; CF answers it at Lepidoptera scale. The floor subset shows the stranded images are recoverable (4.66 %
+right instead of 0.1 %), but in this setting recovering them cost more on the rest. A fair 190 k test would train the
+head from scratch on the frozen trunk in both arms (more costly). The owner (to mt, 15:45): wait for CF before
+discarding the fix.
+
+**CF moved to the shards** (cfsh, job 12470314). The staged cf-v2s job was stopped (owner) because staging global_lepi
+to the node ran at 12-220 files/s and could not finish in 12 h. cfsh trains the fix and the control on
+global_lepi_shards-v1, one B200 each, one factor apart; against the 5 Nov seeds the data path also differs (same
+pixels, different stream order, a seed-like effect).

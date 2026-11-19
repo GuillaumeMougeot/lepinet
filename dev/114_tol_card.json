@@ -1,0 +1,19 @@
+{
+  "title": "Tree of Life classifier and embedding model (DINOv3 ConvNeXt-L, 190,199 species)",
+  "summary": "One photograph of an organism -> species, genus, family, order, class, phylum and kingdom at once, and a 1,536-d embedding for retrieval and few-shot use. A DINOv3 ConvNeXt-L trunk with a hierarchical cosine head over 190,199 species, trained with mini_trainer for the lepinet project. DRAFT card written by the export agent (2026-11-19): every claim below cites a row of lepinet's RESULTS.md; the licence is the owner's decision.",
+  "base_model": "timm/convnext_large.dinov3_lvd1689m",
+  "tags": ["biology", "tree-of-life", "species-classification", "hierarchical-classification", "taxonomy", "image-embedding", "dinov3", "convnext"],
+  "training": "tol256-v1: 190,199 species over seven ranks (kingdom to species), labels keyed by their full taxonomic path. DINOv3 ConvNeXt-L (timm `convnext_large.dinov3_lvd1689m`) with a hierarchical cosine head (one prototype per species, coarser ranks by logsumexp), fine-tuned end to end at 224 px (images read at 256), lr 8e-4, 5 passes, about 106 B200-hours (lepinet RESULTS.md W3).",
+  "results": [
+    {"claim": "Validation species macro-F1 0.640 over 190,199 species.", "source": "lepinet RESULTS.md, row W3"},
+    {"claim": "As a frozen embedding: 1- / 5-shot on Rare Species 62.9 / 79.1 (BioCLIP-2 60.4 / 77.0); on 1,810 held-out taxa 68.9 / 86.3 (BioCLIP-2 66.2 / 85.0), with SimpleShot, BioCLIP-2's protocol.", "source": "lepinet RESULTS.md, row Z19 (TL1)"},
+    {"claim": "Moths, frozen, nearest class mean from 10 images per species (12,041 species): accuracy 84.6 %, macro-F1 0.824 (BioCLIP-2 82.8 % / 0.798).", "source": "lepinet RESULTS.md, row Z20"},
+    {"claim": "Its Lepidoptera classes alone, without fine-tuning: test-fold species macro-F1 0.875, below moth-specific models (0.912-0.916).", "source": "lepinet RESULTS.md, row W3 (TL3)"}
+  ],
+  "limitations": [
+    "A closed label set: an organism outside the 190,199 species still receives one of them. Use the coarser ranks or the embedding when unsure.",
+    "Not calibrated: no temperature or confidence thresholds have been fitted; probabilities are the raw softmax.",
+    "On moths a specialised model is better (see Results); fine-tuning this trunk on one group erases its general embedding (lepinet RESULTS.md Z21).",
+    "Classifies one organism per image; it does not detect."
+  ]
+}
