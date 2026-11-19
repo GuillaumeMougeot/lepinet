@@ -732,3 +732,44 @@ Probe north_europe tta3bm: 224 0.404 / 0.590, 288 0.387 / 0.579, 320 0.376 / 0.5
 trained at 224 px does not gain from a larger test input here, so evaluation resolution does not explain TL3's gap;
 whether training at 320 does is part of TL4's answer (TL4 trains at 320 from the ToL trunk). Relabelling TL3's 224
 predictions with the later dev/109 gives a byte-identical file, so the comparison holds.
+
+### TL4 (2026-11-18): the ToL trunk fine-tuned on Global Lepidoptera, against VD's three seeds
+
+mt (tl4 12465338, 14.3 h; e-tl4 12466860; sheet section "TL4"). VD's recipe, the ToL trunk instead of raw DINOv3,
+shards instead of staged files. Val species macro-F1 by epoch: TL4 0.805 / 0.854 / 0.889 / 0.917 / 0.925; VD seeds
+42-44 0.768-0.771 / 0.839-0.841 / 0.880-0.881 / 0.908-0.909 / 0.917, so TL4 leads at every epoch, most at the start
+(+3.5 after epoch 1). Test fold, line 1, zero / calibrated: TL4 0.918 / 0.913; VD 0.912-0.913 / 0.906-0.907 (seed
+range 0.0011); TL4 - VD mean +0.006 / +0.007; line 2 0.923 against 0.917-0.918; OT3 0.916. Traps, north_europe, zero /
+calibrated: probe tta3bm TL4 0.491 / 0.691, VD 0.481-0.491 / 0.674-0.695; probe-HO tta3bm 0.273 / 0.524 against
+0.249-0.268 / 0.524-0.540; probe single 0.372 / 0.606 against 0.346-0.364 / 0.606-0.620. Full vocabulary, no list,
+calibrated: TL4 0.412 against 0.453-0.464.
+
+**Predictions scored.** "Test fold +0.5 to +1.5 over VD": +0.6, held (six times the seed range). "Probe and probe-HO
++2 to +5 before trap adaptation": not met; TL4 sits inside VD's seed spread on traps, at most about 1 point above at
+zero threshold, and below it with the full vocabulary and no list.
+
+**Reading.** ToL pretraining is a better start for photos of the training domain (faster and slightly higher), and
+gives nothing measurable on trap crops once the moth model is trained. With TL1-TL3 that makes a consistent picture:
+breadth buys a better general embedding (TL1, Z20) and a small in-distribution gain, not robustness to the trap
+domain, which in this project has come only from target-domain data (self-training) or a fauna prior (Z9-Z16).
+W3's prediction that breadth helps under shift before adaptation is falsified at both stages (frozen head, TL3;
+fine-tuned, TL4). The shards behaved like staged files (TL4 is above VD in-distribution and within it on traps), which
+partly answers the held shard check. Pending: Rare Species and held-out few-shot on TL4 (how much generality survives
+fine-tuning), and TL4's trap scores with list, estimated prior and the confidence AUROC (lepinet-2a).
+
+**TL4's pending checks** (lepinet-2a, Z21 in the beyond-scaling entry). Generality after fine-tuning, head-input
+embedding, TL1's protocol: Rare Species 1/5-shot TL4 16.1 / 31.1, VD 14.5 / 28.8 (frozen ToL 62.9 / 79.1, raw DINOv3
+44.2 / 54.0); held-out taxa TL4 9.0 / 19.5, VD 7.7 / 16.9; the near > far gradient is gone. The moth recipe (whole
+network, lr 8e-4, 5 epochs) erases the ToL trunk's generality: TL4 keeps 2 of the 48 Rare Species points between
+frozen ToL and VD, and both moth models end below raw DINOv3 at this layer (one layer measured; P5's backbone layer
+kept 7 points more than its head input). Traps with an estimated prior: TL4 slightly below VD's three seeds (list +
+prior + tta3bm 0.666 against 0.681-0.683; with probe nights 0.706 against 0.707-0.718); with the list alone inside
+the spread. Discrimination inside VD's spread (VD's own seeds differ about 25 % on that measure). Confidence AUROC,
+right against wrong: TL4 0.903-0.914, level with or above VD, so TL3's confidence deficit came from the frozen ToL
+head or its 224 px input, not the trunk.
+
+**What this says for the next steps.** The ToL model's value is as a frozen encoder (TL1, Z20), not as a start for
+this recipe, which overwrites it. TL5 (Otto's recipe from the ToL trunk) would on this evidence land level with OT4,
+so it is not worth its 28 GPU-hours as planned. The run worth considering instead is route 5's: a fine-tune that keeps
+the start (a lower trunk rate, a linear probe first, or a retention term), scored on traps with list and prior and on
+Rare Species afterwards, so the trade is measured. The owner's decision.

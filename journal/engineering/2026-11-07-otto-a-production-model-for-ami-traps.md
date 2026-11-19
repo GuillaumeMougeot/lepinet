@@ -432,3 +432,24 @@ student learns TTA's output at 1x cost.
     list and tta3bm (+5.8 V2-S, +2.2 DINOv3); far below at zero threshold (OT3 0.674), where absent species
     count. With list and an estimated prior, within 2 calibrated points of OT3. On probe-HO, level with OT3 or
     above (0.562). If OT6 with list and prior reaches OT3 on probe, the trap recipe could drop self-training.
+- 2026-11-17: **OT6 scored** (job 12463508, staging 6.9 h on slow /work, training 21h45m; eval 12466305). North_europe
+  species macro-F1, calibrated / zero: probe tta3bm 0.700 / 0.521, probe-HO tta3bm 0.557 / 0.315, probe single
+  0.666 / 0.422, probe-HO single 0.488 / 0.256. OT6 - OT3 at zero threshold: -0.153 [-0.168, -0.130], -0.098
+  [-0.127, -0.060], -0.253 [-0.269, -0.219], -0.135 [-0.169, -0.087].
+  - **Prediction scored (written 2026-11-16):** "2 to 6 calibrated points below OT3 on probe": -4.9, held. "Far
+    below at zero threshold": -15.3, held. "Probe-HO level or above": -0.5 calibrated, held (level). "Within 2
+    calibrated points with list and an estimated prior": falsified narrowly (lepinet-2a, Z16): OT6 with its best
+    prior is -2.2 against OT3 as shipped (list only, 0.749) with the probe nights in the estimate, -4.9 with other
+    nights only; with the same rule on both models -1.2 / -2.4.
+  - **Reading so far:** with the list and the calibrated threshold, the pseudo-labels are worth about 5 points to
+    OT3 on probe and nothing on species the adaptation never saw. At zero threshold they are worth 15, because
+    without them the model names absent species, which is what a prior or the calibration removes. This is
+    lepinet-fable's Z9-Z15 finding reproduced on the production recipe. OT3 stays Otto.
+  - **Z16 (lepinet-2a, on OT6's per-view logits):** with the same list and estimated prior on both, the pseudo-labels
+    are worth 1.2 to 2.8 calibrated probe points and 0.1 to 0.2 points of accuracy; on species the adaptation never
+    saw, OT6 with the prior is ahead by 3.7 to 6.4. Of the probe errors self-training repairs, 73 % are also repaired
+    by list + prior, and 89 % of the repaired errors named a species absent from the traps. Discrimination: one view,
+    OT3's pairwise error is 42 % lower; with tta3bm the two are level.
+  - **Open decision for the owner:** keep self-training in the trap recipe for 1 to 3 calibrated points, or ship
+    OT6-style training plus the list and an estimated prior. The second needs no retraining per site (Z15) and is
+    better on unseen species. One seed per model, one country.

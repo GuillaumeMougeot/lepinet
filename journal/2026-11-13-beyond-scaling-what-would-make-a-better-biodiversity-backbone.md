@@ -10,7 +10,8 @@ score level with self-training alone on the calibrated macro-F1, and 76 to 78 % 
 self-training repairs are the same crops; only the small backbone also learned to read trap
 crops. Section 9, 2026-11-17, on the first Tree of Life model: frozen, it is a better encoder than
 BioCLIP-2 on Rare Species, on taxa only BioCLIP-2 has seen and on moths; its Lepidoptera head trails
-the specialist mainly through the label space, resolution and confidence, not sight). A review of the project for new scientific
+the specialist mainly through the label space, resolution and confidence, not sight. Z16, the control for Otto: with the same prior on both, OT3's pseudo-labels are worth 1 to 3
+calibrated probe points and no accuracy). A review of the project for new scientific
 routes, with six CPU checks run the same day on saved predictions and logits. Short version: under
 shift the models mostly fail by **leaving the local fauna** (87 % of trap errors name a species that
 occurs at no trap). That is a prior the model carries in its weights, and it can be estimated from
@@ -1302,6 +1303,47 @@ under OT3 with the list on probe. Then self-training with gated labels on this b
 no prior gives, and 4b holds for the campaign's st26 recipe only. Both models are one seed; three
 seeds of an unadapted V2-S span 0.5 points under that rule, so a gap above 2 would be read as real.
 
+**Z16 results (2026-11-17).** OT6's per-view fp32 logits from UCloud (files only), `dev/107`
+`calibrated`, `overlap` (OT6 to OT3) and `discrimination`; `z16_calibrated.csv`, `z16_overlap.csv`,
+`z16_discrimination.csv`. OT6's list-only scores reproduce the mini_trainer session's sheet (probe
+tta3bm 0.700, one view 0.666; probe-HO 0.557, 0.488).
+
+| calibrated macro-F1, OT6 / OT3 / gap | probe, one view | probe, tta3bm | probe-HO, tta3bm |
+|---|---|---|---|
+| nothing | 0.496 / 0.729 / -23.2 | 0.609 / 0.739 / -13.1 | 0.473 / 0.564 / -9.1 |
+| list | 0.666 / 0.742 / -7.7 | 0.700 / 0.749 / -4.9 | 0.557 / 0.562 / -0.5 |
+| list and EM | 0.671 / 0.689 / -1.7 | 0.700 / 0.713 / -1.2 | 0.565 / 0.528 / **+3.7** |
+| list and EM, probe nights included | 0.705 / 0.733 / -2.8 | 0.728 / 0.752 / -2.4 | 0.591 / 0.543 / **+4.8** |
+| accuracy gap, same four rules | -12.6, -5.6, -0.1, -0.2 | -6.9, -3.1, -0.1, -0.2 | |
+
+- With the same prior on both, the pseudo-labels are worth 1.2 to 2.8 calibrated points on probe
+  and nothing in accuracy (0.1 to 0.2). On held-out species the prior without self-training is
+  ahead by 3.7 to 6.4 points: OT3's labels pull those crops toward the labelled fauna, as T1rep's
+  real labels did (finding 4).
+- Against the shipped setting (OT3 with the list, 0.749), OT6 with its best prior is 2.2 points
+  behind with the probe nights in the estimate and 4.9 behind with the other nights only. OT3 with
+  an estimated prior gains nothing over its list (0.752 against 0.749): what the prior gives, OT3
+  already has.
+- Crop by crop (one view, full vocabulary): OT6 gets 3,392 probe crops wrong; self-training repairs
+  2,232 of them, and 73 % of those are also repaired by list and EM (V2-S 78, DINOv3 76). 89 % of
+  the repaired errors named a species absent from the traps. Self-training breaks 316 crops that
+  were right, list and EM 122.
+- Prior-free pairwise error: one view OT6 0.00024, OT3 0.00014 (42 % lower, as V2-S's 52 %);
+  tta3bm 0.00012 against 0.00011, level. Congeners: OT3 better with one view (0.0145 against
+  0.0164), worse with tta3bm (0.0166 against 0.0148). Three-view TTA gives OT6 what the
+  pseudo-labels give OT3 in discrimination.
+
+Predictions scored. One view, full vocabulary, OT6 at 0.50 to 0.58: 0.496, just under (falsified by
+0.004); lead of 15 to 23 points: 23.2, at the top; falling to 2 to 6 with list and tta3bm: 4.9,
+held. Same crops, 65 to 80 %: 73 %, held. Discrimination OT6 0.00018 to 0.00035 with OT3 20 to
+60 % lower: 0.00024 and 42 %, held (one view; level with tta3bm). Test fold within 0.3 points: not
+measured (no test-fold eval of OT6). The Otto entry's "within 2 calibrated points with list and an
+estimated prior": -2.2 with the probe nights, -4.9 without, falsified narrowly; my "within 3": held
+with the probe nights only. **Narrowing criterion for 4b (more than 5 points): not met**, though the
+out-of-sample estimate (-4.9) sits at its edge. 4b holds on the production recipe: on probe, a prior
+recovers all of self-training's accuracy and all but 1 to 3 calibrated points of its macro-F1, and
+on held-out species it does better. One seed per model.
+
 ## 9. The first Tree of Life model: what to compare it with (opened 2026-11-17, owner's question)
 
 tol-full is trained (W3: DINOv3 ConvNeXt-L, hierarchical head over seven ranks, 190,199 species, 224
@@ -1379,7 +1421,7 @@ and VD's (TL3's local copy), same crops, same scorer (`z18_tol_trap.csv`):
 |---|---|---|
 | nothing | 0.310 / 0.456 / -14.6 | 0.466 / 0.591 / -12.5 |
 | list | 0.518 / 0.617 / -9.9 | 0.590 / 0.689 / -9.8 |
-| list and EM | 0.534 / 0.633 / -9.8 | 0.601 / 0.682 / -8.1 |
+| list and EM | 0.534 / 0.633 / -9.8 | 0.601 / 0.681 / -8.1 |
 | list and EM, probe nights included | 0.561 / 0.662 / -10.1 | 0.642 / 0.714 / -7.2 |
 | accuracy, same four rules (gap) | -12.8, -4.8, -3.6, -3.4 | -8.0, -4.2, -1.9, -1.7 |
 
@@ -1534,8 +1576,105 @@ had not annealed).
 from tol256 from global_lepi (the original design's "global_lepi fill"); kingdom errors are galls,
 hosts and fungi, the "two organisms in one picture" problem (S1a), not a broken rank.
 
+### Z21, TL4 seen through the same checks (opened 2026-11-18, before running them)
+
+TL4 is the ToL trunk fine-tuned with VD's exact recipe at 320 px (one factor: the starting weights).
+The mini_trainer session scored it against VD's three seeds (`ot_scores.md`): test fold +0.6 points,
+outside VD's seed spread (0.11); traps with the list inside VD's spread (probe tta3bm 0.691 against
+0.674 to 0.695); with the full vocabulary below it (0.412 against 0.453 to 0.464). TL1-TL3's
+prediction of +2 to +5 on the traps failed. What the sheet does not say, and what I predict:
+- (a) *The prior rules leave TL4 level with VD.* With list and EM (both estimates), TL4 within
+  1.5 calibrated points of VD s42 on probe, and within VD's spread wherever the spread is known.
+- (b) *Full vocabulary: TL4 names absent species more often.* Its errors without any rule name a
+  species found at no trap more often than VD's (by 3 to 8 points of share), which is why it sits
+  below VD's spread there and level with the list. ToL saw 17,862 Lepidoptera, so a flatter prior
+  over the 12,632 classes survives fine-tuning.
+- (c) *Discrimination: TL4 better than VD.* Prior-free pairwise error 10 to 30 % lower, with one
+  view and with tta3bm; congeners better too (the frozen ToL model at 224 px was already level).
+- (d) *Confidence: TL4 recovers VD's ranking.* AUROC of top-1 confidence for right against wrong
+  answers within 0.01 of VD's (0.905, list, one view). If so, the frozen ToL head's deficit was the
+  head or the resolution, not the trunk.
+- (e) *Generality after fine-tuning (route 5).* Rare Species 5-shot on the head-input embedding:
+  TL4 keeps more than VD, TL4 45 to 60, VD 30 to 45 (P5 kept 37.6 from BioCLIP-2's 77.0; the frozen
+  ToL model is at 79.1 and raw DINOv3 at 54.0). Both far below the frozen ToL model.
+
+**Z21 results (2026-11-18).** TL4's per-view fp32 logits and weights from UCloud (files only); VD
+s43 and s44 per-view logits recomputed by the mini_trainer session with the same `logits.py` (its
+list-only scores reproduce the sheet: 0.695 and 0.674). `z21_tl4_trap.csv`, `z21_vd_seeds.csv`,
+`z21_*discrimination.csv`, `z21_*confidence.csv`.
+
+| probe, calibrated macro-F1 | TL4 | VD s42 / s43 / s44 | TL4 - VD mean |
+|---|---|---|---|
+| one view: nothing | 0.412 | 0.456 / 0.464 / 0.453 | -4.5 |
+| one view: list | 0.606 | 0.617 / 0.620 / 0.606 | -0.9 (at VD's low end) |
+| one view: list and EM | 0.605 | 0.633 / 0.626 / 0.617 | -2.0 (below) |
+| one view: same, probe nights | 0.645 | 0.662 / 0.649 / 0.641 | -0.5 (inside) |
+| tta3bm: nothing | 0.581 | 0.591 / 0.591 / 0.591 | -1.0 (below) |
+| tta3bm: list | 0.691 | 0.689 / 0.695 / 0.674 | +0.5 (inside) |
+| tta3bm: list and EM | 0.666 | 0.681 / 0.683 / 0.682 | -1.6 (below) |
+| tta3bm: same, probe nights | 0.706 | 0.714 / 0.718 / 0.707 | -0.7 (just below) |
+
+Probe-HO tells the same story: TL4 inside VD's spread with the list (0.524 against 0.525 to 0.540,
+tta3bm) and 3 points below it once a prior is estimated (0.543 against 0.564 to 0.587). Accuracy:
+level with the list (86.6 against 86.3 to 86.4 %), 1.0 to 1.2 below with the prior.
+- (a) Falsified. The prior does not leave TL4 level: VD gains 1 to 3 points more from it, so TL4
+  ends 0.5 to 2 points under VD's spread on probe and 3 under it on probe-HO.
+- (b) Half held. With no rule, one view, TL4's errors name an absent species more often (87.2 against
+  83.4 to 85.0 %); with tta3bm they do not (75.5 against 75.0 to 78.2).
+- (c) Falsified. Pairwise error is inside VD's spread: one view 0.00048 against 0.00045 to 0.00058,
+  tta3bm 0.00015 against 0.00014 to 0.00019. Congeners with one view slightly better than every VD
+  seed (0.0217 against 0.0225 to 0.0255), with tta3bm inside (0.0194 against 0.0181 to 0.0197). VD's
+  seeds differ by about 25 % on this measure, a warning for every single-seed Z10b comparison in
+  this entry (V2-S's -52 % is outside it; DINOv3's -13 % was not).
+- (d) Held. TL4's confidence ranks its answers as VD's do: AUROC 0.903 against 0.905 to 0.910 with
+  the list, one view, and 0.905 against 0.901 to 0.905 with tta3bm. With list, prior and tta3bm it is
+  better (0.914 against 0.850 to 0.864). So the frozen ToL head's deficit in Z18 (0.856 to 0.867)
+  came from its head or its 224 px input, not from the trunk.
+- (e) Falsified, and the largest effect in this section. Fine-tuned on moths, the ToL trunk keeps
+  almost none of its generality. Head-input embedding, `dev/109` SimpleShot as in TL1 (each model at
+  its own preprocessing, the two Lepidoptera models at 320 px):
+
+| 1-shot / 5-shot | Rare Species | held-out taxa | held-out 5-shot near / mid / far |
+|---|---|---|---|
+| ToL, frozen | 62.9 / 79.1 | 68.9 / 86.3 | 91.5 / 82.5 / 61.0 |
+| TL4 (ToL start, moth recipe) | 16.1 / 31.1 | 9.0 / 19.5 | 20.2 / 18.3 / 18.2 |
+| VD (DINOv3 start, moth recipe) | 14.5 / 28.8 | 7.7 / 16.9 | 17.3 / 15.7 / 16.8 |
+| DINOv3 raw | 44.2 / 54.0 | 26.3 / 39.5 | 43.1 / 36.9 / 21.9 |
+
+Both Lepidoptera models end below the raw DINOv3 they or their parent started from. The ToL start
+leaves 2 to 3 points more, nothing like the 25 to 47 points between the frozen ToL model and raw
+DINOv3. The held-out taxa lose their gradient by depth (near is no longer easier than far): the
+embedding no longer encodes taxonomy outside moths. One layer was measured (the head input); P5's
+backbone layer kept 7 points more than its head input, so the trunk may keep somewhat more.
+
+**What Z21 says.** Fine-tuned with the moth recipe, the ToL start is worth +0.6 on the test fold
+(outside VD's seed spread) and nothing on the traps: level with the list, 0.5 to 3 points under VD's
+spread once a prior is estimated. The recipe (lr 8e-4, five epochs, the whole network) overwrites
+what the five ToL passes learnt: of 48 points of Rare Species 5-shot between the frozen ToL model and
+VD, TL4 keeps 2. The ToL model's value is as a frozen encoder, not as a start for this recipe. Two
+consequences:
+- *TL5 (Otto's recipe from the ToL trunk) is not worth running as planned.* On this evidence it
+  would land level with OT4. The run worth doing instead is route 5's: a fine-tune that keeps the
+  start (lower rate on the trunk, linear probe then fine-tune, or a retention term). Scored on the
+  traps with list and prior, and on Rare Species after fine-tuning, so the trade is measured, not
+  assumed.
+- *TL3's confidence gap was the head or the 224 px input* (d). The trunk at 320 px with a moth head
+  ranks its errors as well as VD.
+
 ## Log
 
+- 2026-11-18: Z21 (TL4 through the same checks) at the `lepinet` session's request: predictions
+  first, then TL4's logits and weights from UCloud (files only), VD s43 and s44 trap logits recomputed
+  by the mini_trainer session, embeddings on the workstation GPU. Held (d); half held (b); falsified
+  (a), (c), (e). **My mistake:** the script that queued TL4's embeddings waited for the weight
+  download with `pgrep -f` on the file's path, which matched its own parent shell (whose command line
+  contained the same text), so it waited on itself for about 40 minutes with the GPU idle on my side.
+  Caught when the log showed no progress; TL4 was then embedded directly. The confidence check moved
+  into `dev/107 confidence`. Its first version took "species present at the traps" from the scorer
+  tables, which hold probe crops only, and was fixed before any number was used. Not committed.
+- 2026-11-17, afternoon: OT6 landed (mini_trainer session); Z16 run on its per-view logits
+  (files downloaded, no job). 4b holds on Otto's recipe: same prior on both, self-training worth 1.2 to
+  2.8 calibrated probe points and no accuracy; the prior ahead on held-out species. Not committed.
 - 2026-11-17: section 9 opened (the first ToL model); predictions for Z17 to Z20 written before the
   checks ran, then run the same morning at the owner's request and the `lepinet` session's (TL1 on
   the workstation GPU, 4 loader workers; tol_full's `last.pt`, its training summary and its per-view

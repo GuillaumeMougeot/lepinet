@@ -38,8 +38,9 @@ Journal: journal/2026-11-13-beyond-scaling-what-would-make-a-better-biodiversity
   tolgap         Z17: the test-fold gap between the ToL model's Lepidoptera head and VD, by group of species.
   frozen_index   Z20: support and query images for comparing frozen encoders on Lepidoptera.
   frozen         Z20: nearest class mean on the embeddings of dev/109 `embed`, test fold and probe.
+  confidence     Z18, Z21: how well top-1 confidence ranks right above wrong probe answers; errors naming absent species.
 
-Run from the repo root:  .venv/bin/python dev/107_population_probes.py {observer,prior,ghosts,presence,siteprior,geometry,siteprior2,siteprior3,observers,congeners,severity,calibrated,discrimination,invariance,overlap,newsite,tolgap,frozen_index,frozen}
+Run from the repo root:  .venv/bin/python dev/107_population_probes.py {observer,prior,ghosts,presence,siteprior,geometry,siteprior2,siteprior3,observers,congeners,severity,calibrated,discrimination,invariance,overlap,newsite,tolgap,frozen_index,frozen,confidence}
 """
 from __future__ import annotations
 
@@ -1079,7 +1080,7 @@ def overlap(args) -> None:
     res = pd.DataFrame(rows).set_index("pair").T
     pd.set_option("display.width", 200)
     print(res.round(4).to_string())
-    res.to_csv(OUT / "z13_overlap.csv")
+    res.to_csv(OUT / f"{args.out}.csv")
 
 
 def newsite(args) -> None:
@@ -1305,6 +1306,37 @@ def frozen(args) -> None:
     res.to_csv(OUT / "z20_frozen.csv", index=False)
 
 
+def confidence(args) -> None:
+    """Z18, Z21: on the probe crops, how well each model's top-1 confidence ranks its right answers above its
+    wrong ones (AUROC; share of crops answerable at 95 % precision), and the share of its errors that name a
+    species found at no trap. Reads the scorer tables `calibrated` wrote: --runs name_views,... under z9/."""
+    from sklearn.metrics import roc_auc_score
+    present = None
+    rows = []
+    for run in args.runs.split(","):
+        for rule in ("nothing", "list", "list_and_EM_probe_nights_included"):
+            d = pd.read_csv(OUT / "z9" / run / rule / "trap" / "mini_metric.csv",
+                            usecols=["filename", "level", "label", "prediction", "confidence"])
+            d = d[d["level"] == 0]
+            if present is None:   # every species labelled at the traps (all 47,905 crops; the tables hold probe crops only)
+                present = set(trap_preds("C3b-shift")["label"].astype(str))
+            probe = set(pd.read_csv(OUT / "z9" / run / rule / "trap" / "probe" / "predictions.csv", usecols=["filename"])["filename"])
+            d = d[d["filename"].isin(probe)]
+            ok = (d["label"].astype(str) == d["prediction"].astype(str)).to_numpy()
+            c = d["confidence"].to_numpy()
+            o = np.argsort(-c)
+            prec = np.cumsum(ok[o]) / np.arange(1, len(o) + 1)
+            cov = (np.flatnonzero(prec >= 0.95).max() + 1) / len(o) if (prec >= 0.95).any() else 0.0
+            wrong = d.loc[~ok, "prediction"].astype(str)
+            rows.append({"run": run, "rule": rule, "crops": len(d), "accuracy": ok.mean(),
+                         "AUROC, confidence right vs wrong": roc_auc_score(ok, c), "coverage at 95 % precision": cov,
+                         "median confidence": float(np.median(c)), "errors naming a species at no trap": float((~wrong.isin(present)).mean())})
+    res = pd.DataFrame(rows)
+    pd.set_option("display.width", 220)
+    print(res.round(3).to_string(index=False))
+    res.to_csv(OUT / f"{args.out}.csv", index=False)
+
+
 def geometry(args) -> None:
     from safetensors import safe_open
     rows = []
@@ -1332,7 +1364,7 @@ if __name__ == "__main__":
     sub = ap.add_subparsers(dest="cmd", required=True)
     for fn in (observer, prior, ghosts, presence, siteprior, geometry, siteprior2, siteprior3, observers, congeners, severity,
                calibrated, discrimination, invariance, overlap, newsite, tolgap,
-               frozen_index, frozen):
+               frozen_index, frozen, confidence):
         sp = sub.add_parser(fn.__name__)
         sp.set_defaults(fn=fn)
         if fn is siteprior2:
@@ -1349,11 +1381,15 @@ if __name__ == "__main__":
             sp.add_argument("--fold", required=True, help="folder with {site} for lv, oh, ss")
         if fn is overlap:
             sp.add_argument("--pairs", required=True, help="name=unadapted folder=self-trained folder;...")
+            sp.add_argument("--out", default="z13_overlap")
         if fn is calibrated:
             sp.add_argument("--rules", default="", help="subset of the rules, separated by ';'")
         if fn is discrimination:
             sp.add_argument("--common", action="store_true", help="only species that every folder's model can name")
         if fn is frozen:
             sp.add_argument("--embs", required=True, help="name=folder of the global embed=folder of the trap embed,...")
+        if fn is confidence:
+            sp.add_argument("--runs", required=True, help="z9 subfolders (name_views), comma-separated")
+            sp.add_argument("--out", default="z21_confidence")
     a = ap.parse_args()
     a.fn(a)
