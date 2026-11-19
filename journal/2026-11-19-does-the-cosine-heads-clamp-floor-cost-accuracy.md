@@ -1,7 +1,7 @@
 # Does the cosine head's clamp floor cost accuracy, and does the fix train as well?
 
 **Kind:** research · **Status:** OPEN (2026-11-19). The defect measured at 190 k classes (`dev/113`); the fix
-specified for mini_trainer; its test (CF) to run before any longer ToL training. Found at Lepidoptera scale by the
+built in mini_trainer (mt, 1554c9c, CPU test passed); its tests (CF, and a 190 k-class head check) submitting, before any longer ToL training. Found at Lepidoptera scale by the
 mt session on 2026-11-03 ([[2026-11-03-moving-the-recipe-into-mini-trainer]]); the floor itself was first seen in
 August ([[2026-08-06-the-cosine-head-is-not-unit-norm]]).
 
@@ -68,10 +68,24 @@ default), or a clamp that passes the gradient through.
 The pilot cannot test it: after one pass nothing is on the floor. The floor exists in trained Lepidoptera heads, and
 three seeds give a noise band, so:
 
-- **CF**: V2-S BU with the fix, otherwise exactly v2s_bu_s42 (one factor), against v2s_bu_s42/43/44 (test fold
-  species macro-F1 seed range about 0.11 points). Built by mt with a CPU test of the gradients above.
+- **CF**: V2-S BU with the fix, otherwise exactly v2s_bu_s42, against v2s_bu_s42/43/44 (test fold species macro-F1
+  seed range about 0.11 points). The three seeds ran on 5 Nov code, so the same job also reruns v2s_bu_s42 on today's
+  code without the fix (mt's suggestion): CF is one factor from that control, and the control against the old s42
+  shows whether the code moved anything. Built by mt as the opt-in head option `magnitude_after_angle` (default
+  unchanged); its CPU test reproduces the gradients above (zero for a floored target before, non-zero after),
+  identical logits at g = 1, and the option surviving a save and reload.
 - **Predictions (2026-11-19, before any run):** nothing on the floor by construction; test fold within the seed range
   or up to 0.3 above (the stranded share, 0.1-0.3 % of images at Lepidoptera scale, bounds the gain); traps not below the seeds. If
   CF is below the range on the test fold, the floor is doing useful work and the next ToL run keeps the current head.
-- A 190 k-class check, if mt finds it cheap: the ToL head retrained on frozen tol_full features of a ToL subset, old
-  form against the fix.
+- **The 190 k-class check** (mt's design, about 2-3 B200-hours): the V2-S run cannot show the floor at ToL scale, so
+  two head-only arms on tol_full's frozen trunk, both starting from its trained head (78 % of pairs on the floor), one
+  with the current head and one with the fix, each trained for one pass of the pilot set. The two forms give
+  different logits at the same parameters when g is not 1, so the fixed arm starts perturbed (a floored pair at cos
+  -0.8 moves from -61.6 to about -51; a true class at cos 0.5 from 30.7 to about 28.9): this tests how training
+  proceeds from there, not a drop-in swap.
+- **Predictions for the 190 k check (supervisor, 2026-11-19, before it runs):** (a) the current arm keeps its floor
+  (pairs and stranded targets within 0.2 points of 78.4 % and 0.88 %); (b) the fixed arm's top-1 on the known test
+  images ends within 1 point of the current arm's, either way; (c) on the images whose true class started on the
+  floor, the fixed arm gets at least 10 points more of them right than the current arm. If (b) fails by more than a
+  point downward, the floor does useful work at 190 k classes and the next ToL run keeps the current head whatever
+  CF says; if (c) fails, the stranded images are wrong for reasons the floor does not explain.

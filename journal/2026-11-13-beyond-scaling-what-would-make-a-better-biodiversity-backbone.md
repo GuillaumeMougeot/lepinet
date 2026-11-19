@@ -1688,8 +1688,65 @@ Predictions (written before any of it ran):
 - (e) Consequence: with no crop under 64 px, a MixRes-style augmentation is worth at most 1 to 3
   points here, a one-factor 224 px run at most, not a priority above the prior and the list.
 
+**Z22 results (2026-11-19).** `dev/107 cropsize`: each model's list-rule prediction table (my `z9/`
+tables; OT4's from the mini_trainer session's `u/` scores, which it reproduces: 0.725 and 0.760),
+split into quintile crop sets, each scored with `flemming.py --set-file` (calibrated by (trap,
+night), 20 seeds); `z22_cropsize.csv`, sets in `z22/sets/`. Absolute quintiles of sqrt(area): 70-138,
+138-163, 163-194, 194-230, 230-674 px (3,040 crops each, 163 to 203 species). Relative: under 0.92 of
+the species' median, 0.92-0.98, 0.98-1.02, 1.02-1.09, above 1.09.
+
+Accuracy with the list, smallest / largest quintile (Q5 - Q1):
+
+| model (training px) | absolute, one view | absolute, tta3bm | within species, one view | within species, tta3bm |
+|---|---|---|---|---|
+| OT3 (BioCLIP-2, 224, self-trained) | 93.0 / 92.4 (-0.7) | 94.1 / 93.5 (-0.6) | 85.2 / 92.5 (+7.4) | 87.9 / 93.2 (+5.3) |
+| OT4 (DINOv3, 320, self-trained) | 91.0 / 93.3 (+2.3) | 94.2 / 94.2 (0.0) | 82.0 / 91.5 (+9.5) | 87.9 / 92.9 (+5.0) |
+| P5 (BioCLIP-2, 224, self-trained) | 84.1 / 89.7 (+5.6) | 88.6 / 90.5 (+1.9) | 78.2 / 90.9 (+12.7) | 81.6 / 91.1 (+9.5) |
+| OT6 (OT3 without pseudo-labels) | 78.4 / 91.5 (+13.1) | 89.0 / 91.5 (+2.5) | 72.8 / 89.7 (+16.9) | 82.6 / 90.6 (+7.9) |
+| VD s42 (DINOv3, 320) | 71.5 / 86.6 (+15.1) | 85.6 / 88.2 (+2.6) | 65.2 / 86.6 (+21.4) | 78.4 / 89.4 (+11.1) |
+| TL4 (ToL start, 320) | 69.6 / 86.8 (+17.3) | 86.4 / 88.7 (+2.3) | 64.5 / 87.0 (+22.5) | 78.1 / 90.0 (+12.0) |
+| ToL frozen head (224) | 65.2 / 83.4 (+18.2) | 78.8 / 85.5 (+6.6) | 58.4 / 83.5 (+25.1) | 71.2 / 87.1 (+15.9) |
+
+Calibrated macro-F1 follows the same order (one view, absolute Q5 - Q1: OT3 +7.8, OT4 +15.7, P5
++12.7, OT6 +18.0, VD +22.9, TL4 +21.3, ToL +24.6; tta3bm +5.6 to +14.8). Gap to the test fold
+(accuracy), smallest against largest absolute quintile: one view VD 19.9 against 4.8, TL4 22.6
+against 5.3, ToL 22.8 against 4.6; tta3bm 5.9 against 3.3, 5.8 against 3.5, 9.1 against 2.5; OT3 none
+in either (its probe accuracy with the list is above its test-fold accuracy).
+
+- (a) Falsified as stated: the rise depends on whether the model trained on trap crops. Models that
+  never saw one rise 13 to 18 points with one view (above my range); the self-trained OT3 and OT4 do
+  not rise at all (-0.7, +2.3); P5 in between (+5.6). With tta3bm the rise falls to 2 to 3 points for
+  all but the frozen ToL head (6.6): held.
+- (b) Falsified. The effect is not species composition: within species it is as large or larger
+  (VD +21.4 against +15.1). Caveat: a crop small for its species is not only a lower-resolution
+  moth; it may be a truncated detection or a moth with folded wings. That split mixes resolution
+  with framing and posture.
+- (c) Falsified. No interaction with training resolution: the frozen ToL head (224) and TL4 (320),
+  same trunk origin, lose the same on small crops (+18.2, +17.3); OT4 (320) and OT3 (224) both
+  lose almost nothing (+2.3, -0.7). What separates the models is trap training, not input size.
+- (d) Falsified for the models that never saw a trap: with one view their smallest quintile's gap
+  to the test fold is 4 to 5 times the largest's (1.7 to 3.7 times with tta3bm). OT3 has no gap.
+
+**What Z22 says.** The small-crop deficit is a domain gap, and three things we already use remove
+most of it: trap self-training (OT3 and OT4 lose nothing on small crops; OT6, the same recipe without
+pseudo-labels, loses 13 points), three-view TTA (the never-trap models' 15 to 18 points shrink to 2
+to 3), and the list. Training resolution does not interact with crop size. **For Otto a MixRes
+augmentation has nothing to recover in absolute crop size** (OT3 with tta3bm: 94.1 % on the smallest
+quintile, its best). It could matter on the generalist path, where no trap crop is trained on (TL8a,
+the frozen ToL head, OT6). Even there TTA already takes most of it, and our crops are never under
+64 px, MixRes's regime. Before any training run, an eval-only test separates resolution from framing:
+downscale the largest-quintile probe crops to the smallest quintile's size (about 124 px) and back,
+and score a never-trap model (VD or TL4) on them. If accuracy falls to the small quintile's level,
+resolution is the cause and MixRes is worth one run on the generalist path; if not, the small-crop
+penalty is framing or posture, which MixRes does not address. Prediction (e): held in direction; the
+recoverable amount for Otto is nearer zero than 1 to 3 points.
+
 ## Log
 
+- 2026-11-19: Z22 (crop size, the owner's MixRes question) at the supervising session's request
+  (lepinet-cf): predictions first, then CPU only on saved prediction tables. (a) to (d) falsified, (e)
+  held in direction. TL8a and TL8b (the frozen-ToL-trunk moth heads, formerly G1a and G1b) to be
+  scored as Z16 and Z21 when their logits land. Not committed (the supervisor commits).
 - 2026-11-18: Z21 (TL4 through the same checks) at the `lepinet` session's request: predictions
   first, then TL4's logits and weights from UCloud (files only), VD s43 and s44 trap logits recomputed
   by the mini_trainer session, embeddings on the workstation GPU. Held (d); half held (b); falsified

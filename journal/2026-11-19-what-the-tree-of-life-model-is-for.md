@@ -117,7 +117,7 @@ predictions written now:
 
 | step | what | cost | prediction |
 |---|---|---|---|
-| TL8 | specialisation only, trunk frozen. **Approved 2026-11-19, built by mt.** TL8a: OT4's recipe (Otto's, on DINOv3 ConvNeXt-L BU, TrivialAugmentWide, 10 epochs) with tol_full's trunk frozen, 224 px, no pseudo-labels; TL8b: TL8a plus OT3's gated labels. Scored with list and estimated prior (lepinet-2a) | two 1-GPU runs; the loader is the owner's choice (both staged as one 2-GPU job, or the gated-label merge added to the shard loader first); the trunk runs forward only, so well under OT4's training time; first sketched as cached features, which would drop the augmentation | TL8b probe 0.64-0.70 calibrated with list and prior: above the 190 k head (0.590), below Otto (0.749); probe-HO near OT6 (0.557). Rare Species unchanged from tol_full (the trunk is frozen; a check that it is) |
+| TL8 | specialisation only, trunk frozen. **Approved 2026-11-19, built by mt.** TL8a: OT4's recipe (Otto's, on DINOv3 ConvNeXt-L BU, TrivialAugmentWide, 10 epochs) with tol_full's trunk frozen, 224 px, no pseudo-labels; TL8b: TL8a plus OT3's gated labels. Scored with list and estimated prior (lepinet-2a) | two 1-GPU runs on the mini_trainer shards (owner's choice, 2026-11-19: TL8a at once, TL8b once the gated-label merge is in the shard loader, so the two differ by the labels only); the trunk runs forward only, so well under OT4's training time; first sketched as cached features, which would drop the augmentation | TL8b probe 0.64-0.70 calibrated with list and prior: above the 190 k head (0.590), below Otto (0.749); probe-HO near OT6 (0.557). Rare Species unchanged from tol_full (the trunk is frozen; a check that it is) |
 | TL9 | a little fine-tuning (route 5): TL8's head as the start, trunk at a tenth of the head's rate, TrivialAugmentWide, gated labels | 1 run, about 14-28 B200-hours | probe within 2 points of Otto (0.73-0.77), probe-HO above it; Rare Species 5-shot stays above 60 (TL4 kept 31). Both together = the generalist path matches the specialist |
 | TL10 | a second generalist (ToL v2), section 6 | 1 run, 200-320 B200-hours | its frozen moth head (TL8 on v2) closer to Otto than TL8; held-out few-shot not below tol-full |
 
@@ -178,6 +178,14 @@ Plan: first lepinet-2a's CPU check (requested 2026-11-19): is the trap deficit c
 training resolution interact with crop size? If yes, one moth run, **MR**: OT3's recipe plus the matched resolution
 augmentation, one factor, scored by crop-size quintile. Into ToL only after MR is positive, because the one-run
 rule allows no ToL ablation and the generalist's few-shot benchmarks are high-resolution photos that it could cost.
+
+**Check done (Z22, lepinet-2a, 2026-11-19): no on both counts for Otto.** The small-crop deficit is a domain gap, not a
+resolution one. Models never trained on trap crops lose 13-18 points on the smallest fifth of crops with one view;
+the self-trained OT3 and OT4 lose nothing (-0.7, +2.3), and three-view TTA shrinks the others' loss to 2-3 points.
+Training resolution does not interact with crop size (224 and 320 lose alike). So MR is not run for Otto, which has
+nothing to recover. It could still matter on the generalist path (TL8a, the frozen ToL head), which sees no trap
+crop; before any run, an eval-only test (largest crops downscaled to the smallest's size and back, scored by a
+never-trap model) separates resolution from framing and posture. Details in the beyond-scaling entry, Z22.
 
 ## What I got wrong
 
