@@ -1661,6 +1661,33 @@ consequences:
 - *TL3's confidence gap was the head or the 224 px input* (d). The trunk at 320 px with a moth head
   ranks its errors as well as VD.
 
+### Z22, is the trap deficit on the small crops? (opened 2026-11-19, the owner's MixRes question)
+
+Jain et al. (ECCV 2024, the AMI dataset paper) train with images randomly downscaled to 25 or 50 % of
+the input and upscaled back (p = 0.25 each), and report +4 to +7 points of top-1 on AMI-Traps for
+-0.3 to -1.8 in distribution; their crops are often under 64 px (as relayed by the supervising
+session, not checked here). Ours are larger: the probe crops' sqrt(area) has median 178 px, 10th
+percentile 124, 90th 268, none under 64 (`data/trap_quality/probe_quality.parquet`). Every model
+upsamples them (to 224, or to 384 then a 320 crop). The question: is our trap deficit concentrated
+on the small crops, and does training resolution interact with crop size? Models, regional list,
+one view and tta3bm: OT3, OT6, P5 (BioCLIP-2, 224 px), OT4, TL4, VD (DINOv3, 320 px), and the frozen
+ToL head (224 px). Two splits: absolute crop-size quintiles (as asked), and **relative size within
+species** (a crop's size over its species' median on the probe), because big moths make big crops
+and an absolute split also sorts species.
+
+Predictions (written before any of it ran):
+- (a) Accuracy rises with crop size for every model. Smallest to largest absolute quintile, list,
+  one view: +5 to +12 points; with tta3bm a smaller rise.
+- (b) Less than half of that rise survives the within-species split. Much of the absolute effect is
+  which species are small (micro-moths, harder anyway).
+- (c) The 320 px models lose more on small crops than the 224 px ones: on the smallest quintile
+  against the middle one, 1 to 4 points more for OT4, TL4 and VD than for OT3, OT6 and P5. A model
+  that learnt detail from 320 px photos finds less of it in an upsampled 124 px crop.
+- (d) The gap to the test fold is concentrated in small crops, but not mostly: smallest quintile's
+  gap at most 1.5 times the largest's.
+- (e) Consequence: with no crop under 64 px, a MixRes-style augmentation is worth at most 1 to 3
+  points here, a one-factor 224 px run at most, not a priority above the prior and the list.
+
 ## Log
 
 - 2026-11-18: Z21 (TL4 through the same checks) at the `lepinet` session's request: predictions

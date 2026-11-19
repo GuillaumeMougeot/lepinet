@@ -39,8 +39,9 @@ Journal: journal/2026-11-13-beyond-scaling-what-would-make-a-better-biodiversity
   frozen_index   Z20: support and query images for comparing frozen encoders on Lepidoptera.
   frozen         Z20: nearest class mean on the embeddings of dev/109 `embed`, test fold and probe.
   confidence     Z18, Z21: how well top-1 confidence ranks right above wrong probe answers; errors naming absent species.
+  cropsize       Z22: accuracy and calibrated macro-F1 by crop-size quintile, absolute and within species.
 
-Run from the repo root:  .venv/bin/python dev/107_population_probes.py {observer,prior,ghosts,presence,siteprior,geometry,siteprior2,siteprior3,observers,congeners,severity,calibrated,discrimination,invariance,overlap,newsite,tolgap,frozen_index,frozen,confidence}
+Run from the repo root:  .venv/bin/python dev/107_population_probes.py {observer,prior,ghosts,presence,siteprior,geometry,siteprior2,siteprior3,observers,congeners,severity,calibrated,discrimination,invariance,overlap,newsite,tolgap,frozen_index,frozen,confidence,cropsize}
 """
 from __future__ import annotations
 
@@ -1337,6 +1338,88 @@ def confidence(args) -> None:
     res.to_csv(OUT / f"{args.out}.csv", index=False)
 
 
+Z22 = OUT / "z22"
+U = Path("/data/au761367/otto_eval/u")   # the mini_trainer session's scored predictions, read only
+CROPSIZE_RUNS = {   # name: (views, list-rule prediction table of every probe crop)
+    **{f"{m}_{v}": OUT / "z9" / f"{m}_{v}" / "list" / "trap" / "mini_metric.csv"
+       for m in ("OT3", "OT6", "P5", "TL4", "VD s42", "ToL") for v in ("r0", "tta3bm")},
+    "OT4_r0": U / "otto_dinov3_bu_gate70_trivial_s42/scores/ne-none/trap/mini_metric.csv",
+    "OT4_tta3bm": U / "otto_dinov3_bu_gate70_trivial_s42/scores/ne-tta3bm/trap/mini_metric.csv",
+}
+TESTFOLD = {   # species accuracy and calibrated macro-F1 on the full test fold, same protocol (E3 line 1)
+    "OT3": (0.9181, 0.9108), "VD s42": (0.9143, 0.9060), "TL4": (0.9215, 0.9131), "ToL": (0.8798, 0.8685)}
+
+
+def cropsize(args) -> None:
+    """Z22: accuracy and calibrated macro-F1 (list rule) by crop-size quintile of the probe crops, absolute
+    (sqrt of the crop's area) and relative to the species' median size on the probe (so that the split does
+    not sort species). Scored with flemming.py's --set-file, one copy of each prediction table under z22/."""
+    import os
+    import shutil
+    import subprocess
+    from concurrent.futures import ThreadPoolExecutor
+    q = pd.read_parquet(ROOT / "data/trap_quality/probe_quality.parquet")
+    q["size"] = np.sqrt(q["area"])
+    q["species"] = q["image_path"].str.split("/").str[0]
+    q["rel"] = q["size"] / q.groupby("species")["size"].transform("median")
+    q["abs_q"] = pd.qcut(q["size"], 5, labels=[f"qa{i}" for i in range(1, 6)])
+    q["rel_q"] = pd.qcut(q["rel"], 5, labels=[f"qr{i}" for i in range(1, 6)])
+    (Z22 / "sets").mkdir(parents=True, exist_ok=True)
+    sets = {}
+    for col in ("abs_q", "rel_q"):
+        for name, g in q.groupby(col, observed=True):
+            f = Z22 / "sets" / f"{name}.parquet"
+            g[["image_path"]].to_parquet(f)
+            sets[name] = f
+    bounds = q.groupby("abs_q", observed=True)["size"].agg(["min", "max", "size"])
+    print("absolute quintiles, sqrt(area) px:", bounds.round(0).astype(int).to_dict("index"))
+    print("relative quintiles, size / species median:", q.groupby("rel_q", observed=True)["rel"].agg(["min", "max"]).round(2).to_dict("index"))
+    q.to_parquet(Z22 / "probe_crops.parquet")
+
+    def run(name: str) -> None:
+        dest = Z22 / name / "trap"
+        dest.mkdir(parents=True, exist_ok=True)
+        d = pd.read_csv(CROPSIZE_RUNS[name], dtype={"label": str, "prediction": str})
+        d["filename"] = d["filename"].str.split("/").str[-2:].str.join("/")
+        d[d["filename"].isin(set(q["image_path"]))].to_csv(dest / "mini_metric.csv", index=False)
+        if (dest / "qr5" / "scores.csv").exists() and not args.force:
+            return
+        subprocess.run([str(ROOT / ".venv/bin/python"), str(MT / "dev/lepinet/flemming.py"), "score", "--predictions",
+                        str(dest / "mini_metric.csv"), "--lepinet", str(ROOT), "--seeds", "20", "--sets", "probe",
+                        *[x for k, v in sets.items() for x in ("--set-file", f"{k}={v}")]],
+                       env={**os.environ, "PYTHONPATH": str(MM)}, capture_output=True, text=True, check=True)
+        print("scored", name, flush=True)
+
+    with ThreadPoolExecutor(args.jobs) as ex:
+        list(ex.map(run, CROPSIZE_RUNS))
+    rows = []
+    for name in CROPSIZE_RUNS:
+        model, views = name.rsplit("_", 1)
+        d = pd.read_csv(Z22 / name / "trap" / "mini_metric.csv", dtype={"label": str, "prediction": str})
+        d = d[d["level"] == 0].merge(q[["image_path", "abs_q", "rel_q"]], left_on="filename", right_on="image_path")
+        d["ok"] = d["label"] == d["prediction"]
+        for st in ["probe", *sets]:
+            sc = pd.read_csv(Z22 / name / "trap" / st / "scores.csv")
+            f1 = sc[(sc.metric == "f1") & (sc.level == 0)].iloc[0]
+            m = d if st == "probe" else d[(d["abs_q"] == st) | (d["rel_q"] == st)]
+            acc = m["ok"].mean()
+            tf = TESTFOLD.get(model)
+            rows.append({"model": model, "views": views, "set": st, "crops": len(m), "species": m["label"].nunique(),
+                         "accuracy": acc, "macro-F1 calibrated": float(f1.calg_mean), "macro-F1 zero": float(f1.zero),
+                         "test fold - accuracy": (tf[0] - acc) if tf else np.nan,
+                         "test fold - macro-F1 calibrated": (tf[1] - float(f1.calg_mean)) if tf else np.nan})
+    res = pd.DataFrame(rows)
+    res.to_csv(OUT / "z22_cropsize.csv", index=False)
+    pd.set_option("display.width", 250)
+    for col in ("accuracy", "macro-F1 calibrated"):
+        for prefix in ("qa", "qr"):
+            t = res[res["set"].str.startswith(prefix) | (res["set"] == "probe")].pivot_table(
+                index=["views", "model"], columns="set", values=col, sort=False)
+            t["Q5 - Q1"] = t[f"{prefix}5"] - t[f"{prefix}1"]
+            print(f"{col}, {'absolute' if prefix == 'qa' else 'relative within species'} quintiles")
+            print((100 * t).round(1).to_string())
+
+
 def geometry(args) -> None:
     from safetensors import safe_open
     rows = []
@@ -1364,7 +1447,7 @@ if __name__ == "__main__":
     sub = ap.add_subparsers(dest="cmd", required=True)
     for fn in (observer, prior, ghosts, presence, siteprior, geometry, siteprior2, siteprior3, observers, congeners, severity,
                calibrated, discrimination, invariance, overlap, newsite, tolgap,
-               frozen_index, frozen, confidence):
+               frozen_index, frozen, confidence, cropsize):
         sp = sub.add_parser(fn.__name__)
         sp.set_defaults(fn=fn)
         if fn is siteprior2:
@@ -1388,6 +1471,9 @@ if __name__ == "__main__":
             sp.add_argument("--common", action="store_true", help="only species that every folder's model can name")
         if fn is frozen:
             sp.add_argument("--embs", required=True, help="name=folder of the global embed=folder of the trap embed,...")
+        if fn is cropsize:
+            sp.add_argument("--jobs", type=int, default=4)
+            sp.add_argument("--force", action="store_true", help="rescore tables already scored")
         if fn is confidence:
             sp.add_argument("--runs", required=True, help="z9 subfolders (name_views), comma-separated")
             sp.add_argument("--out", default="z21_confidence")

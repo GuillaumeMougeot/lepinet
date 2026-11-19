@@ -69,6 +69,7 @@ kept as a record. Long-term tooling does not live here: the documentation check 
 | `110_species_floor.py` | what lifting the 50-image species floor would add to Global Lepidoptera under a genus or family rule, and images per family with no floor (journal 2026-11-17) |
 | `111_tol_species_floor.py` | the same question for tol256-v1: below-floor species a genus or family rule would add, on disk (with the screens the freeze skipped for them) and in the TreeOfLife-200M catalog, and images per family with no floor; result in the docstring (journal 2026-11-17) |
 | `112_embedding_structure.py` | is the ToL embedding taxonomically structured? Species means of the saved TL1/Z21 embeddings (held-out taxa, Rare Species) for ToL, BioCLIP-2, raw DINOv3, TL4, VD: nearest-species genus/family rate, cosine by shared rank, rank correlation with tree distance (RESULTS TL7, journal 2026-11-19) |
+| `113_clamp_floor.py` | the cosine head's clamp floor: floor counts on a checkpoint (`stats`), the gradient a floored target gets with the current and fixed head (`grad`), and the explanatory figure (`figure`, journal/figures) (journal 2026-11-19, RESULTS CF) |
 
 **Conventions.** Never `uv sync` or `uv run` (the venv is hand-managed); use `.venv/bin/python`
 from the repo root.
