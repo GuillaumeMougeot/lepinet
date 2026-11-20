@@ -11,6 +11,7 @@ relative to `ucloud/`).
 | `lepinet-B8*.toml`, `lepinet-P5*.toml` | train / eval / probe / probe-HO / open-set rules / abstention for the two shipped models. **Clone these; never hand-write a `run =` line** |
 | `lepinet-ioprobe3.toml` | one-minute cold-read throughput probe: tells starvation from a hang |
 | `lepinet-tol*.toml` | TreeOfLife plan, split, probe, I/O test and fetch (1-4 vCPU) |
+| `lepinet-bt-a.toml`, `lepinet-bt-c.toml`, `setup-bt.sh` | C3 on Kim Bjerge's broad-taxon set, one B200 MIG slice each: his recipe retrained and the ToL trunk on test-time views (a), a frozen-trunk head (c); `dev/116`, staged folder synced to `/12347837/repos/broad_taxa` |
 | `setup-lepinet.sh`, `setup-crawler.sh`, `setup.sh`, `setup-staged.sh`, `stage.py` | environment setup run inside the job |
 | `budget_check.py` | the CPU budget guard (see below) |
 

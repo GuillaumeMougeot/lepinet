@@ -5,8 +5,14 @@ against Kim Bjerge's specialist (ResNet50v2 at 128 px). CPU only, ONNX Runtime, 
     .venv/bin/python -I dev/115_broad_taxa.py embed      # ToL trunk + head on every crop (his validation split first), resumable
     .venv/bin/python -I dev/115_broad_taxa.py mapping    # ToL families -> the 16 categories, the pre-registered variants
     .venv/bin/python -I dev/115_broad_taxa.py zeroshot   # no training: category masses from the hierarchical marginals
-    .venv/bin/python -I dev/115_broad_taxa.py head       # heads on the frozen embedding, fit on Kim's train split only
-    .venv/bin/python -I dev/115_broad_taxa.py leak       # how close each validation crop is to a training crop
+    .venv/bin/python -I dev/115_broad_taxa.py head       # BT1: every labelled rung, on Kim's list and site held out
+    .venv/bin/python -I dev/115_broad_taxa.py nolabels   # BT5: EM prior (L0), temperature, pseudo-label head
+    .venv/bin/python -I dev/115_broad_taxa.py leak       # near-duplicates across each split, 1-NN, byte-identical pairs
+    .venv/bin/python -I dev/115_broad_taxa.py views      # BT3: tta3bm and pad-to-square, from dev/116's embeddings
+    .venv/bin/python -I dev/115_broad_taxa.py gpu        # BT2 (Kim's recipe retrained), BT4 (frozen-trunk head)
+
+Folds: `kim` (his training list -> his validation list) and LV / OH / SS (the other two sites -> that site, pooled
+as "site held out"). The GPU job's outputs (dev/116, /12347837/repos/broad_taxa/out) go in data/broad_taxa/gpu.
 
 Data (CC-BY-4.0, Zenodo 15105293, `broadTaxonClassifier.zip`, md5 checked) and Kim's published files
 (github.com/kimbjerge/MCC24-trap, `model_order_100524/`) sit in /data/au761367/benchmarks/mcc24; they are downloaded
@@ -29,6 +35,7 @@ import argparse
 import hashlib
 import importlib.util
 import json
+import math
 import os
 import pickle
 import re
@@ -393,70 +400,103 @@ def _features(z, key):
     return x / np.linalg.norm(x, axis=1, keepdims=True) if key == "embedding" else x
 
 
-def _fit_lr(X, y, C):
-    from sklearn.linear_model import LogisticRegression
-    from sklearn.pipeline import make_pipeline
-    from sklearn.preprocessing import StandardScaler
-    return make_pipeline(StandardScaler(), LogisticRegression(C=C, max_iter=2000, tol=1e-4)).fit(X, y)
+def fold_masks(idx):
+    """kim: his training list -> his validation list; LV, OH, SS: the other two sites -> that site."""
+    site = idx.trap.str[:2].to_numpy()
+    out = {"kim": ((idx.split == "train").to_numpy(), (idx.split == "val").to_numpy())}
+    for s in ("LV", "OH", "SS"):
+        out[s] = ((site != s) & (site != ""), site == s)
+    return out
 
 
-def _choose_c(X, y, seed=0):
+def score_folds(fn, y, masks, name):
+    """fn(tr, te) -> predictions on te. Kim's list scored alone; the three sites pooled (each crop predicted by the
+    model that did not see its site)."""
+    res, pooled_y, pooled_p = {}, [], []
+    for f, (tr, te) in masks.items():
+        p = fn(tr, te)
+        if f == "kim":
+            res["kim"] = {**macro_prf(y[te], p), "diag": diagnostics(y[te], p)}
+        else:
+            res[f"site_{f}"] = {k: v for k, v in macro_prf(y[te], p).items() if k != "per_class"}
+            pooled_y.append(y[te])
+            pooled_p.append(p)
+    yy, pp = np.concatenate(pooled_y), np.concatenate(pooled_p)
+    res["site"] = {**macro_prf(yy, pp), "diag": diagnostics(yy, pp)}
+    print(_line(f"{name} | Kim's list", res["kim"]))
+    print(_line(f"{name} | site held out", res["site"]), flush=True)
+    return res
+
+
+class LR:
+    """Multinomial logistic regression, sklearn's objective (C * sum of cross-entropies + |W|^2 / 2) on inputs
+    standardised on the training part, solved with full-batch L-BFGS in torch (fp32): sklearn's lbfgs took minutes
+    per fit at 100 k x 1,536."""
+
+    def __init__(self, C):
+        self.C = C
+
+    def fit(self, X, y):
+        import torch
+        self.mu, self.sd = X.mean(0), X.std(0) + 1e-6
+        Xt = torch.from_numpy(((X - self.mu) / self.sd).astype(np.float32))
+        yt = torch.from_numpy(y.astype(np.int64))
+        self.W = torch.zeros(X.shape[1], len(CATS), requires_grad=True)
+        self.b = torch.zeros(len(CATS), requires_grad=True)
+        opt = torch.optim.LBFGS([self.W, self.b], max_iter=500, tolerance_grad=1e-6, line_search_fn="strong_wolfe")
+        lam = 1.0 / (self.C * len(y))
+
+        def closure():
+            opt.zero_grad()
+            loss = torch.nn.functional.cross_entropy(Xt @ self.W + self.b, yt) + 0.5 * lam * (self.W ** 2).sum()
+            loss.backward()
+            return loss
+        opt.step(closure)
+        return self
+
+    def logits(self, X):
+        import torch
+        with torch.no_grad():
+            return (torch.from_numpy(((X - self.mu) / self.sd).astype(np.float32)) @ self.W + self.b).numpy()
+
+    def predict(self, X):
+        return self.logits(X).argmax(1)
+
+
+def _choose_c(X, y, seed=0, verbose=False):
     hold = np.random.default_rng(seed).random(len(y)) < 0.1
-    scores = {}
-    for C in (0.1, 1, 10, 100):
-        m = _fit_lr(X[~hold], y[~hold], C)
-        scores[C] = macro_prf(y[hold], m.predict(X[hold]))["f1"]
-        print(f"  C {C:6}: macro F1 on 10 % of the training list {scores[C]:.4f}", flush=True)
-    return max(scores, key=scores.get), scores
+    scores = {C: macro_prf(y[hold], LR(C).fit(X[~hold], y[~hold]).predict(X[hold]))["f1"] for C in (0.1, 1, 10, 100)}
+    if verbose:
+        print("   C on 10 % of the training part:", {k: round(v, 4) for k, v in scores.items()}, flush=True)
+    return max(scores, key=scores.get)
 
 
-def head(_):
-    idx = pd.read_csv(OUT / "index.csv", keep_default_na=False)
-    z = load_shards(("embedding", "features"))
-    assert len(z["kim_idx"]) == len(idx), f"embed is not finished: {len(z['kim_idx'])} of {len(idx)} rows"
-    y = idx.label.to_numpy()
-    tr, va = (idx.split == "train").to_numpy(), (idx.split == "val").to_numpy()
-    res = {}
-    for name, key in (("a_lr_embedding", "embedding"), ("c_lr_features", "features")):
-        X = _features(z, key)
-        t0 = time.time()
-        C, grid = _choose_c(X[tr], y[tr])
-        m = _fit_lr(X[tr], y[tr], C)
-        p = m.predict(X[va])
-        res[name] = {**macro_prf(y[va], p), "diag": diagnostics(y[va], p), "C": C, "grid": grid,
-                     "fit_seconds": time.time() - t0}
-        print(_line(f"({name[0]}) LR on {key}, C {C}", res[name]), flush=True)
-        if key == "embedding":
-            np.save(OUT / "head_a_val_pred.npy", p)
-    X = _features(z, "embedding")
-    mu = np.stack([X[tr & (y == c)].mean(0) for c in range(len(CATS))])
-    mu /= np.linalg.norm(mu, axis=1, keepdims=True)
-    p = (X[va] @ mu.T).argmax(1)
-    res["b_nearest_class_mean"] = {**macro_prf(y[va], p), "diag": diagnostics(y[va], p)}
-    print(_line("(b) nearest class mean", res["b_nearest_class_mean"]))
-    res.update(ladder(idx, y, tr, va))
-    (OUT / "head.json").write_text(json.dumps(res, indent=1))
+def _lr_rung(X, y, chosen, tag):
+    def fn(tr, te):
+        C = _choose_c(X[tr], y[tr])
+        chosen[tag].append(C)
+        return LR(C).fit(X[tr], y[tr]).predict(X[te])
+    return fn
 
 
-def ladder(idx, y, tr, va):
-    """C5's decomposition (added after the zero-training score, predictions written first): from the frozen ToL
-    head's own output to a head on the embedding, each rung fit on Kim's training list only.
-    L1: 16 biases on the zero-training log masses (class prior only); L2: a linear map of the 16 log masses
-    (the mapping relearned); L3: logistic regression on the log family posterior (5,039 families, those with mean
-    mass above 1e-4 on the training list)."""
-    import torch
+def category_logmass(fp, variant="V0"):
     labels = json.loads((RELEASE / "heads/tol.json").read_text())["labels"][2]
-    z = load_shards(("family_p",))
-    fp = z["family_p"].astype(np.float32)
-    fc, _ = family_category(labels, "V0")
+    fc, _ = family_category(labels, variant)
     M = np.zeros((len(labels), len(CATS)), np.float32)
     M[np.flatnonzero(fc >= 0), fc[fc >= 0]] = 1
-    lm = np.log(fp @ M + 1e-6)
-    out = {}
-    t = torch.from_numpy(lm[tr])
+    return np.log(fp @ M + 1e-6)
+
+
+def _softmax(z):
+    e = np.exp(z - z.max(1, keepdims=True))
+    return e / e.sum(1, keepdims=True)
+
+
+def fit_bias(lm, y):
+    import torch
+    t, yt = torch.from_numpy(lm.astype(np.float32)), torch.from_numpy(y)
     b = torch.zeros(len(CATS), requires_grad=True)
     opt = torch.optim.LBFGS([b], max_iter=200)
-    yt = torch.from_numpy(y[tr])
 
     def closure():
         opt.zero_grad()
@@ -464,79 +504,289 @@ def ladder(idx, y, tr, va):
         loss.backward()
         return loss
     opt.step(closure)
-    p = (lm[va] + b.detach().numpy()).argmax(1)
-    out["L1_bias_only"] = {**macro_prf(y[va], p), "diag": diagnostics(y[va], p), "bias": b.detach().tolist()}
-    print(_line("L1 zero training + 16 biases", out["L1_bias_only"]), flush=True)
-    C, grid = _choose_c(lm[tr], y[tr])
-    p = _fit_lr(lm[tr], y[tr], C).predict(lm[va])
-    out["L2_linear_on_16_masses"] = {**macro_prf(y[va], p), "diag": diagnostics(y[va], p), "C": C}
-    print(_line(f"L2 linear on 16 log masses, C {C}", out["L2_linear_on_16_masses"]), flush=True)
-    keep = fp[tr].mean(0) > 1e-4
-    lf = np.log(fp[:, keep] + 1e-6)
-    C, grid = _choose_c(lf[tr], y[tr])
-    p = _fit_lr(lf[tr], y[tr], C).predict(lf[va])
-    out["L3_lr_on_family_posterior"] = {**macro_prf(y[va], p), "diag": diagnostics(y[va], p), "C": C,
-                                        "families": int(keep.sum())}
-    print(_line(f"L3 LR on {keep.sum()} log family masses, C {C}", out["L3_lr_on_family_posterior"]), flush=True)
-    return out
+    return b.detach().numpy()
+
+
+def fit_temperature(lm, y):
+    import torch
+    t, yt = torch.from_numpy(lm.astype(np.float32)), torch.from_numpy(y)
+    logT = torch.zeros(1, requires_grad=True)
+    opt = torch.optim.LBFGS([logT], max_iter=100)
+
+    def closure():
+        opt.zero_grad()
+        loss = torch.nn.functional.cross_entropy(t / logT.exp(), yt)
+        loss.backward()
+        return loss
+    opt.step(closure)
+    return float(logT.exp())
+
+
+def nll_ece(p, y, bins=15):
+    conf, pred = p.max(1), p.argmax(1)
+    edges = np.linspace(0, 1, bins + 1)
+    ece = sum(abs((pred[m] == y[m]).mean() - conf[m].mean()) * m.mean()
+              for lo, hi in zip(edges[:-1], edges[1:]) if (m := (conf > lo) & (conf <= hi)).any())
+    return float(-np.log(p[np.arange(len(y)), y] + 1e-12).mean()), float(ece)
+
+
+def em_prior(p, iters=50):
+    """dev/107's em_prior with a uniform source prior: the maximum-likelihood class prior of an unlabelled set, the
+    model's posteriors held fixed (Saerens et al. 2002)."""
+    c = p.shape[1]
+    pi = np.full(c, 1.0 / c)
+    for _ in range(iters):
+        r = (pi * c).astype(np.float32)
+        d = np.maximum(p @ r, 1e-30)
+        s = r.astype(np.float64) * (p.T @ (1.0 / d).astype(np.float32))
+        pi = s / s.sum()
+    return pi
+
+
+def _load_all(cols):
+    idx = pd.read_csv(OUT / "index.csv", keep_default_na=False)
+    z = load_shards(cols)
+    assert len(z["kim_idx"]) == len(idx), f"embed is not finished: {len(z['kim_idx'])} of {len(idx)} rows"
+    return idx, z
+
+
+def head(_):
+    """BT1: every labelled rung (L1-L3, (a)-(c)), on Kim's list and site held out."""
+    idx, z = _load_all(("embedding", "features", "family_p"))
+    y = idx.label.to_numpy()
+    masks = fold_masks(idx)
+    lm = category_logmass(z["family_p"].astype(np.float32))
+    chosen = {k: [] for k in ("L2", "L3", "a", "c")}
+    res = {}
+
+    def l1(tr, te):
+        return (lm[te] + fit_bias(lm[tr], y[tr])).argmax(1)
+    res["L1_bias_only"] = score_folds(l1, y, masks, "L1 zero training + 16 biases")
+    res["L2_linear_on_16_masses"] = score_folds(_lr_rung(lm, y, chosen, "L2"), y, masks, "L2 linear on 16 log masses")
+    fp = z["family_p"].astype(np.float32)
+
+    def l3(tr, te):
+        keep = fp[tr].mean(0) > 1e-4
+        lf = np.log(fp[:, keep] + 1e-6)
+        return _lr_rung(lf, y, chosen, "L3")(tr, te)
+    res["L3_lr_on_family_posterior"] = score_folds(l3, y, masks, "L3 LR on log family masses")
+    X = _features(z, "embedding")
+    res["a_lr_embedding"] = score_folds(_lr_rung(X, y, chosen, "a"), y, masks, "(a) LR on the embedding")
+
+    def ncm(tr, te):
+        mu = np.stack([X[tr & (y == c)].mean(0) for c in range(len(CATS))])
+        mu /= np.linalg.norm(mu, axis=1, keepdims=True)
+        return (X[te] @ mu.T).argmax(1)
+    res["b_nearest_class_mean"] = score_folds(ncm, y, masks, "(b) nearest class mean")
+    res["c_lr_features"] = score_folds(_lr_rung(_features(z, "features"), y, chosen, "c"), y, masks, "(c) LR on features")
+    res["C_chosen"] = {k: v for k, v in chosen.items()}
+    (OUT / "head.json").write_text(json.dumps(res, indent=1))
+
+
+def nolabels(_):
+    """BT5: L0 (EM prior), temperature, pseudo-label head. Labels are used only to score (and T is fit on Kim's
+    training list)."""
+    idx, z = _load_all(("embedding", "family_p"))
+    y = idx.label.to_numpy()
+    masks = fold_masks(idx)
+    val = masks["kim"][1]
+    site = idx.trap.str[:2].to_numpy()
+    lm = category_logmass(z["family_p"].astype(np.float32))
+    p = _softmax(lm)
+    res = {}
+
+    def report(tag, pred):
+        r = {"kim": {**macro_prf(y[val], pred[val]), "diag": diagnostics(y[val], pred[val])},
+             "all": {k: v for k, v in macro_prf(y, pred).items() if k != "per_class"}}
+        print(_line(f"{tag} | Kim's list", r["kim"]))
+        print(_line(f"{tag} | all crops", r["all"]), flush=True)
+        return r
+    res["zero"] = report("zero training", p.argmax(1))
+    for T_name, T in (("T1", 1.0), ("Ttrain", fit_temperature(lm[masks["kim"][0]], y[masks["kim"][0]]))):
+        pt = _softmax(lm / T)
+        nll, ece = nll_ece(pt[val], y[val])
+        res[f"calibration_{T_name}"] = {"T": T, "nll_val": nll, "ece_val": ece}
+        print(f"temperature {T:.3f}: NLL {nll:.4f}, ECE {ece:.4f} on Kim's list")
+        pi = em_prior(pt)
+        res[f"L0_pooled_{T_name}"] = {**report(f"L0 EM prior, all crops, T {T:.2f}", (pt * pi).argmax(1)),
+                                      "prior": pi.tolist()}
+        ps = pt.copy()
+        for s in ("LV", "OH", "SS"):
+            m = site == s
+            ps[m] = pt[m] * em_prior(pt[m])
+        ps[site == ""] = pt[site == ""] * pi
+        res[f"L0_per_site_{T_name}"] = report(f"L0 EM prior, per site, T {T:.2f}", ps.argmax(1))
+    # pseudo-labels: (a) fit on the 70 % most confident zero-training answers of the fold's training part
+    X = _features(z, "embedding")
+    conf, pl = p.max(1), p.argmax(1)
+
+    def pseudo(tr, te):
+        rows = np.flatnonzero(tr)
+        keep = rows[conf[rows] >= np.quantile(conf[rows], 0.30)]
+        C = _choose_c(X[keep], pl[keep])
+        return LR(C).fit(X[keep], pl[keep]).predict(X[te])
+    res["pseudo_label_head"] = score_folds(pseudo, y, masks, "pseudo-label head (70 % gate)")
+    gate = conf >= np.quantile(conf[masks["kim"][0]], 0.30)
+    res["pseudo_label_correct_in_gate"] = float((pl[masks["kim"][0] & gate] == y[masks["kim"][0] & gate]).mean())
+    print(f"pseudo-labels correct in the gate (Kim's training list): {res['pseudo_label_correct_in_gate']:.3f}")
+    (OUT / "nolabels.json").write_text(json.dumps(res, indent=1))
 
 
 def leak(_):
-    """1-NN from Kim's training list to his validation list; the head trained on two sites, scored on the third."""
+    """Near-duplicates across each split (nearest training embedding), 1-NN, byte-identical pairs."""
     import torch
     torch.set_num_threads(THREADS)
-    idx = pd.read_csv(OUT / "index.csv", keep_default_na=False)
-    z = load_shards(("embedding",))
-    assert len(z["kim_idx"]) == len(idx)
+    idx, z = _load_all(("embedding",))
     X = torch.from_numpy(_features(z, "embedding"))
     y = idx.label.to_numpy()
-    site = idx.trap.str[:2].to_numpy()
-    tr, va = (idx.split == "train").to_numpy(), (idx.split == "val").to_numpy()
-    res = {}
+    masks = fold_masks(idx)
 
     def nn1(q, ref):
         best, arg = np.full(q.sum(), -2.0, np.float32), np.zeros(q.sum(), int)
-        R = X[ref]
-        ri = np.flatnonzero(ref)
-        for s in range(0, q.sum(), 4096):
-            sim = X[np.flatnonzero(q)[s:s + 4096]] @ R.T
-            v, i = sim.max(1)
+        R, ri, qi = X[ref], np.flatnonzero(ref), np.flatnonzero(q)
+        for s in range(0, len(qi), 4096):
+            v, i = (X[qi[s:s + 4096]] @ R.T).max(1)
             best[s:s + 4096], arg[s:s + 4096] = v.numpy(), ri[i.numpy()]
         return best, arg
 
-    cos, arg = nn1(va, tr)
-    p = y[arg]
-    res["nn1_random_split"] = {**macro_prf(y[va], p), "cos_ge_0.95": float((cos >= 0.95).mean()),
-                               "cos_ge_0.90": float((cos >= 0.90).mean()), "cos_median": float(np.median(cos))}
-    print(_line("1-NN, Kim's train -> val", res["nn1_random_split"]), f" nearest cos median {np.median(cos):.3f}, "
-          f">=0.95 {(cos >= 0.95).mean():.3f}")
-    head_json = json.loads((OUT / "head.json").read_text())
-    C = head_json["a_lr_embedding"]["C"]
-    pred = np.full(len(y), -1)
-    cos_site = np.full(len(y), np.nan, np.float32)
-    Xn = X.numpy()
-    for s in ("LV", "OH", "SS"):
-        te, fit = site == s, (site != s) & (site != "")
-        m = _fit_lr(Xn[fit], y[fit], C)
-        pred[te] = m.predict(Xn[te])
-        cos_site[te] = nn1(te, fit)[0]
-        r = macro_prf(y[te], pred[te])
-        res[f"site_{s}"] = r
-        print(_line(f"(a) trained without {s}, scored on {s}", r), flush=True)
-    ok = pred >= 0
-    res["site_pooled"] = {**macro_prf(y[ok], pred[ok]), "diag": diagnostics(y[ok], pred[ok]),
-                          "nn_cos_median": float(np.nanmedian(cos_site)),
-                          "nn_cos_ge_0.95": float((cos_site[ok] >= 0.95).mean())}
-    print(_line("(a) site held out, pooled", res["site_pooled"]))
+    res, cos_site, pred_site, y_site = {}, [], [], []
+    for f, (tr, te) in masks.items():
+        cos, arg = nn1(te, tr)
+        same = y[arg] == y[te]
+        r = {"n": int(te.sum()), "cos_ge_0.98": float((cos >= 0.98).mean()), "cos_ge_0.95": float((cos >= 0.95).mean()),
+             "cos_ge_0.98_same_class": float(((cos >= 0.98) & same).mean()), "cos_median": float(np.median(cos)),
+             "nn1": {k: v for k, v in macro_prf(y[te], y[arg]).items() if k != "per_class"}}
+        md5_tr = set(idx.md5[tr])
+        r["byte_identical_in_training_part"] = int(idx.md5[te].isin(md5_tr).sum())
+        res[f] = r
+        if f != "kim":
+            cos_site.append(cos), pred_site.append(y[arg]), y_site.append(y[te])
+        print(f"{f}: n {r['n']:,}  nearest training crop cos >= 0.98 {r['cos_ge_0.98']:.3f} (same class "
+              f"{r['cos_ge_0.98_same_class']:.3f}), >= 0.95 {r['cos_ge_0.95']:.3f}, median {r['cos_median']:.3f}; "
+              f"1-NN macro F1 {r['nn1']['f1']:.4f} acc {r['nn1']['accuracy']:.4f}; byte-identical {r['byte_identical_in_training_part']}",
+              flush=True)
+    c, p_, yy = np.concatenate(cos_site), np.concatenate(pred_site), np.concatenate(y_site)
+    res["site_pooled"] = {"cos_ge_0.98": float((c >= 0.98).mean()), "cos_ge_0.95": float((c >= 0.95).mean()),
+                          "cos_median": float(np.median(c)),
+                          "nn1": {k: v for k, v in macro_prf(yy, p_).items() if k != "per_class"}}
+    print("site pooled:", {k: (round(v, 3) if isinstance(v, float) else v) for k, v in res["site_pooled"].items() if k != "nn1"},
+          f"1-NN macro F1 {res['site_pooled']['nn1']['f1']:.4f}")
     (OUT / "leak.json").write_text(json.dumps(res, indent=1))
+
+
+# --------------------------------------------------------------------------------------- the GPU job's outputs
+GPU = OUT / "gpu"   # /12347837/repos/broad_taxa/out, downloaded
+
+
+def head_scores(E, batch=512):
+    """Species logits of the ToL head for normalised embeddings, then family masses (as `embed`), in torch."""
+    import torch
+    from scipy import sparse
+    P = predict_module()
+    h = P.load_head(RELEASE / "heads/tol.safetensors")
+    D = torch.from_numpy(h.direction)
+    g, b = torch.from_numpy(h.magnitude), torch.from_numpy(h.bias)
+    fam = h.parents[1][h.parents[0]]
+    S = sparse.csr_matrix((np.ones(len(fam), np.float32), (np.arange(len(fam)), fam)), shape=(len(fam), h.sizes[2]))
+    return D, g, b, S
+
+
+def views(_):
+    """BT3: zero training and head (a) under tta3bm and pad-to-square, from the job's embeddings."""
+    import torch
+    torch.set_num_threads(THREADS)
+    meta = json.loads((GPU / "emb_meta.json").read_text())
+    idx = pd.read_csv(OUT / "index.csv", keep_default_na=False)
+    assert meta["kim_idx"] == list(range(len(idx)))
+    y = idx.label.to_numpy()
+    masks = fold_masks(idx)
+    D, g, b, S = head_scores(None)
+    s = math.sqrt(D.shape[1] - 2)
+    E = {v: np.load(GPU / f"emb_{v}.npy", mmap_mode="r") for v in meta["views"]}
+    cache = OUT / "views_family_p.npz"
+    if not cache.exists():
+        fps = {"r0": [], "tta3bm": [], "padsq": []}
+        for st in range(0, len(idx), 512):
+            z = {}
+            for v in meta["views"]:
+                e = torch.from_numpy(E[v][st:st + 512].astype(np.float32))
+                e = e / e.norm(dim=1, keepdim=True)
+                z[v] = s * torch.asin((g * (e @ D.T)).clamp(-1 + 1e-7, 1 - 1e-7)) + b
+            pol = {"r0": z["r0"], "padsq": z["padsq"], "tta3bm": (z["r0"] + z["rot-30bm_pad25"] + z["rot30bm_pad25"]) / 3}
+            for k, zz in pol.items():
+                fps[k].append((S.T @ torch.softmax(zz, 1).numpy().T).T.astype(np.float16))
+            if st % 16384 == 0:
+                print(f"views: {st:,}/{len(idx):,}", flush=True)
+        np.savez(cache, **{k: np.concatenate(v) for k, v in fps.items()})
+    fps = np.load(cache)
+    res = {}
+    zr = load_shards(("family_p",))
+    ref = category_logmass(zr["family_p"].astype(np.float32)).argmax(1)
+    for k in ("r0", "tta3bm", "padsq"):
+        lm = category_logmass(fps[k].astype(np.float32))
+        pred = lm.argmax(1)
+        if k == "r0":
+            res["r0_agreement_with_cpu"] = float((pred == ref).mean())
+            print(f"GPU r0 against the CPU run: same category on {res['r0_agreement_with_cpu']:.4f} of crops")
+        res[f"zero_{k}"] = score_folds(lambda tr, te, p=pred: p[te], y, masks, f"zero training, {k}")
+    X = {v: np.asarray(E[v], dtype=np.float32) for v in meta["views"]}
+    for v in X:
+        X[v] /= np.linalg.norm(X[v], axis=1, keepdims=True)
+
+    def a_views(tr, te, test_views=("r0",), train_view="r0"):
+        C = _choose_c(X[train_view][tr], y[tr])
+        m = LR(C).fit(X[train_view][tr], y[tr])
+        return np.mean([m.logits(X[v][te]) for v in test_views], 0).argmax(1)
+    res["a_r0"] = score_folds(a_views, y, masks, "(a) r0")
+    res["a_tta3bm"] = score_folds(lambda tr, te: a_views(tr, te, ("r0", "rot-30bm_pad25", "rot30bm_pad25")), y, masks,
+                                  "(a) trained r0, tested tta3bm")
+    res["a_padsq"] = score_folds(lambda tr, te: a_views(tr, te, ("padsq",), "padsq"), y, masks, "(a) padsq")
+    (OUT / "views.json").write_text(json.dumps(res, indent=1))
+
+
+def gpu(_):
+    """BT2 (Kim's recipe) and BT4 (frozen-trunk head) from the job's logits."""
+    idx = pd.read_csv(OUT / "index.csv", keep_default_na=False)
+    y = idx.label.to_numpy()
+    res = {}
+    for tag, key in (("BT2_kim_recipe", "kim"), ("BT4_frozen_head", "frozen")):
+        files = {f: GPU / f"{key}_{f}.npz" for f in ("kim", "LV", "OH", "SS")}
+        if not all(p.exists() for p in files.values()):
+            print(tag, "missing", [f for f, p in files.items() if not p.exists()])
+            continue
+        r, yy, pp = {}, [], []
+        for f, p in files.items():
+            z = np.load(p)
+            assert (y[z["kim_idx"]] == z["label"]).all()
+            lg = z["logits_last"] if "logits_last" in z.files else z["logits"]
+            pred = lg.argmax(1)
+            if f == "kim":
+                r["kim_last"] = {**macro_prf(z["label"], pred), "diag": diagnostics(z["label"], pred)}
+                if "logits_best" in z.files:
+                    pb = z["logits_best"].argmax(1)
+                    r["kim_best_epoch"] = {**macro_prf(z["label"], pb), "epoch": int(z["best_epoch"]),
+                                           "history": json.loads(str(z["history"]))}
+                print(_line(f"{tag} | Kim's list, last epoch", r["kim_last"]))
+                if "kim_best_epoch" in r:
+                    print(_line(f"{tag} | Kim's list, best epoch {r['kim_best_epoch']['epoch']} (his protocol)",
+                                r["kim_best_epoch"]))
+            else:
+                r[f"site_{f}"] = {k: v for k, v in macro_prf(z["label"], pred).items() if k != "per_class"}
+                yy.append(z["label"]), pp.append(pred)
+        yy, pp = np.concatenate(yy), np.concatenate(pp)
+        r["site"] = {**macro_prf(yy, pp), "diag": diagnostics(yy, pp)}
+        print(_line(f"{tag} | site held out (last epoch)", r["site"]), flush=True)
+        res[tag] = r
+    (OUT / "gpu.json").write_text(json.dumps(res, indent=1))
 
 
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("step", choices=["split", "embed", "mapping", "zeroshot", "head", "leak"])
+    p.add_argument("step", choices=["split", "embed", "mapping", "zeroshot", "head", "nolabels", "leak", "views", "gpu"])
     p.add_argument("--limit", type=int, default=0, help="embed: only the first N crops (a smoke test)")
     a = p.parse_args()
-    {"split": split, "embed": embed, "mapping": mapping, "zeroshot": zeroshot, "head": head, "leak": leak}[a.step](a)
+    {"split": split, "embed": embed, "mapping": mapping, "zeroshot": zeroshot, "head": head, "nolabels": nolabels,
+     "leak": leak, "views": views, "gpu": gpu}[a.step](a)
 
 
 if __name__ == "__main__":

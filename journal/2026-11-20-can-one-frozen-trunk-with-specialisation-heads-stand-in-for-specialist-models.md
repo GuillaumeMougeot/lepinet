@@ -52,6 +52,41 @@ claim is made on the clean part.
 
 Each item is a head or an evaluation on a frozen trunk: a few B200-hours each, no trunk training.
 
+## The specialisation candidates (supervisor, 2026-11-20)
+
+Everything the project has measured that adapts a model to a deployment, grouped by what it needs from the target.
+"Fixes" says which part of the gap it addresses: the label space, bias (which classes the target holds, label
+shift), confidence, discrimination, or domain (how the target's images look). Numbers are the project's own, with
+their IDs; the last column says where each stands on the AMI broad-taxon set (C3, BT1) and is the to-do list for C3
+and C4.
+
+| | candidate | needs from the target | fixes | measured | on C3 (MCC24) |
+|---|---|---|---|---|---|
+| 1 | map the head to the target's labels by taxonomy (marginals; mass off the target's taxa set aside) | its label names | label space | Rare Species 70.2 against BioCLIP-2's text 76.8 (BS3) | done: V0-V2, 0.765 against Kim's 0.970 (BT1) |
+| 2 | target list: restrict the answer to the taxa expected there (a regional checklist) | a list | bias | the largest single prior on traps: calibrated probe V2-S 0.372 to 0.553 (Z9); +5.1 accuracy, -1.7 macro-F1 when the list is most of the scored set (K1) | built into 1 (16 categories) |
+| 3 | test-time augmentation, three views with border-mean fill (tta3bm) | nothing | domain | calibrated probe +5 to +11 (VY); halves the small-crop deficit (Z22) | **not tried** |
+| 4 | read the crop as it is: pad to square instead of cutting the centre | nothing | domain | not measured | **not tried** (Kim's crops are elongated; the square read cuts some) |
+| 5 | open-set score chosen for the model's scale, rank abstention | a precision target | unknowns | the best rule changes with scale, 6-8 points (E2, finding 6); trap out-of-vocabulary AUROC 0.84-0.86 (N3); expected-utility back-off (Q1) | V2 only (Vegetation as 'everything else') |
+| 6 | prior estimated by EM (Saerens et al. 2002) on unlabelled target images, applied as p(y\|x) x prior(y) | unlabelled images | bias | with the list, a never-trap model comes within 1.5 / 0.6 points of its self-trained twin (finding 4b, Z14); at a new site it equals self-training on two other sites (Z15); it **harms** models trained on trap labels (Z21, Z23), so it is for never-trap models such as ToL's head | **not tried**: next, as rung L0 of the C5 ladder, on all crops and per site |
+| 7 | self-training on gated pseudo-labels (OT3's recipe) | unlabelled images, GPU | bias, domain | +7.94 probe (finding 4); on the frozen trunk +4.9 calibrated (TL8b against TL8a, Z23); 73-78 % of its repairs are what list and EM give without training (Z13, Z16) | **not tried** (a CPU version: pseudo-label a head on the frozen embedding) |
+| 8 | temperature on the target | a few labels or a held-out split | confidence | a margin head needs one before any threshold (finding 9) | **not tried** |
+| 9 | nearest class mean on the frozen embedding (SimpleShot) | a few labelled images per class | discrimination | 10 images per species: 84.6 % test-fold accuracy against 89.3 for a trained head (Z20); Rare Species 79.1 at 5 shots (Z19) | planned, BT1 (b) |
+| 10 | the C5 ladder on the head's own outputs: L1 class biases, L2 a linear map of the category masses, L3 a linear model on the family posterior | labelled images | bias, then discrimination | new | planned (rungs fixed before the scores, 12:10 above) |
+| 11 | linear head on the frozen embedding | labelled images | discrimination | new | planned, BT1 (a) |
+| 12 | head trained through the frozen trunk with augmentation (TL8's recipe) | labelled images, GPU | discrimination, domain | test fold 0.895 against Otto's 0.919; probe 0.647 (TL8a) | **not tried** |
+| 13 | class-balanced classifier retraining (cRT), frozen trunk | the training labels | long-tail bias | +1.1 on the test fold with a frozen trunk (VK) | not relevant at 16 classes |
+| 14 | a small dose of real target labels | labelled target images | bias | +1.0 probe, and the gain is lost on unseen species (finding 4) | the trained heads above are this, at full dose |
+
+Two more change the trunk, so they are the generalist's training recipe rather than specialisation: resolution
+augmentation (MixRes, MR; Z22 puts never-trap models 13-18 accuracy points lower on their smallest crops than on their
+largest) and domain augmentation (AG). Fine-tuning the trunk (TL4) is the specialist reference, not a candidate:
+it erases the trunk's generality (Z21).
+
+**On Kim's split.** His validation list is close to a resubstitution test (section C3 below: 62 % of validation crops
+share their source frame with a same-class training crop; 12 byte-identical pairs, 3 across the split), so rungs 8-12
+are scored twice: on his list, to compare with his 0.970, and site held out, where only a specialist retrained on the
+same folds is a fair reference. Candidates 1-6 use no labels and are leak-free on either.
+
 ## Predictions (supervisor, 2026-11-20, before any result)
 
 - **C2.** Mean 5-shot over the ten species tasks within 3 points of BioCLIP-2's 78.3, either side; above on Insects,
@@ -179,6 +214,47 @@ only. L1: 16 biases on the zero-training log masses (the class prior alone); L2:
 (the mapping relearned); L3: logistic regression on the log family posterior (families with mean mass above 1e-4).
 Predicted macro F1 on the validation list: L1 0.80-0.84, L2 0.84-0.88, L3 0.90-0.93, then (a) at 0.955. If C5
 holds here, L1 and L2 close most of the gap; if the deficit is discrimination, only (a) does.
+
+### Wider scope (owner, 13:30): leakage, specialisation candidates, a GPU job
+
+The owner asked whether Kim's split is simply leakage, and for the specialisation candidates above (rows 3, 4, 6,
+7, 8, 12) on this set, with Kim's specialist retrained so that a leak-free comparison has a specialist. IDs:
+
+- **BT1:** zero training and every labelled rung of the ladder ((a), (b), (c), L1-L3), each scored twice: on Kim's
+  validation list, and site held out (fit on two sites, scored on the third; three folds, pooled over all crops).
+  Plus near-duplicates across each split: cosine of the nearest training embedding at least 0.98 and 0.95, 1-NN,
+  byte-identical pairs.
+- **BT2 (GPU):** Kim's recipe retrained from his repository's model code, on his split (a reproduction check against
+  0.970) and on the three site folds. His training script is not public, so the augmentation ranges are ours.
+- **BT3 (GPU, then CPU):** the trunk re-run for tta3bm (mean of the species logits over r0 and the two rotated,
+  border-mean-padded views) and pad-to-square (padsq: the crop padded to a square with its border mean, instead of
+  the centre cut), for zero training and head (a).
+- **BT4 (GPU):** a head trained through the frozen trunk with augmentation (TL8's recipe: hidden layer, cosine head,
+  TrivialAugmentWide, 10 epochs), on his split and the site folds.
+- **BT5 (CPU, no labels):** L0, an EM prior (Saerens et al. 2002, as dev/107: uniform source prior, 50 iterations)
+  on the zero-training category posterior, estimated on all crops and per site, applied as p(y|x) x prior(y); a
+  temperature on the 16 category log masses, fit on Kim's training list (argmax unchanged, so macro F1 and accuracy
+  cannot move, only calibration, and the EM prior through it); a pseudo-label head: (a) fit on the zero-training
+  answers of unlabelled crops (the training part of each fold), gated to the 70 % most confident (OT1's gate).
+
+Jobs: lepinet-bt-a (12472000: BT2 then BT3) and lepinet-bt-c (12472004: BT4), one B200 1g MIG slice each, submitted
+13:58. The trunk path in the job reproduces the CPU ONNX embeddings (r0 cosine at least 0.99992 on 27 crops).
+
+**Predictions (14:05, before any of these numbers; the zero-training score on the validation list was known):**
+
+- **Leakage:** at least 30 % of Kim's validation crops have a training crop at cosine 0.95 or more, at least 10 % at
+  0.98; site held out, under 5 % at 0.98.
+- **BT2:** the reproduction lands at 0.960-0.975 macro F1 on his list; site held out, his recipe drops 7-12 points
+  (pooled 0.85-0.90).
+- **BT1 site held out:** (a) drops 5 points or more (as predicted above); L1 and L2 drop 2 points or less (16 to 272
+  parameters cannot memorise). Against BT2 on the same folds, (a) is within 3 points of the retrained specialist.
+- **BT4:** on his list 0.960-0.970 (level with or above (a)); site held out, within 2 points of BT2 or above it.
+- **BT3:** zero training with tta3bm +1-3 points macro F1 over r0; padsq +0-2 (keeps legs, tails and long wings
+  that the centre cut loses on elongated crops; Tipulidae, Ephemeroptera, Neuroptera gain most).
+- **BT5:** L0 (EM prior, all crops pooled) +2-5 points on zero training (0.79-0.81 on Kim's list), per site no
+  better than pooled (+-1: three Danish sites share most of their fauna); the temperature changes nothing in macro
+  F1 by construction and improves calibration; the pseudo-label head 0.78-0.83, inheriting zero training's
+  systematic errors (mayflies as micro-moths, bibionids as Nematocera) rather than repairing them.
 
 ### Results
 

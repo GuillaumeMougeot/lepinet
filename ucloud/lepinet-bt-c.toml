@@ -1,0 +1,27 @@
+# C3, AMI broad taxa (MCC24): BT4 (a head trained through tol_full's frozen trunk with augmentation, TL8's recipe: his split and three site folds). dev/116_broad_taxa_gpu.py, staged with
+# its inputs in /data/au761367/benchmarks/mcc24/ucloud_bt (the 0.49 GB zip, index.csv). Owner-approved MIG job
+# (2026-11-20, relayed by the supervisor). Outputs in /12347837/repos/broad_taxa/out. Journal 2026-11-20 (one frozen trunk), RESULTS BT2-BT4.
+name = "lepinet-bt-c"
+replicas = 1
+[application]
+name = "pytorch-te"
+version = "26.05"
+[product]
+id = "gpu-nvidia-b200-1-mig.1g"
+category = "gpu-nvidia-b200"
+provider = "ucloud"
+[time_allocation]
+hours = 6
+[sync]
+local = "/data/au761367/benchmarks/mcc24/ucloud_bt"
+remote = "/12347837/repos/broad_taxa"
+[setup]
+script = "setup-bt.sh"
+run = "bash /work/broad_taxa/run_c.sh"
+[schedule]
+auto_extend = "2h"
+max_time = "12h"
+[[resources]]
+type = "file"
+path = "/12347837/repos/mini_trainer-campaign/tmp-runs/tol_full/weights"
+read_only = true
