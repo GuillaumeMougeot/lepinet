@@ -35,9 +35,13 @@ claim is made on the clean part.
    used meanwhile, and each frozen evaluation below is rerun on v2 when it lands.
 2. **C2, BioCLIP-2's suite.** Download, reproduce BioCLIP-2's published values with stock BioCLIP-2 first (as for
    Rare Species), then score tol_full: 1- and 5-shot (SimpleShot) on the ten species tasks and the non-species tasks
-   with their protocols. ToL has no text, so no zero-shot; instead, for species that are ToL classes, the head's own
-   rows with no examples (coverage reported per task), the closed-set counterpart of zero-shot. Downloads need the
-   owner's approval; the Meta-Album licence is still open (2026-11-07 entry).
+   with their protocols, and zero-shot. Zero-shot is not BioCLIP-2's privilege: BioCLIP-2 is trained on a closed set
+   of taxa and its text encoder encodes their hierarchical labels, so its zero-shot on taxa it trained on (Rare
+   Species: 76.8, above its own 1-shot 59.5) is classification by label prototypes. Ours is the same with the head's
+   rows (coverage per task reported), and coarser-rank marginals for taxa outside the vocabulary. The framing for the
+   paper: both are embedding models trained in a closed-set fashion, as ArcFace is for faces; the one difference
+   worth stating is that a text encoder can make a prototype for a name it never trained on. Downloads: the owner
+   asked for the space check (2026-11-20); the Meta-Album licence is still open (2026-11-07 entry).
 3. **C3, AMI order and species.** With the owner's order dataset: the specialist order classifier's accuracy; the
    ToL head's own order marginal (no training); an order head on the frozen trunk; then the pipeline, order then
    moth head on crops predicted Lepidoptera, scored end to end against the two specialists.

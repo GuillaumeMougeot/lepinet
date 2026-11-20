@@ -138,6 +138,12 @@ property, it is a hope.
 **Prove what you can without a GPU first.** The clean package was made to load the old checkpoint
 bit-exactly, so export, prediction and evaluation were all validated before any retraining.
 
+**Closed-set training, open-set model** (owner, said more than once; 2026-11-20). The cosine head trains an
+embedding model in a closed-set fashion, as ArcFace does for faces; BioCLIP-2 is no less closed-set (its text side
+encodes the taxonomic labels). Never write that our models "cannot do zero-shot": for an in-vocabulary taxon the
+head's row plays the text embedding's role, coarser ranks cover out-of-vocabulary taxa, and the normalised scores
+do open-set detection. The one real difference, a prototype for a never-trained name, is worth stating, not more.
+
 **Extension points are registries.** `HEAD_REGISTRY`, `DOMAIN_AUG_REGISTRY`. A `dev/` experiment adds
 an entry rather than editing the package, so the default recipe cannot drift under a published
 number. Follow this pattern for anything new that is opt-in.
