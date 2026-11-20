@@ -1,10 +1,10 @@
 """C3 on a GPU (UCloud, one B200 MIG slice): the specialist retrained, the ToL trunk under test-time views, and a head
 trained through the frozen trunk. Stages, each writing to --out; runs on CPU with --limit as a check.
 
-    python dev/116_broad_taxa_gpu.py prep   --zip broadTaxonClassifier.zip --root /tmp/mcc24 --index index.csv
-    python dev/116_broad_taxa_gpu.py kim    --root R --index I --out O            # BT2: Kim's recipe, 4 folds
-    python dev/116_broad_taxa_gpu.py embed  --root R --index I --out O --weights last.pt --sha256 H   # BT3: views
-    python dev/116_broad_taxa_gpu.py frozen --root R --index I --out O --weights last.pt --sha256 H   # BT4: head
+    python dev/117_broad_taxa_gpu.py prep   --zip broadTaxonClassifier.zip --root /tmp/mcc24 --index index.csv
+    python dev/117_broad_taxa_gpu.py kim    --root R --index I --out O            # BT2: Kim's recipe, 4 folds
+    python dev/117_broad_taxa_gpu.py embed  --root R --index I --out O --weights last.pt --sha256 H   # BT3: views
+    python dev/117_broad_taxa_gpu.py frozen --root R --index I --out O --weights last.pt --sha256 H   # BT4: head
 
 Folds (from dev/115's index.csv): `kim` = his random 80/20 split (train on his training list, score his validation
 list); `LV`, `OH`, `SS` = train on the other two sites (all crops), score the held-out site.
@@ -125,6 +125,10 @@ class KimResNet50(nn.Module):
         return self.softmax_reg1(self.relu_lv1(self.linear_lvl1(self.drop(self.model_ft(x)))))
 
 
+def _one_thread():
+    torch.set_num_threads(1)   # a pool worker: torch would otherwise size its pool from the host's 256 cores
+
+
 def _squash128(path):
     with Image.open(path) as im:
         x = torch.from_numpy(np.asarray(im.convert("RGB")).copy()).permute(2, 0, 1).float()[None]
@@ -159,7 +163,7 @@ def kim(a):
     cache = Path(a.root).parent / f"kim128_{len(idx)}.npy"
     if not cache.exists():
         t = time.time()
-        with Pool(cpus()) as pool:
+        with Pool(cpus(), initializer=_one_thread) as pool:
             arr = np.stack(pool.map(_squash128, [path_of(a, idx, i) for i in range(len(idx))], chunksize=256))
         np.save(cache, arr)
         log(f"kim: {len(arr):,} crops squashed to 128 in {time.time() - t:.0f} s")
@@ -441,6 +445,7 @@ def main():
     p.add_argument("--batch", type=int, default=64)
     p.add_argument("--limit", type=int, default=0, help="a CPU check on about N crops")
     a = p.parse_args()
+    torch.set_num_threads(cpus())   # inside a UCloud job torch sees the host's 256 cores; the cgroup quota is right
     a.epochs = a.epochs or {"kim": 25, "frozen": 10}.get(a.stage, 0)
     {"prep": prep, "kim": kim, "embed": embed, "frozen": frozen}[a.stage](a)
 

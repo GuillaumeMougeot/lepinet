@@ -45,8 +45,8 @@ import pyarrow.parquet as pq
 
 ROOT = Path(__file__).resolve().parents[1]
 TOL = Path("/data/datasets/tol256")
-CATALOG_TAXA = Path("/data/au761367/tol256s/fix_build/catalog_taxa.parquet")   # dev/102 catalog
-BENCH = Path("/data/au761367/tol256s/freeze_build/bench")                      # dev/103 bench
+CATALOG_TAXA = TOL / "provenance/fix_build/catalog_taxa.parquet"   # dev/102 catalog
+BENCH = TOL / "provenance/freeze_build/bench"                      # dev/103 bench
 C = ["kingdom", "phylum", "class", "order", "family", "genus", "species"]
 FLOOR, CAP, BENCH_HAMMING = 50, 2000, 6
 

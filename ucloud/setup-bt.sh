@@ -1,5 +1,5 @@
 # Environment for the C3 broad-taxa jobs (lepinet-bt-a, lepinet-bt-c), embedded into the batch script by ucloud-api.
-# cwd = /work/broad_taxa: a staged folder (dev/116 as bt_gpu.py, dev/115's index.csv, the MCC24 zip, lepinet's
+# cwd = /work/broad_taxa: a staged folder (dev/117 as bt_gpu.py, dev/115's index.csv, the MCC24 zip, lepinet's
 # pyproject.toml / uv.lock), not the repo. Dependencies only, from lepinet's lock (torch 2.12.1+cu130, timm).
 set -x
 export PATH="$HOME/.local/bin:$PATH"

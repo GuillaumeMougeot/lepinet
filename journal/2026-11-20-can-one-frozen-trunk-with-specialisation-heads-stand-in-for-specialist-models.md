@@ -106,8 +106,8 @@ same folds is a fair reference. Candidates 1-6 use no labels and are leak-free o
 ## C3: AMI broad taxa (MCC24)
 
 The order half of C3, on Kim Bjerge's published broad-taxon dataset rather than the owner's (still in transfer).
-Broad-taxa agent, 2026-11-20, CPU only (4 cores). Script `dev/115_broad_taxa.py`; outputs `data/broad_taxa/`;
-RESULTS BT1.
+Broad-taxa agent, 2026-11-20: CPU (4 cores) and, from 13:58, two B200 MIG slices. Scripts `dev/115_broad_taxa.py`
+(CPU) and `dev/117_broad_taxa_gpu.py` (GPU job); outputs `data/broad_taxa/`; RESULTS BT1-BT5.
 
 ### The data, Kim's split and his metric (established before any model ran)
 
@@ -237,8 +237,12 @@ The owner asked whether Kim's split is simply leakage, and for the specialisatio
   cannot move, only calibration, and the EM prior through it); a pseudo-label head: (a) fit on the zero-training
   answers of unlabelled crops (the training part of each fold), gated to the 70 % most confident (OT1's gate).
 
-Jobs: lepinet-bt-a (12472000: BT2 then BT3) and lepinet-bt-c (12472004: BT4), one B200 1g MIG slice each, submitted
-13:58. The trunk path in the job reproduces the CPU ONNX embeddings (r0 cosine at least 0.99992 on 27 crops).
+Jobs (`ucloud/lepinet-bt-a.toml`, `lepinet-bt-c.toml`, running `dev/117`): lepinet-bt-a (12472000: BT2 then BT3)
+and lepinet-bt-c (12472004: BT4), one B200 1g MIG slice each, submitted 13:58. Job a was restarted at 14:09 as
+12472031 after 11 minutes: a genuine mistake. The crop squash ran in a `multiprocessing.Pool` whose workers
+sized torch's thread pool from the host's 256 cores (CLAUDE.md warns of exactly this), so six workers crawled on
+6 vCPUs; the local check had shown it (25 crops/s) and was not read. Fixed with one thread per worker and
+`torch.set_num_threads` from the cgroup quota (800 crops/s locally). The trunk path in the job reproduces the CPU ONNX embeddings (r0 cosine at least 0.99992 on 27 crops).
 
 **Predictions (14:05, before any of these numbers; the zero-training score on the validation list was known):**
 

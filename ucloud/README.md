@@ -11,7 +11,7 @@ relative to `ucloud/`).
 | `lepinet-B8*.toml`, `lepinet-P5*.toml` | train / eval / probe / probe-HO / open-set rules / abstention for the two shipped models. **Clone these; never hand-write a `run =` line** |
 | `lepinet-ioprobe3.toml` | one-minute cold-read throughput probe: tells starvation from a hang |
 | `lepinet-tol*.toml` | TreeOfLife plan, split, probe, I/O test and fetch (1-4 vCPU) |
-| `lepinet-bt-a.toml`, `lepinet-bt-c.toml`, `setup-bt.sh` | C3 on Kim Bjerge's broad-taxon set, one B200 MIG slice each: his recipe retrained and the ToL trunk on test-time views (a), a frozen-trunk head (c); `dev/116`, staged folder synced to `/12347837/repos/broad_taxa` |
+| `lepinet-bt-a.toml`, `lepinet-bt-c.toml`, `setup-bt.sh` | C3 on Kim Bjerge's broad-taxon set, one B200 MIG slice each: his recipe retrained and the ToL trunk on test-time views (a), a frozen-trunk head (c); `dev/117`, staged folder synced to `/12347837/repos/broad_taxa` |
 | `setup-lepinet.sh`, `setup-crawler.sh`, `setup.sh`, `setup-staged.sh`, `stage.py` | environment setup run inside the job |
 | `budget_check.py` | the CPU budget guard (see below) |
 
@@ -45,6 +45,11 @@ relative to `ucloud/`).
   single-GPU Lepidoptera jobs failed with "No space left on device": each stages the 452 GB image
   set to the node's `/tmp`. Small datasets (Pl@ntNet, 0.9 min) run fine one per job; Lepidoptera runs
   go 4 per job, staged once.
+- **Moving to Trash frees nothing.** `ucloud files rm` moves a folder to its drive's `Trash/`, which
+  counts against the project's storage quota until it is emptied in the web interface (the CLI cannot
+  empty it). The quota is shared by every member's drive and the `datasets` and `models` drives.
+  `ucloud files du` and `ucloud files ncdu` read UCloud's storage index at once; it can lag recent
+  writes by hours (`--walk` counts live). Delete nothing without the owner's yes (2026-11-20).
 - **A multi-GPU job holds every GPU until its last run ends.** Put only runs of matching length in one
   job (owner, 2026-11-06): a 39 h run beside two 13.5 h ones idles two GPUs for 25 h.
 

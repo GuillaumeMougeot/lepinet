@@ -8,11 +8,11 @@ against Kim Bjerge's specialist (ResNet50v2 at 128 px). CPU only, ONNX Runtime, 
     .venv/bin/python -I dev/115_broad_taxa.py head       # BT1: every labelled rung, on Kim's list and site held out
     .venv/bin/python -I dev/115_broad_taxa.py nolabels   # BT5: EM prior (L0), temperature, pseudo-label head
     .venv/bin/python -I dev/115_broad_taxa.py leak       # near-duplicates across each split, 1-NN, byte-identical pairs
-    .venv/bin/python -I dev/115_broad_taxa.py views      # BT3: tta3bm and pad-to-square, from dev/116's embeddings
+    .venv/bin/python -I dev/115_broad_taxa.py views      # BT3: tta3bm and pad-to-square, from dev/117's embeddings
     .venv/bin/python -I dev/115_broad_taxa.py gpu        # BT2 (Kim's recipe retrained), BT4 (frozen-trunk head)
 
 Folds: `kim` (his training list -> his validation list) and LV / OH / SS (the other two sites -> that site, pooled
-as "site held out"). The GPU job's outputs (dev/116, /12347837/repos/broad_taxa/out) go in data/broad_taxa/gpu.
+as "site held out"). The GPU job's outputs (dev/117, /12347837/repos/broad_taxa/out) go in data/broad_taxa/gpu.
 
 Data (CC-BY-4.0, Zenodo 15105293, `broadTaxonClassifier.zip`, md5 checked) and Kim's published files
 (github.com/kimbjerge/MCC24-trap, `model_order_100524/`) sit in /data/au761367/benchmarks/mcc24; they are downloaded
@@ -443,7 +443,7 @@ class LR:
         yt = torch.from_numpy(y.astype(np.int64))
         self.W = torch.zeros(X.shape[1], len(CATS), requires_grad=True)
         self.b = torch.zeros(len(CATS), requires_grad=True)
-        opt = torch.optim.LBFGS([self.W, self.b], max_iter=500, tolerance_grad=1e-6, line_search_fn="strong_wolfe")
+        opt = torch.optim.LBFGS([self.W, self.b], max_iter=500, tolerance_grad=1e-4, line_search_fn="strong_wolfe")  # sklearn tol
         lam = 1.0 / (self.C * len(y))
 
         def closure():
