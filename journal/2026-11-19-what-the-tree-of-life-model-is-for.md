@@ -121,6 +121,18 @@ predictions written now:
 | TL9 | a little fine-tuning (route 5): TL8's head as the start, trunk at a tenth of the head's rate, TrivialAugmentWide, gated labels | 1 run, about 14-28 B200-hours | probe within 2 points of Otto (0.73-0.77), probe-HO above it; Rare Species 5-shot stays above 60 (TL4 kept 31). Both together = the generalist path matches the specialist |
 | TL10 | a second generalist (ToL v2), section 6 | 1 run, 200-320 B200-hours | its frozen moth head (TL8 on v2) closer to Otto than TL8; held-out few-shot not below tol-full |
 
+**TL8 scored (2026-11-20; mt's score sheet and lepinet-2a's Z23).** Calibrated species macro-F1, tta3bm, regional
+list, probe / probe-HO: TL8a 0.647 / 0.482 (test fold 0.895), TL8b 0.696 / 0.429 (test fold 0.895, equal to TL8a; OT3 0.916), against OT6
+0.700 / 0.557, OT3 0.749 / 0.562 and OT4 0.760 / 0.539. My prediction: TL8b 0.64-0.70 with the list held, at the top
+of the range; with an estimated prior it is falsified (0.576-0.613): an estimated prior harms any head trained on
+trap labels (Z23), so it is for models that never saw a trap. Probe-HO near 0.557 is falsified (0.429): the gated
+labels cost the frozen trunk 5.3 points there, where they cost OT3 nothing. **A frozen generalist plus a head does
+not reach Otto** (TL8b 5.3 under OT3, 6.4 under OT4), so TL9 is the next rung. What the frozen trunk does well: TL8a
+tells trap species apart pairwise as well as the fine-tuned 320 px models (one-view pairwise error 0.00039 against
+VD's 0.00045-0.00058), and TL8b ranks its own answers best of any model measured (AUROC right against wrong 0.935
+with tta3bm). Its deficit is class bias and confidence, not discrimination. Both trunks are unchanged (342 of 342
+tensors), so their general embedding is tol_full's. One seed each; 224 px against 320 px for OT4 and VD.
+
 **Owner, 2026-11-19: no AMI trap data in the ToL training set yet, and no 320 px**: ToL is stored at 256 px (short
 side), so 320 would only upsample, and most trap crops are smaller than that too (probe crops: median side 178 px,
 10th percentile 124, 90th 268, 96 % under 320). TL10 stays at read 256 / crop 224. My first TL10 sketch had both; it
@@ -151,13 +163,44 @@ passes" and every branch is a usable model.
 
 **What goes in, and what does not.** Changing one factor keeps the result readable; the project's +4.7 lesson
 (three changes, one jump, never attributed) applies to a 200 B200-hour run more than anywhere. In: length, and the
-clamp fix only if CF passes (it would then be a correction measured on its own). Out until tested separately:
+clamp fix only if CF passes (it would then be a correction measured on its own; **it did not**, 2026-11-20, so the current head stays). Out until tested separately:
 coarse-only labels for under-floor species (needs the loss mask, then its own run), MixRes (section 7), trap data
 (owner).
 
 **When.** Ready when (1) CF has scored (code plus one V2-S run, about a day once built), (2) TL8 has scored (it is
 the yardstick for v2's frozen moth head; about two days with staging), and (3) mt has the schedule (one-cycle at 10
 passes needs nothing new; the branched schedule needs code and a resume test). Realistically the start of next week.
+
+**Decided (owner, 2026-11-20).** TL9 on hold; TL10 first. The owner's goal for it: a frozen trunk as close as possible
+to Otto on the test fold, towards "one model to rule them all": a very good frozen generalist plus specialisation
+techniques that bridge an embedding model and a real deployment (domain shift, label shift, unknown objects). CF and
+TL8 have scored, so the conditions above are met except the branched schedule, which is dropped to start sooner:
+TL10 is tol-full with one change, 10 passes instead of 5, one-cycle, everything else equal (current head, 256/224, no
+trap data, one seed). Its pass-5 checkpoint is mid-schedule (learning rate not annealed): a progress diagnostic, not a
+matched comparison with tol-full. Yardstick: TL8a's exact recipe on the frozen v2 trunk (TL8a-v2), plus the
+generalist suite (TL1 few-shot, TL2 open-set, Z20 moth retrieval, TL7 structure).
+
+**Predictions for TL10 (supervisor, 2026-11-20, before the run).**
+- Validation species macro-F1 0.68-0.71 (tol-full 0.640).
+- TL8a-v2 test fold 0.900-0.907 at zero threshold, line 1 (TL8a 0.895; OT3 0.916, VD 0.912): the gap to Otto shrinks
+  by a quarter to a half but does not close. Basis: Lepidoptera gained 2-3 points from 5 to 10 epochs (confounded
+  with resolution) and nothing beyond; a frozen trunk passes on only part of a better trunk to one group.
+- TL8a-v2 trap probe, calibrated with the list, tta3bm: 0.65-0.68 (TL8a 0.647).
+- Generality kept: Rare Species and held-out 5-shot within 1.5 points of tol-full's 79.1 and 86.3, either way.
+- If TL8a-v2 gains under 0.3 on the test fold, length is not the lever for the frozen-trunk goal, and the next
+  generalist changes something else (data, resolution or the species floor), each tested on its own.
+
+**Beyond 10 passes, and the schedule (owner's questions, 2026-11-20).** TL10 started at 09:51 (job 12471243), so
+the choice for now is between letting it run and restarting it longer. tol-full was far from memorising its data:
+at the end, training top-1 83.3 % against validation 80.7 %, and validation species macro-F1 still rising (0.590,
+0.619, 0.634, 0.640 over the last four half-passes, the last steps mostly from the annealing). The Lepidoptera case
+where 30 epochs did worse than 10 was a model that had fitted its training set. So more than 10 passes may well pay
+on ToL, but 10 first measures the slope from 5 to 10 at half the cost of 20, and the slope decides. A small
+schedule test first would not help: a short-horizon comparison does not predict the converged outcome (CLAUDE.md,
+the margin lesson). The schedule matters for the run after TL10: a finished one-cycle run cannot be extended
+(re-warming tol_full's head cost 2.76 points in cftol), while warmup-stable-decay can continue its stable phase and
+branch cooldowns at several lengths. mt prepares it as opt-in code during TL10 (no GPU job); TL10, one-cycle at 10
+passes, is the reference a WSD run at 10 passes must match.
 
 ## 7. Resolution augmentation (MixRes), owner's question
 

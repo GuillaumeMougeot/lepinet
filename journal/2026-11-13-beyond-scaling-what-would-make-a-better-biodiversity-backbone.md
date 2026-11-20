@@ -11,7 +11,9 @@ self-training repairs are the same crops; only the small backbone also learned t
 crops. Section 9, 2026-11-17, on the first Tree of Life model: frozen, it is a better encoder than
 BioCLIP-2 on Rare Species, on taxa only BioCLIP-2 has seen and on moths; its Lepidoptera head trails
 the specialist mainly through the label space, resolution and confidence, not sight. Z16, the control for Otto: with the same prior on both, OT3's pseudo-labels are worth 1 to 3
-calibrated probe points and no accuracy). A review of the project for new scientific
+calibrated probe points and no accuracy. Z23, the frozen ToL trunk with a moth head (TL8): the same
+labels give that head exactly what they gave OT3, and an estimated prior harms any trap-trained
+head). A review of the project for new scientific
 routes, with six CPU checks run the same day on saved predictions and logits. Short version: under
 shift the models mostly fail by **leaving the local fauna** (87 % of trap errors name a species that
 occurs at no trap). That is a prior the model carries in its weights, and it can be estimated from
@@ -1741,8 +1743,131 @@ resolution is the cause and MixRes is worth one run on the generalist path; if n
 penalty is framing or posture, which MixRes does not address. Prediction (e): held in direction; the
 recoverable amount for Otto is nearer zero than 1 to 3 points.
 
+### Z23, TL8a and TL8b through the same checks (opened 2026-11-20, before scoring them)
+
+TL8 is the first rung of the step-back entry's ladder ([[2026-11-19-what-the-tree-of-life-model-is-for]],
+section 5): tol_full's trunk frozen (the training log checks all 342 trunk tensors), a moth BU head
+trained with OT4's recipe at 224 px on the mini_trainer shards. TL8a has no pseudo-labels; TL8b adds
+OT3's gated labels, nothing else. With the trunk frozen, the gated labels can change only the head, so
+TL8b against TL8a is section 8's question (does self-training repair the images or the label prior?)
+with the image half switched off. The mini_trainer session's sheet already gives TL8a with the list
+(probe tta3bm 0.647 calibrated, probe-HO 0.482; one view 0.557, 0.436), so for TL8a only the prior and
+the extra checks are predictions. TL8b's scores I have not seen.
+- (a) *The prior on TL8a acts as on the other never-trap models.* List and EM from other nights within
+  1.5 points of the list on probe tta3bm (OT6 0.0, VD -0.8, TL4 -2.5, ToL +1.1); with the probe
+  nights +2 to +4 (0.67 to 0.69). Probe-HO +1 to +4.
+- (b) *On a frozen trunk the gated labels act as a label prior.* List only, tta3bm: TL8b above TL8a by
+  3 to 6 calibrated points (OT3 over OT6: +4.9) and by 10 to 20 at zero threshold (OT3 over OT6:
+  +15.3). With an estimated prior on both: within 2 points (OT3 over OT6, trunk trainable: +1.2 to
+  +2.4; a frozen trunk leaves less for the labels). Probe-HO with a prior: TL8b 2 to 5 points under
+  TL8a (OT3 under OT6: 3.7 to 4.8).
+- (c) *Discrimination does not move.* Prior-free pairwise error (Z10b), one view: TL8b within 25 % of
+  TL8a (VD's seed spread), where OT3 was 42 % under OT6 with its trunk trained. A larger drop would
+  mean the head alone learns to read trap crops from the labels.
+- (d) *Confidence: the frozen ToL head's deficit was mostly its head.* AUROC of top-1 confidence,
+  right against wrong (list, one view): TL8a 0.88 to 0.90, between the ToL head (0.867) and VD
+  (0.905). TL8a shares the ToL head's trunk and 224 px input, so the rest of the gap is the input.
+- (e) *The supervising session's prediction* (TL8b probe 0.64 to 0.70 calibrated with list and
+  prior; probe-HO near OT6's 0.557): the first held, in its upper half (0.67 to 0.70); the second
+  falsified, TL8b probe-HO 0.47 to 0.52 (TL8a with the list is already 7.5 under OT6, and gated labels
+  lower probe-HO).
+- (f) *Against Otto's DINOv3 model* (OT4, self-trained, 320 px, list and tta3bm 0.760): TL8b 5 to 9
+  points under it with the list, and still 4 or more under it once both have a prior.
+
+What would change a conclusion: TL8b with list and prior at or above OT3 with the list (0.749) would
+make TL9 (the gentle fine-tune) unnecessary for the traps; TL8b over TL8a by more than 3 points once
+both have a prior would mean the labels give a frozen trunk's head something no prior gives, and
+would narrow finding 4b.
+
+**Z23 results (2026-11-20).** TL8a's, TL8b's and OT4's per-view fp32 logits from UCloud (files only,
+no job); `dev/107` `calibrated`, `overlap` (TL8a to TL8b), `discrimination`, `confidence`; one
+mechanism check on the estimated prior (scratch script, `z23_em_concentration.csv`). Outputs
+`z23_calibrated.csv`, `z23_ot4_calibrated.csv`, `z23_overlap.csv`, `z23_discrimination.csv`,
+`z23_confidence.csv`, `z23_ot4_confidence.csv`. The list-only scores reproduce the mini_trainer
+session's sheet (TL8a 0.647, 0.482, 0.557, 0.436; OT4 0.760, 0.725). The other models' rows are
+Z9, Z16, Z18 and Z21's.
+
+| tta3bm, calibrated macro-F1, probe / probe-HO | TL8a | TL8b | OT6 | OT3 | OT4 |
+|---|---|---|---|---|---|
+| nothing | 0.546 / 0.447 | 0.637 / 0.406 | 0.609 / 0.473 | 0.739 / 0.564 | 0.725 / 0.515 |
+| list | 0.647 / 0.482 | **0.696** / 0.429 | 0.700 / 0.557 | 0.749 / 0.562 | 0.760 / 0.539 |
+| list and EM | 0.612 / 0.468 | 0.576 / 0.370 | 0.700 / 0.565 | 0.713 / 0.528 | 0.708 / 0.508 |
+| list and EM, probe nights included | 0.661 / 0.508 | 0.613 / 0.392 | 0.728 / 0.591 | 0.752 / 0.543 | 0.752 / 0.530 |
+| accuracy, list / best prior | 85.4 / 88.4 | 88.6 / 85.7 | 89.1 / 91.7 | 92.2 / 92.0 | 92.1 / 91.8 |
+
+One view tells the same story (probe, the four rules: TL8a 0.373, 0.557, 0.555, 0.593; TL8b 0.544,
+0.652, 0.499, 0.527). For reference with the list and tta3bm: TL4 0.691 / 0.524, the frozen ToL head
+0.590 / 0.446, VD 0.674 to 0.695. At zero threshold (list, tta3bm): TL8a 0.432, TL8b 0.586, OT6
+0.521, OT3 0.674, OT4 0.692.
+- **The gated labels give the frozen trunk's head what they gave OT3.** TL8b over TL8a with the list
+  and tta3bm: +4.9 calibrated, +15.4 at zero threshold, +3.2 accuracy; OT3 over OT6: +4.9, +15.3,
+  +3.1. With the trunk frozen, all of it is the head's.
+- **They are the prior's repairs.** Of TL8a's 5,152 one-view errors (full vocabulary) the labels
+  repair 2,829; 84 % of those are also repaired by list and EM (OT6 to OT3: 73 %; V2-S 78, DINOv3
+  76), and 93 % of them named a species found at no trap. The labels break 291 right answers, list
+  and EM 319.
+- **Discrimination barely moves.** Prior-free pairwise error, one view: TL8a 0.00039, TL8b 0.00034
+  (-13 %, inside VD's 25 % seed spread; OT3 was 42 % under OT6); tta3bm 0.00015 and 0.00014;
+  congeners level (0.0244, 0.0248). TL8a's one-view error is already under VD's three seeds
+  (0.00045 to 0.00058) and TL4 (0.00048): frozen at 224 px, the ToL trunk tells trap species apart
+  as well as the fine-tuned 320 px models. Its macro-F1 deficit is in bias and confidence, as Z18
+  found for the ToL head.
+- **An estimated prior harms TL8b.** It costs 8 to 12 calibrated points with tta3bm (12 to 15 with
+  one view) and 3 to 5 accuracy points, where it leaves OT3 and OT4 within a point of the list once
+  the probe nights are in the estimate. Mechanism, measured on
+  the pool crops (one view): TL8b's EM prior has 77 effective species, against 110 in the pool's own
+  labels (OT3 104, OT4 99, OT6 104, TL8a 96, all after the list). The head is confident (median
+  top-1 posterior 0.98, as OT6's) but leans toward the common labelled species, and EM, which trusts
+  the posteriors, concentrates further and suppresses the rarer ones (macro recall 0.73 to 0.51).
+- **Probe-HO: the labels cost a frozen trunk 5 points.** TL8b 0.429 against TL8a 0.482 with the
+  list (9.8 to 11.6 with a prior), where OT3 lost nothing against OT6 (+0.5). A head on frozen
+  features can only learn the labels as a bias toward the labelled fauna.
+- **Confidence: TL8b ranks its answers best of every model measured.** AUROC, right against wrong,
+  list: one view TL8a 0.898, TL8b 0.930, OT4 0.923, VD 0.905, the ToL head 0.867; tta3bm TL8a 0.913,
+  TL8b 0.935, OT4 0.932. Coverage at 95 % precision (tta3bm): TL8b 0.882, OT4 0.943, TL8a 0.797.
+
+Predictions scored. (a) TL8a's prior: from other nights within 1.5 points of the list, falsified
+(-3.5, as TL4's -2.5); with the probe nights +2 to +4, falsified (+1.4); probe-HO +1 to +4, held with
+the probe nights only (+2.6; -1.4 without). (b) TL8b over TL8a with the list, +3 to +6 and +10 to +20
+at zero threshold: held (+4.9, +15.4). Within 2 once both have a prior: falsified, TL8b 3.6 to 4.8
+**under** (the prior hurts it). Probe-HO 2 to 5 under with a prior: falsified, 9.8 to 11.6 under
+(5.3 with the list). (c) Held (-13 %). (d) Held (0.898): the head is about 80 % of the ToL head's
+confidence gap to VD, the 224 px input the rest. (e) The supervising session's TL8b at 0.64 to
+0.70 with list and prior: held with the list (0.696, its top), falsified with an estimated prior
+(0.576 to 0.613). Probe-HO near OT6's 0.557: falsified (0.429). My refinements: upper half with the
+list held; probe-HO 0.47 to 0.52 falsified (lower). (f) Held: 6.4 under OT4 with the list, 13 to 14
+under with a prior on both.
+
+**What Z23 says.** Specialisation alone, on the frozen ToL trunk, does not approach Otto: TL8b with
+the list is 5.3 calibrated points under OT3 and 6.4 under OT4 on probe, and 13 under OT3 on probe-HO.
+Neither criterion set before the run is met: TL8b stays under OT3's 0.749, so TL9 (a little
+fine-tuning) remains the step that could close the gap. The 4b criterion (TL8b over TL8a by more than
+3 points once both have a prior) is not met on its letter, because the prior hurts TL8b; at each
+model's best rule the labels lead by 3.5 (prior with the probe nights) to 4.9 points (out of sample),
+as OT3 led OT6 by 2.4 to 4.9. So the prior replaces the labels to the same degree on a frozen trunk
+as on a trained one, and the labels' gain with the list is the same to a decimal with the trunk
+frozen: on probe, what OT3's pseudo-labels buy over OT6 can be bought without changing a trunk
+weight. That strengthens 4b's reading (mostly a label prior), with two limits: different trunks and
+resolutions, one seed each. Three practical points:
+- *No estimated prior on a model trained on trap labels.* It costs TL8b 8 to 15 points, OT3 and OT4
+  3.6 to 7.8 without the probe nights. The prior is for never-trap models; the list is for all.
+- *For TL9, read probe-HO against TL8a.* Gated labels on a frozen trunk trade 5 held-out points
+  for 5 probe points; a trainable trunk (OT3) did not pay that. TL9 should report probe with the list
+  against OT3 (0.749), probe-HO against TL8a (0.482) and OT3 (0.562), and Rare Species after
+  fine-tuning (route 5's trade).
+- *TL8b is the best-ranked model for abstention* (AUROC 0.930 to 0.935). If the generalist path is
+  used for a "knows what it does not know" deployment, its confidence is already the best we have,
+  while its accuracy is not.
+The 224 px against 320 px confound with OT4 and VD remains.
+
 ## Log
 
+- 2026-11-20: Z23 (TL8a and TL8b through Z16/Z21's checks) at the supervising session's request:
+  predictions first (TL8b's scores unseen; TL8a's list-only scores already in the mini_trainer sheet,
+  so not predicted), then TL8a's, TL8b's and OT4's logits from UCloud (files only, no job), CPU only.
+  The few-shot frozen-trunk check was skipped at the supervisor's word (the training log checks the
+  342 trunk tensors). Held (b) with the list, (c), (d), (f); falsified (a) mostly, (b) with a prior,
+  (e) on probe-HO and with a prior. Not committed (the supervisor commits).
 - 2026-11-19: Z22 (crop size, the owner's MixRes question) at the supervising session's request
   (lepinet-cf): predictions first, then CPU only on saved prediction tables. (a) to (d) falsified, (e)
   held in direction. TL8a and TL8b (the frozen-ToL-trunk moth heads, formerly G1a and G1b) to be

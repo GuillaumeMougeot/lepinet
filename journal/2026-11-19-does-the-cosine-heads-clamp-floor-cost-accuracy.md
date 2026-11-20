@@ -1,7 +1,8 @@
 # Does the cosine head's clamp floor cost accuracy, and does the fix train as well?
 
-**Kind:** research · **Status:** OPEN (2026-11-19). The defect measured at 190 k classes (`dev/113`); the fix
-built in mini_trainer (mt, 1554c9c, CPU test passed). The 190 k-class head check (cftol) does not support it as a swap on a trained head (-1.12 points), a test weighted against the fix; CF on V2-S (cfsh, on the shards) is running and decides, before any longer ToL training (owner: wait for it before discarding the fix). Found at Lepidoptera scale by the
+**Kind:** research · **Status:** RESOLVED (2026-11-20): **the fix trains worse, at both scales** (CF on V2-S: test fold
+-1.0, top-1 -0.50; cftol at 190 k classes: top-1 -1.12). The floor is not a defect but a learned gate, a non-linearity
+worth more than the few images it strands; the next ToL run keeps the current head (owner: a negative result). Found at Lepidoptera scale by the
 mt session on 2026-11-03 ([[2026-11-03-moving-the-recipe-into-mini-trainer]]); the floor itself was first seen in
 August ([[2026-08-06-the-cosine-head-is-not-unit-norm]]).
 
@@ -122,3 +123,63 @@ discarding the fix.
 to the node ran at 12-220 files/s and could not finish in 12 h. cfsh trains the fix and the control on
 global_lepi_shards-v1, one B200 each, one factor apart; against the 5 Nov seeds the data path also differs (same
 pixels, different stream order, a seed-like effect).
+
+## CF: the fix trains worse (cfsh, job 12470314; evals 12470726 / 12470728; scored by mt 2026-11-19 21:30)
+
+V2-S BU on the shards, fix and control one factor apart; the three 5 Nov seeds (staged data) as the noise band. Traps
+are north_europe, line 1.
+
+| | test fold species macro-F1, zero / calibrated | top-1 | probe tta3bm, calibrated / zero | probe-HO tta3bm, calibrated / zero |
+|---|---|---|---|---|
+| fix | 0.878 / 0.872 | 92.67 | 0.627 / 0.422 | 0.525 / 0.232 |
+| control | 0.888 / 0.879 | 93.18 | 0.627 / 0.432 | 0.490 / 0.236 |
+| v2s_bu s42-44 | 0.887-0.888 (zero) | | 0.624-0.633 / 0.433-0.439 | 0.466-0.485 / 0.237-0.246 |
+
+Fix minus control: top-1 -0.50 (+/-0.04, paired), test fold -1.0, about nine times the seed spread. The control equals
+the seeds, so the shard data path changes nothing. Floor counts (mt's `saturation.py`, 8,192 test images): control 58 %
+of (image, species) pairs on the floor, the true class there for 0.13 % of images; the fix none.
+
+**Predictions scored.** Nothing on the floor: held, by construction. Test fold within the seed range or up to 0.3
+above: failed (-1.0). Traps not below the seeds: failed at zero threshold (three of four cells below). One calibrated
+cell is above: probe-HO tta3bm, +3.5 over the control and +4 over the best seed (2,455 crops, one seed: a hint, not a
+finding). By the rule set beforehand, the next ToL run keeps the current head.
+
+## What it means: the floor is a gate, and the gate is worth more than what it strands
+
+The premise of this entry was that the floor is a defect with a side benefit. Both tests say the side benefit is the
+main effect. At 12 k classes the floor strands the true class for 0.13 % of images, so removing it could gain at most
+0.13 points of top-1; it cost 0.50. At 190 k classes it strands 0.9-2.4 % and removing it cost 1.1 (cftol, on a test
+weighted against the fix).
+
+The owner's reading (2026-11-20): networks do better with a bit of non-linearity, ReLU being the example. It can be
+made exact here. Write the logit as a function of the angle t between embedding and prototype. The fixed head is
+linear in it: g * S * (pi/2 - t), so g is only a temperature. The current head is S * asin(g * cos t): flat beyond
+t = acos(-1/g), steep near that edge. The flat part is a per-species gate whose position each species learns through g;
+behind it the species is switched off for that image, with a constant output and zero gradient, which is a ReLU's
+inactive side. The fix removed the head's only non-linearity in the angle, and the model got worse. The stranded true
+classes are this gate's version of ReLU's dead units: a known cost of a non-linearity that pays overall. The analogy is
+loose (the trunk keeps all its non-linearities), but the gate is real.
+
+What the gate buys, from the floor counts (an interpretation; these runs do not separate the three):
+- **A different geometry.** With the floor, the network parks wrong species on the far side of the sphere (median
+  g * cos -0.78; 58 % of pairs floored) and keeps g moderate (median 1.81). Without it, wrong species stay near
+  orthogonal (median cos +0.02), and the network separates by temperature instead: median g 2.42, logits up to about
+  +/-149 instead of +/-62. In cftol, g went from 1.41 to 2.18 in one pass for the same reason.
+- **Per-image sparsity.** Each image deals with a shortlist of species (about 790 of 190,199 for tol_full); the rest
+  send no gradient, so it goes to the species that can be confused. This is learned hard-negative mining. Partial FC
+  in face recognition (An et al., 2021) samples a fraction of the negative classes at random to a similar end and
+  loses little; here the selection is learned, per image.
+- **A bounded logit.** The current head's logit cannot leave +/-S * pi/2 whatever g does, a cap on confidence; the fixed
+  head has none, and its g grew. The fix arm's lower zero-threshold trap scores, and its one higher calibrated cell,
+  fit a calibration change. That fit is not yet a check.
+
+Two cheap follow-ups would separate them, neither needed for a decision:
+1. CPU, on the saved logits: compare the fix arm's confidence on its errors, and its calibration error, with the
+   control's. If the fix arm is overconfident, the bounded logit carries weight.
+2. The gate's LeakyReLU: keep the forward pass identical (inference unchanged) and let the gradient through the floor
+   for the true class only. Wrong species stay gated; stranded targets can climb back. At 12 k classes its ceiling
+   (0.13 %) is below the seed spread, so only a ToL-scale run could measure it. It is a candidate for a later ToL run,
+   not for TL10, by the one-factor rule.
+
+**Decision.** The next ToL run keeps the current head. Whether `magnitude_after_angle` stays in mini_trainer as an
+opt-in option (default unchanged) or is dropped is the owner's call; mt recommends either.
