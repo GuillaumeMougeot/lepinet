@@ -202,6 +202,219 @@ the margin lesson). The schedule matters for the run after TL10: a finished one-
 branch cooldowns at several lengths. mt prepares it as opt-in code during TL10 (no GPU job); TL10, one-cycle at 10
 passes, is the reference a WSD run at 10 passes must match.
 
+**The s3 decision rule (supervisor, 2026-11-21 18:00, before any d5 or d10 number).** TL10 became a WSD run (mt's plan,
+`plans/wsd/README.md`): stable segments s1 (passes 1-5) and s2 (6-10) are done, and the decay branches d5 (5 + 1 pass)
+and d10 (10 + 2 passes) each get TL8a-v2 and the standard eval. The owner delegated the call on s3 (passes 11-20 with a
+4-pass decay, about 212 B200-hours): "take the right decisions depending on perfs". The rule follows the owner's goal for
+TL10 (a frozen trunk as close as possible to Otto on the test fold) and the 0.3 threshold written above:
+- Queue s3 if TL8a-v2 on d10 beats TL8a-v2 on d5 by **0.3 points or more** on the test fold at zero threshold, and
+  d10's Rare Species and held-out 5-shot are not more than 1.5 points below d5's.
+- Otherwise stop: TL10 is d10, and the next generalist changes something other than length.
+- Validation species macro-F1 alone does not decide: a gain there without a TL8a-v2 gain is not the goal.
+
+Both branches decay for the same share of their length (one sixth), so d10 against d5 measures one doubling of
+compute, and s3 would be the next doubling (12 to 24 passes), expected to return less than this one.
+
+Predictions: validation species macro-F1 d5 0.64-0.66, d10 0.68-0.71; TL8a-v2 test fold d5 0.895-0.899, d10
+0.900-0.907, so the rule most likely queues s3, by a small margin; trap probe (calibrated, list, tta3bm) d5 0.64-0.66,
+d10 0.65-0.68.
+
+**d5 scored (mt, 2026-11-21 18:00; job 12472455, DDP equality OK).** Validation species macro-F1 **0.603** (tol-full
+0.640): my 0.64-0.66 is wrong, below the range. Rare Species 1- / 5-shot 63.2 / 77.5 (tol-full 62.9 / 79.1), held-out
+68.8 / 84.9 (68.9 / 86.3), placement genus / family / order 66.3 / 59.8 / 49.3 (67.1 / 59.9 / 45.6), open-set max
+softmax near / mid / far 0.772 / 0.823 / 0.851 (0.788 / 0.854 / 0.883). So at slightly more compute (6 passes against
+5), WSD with a one-sixth cooldown lands below tol-full's one-cycle cosine: -3.7 on validation, -1.6 and -1.4 at 5-shot,
+level at 1-shot. The literature's rule of thumb (a cooldown of about a fifth matches cosine) does not hold here, or not at
+one pass. TL8a-v2 on d5 is running.
+
+**Rule amended (supervisor, 2026-11-21 19:00, after d5, before any d10 number).** s3 keeps the one-sixth cooldown share
+(4 of 24 passes), the share that just lost to cosine, so 212 B200-hours on it need a guard. If d10's validation species
+macro-F1 is below tol-full's 0.640, or its Rare Species or held-out 5-shot below tol-full's 79.1 / 86.3, the cooldown is
+the suspect and s3 is not queued; instead one branch from e20 with a 4-pass cooldown (10 + 4 passes, about 85
+B200-hours) tests the cooldown length, and s3 waits for it. Otherwise the rule above applies unchanged.
+
+**The stable phase was flat (owner spotted it, 2026-11-21 18:50; `tmp-runs/tol_v3/logs/summary.csv`).** Validation species
+macro-F1 reached 0.50 by pass 2.5 and stayed at 0.498-0.503 from virtual epoch 5 to 19 (passes 3-10); training loss moved
+from 2.88 to 2.76 on matched half-passes, validation loss from 2.943 to 2.853 and validation top-1 from 69.8 to 70.5 (mt):
+a small residual slope in loss and accuracy, none in macro-F1. d10 against d5 measures what that slope is worth once decayed. The config differs from tol-full only in the schedule, so this is the schedule:
+8e-4 was tol-full's one-cycle peak, held briefly there, and held for 10 passes here it pins the model to its noise floor
+(in tol-full, lowering the rate from 8e-4 to 5.4e-4 alone was worth +3.7 by epoch 4). **s3 as designed is off whatever d10
+shows** (it would hold 8e-4 for 10 more passes); this supersedes the rule above. If d10 lands at or below about 0.64, the next
+generalist is the 10-pass one-cycle run first approved. A 1-pass cooldown from e20 (separating stable passes from cooldown
+length) waits for d10 (owner). Prediction for d10's final validation species macro-F1: 0.615-0.635, between d5 and tol-full.
+
+**d10 scored (mt, 2026-11-21 23:31; job 12472710, DDP equality OK).** Validation species macro-F1 **0.618**, top-1 80.0,
+loss 1.817 (d5 0.603 / 78.8 / 1.932; tol-full 0.640 / 80.7 / 1.879). Predictions: the pre-run 0.68-0.71 is wrong; the 18:50
+revision 0.615-0.635 is right. Passes 6-10 plus a cooldown twice as long bought +1.5 over d5, and d10 stays 2.2 under
+tol-full's 5-pass cosine. But d10's validation **loss is below tol-full's** (1.817 against 1.879) while its top-1 is 0.7 lower
+and its macro-F1 2.2 lower: d10 fits the common species as well or better and loses on the tail. That points at the rare
+species' head rows, which get a few updates per pass and so need passes at a low rate (tol-full spent about 2.5 passes below
+4e-4; d10 about 1). The 4-pass cooldown from e20 tests exactly that, one factor against d10.
+d10's generalist suite (mt, TL1/TL2 protocol; d10 / d5 / tol-full): Rare Species 1-shot 63.7 / 63.2 / 62.9, 5-shot
+77.8 / 77.5 / 79.1; held-out 1-shot 69.8 / 68.8 / 68.9, 5-shot 85.3 / 84.9 / 86.3; placement genus / family / order 67.3 / 60.8 /
+49.6 (tol-full 67.1 / 59.9 / 45.6); open-set max softmax 1-2 points under tol-full. The embedding is at least tol-full's
+(1-shot and placement above it); what lags is what depends on the head and the tail (macro-F1, open set) and 5-shot.
+
+**TL8a-v2 on d5 scored (mt, 2026-11-22; e-tl8a2d5 12472992, trunk check 342/342).** Test fold species macro-F1, zero /
+calibrated: **0.893 / 0.883** against TL8a on tol-full 0.895 / 0.884 (prediction 0.895-0.899: just under). Trap probe, list,
+tta3bm, calibrated / zero: **0.664 / 0.463** against 0.647 / 0.432 (prediction 0.64-0.66: just over); probe-HO 0.471 / 0.274
+(0.482 / 0.267); single view 0.578 / 0.330 (0.557 / 0.330). So for the owner's goal (a frozen trunk close to Otto), d5's
+trunk is level with tol-full's on the test fold and 1.7 points better on the trap probe, although its own ToL head is 3.7
+points worse on validation macro-F1. The WSD deficit sits in the ToL head's tail, which TL8a-v2 replaces; the trunk is not
+worse. That lowers the stake of a longer cooldown for the frozen-trunk claims (it would mostly repair the ToL head).
+
+**TL8a-v2 on d10 scored (mt, 2026-11-22 06:45; all TL10 pieces done).** Test fold zero / calibrated **0.897 / 0.886**
+(d5 0.893 / 0.883, TL8a 0.895 / 0.884; OT3 0.916, OT4 0.919); trap probe tta3bm calibrated **0.667** (d5 0.664, TL8a 0.647),
+probe-HO 0.486 (0.471, 0.482). Predictions: test fold 0.900-0.907 wrong (under); trap probe 0.65-0.68 right. d10 against d5
+(one doubling of length): +0.4 test fold, +0.3 probe, +1.5 validation, +0.3 / +0.4 at 5-shot. The withdrawn s3 rule would have
+queued s3 (+0.41); it stays off. **Answer to this section's question:** against tol-full, ten passes buy +0.2 on the test fold,
+under the 0.3 written before TL10 ran, and the gap to Otto is still 1.9-2.2 points. At about +0.4 per doubling, length cannot
+close it: **length is not the lever for the frozen-trunk goal.** The next generalist changes something else, one factor at a
+time: model size (the model underfits, train and validation top-1 within 3 points) or data (species floor, coarse-only labels);
+not resolution (owner: the data stay at 256 px).
+
+**Next (owner, 2026-11-23).** Queued through mt: the training-set check without augmentation by species-frequency bin
+(tol-full, d10) and the overfit test on 1 % of tol256 (augmentation off, one-cycle cosine). The 4-pass cooldown from e20 is not
+queued. The owner is reconsidering constant learning rates; my view: the next generalist uses tol-full's one-cycle cosine at
+its chosen length, so it changes one factor against a known reference, and branching stays an exploration tool (lower
+held rate, cooldown counted in passes), not the schedule of a model we release.
+
+**The two checks: design (mt) and predictions (supervisor, 2026-11-23, before any number).** (1) Training-set check:
+up to 10 training and 10 validation images per species (1.85 M and 1.01 M images), eval transform, tol-full and d10, top-1 and
+mean per-species recall by training-frequency bin (<100, 100-200, 200-500, 500-1000, >=1000). mt's smoke already hints: tol-full
+gets 0.657 top-1 on a species-balanced training sample, against 83 % on the natural training mix, so the rare species are not
+fitted even on their own training images. Predictions: per-species recall train minus validation 8-15 points in the <100 bin and
+under 3 at >=1000; training recall under 70 % in the <100 bin; d10's deficit against tol-full concentrated in the <100 bin (2-4
+points there, under 1 at >=1000). (2) Overfit test: 1 % of set 2 (546,436 images, 112,716 species), tol-full's recipe with
+augmentation off (dropout 0.1 and weight decay 0.01 kept, so augmentation is the only change), batch 768 and lr 8e-4 on one B200,
+30 epochs, one-cycle cosine, about 8 B200-h. Predictions: training top-1 in eval mode reaches 95-99 % (not 100: duplicates with
+conflicting labels and the clamped cosine head); validation macro-F1 on the subset's species peaks before epoch 15 and then
+falls. If training top-1 stalls under 90 %, the recipe caps fitting (dropout, weight decay, the head) before the data do.
+
+**Can the generalist match OT6 on its own ground? (owner, 2026-11-23).** OT6 (Otto's recipe without pseudo-labels,
+BioCLIP-2) scores 0.920 / 0.910 (zero / calibrated) on the test fold. Its config against TL10's: the same resolution (256 read,
+224 crop), loss and head type, **no class oversampling in either** (`class_sampling_power: 0`); OT6 adds TrivialAugmentWide and
+dihedral views, fine-tunes at 1e-5 from BioCLIP-2 (whose pretraining saw about two-thirds of our test fold, with labels), on 12 k
+classes. Filtering ToL's own head to the Lepidoptera species was measured as TL3: 0.875. Two jobs, in parallel (mt): (1)
+filtering plus a post-hoc prior correction (logits minus tau log prior, tau chosen on fold 1), on tol-full's and d10's ToL heads
+and on the TL8a-v2 heads; (2) TL8a-v2 on d10 with square-root class oversampling, one factor against 0.897. Predictions (before
+any number): plain filtering of d10's head under tol-full's 0.875; the prior correction adds 1-2 points to a filtered ToL head and
+0.3-1.0 to a TL8a-v2 head; the oversampled head reaches 0.902-0.912. None reaches 0.920 alone: the gap closes to about 1 point at
+best, and a stronger tail in the generalist itself (sqrt oversampling in the ToL run, one factor) is the next lever.
+Design note (mt, supervisor's call): mini_trainer refuses class-weighted sampling on shard sets, and TL8a trains on shards,
+so the oversampled head runs on the folder path (WeightedEpochSampler, count^-0.5, same draws per epoch, with replacement), with a
+control on the same path at power 0: sqrt minus control is the sampling effect, control minus tl8a2d10 the loader's. Weighted
+sampling in the shard loader (half a day) waits for the owner's choice of the next ToL run, which also trains on shards.
+e-prior (job 12474204) validated: at tau 0 it reproduces TL8a-v2 d10's 0.8971 / 0.8862 exactly.
+
+**Check 1 scored (mt, 2026-11-23; `plans/fit/README.md`, `/data/au761367/lepinet/fit/c1_report.json`).** Mean
+per-species recall, train / val / paired gap, tol-full: <100 46.8 / 44.4 / +8.8; 100-200 75.5 / 68.7 / +7.0; 200-500 82.6 / 77.5 /
++5.1; 500-1000 87.3 / 83.5 / +3.8; >=1000 90.4 / 87.9 / +2.5. d10 minus tol-full, train / val: <100 -4.9 / -3.5, at most -0.9
+elsewhere. Predictions: gap 8-15 at <100 and under 3 at >=1000, right (+8.8, +2.5); training recall under 70 % at <100, right
+(46.8); d10's deficit concentrated at <100 (2-4 there, under 1 above), right (-3.5 val). **Reading: the generalist underfits the
+tail.** Species under 100 training images are 103 k of 190 k, so they carry species macro-F1, and the model names under half of
+their own training images. Regularisation is not the lever (the gap is small); what gives the tail more fitting is: sqrt
+oversampling (more draws of rare species), more passes at a low rate (what d10 lacked against tol-full), and capacity. Whether
+the recipe can memorise at all is the overfit test's question.
+
+**Check 3 scored (mt, e-prior 12474204, about 2 B200-h; `ot_scores.md` "Check 3").** Tau chosen on fold 1: tol-full
+ToL head 0.25, d10 ToL head 0, TL8a-v2 heads 0.25. Test fold line 1, zero / calibrated, plain then corrected: tol-full ToL head
+0.875 / 0.869 -> 0.877 / 0.874; d10 ToL head 0.874 / 0.869 (tau 0); TL8a-v2 d5 0.893 / 0.883 -> 0.900 / 0.892; d10 0.897 / 0.886
+-> **0.903 / 0.896**; OT6 (line 1, as the sheet) 0.917 / 0.912. Best generalist route: 1.4 / 1.6 under OT6, the prior closing
+30-40 % of the gap. Traps: the Global Lepidoptera frequency prior does not help (calibrated -0.5 to +0.1), as expected: it is
+not the trap prior. d10's own ToL head scores 0.628 on the trap probe against tol-full's 0.590, level with it on the test fold.
+Predictions: plain d10 filtering under 0.875, right only just (0.874); the prior adds 1-2 to a filtered ToL head, **wrong** (+0.2
+and 0); 0.3-1.0 to a TL8a-v2 head, right (+0.6, +0.7). Reading: the ToL head's tail is under-fitted (check 1), not biased by
+its prior, so a post-hoc prior cannot repair it; a trained head's prior bias is real but small.
+
+**The next ToL run: a decision rule to apply when the evidence lands (supervisor, 2026-11-23, owner: "keep it in mind,
+we'll see tomorrow").** One factor against tol-full, on tol-full's cosine schedule. If the sqrt-oversampled TL8a-v2 head
+gains 0.5 or more on the test fold over its control, and the label-shift test shows its trap deficit vanishing once class
+frequencies are corrected: tol-full plus sqrt oversampling. Otherwise, if the ViT-L overfit test fits clearly faster than
+ConvNeXt-L at matched epochs: ViT-L on tol-full's recipe. Otherwise: tol-full at 10 passes. Class-weighted sampling in mt's
+shard loader is being built now (no GPU) so the first branch is not delayed. Start estimate: best case 2026-11-24 afternoon,
+realistic 11-25, worst case 11-27 or the week after.
+
+**Schedule test (owner, 2026-11-23; mt `plans/sched`, job 12475208).** EfficientNetV2-S BU on Global Lepidoptera, 5 epochs
+at 256 px, from the shards, against the shard control v2s_bu_ctl_sh_s42 (cosine; equal to the staged seeds 42-44, 0.8866-0.8877,
+which give the noise band): arm A poly 0.9 with the control's warmup (shape only), arm B poly 0.9 with no warmup (the owner's
+nnU-Net-style package; B - A is the warmup). SGD dropped (owner): heavy-tailed classes favour Adam-type optimisers. Predictions
+(before any number): A within 3x the seed range of cosine on test-fold species macro-F1 (|difference| under 0.3); B at or
+below A, by 0 to 0.8, the cost, if any, from the randomly initialised head's first steps at full rate reaching the pretrained
+backbone; per-bin, any difference concentrated in the rare bins.
+
+**(C) scored: what sqrt oversampling does for a specialist (mt, no GPU; `ot_scores.md` (C), `/data/au761367/lepinet/bank/bank.json`).**
+Three clean bank pairs, oversample_power 0.5 against 0, test fold line 1 zero / calibrated, trap single view without the list
+(no logits kept): 20 M (L0 / singlehead) +1.9 / +2.9 on the test fold, calibrated probe -9.4, probe-HO -8.0; 198 M (L5 / F1)
++1.6 / +2.2, probe -4.6, probe-HO -4.8; 198 M with self-training (B7 / B6) +1.8 / +2.3, probe -0.3, probe-HO -2.4. So for a
+specialist sqrt buys a steady +1.6 to +1.9 in distribution at every size, and costs the traps unless the model learns the
+trap's class prior (self-training removes most of the cost): the label-prior reading again. **The fair specialist bar is
+therefore about 0.933-0.936** (OT6's 0.917 plus that gain), not 0.917: with sqrt on both sides, the generalist route's gap is
+nearer 2-3 points than 1.
+
+**Check 2 scored: the recipe memorises completely (mt, fit-overfit 12474050; `/data/au761367/lepinet/fit/results/`).**
+ConvNeXt-L, tol-full's recipe without augmentation, 546,436 images of 112,716 species, 30 epochs: eval-mode training top-1 on
+the fixed 10 % 0.590 at epoch 5, 0.993 at 10, 0.9997 at 15, 1.0000 from 21; the whole subset at epoch 30 546,434 of 546,436
+(100 % in every frequency bin; the two misses are cross-kingdom, an orchid named as a fish and a red alga as a brown alga,
+label or image problems). Validation macro-F1 (3 images per subset species, not comparable to 0.640) 0.128 at 10, still
+rising to 0.147 at 25, flat to 30, while validation loss was lowest at epoch 5. Predictions: 95-99 % wrong (100 %); a
+validation peak before 15 then a fall wrong (still rising after memorisation). **Reading:** nothing in the recipe (cosine head
+with its clamp, dropout 0.1, weight decay 0.01, lr 8e-4) caps fitting, so the tail at full scale (46.8 % of its own training
+images, check 1) is underfit for lack of exposures, not for lack of a mechanism. Rough count: here an image needed about 10
+exposures under a decaying rate to be fitted; tol-full gave each rare-species image 5, and sqrt oversampling would give about
+15 (x3.1 draws). Whether capacity also binds at 61 M images is the ViT-L test's question (fit-vitl 12475364, started). And the
+owner's point holds: validation kept improving after training reached 100 %, so the gap alone is no reason to stop.
+
+**Check 4 scored: sqrt oversampling on the frozen d10 head, and its trap cost is label shift (mt; `ot_scores.md` Check 4).**
+Test fold line 1 zero / calibrated: sq (power 0.5) **0.906 / 0.906**, its folder-path control 0.896 / 0.884, TL8a-v2 d10 (shards)
+0.897 / 0.886: sampling +1.08 / +2.20, loader -0.16 / -0.18 (seed level). Trap, sq minus control, calibrated / zero, probe then
+probe-HO: (a) as they are -0.86 / -2.66, -2.70 / -0.44; (b) sq's implicit prior (count^0.5) replaced by the natural one
+-0.13 / -0.28, -1.69 / -0.36; (c) each head's own prior divided out, then the list and an EM trap prior +2.10 / +1.59,
++1.32 / +1.69 (absolute (c): sq 0.679 calibrated probe, 0.537 probe-HO). Prediction for the sq head 0.902-0.912: right (0.906).
+**Reading: the owner's hypothesis holds.** Oversampling's trap cost is label shift: it vanishes on the probe once the training
+prior is put back, and with the trap's own prior estimated the oversampled head is better under shift too, so its
+representation is not damaged (the 2026-08 'trades shift robustness for accuracy' finding is superseded; its two supports had
+already fallen). Against the decision rule above: test-fold gain +1.08 >= 0.5, and the trap deficit vanishes once class
+frequencies are corrected: **the next ToL run is tol-full plus sqrt oversampling**, subject to the owner's review tomorrow with
+the ViT-L test. Gap of the best generalist head to OT6: -1.1 zero, -0.6 calibrated; to a fair sqrt specialist about 2.7-3.
+
+**ViT-L overfit test scored (mt, fit-vitl 12475364; `/data/au761367/lepinet/fit/results_vitl`).** DINOv3 ViT-L/16, same 1 %
+subset and recipe, batch 640, lr 8e-4 (guard OK, no NaN). Eval-mode training top-1, ViT / ConvNeXt-L: e2 19.9 / 9.6, e4 50.2 /
+35.5, e8 95.1 / 94.6, e10 98.4 / 99.3, 100 % from e24 / e21; whole subset at e30 546,435 / 546,434 of 546,436 (the one ViT miss
+and one ConvNeXt miss look like one image under two labels). Validation macro-F1 at e30 **0.210 / 0.146**, top-1 26.1 / 18.8 %,
+ahead in every bin (<100 11.7 / 8.1, >=1000 52.2 / 40.0); throughput 791 / 1,185 img/s (0.67x). Reading: both memorise; the
+ViT generalises far better from about 5 images per species, which is the tail's regime (it measures pretrained features plus
+fine-tuning from few examples, not capacity at 61 M images). The 5-point lr rule did not trigger. A 15-pass ViT-L ToL run would
+cost about 480 B200-h (about 2.5 days on 8 B200).
+
+**Label-shift test, test-fold half (mt, e-shift 12475365).** Test fold line 1 zero / calibrated, sq against control: (a) as
+trained 0.906 / 0.906 against 0.896 / 0.885 (+1.0 / +2.2); (b) sq's prior reset to natural 0.905 / 0.896 (+0.9 / +1.1); (c)
+own prior out and an EM prior estimated on the test fold 0.898 / 0.885 against 0.880 / 0.867 (+1.8 / +1.8; EM costs both heads
+0.8-1.7 here, since that fold already follows the training prior: a trap-side correction only). So about half of sqrt's
+calibrated test-fold gain is its implicit prior and the rest a better head (+0.9 / +1.1 with the prior removed), while on the
+traps its deficit is the prior. Sqrt oversampling improves what the head learns, not only where it puts its prior mass.
+
+**Schedule test scored (mt, SC1).** Test fold species zero / calibrated: cosine control 0.8880 / 0.8793; A poly with
+warmup 0.8885 / 0.8816; B poly without warmup 0.8632 / 0.8507; seeds 42-44 0.8866-0.8877. Per-bin species F1 (<100 ... >=1000):
+control 0.844 ... 0.944, A 0.848 ... 0.944, B 0.778 ... 0.940. Predictions: A within 0.3 of cosine, right (+0.05 / +0.23);
+B at or below A by 0-0.8, wrong (-2.5, -6.6 in the rarest bin). B's calibrated trap probe rose to 0.665 (control 0.627, seeds
+0.624-0.633): an under-fitted tail predicts fewer rare species, which helps on a catch of common species, the same label-shift
+mechanism that made oversampling look harmful. Conclusion: keep cosine; warmup is mandatory (more so for a ViT).
+
+**The next ToL run, agreed (owner, 2026-11-24): a bundle, not one factor.** ViT-L, sqrt oversampling, 15 passes, tol-full's
+cosine with warmup (about 480 B200-h); the owner accepts that the bundle cannot be fully attributed afterwards. Augmentation is
+tested first, universally (the generalist serves other uses than traps: no dihedral rotations, no trap-specific degradations):
+ViT-L on the 1 % subset, 30 epochs, arms LIGHT (tol-full's augmentation), H1 (+ TrivialAugmentWide), H2 (H1 + random erasing +
+Mixup/CutMix at timm's defaults, new opt-in code), against fit-vitl without augmentation (0.210). Predictions (before any number):
+LIGHT above none (0.215-0.235), H1 above LIGHT by 1-3 points, H2 within 2 points of H1 either way at 30 epochs (mixing pays over
+long training, so a narrow H2 loss would not rule it out at full scale). Label priors need no target labels: the list comes
+from outside knowledge and the EM prior from unlabelled target images (averaged soft pseudo-labels), and the oversampled head
+takes the EM prior better than its control (+2.1 probe).
+
+**What I got wrong here.** As supervisor I tracked job states and checkpoints through s1 and s2 (27 hours) and never read
+the validation curve against tol-full's at matched epochs; the gap was visible at virtual epoch 4 (0.494 against 0.531),
+about 5 hours into s1. For any long run, compare its curve with the reference run's after the first few evaluations.
+
 ## 7. Resolution augmentation (MixRes), owner's question
 
 Jain et al. (ECCV 2024, the AMI dataset) downscale training images to 25 or 50 % of the input size (probability 0.25

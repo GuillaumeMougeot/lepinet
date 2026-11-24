@@ -82,10 +82,13 @@ augmentation (MixRes, MR; Z22 puts never-trap models 13-18 accuracy points lower
 largest) and domain augmentation (AG). Fine-tuning the trunk (TL4) is the specialist reference, not a candidate:
 it erases the trunk's generality (Z21).
 
-**On Kim's split.** His validation list is close to a resubstitution test (section C3 below: 62 % of validation crops
-share their source frame with a same-class training crop; 12 byte-identical pairs, 3 across the split), so rungs 8-12
-are scored twice: on his list, to compare with his 0.970, and site held out, where only a specialist retrained on the
-same folds is a fair reference. Candidates 1-6 use no labels and are leak-free on either.
+**On Kim's split.** Rungs 8-12 are scored twice: on his list, to compare with his 0.970, and site held out, where only
+a specialist retrained on the same folds is a fair reference; candidates 1-6 use no labels. *Corrected 2026-11-21:* this
+paragraph first called his list "close to a resubstitution test" because 62 % of validation crops share a source frame
+with a training crop of the same class. That was wrong: a frame holds about 35 insects, so sharing one does not mean the
+same insect. In embedding space only 10.3 % of validation crops have a training crop at cosine 0.95 or more (0.9 % at
+0.98). What the random split hides is site shift (a new site costs 7-9 points of macro F1), not leakage (a trap-night
+split within the sites costs about 1); section C3 below.
 
 ## Predictions (supervisor, 2026-11-20, before any result)
 
@@ -133,9 +136,11 @@ Broad-taxa agent, 2026-11-20: CPU (4 cores) and, from 13:58, two B200 MIG slices
 - **What the split means.** 86 % of the validation crops that carry a frame time stamp have a same-class training
   crop from the same trap within one time-lapse frame (11 min), and 62 % share their very source frame with a
   same-class training crop. 83 % of validation Lepidoptera have a training file with the same species name, trap
-  and night. 24 files form 12 byte-identical pairs, 3 of them split across training and validation. Kim's validation
-  set is therefore close to a resubstitution test for any model trained on his training split: insects sit still
-  on the screen for several frames. That favours a trained specialist, and a trained head on our trunk equally.
+  and night. 24 files form 12 byte-identical pairs, 3 of them split across training and validation. I first read
+  this as "close to a resubstitution test" (insects sit still on the screen for several frames). **That was a
+  genuine mistake**, corrected at 19:30 by the measurement: a source frame holds about 35 insects, so sharing a
+  frame or a night does not mean sharing an individual. The embedding measures it directly (Results, leakage): 10 %
+  of validation crops have a training crop at cosine 0.95 or more, 0.9 % at 0.98.
 - **Metric.** Table 4 reports precision 0.974, recall 0.965, F1 0.970 on 25,034 samples, without saying how they are
   averaged. His own logits give **macro** (unweighted over the 16 classes) P 0.9742, R 0.9652, F1 0.9695 (accuracy
   0.9839); with his anomaly thresholds 24,799 samples remain and P / R / F1 are 0.9772 / 0.9707 / 0.9738, his second
@@ -260,6 +265,13 @@ sized torch's thread pool from the host's 256 cores (CLAUDE.md warns of exactly 
   F1 by construction and improves calibration; the pseudo-label head 0.78-0.83, inheriting zero training's
   systematic errors (mayflies as micro-moths, bibionids as Nematocera) rather than repairing them.
 
+**Added 19:35, after the leak and GPU numbers and before this split ran: a trap-night split (post hoc).** Kim's
+80/20 again, but by (trap, night) within the same sites (3,532 trap-nights, 20 % held out, seed 0; 99.8 % of his
+validation crops share a trap-night with training crops). It removes what his random split shares within a night
+(any individual seen on several frames, the night's conditions) and keeps the sites, so it separates leakage from a
+new site's shift. Prediction: 1-NN and (a) on it land within 2.5 points of their values on his list (1-NN there:
+0.947), far above site held out (1-NN 0.856): his split's advantage is mostly the site, not shared individuals.
+
 ### Results
 
 **Zero training (V0) on Kim's validation list, 25,034 crops** (`data/broad_taxa/zeroshot.json`):
@@ -295,10 +307,151 @@ Where it goes wrong, by the confusion matrix and a look at the crops:
   measured 0.825, inside; the worst categories named (Trichoceridae, Hymenoptera Other, Vegetation) were among the
   five worst, but Ephemeroptera, predicted among the best, is the third worst. V1 +1-2 points: wrong, -2.3 (Limoniidae
   is ToL's usual answer for small Nematocera and Trichoceridae, so widening Tipulidae draws them in). V2 0-2 points
-  lower: right (-1.3). **Supervisor: within 3 points of the specialist (0.940): falsified, 20.5 points below.**
+  lower: right (-1.3). **Supervisor: within 3 points of the specialist (0.940): falsified, 20.4 points below.**
+- **All 125,135 crops** (nothing trained on them): V0 macro F1 0.760, accuracy 0.822 (V1 0.738, V2 0.747); within
+  1 point of the validation list, as predicted.
+
+**Leakage across Kim's split** (`leak.json`; nearest training crop by cosine of ToL's embedding):
+
+| scored part | n | cos >= 0.98 | cos >= 0.95 | median | 1-NN macro F1 (acc) | byte-identical twins |
+|---|---|---|---|---|---|---|
+| Kim's validation list | 25,034 | 0.9 % | 10.3 % | 0.910 | 0.947 (0.968) | 3 |
+| site held out (LV / OH / SS) | 125,123 | 0.0 % | 1.4 % | 0.881 | 0.856 (pooled) | 0 |
+
+So his split is not a resubstitution test: one validation crop in ten has a near-twin in training, one in a hundred
+an almost exact one. Predictions: "at least 30 % at 0.95 and 10 % at 0.98" falsified (10.3 % and 0.9 %); "site held
+out under 5 % at 0.98" right (0.0 %); "1-NN accuracy at least 0.95" right (0.968). Between his split and a new site,
+1-NN loses 9 points of macro F1; how much of that is shared nights and how much the site is the trap-night split's
+question (below, when it lands).
+
+**BT2, Kim's recipe retrained** (lepinet-bt-a, 76 min on a 1g slice; `gpu.json`). On his list it moves between 0.913
+and 0.964 macro F1 from epoch to epoch (accuracy 0.937-0.981); his protocol, the best epoch on that list, gives
+**0.964** (epoch 12, accuracy 0.981), half a point under his own published checkpoint (0.970, chosen the same way);
+the last epoch 0.925, the mean of the last five 0.947. Site held out, last epoch: **0.870 pooled** (accuracy
+0.929); per site LV 0.828, OH 0.844, SS 0.865, each moving 5-12 points between epochs (LV 0.742-0.850). So a
+single number for a ResNet50 trained this way carries several points of epoch noise, and his 0.970 is a best-of-25
+on the list it is reported on. Predictions: reproduction 0.960-0.975, right (0.964); site held out 0.85-0.90, a 7-12
+point drop, right (0.870, 9.4 points).
+
+**BT4, a head trained through the frozen trunk with augmentation** (TL8's recipe; lepinet-bt-c, 131 min): his list
+**0.962** (accuracy 0.980), level with his recipe's best epoch and without any epoch choice; **site held out 0.897**
+(accuracy 0.943; LV 0.871, OH 0.871, SS 0.873), **2.7 points above the retrained specialist**, and above it at every
+site (+4.2, +2.7, +0.7 against its last epoch; +7.1, +2.8, +2.0 against the mean of its last five). By category, site
+held out, it is ahead on 13 of 16 (Araneae 0.95 against 0.86, Tipulidae 0.94 against 0.89, Vegetation 0.70 against
+0.65) and behind on Ephemeroptera (0.92 / 0.95), Neuroptera (0.95 / 0.97) and Trichoptera (0.96 / 0.97); both fail
+on Trichoceridae (0.32 and 0.28: winter crane flies, half of them caught in November and two thirds at SS, so
+holding SS out leaves 547 to learn from). The routing decision
+C3's pipeline needs, Lepidoptera or not: F1 0.990 (BT4) against 0.991 (BT2) site held out, 0.997 against 0.996 on
+his list. Predictions: 0.960-0.970 on his list, right; site held out within 2 points of BT2 or above, right (above).
+
+**The trap-night split** (`night.json`; 99,534 training crops, 25,589 scored, from 706 held-out trap-nights): near-twins
+at cosine 0.95 or more 3.7 % (his split 10.3 %), at 0.98 0.1 %; **1-NN 0.937 and (a) 0.944**, against 0.947 and
+0.953 on his split and 0.856 and 0.878 site held out. Zero training on the same crops: 0.750 (0.765 on his list),
+so part of even that point is which crops are scored. **His random split is worth about 1 point; a new site costs
+7-9.** The owner's question, "is Kim's split just leakage?", has a measured answer: no; its weakness is that every
+site is in training, not that individuals cross the split. Prediction (within 2.5 points of his list, far above
+site held out): right.
+
+**Everything on one page** (macro F1, accuracy in brackets; "site held out" pools the three folds; for rungs without
+labels it is simply all crops):
+
+| rung | needs from the target | Kim's list | site held out | Lepidoptera or not (his list / site) |
+|---|---|---|---|---|
+| Kim's ResNet50, his published checkpoint | his labels; epoch chosen on the list | 0.970 (0.984) | - | 0.998 / - |
+| BT2: his recipe retrained (best epoch / last) | labels, GPU | 0.964 / 0.925 (0.981 / 0.950) | 0.870 (0.929) | 0.996 / 0.991 |
+| zero training, centre read (V0) | nothing | 0.765 (0.825) | 0.760 (0.822) | 0.916 / 0.914 |
+| zero training, tta3bm (BT3) | nothing | 0.829 (0.888) | 0.825 (0.886) | 0.952 / 0.950 |
+| zero training, pad to square (BT3) | nothing | 0.826 (0.887) | 0.821 (0.885) | 0.959 / 0.957 |
+| L0, EM prior pooled / per site (BT5) | unlabelled crops | 0.732 / 0.775 | 0.734 / 0.774 | 0.867 / - |
+| pseudo-label head, 70 % gate (BT5) | unlabelled crops | 0.801 (0.841) | 0.776 (0.830) | 0.920 / 0.916 |
+| L1, 16 biases | labels | 0.820 (0.870) | 0.785 (0.844) | 0.950 / 0.937 |
+| L2, linear map of the 16 masses | labels | 0.861 (0.905) | 0.817 (0.870) | 0.968 / 0.953 |
+| L3, linear on the family posterior (families above 1e-4 mean mass) | labels | 0.933 (0.959) | 0.857 (0.910) | 0.991 / 0.977 |
+| (b) nearest class mean on the embedding | labels | 0.793 (0.809) | 0.758 (0.775) | 0.912 / 0.906 |
+| 1-NN on the embedding | labels | 0.947 (0.968) | 0.856 | - |
+| (a) linear on the embedding | labels | 0.953 (0.970) | 0.878 (0.923) | 0.995 / 0.983 |
+| (a), tta3bm at test | labels | 0.941 (0.970) | 0.891 (0.936) | 0.994 / 0.985 |
+| (a), pad to square | labels | **0.961** (0.978) | **0.900** (0.943) | 0.998 / 0.991 |
+| (c) linear on the trunk features | labels | 0.958 (0.975) | 0.887 (0.927) | 0.996 / 0.982 |
+| BT4: head trained through the frozen trunk with augmentation | labels, GPU | 0.962 (0.980) | 0.897 (0.943) | 0.997 / 0.990 |
+
+What it says:
+
+- **A frozen generalist with a trained order head is in the specialist's range on his split and ahead of it at a new
+  site.** On his list the best frozen-trunk heads sit 0.8-0.9 under his published, list-selected checkpoint and level
+  with his recipe retrained (0.961-0.962 against 0.964 best epoch, 0.925 last). Site held out, (a) on the padded read
+  (0.900, a linear model on CPU) and BT4 (0.897) beat the retrained specialist (0.870) by 2.7-3.0 points. That is C3's
+  order half, with the honest caveat that 16 conventional groups need labels: with none, the generalist is 14 points
+  below at best.
+- **C5's decomposition, on his list.** Of the 19.9 points between zero training and his recipe, reading the whole
+  crop (pad or tta3bm) gives 6; the class prior alone (L1) 5.5; relearning the mapping of the 16 category masses (L2)
+  9.6; a linear readout of ToL's own family posterior (L3, still nothing but the head's output) 16.8, 84 % of the
+  gap; the embedding (a) 18.8. So the head already discriminates these groups; what zero training lacks is the
+  mapping from taxa to Kim's conventions (bibionids are "Brachycera" to his annotators), the fauna's prior and a read
+  of the whole insect. Discrimination proper is the last 1-3 points.
+- **Reading the crop is the largest label-free lever.** The centre square of an elongated crop loses wings, legs and
+  tails: padding to square or tta3bm (whose views are padded 25 %) adds 6 points with no training, Ephemeroptera most
+  (F1 0.61 to 0.80-0.84: the tails), then Neuroptera (0.75 to 0.83-0.88), Coleoptera and Brachycera; Trichoceridae
+  and Vegetation do not move. For a trained head, padding helps everywhere (+0.8 on his list, +2.1 site held out, against (a) on the job's r0);
+  tta3bm on a head fit on centre reads helps at a new site (+1.3) and costs on his list (-1.2), the views being
+  foreign to it. Neither combination (padded and rotated) nor a head trained on padded crops through the trunk (BT4
+  with the padded read) was run.
+- **The unlabelled-data tools barely help, or hurt, because zero training's errors are systematic.** EM drove the
+  Trichoceridae prior to 0.000 (true share 0.013), Ephemeroptera to 0.022 (0.081) and Lepidoptera Micro to 0.329
+  (0.225): it reads the mayflies-as-micro-moths confusion as fauna and amplifies it (-3.3 pooled; per site +1.0). Its
+  uniform source prior is also wrong here: a category's implied prior grows with the number of ToL species in it.
+  The pseudo-label head (gate 91.7 % correct) inherits the same errors (mayfly recall 0.44 to 0.48) and repairs only
+  Vegetation (F1 0.46 to 0.82, whose false plant answers were unconfident). The temperature fit on his training list
+  is 1.06: the category posterior was already calibrated (ECE 0.036 at T = 1, 0.046 at 1.06; NLL 0.7195 to 0.7180).
+- **Caveats.** The 11 non-Lepidoptera categories are conventions of one annotation team; Kim's training script is
+  not public (BT2's augmentation ranges are ours); one seed everywhere, and BT2's epoch-to-epoch spread (5-12 points)
+  is larger than most differences in the table, BT4's is unmeasured; (a) and L3 chose C = 0.1, the edge of the
+  pre-registered grid, on every fold (not extended after the fact); BT4 and (a) differ in more than augmentation
+  (hidden layer, cosine head, epochs), so the table does not attribute BT4 to augmentation.
+
+**Predictions scored** (the 10:50, 12:10 and 14:05 sets; "right" means inside the stated range):
+
+| prediction | outcome |
+|---|---|
+| zero training 0.78 (0.65-0.88), accuracy 0.86 (0.75-0.93); full set within 1 point | right: 0.765, 0.825; 0.760 |
+| V1 +1-2; V2 0-2 lower | wrong (-2.3); right (-1.3) |
+| (a) 0.955 (0.93-0.97); within 1 point of Kim with probability 0.4 | right (0.953); not within 1 (-1.7) |
+| (b) 5-10 below (a); (c) within 1 of (a) | wrong (16 below); right (+0.5) |
+| L1 0.80-0.84, L2 0.84-0.88, L3 0.90-0.93 | right, right, just above (0.933) |
+| 1-NN accuracy at least 0.95 | right (0.968) |
+| near-twins: at least 30 % at 0.95, 10 % at 0.98; site held out under 5 % at 0.98 | wrong (10.3 %, 0.9 %); right (0.0 %) |
+| BT2 0.960-0.975; site held out 0.85-0.90 | right (0.964); right (0.870) |
+| site held out: (a) drops 5 or more; L1, L2 drop 2 or less; (a) within 3 of BT2 | right (7.5); wrong (3.5, 4.5); right (+0.8) |
+| BT4 0.960-0.970; site held out within 2 of BT2 or above | right (0.962); right (+2.7) |
+| BT3: tta3bm +1-3, padsq +0-2 on zero training | wrong both: +6.3, +6.0 |
+| BT5: L0 +2-5 pooled, per site within 1 of pooled; T changes no macro F1; pseudo-label head 0.78-0.83, inheriting the errors | wrong (-3.3), wrong (+4.3 over pooled); right by construction; right (0.801), right (Vegetation the exception) |
+| trap-night split within 2.5 points of his list | right (-1.0, -0.9) |
+| supervisor: zero training within 3 points of the specialist; a trained head within 1 | wrong (-20.4, -14 with padding); right for BT4 (-0.8) and (a) padded (-0.9), wrong for (a) (-1.7) |
+
+**What C3 still needs.** (1) The pipeline end to end: an order head from this section routing crops to TL8b's moth
+head, scored against the two specialists on one labelled set; MCC24 cannot score the species half (its moth names
+look like a classifier's output, not labels), and the trap probe has no order labels, so this waits for the owner's
+order dataset. (2) The best order head is probably BT4 or (a) on a padded read with tta over padded views; not run.
+(3) TL10's trunk, when it lands (rerun `dev/115 embed` with its release). (4) If EM is to be tried again, with the
+head's implied category prior as source prior.
+
+GPU cost: lepinet-bt-a 12472031 about 1.7 h and the aborted 12472000 0.2 h, lepinet-bt-c 12472004 about 2.2 h, on
+1g slices: about 4.1 slice-hours, roughly 0.6 B200-hours. On UCloud, `/12347837/repos/broad_taxa` holds the 0.52 GB
+staging folder and 1.5 GB of outputs (nothing deleted; the owner can remove it). Local CPU: 6.6 h for the trunk on
+all crops (5.4 img/s on 4 cores, 3.9 GB), then 1.5 h of scoring; the largest step (`head`) peaked at 7.6 GB, above
+the few GB asked for and under the 12 GB cap.
 
 ## Log
 
+- 2026-11-21: C2 scored (lepinet-2a; section "C2: scores" below, BS1-BS4): BioCLIP-2 reproduced with its own code
+  (5-shot, zero-shot, NeWT, AwA2 40/10, PlantDoc within 2; 1-shot Fungi 4.2 below); frozen ToL +1.1 at 5-shot and
+  +0.6 at 1-shot over nine species tasks, head zero-shot 54.8 against text 53.4, NeWT and AwA2 1.4 to 3.5 below,
+  PlantDoc above; overlap large on Fungi (517/1,000 by id) and NeWT (3,278 of 6,000 audited) but it does not
+  inflate ToL.
+- 2026-11-21: C3's order half scored (broad-taxa agent; section C3 above, BT1-BT5): frozen-trunk heads level with
+  Kim's specialist on his split (0.961-0.962 against 0.964 retrained, 0.970 published) and 2.7-3.0 points above it
+  site held out (0.897-0.900 against 0.870); zero training 0.765, 0.83 with a padded or tta3bm read; EM prior and
+  pseudo-labels do not repair systematic errors; his split is not leakage (trap-night split within 1 point).
 - 2026-11-20: C3's order half started on Kim Bjerge's MCC24 broad-taxon data (section above): split recovered,
   metric reproduced, mapping and predictions written before scoring; embeddings running on 4 CPU cores.
 - 2026-11-20: opened (owner's message: new story first; C1 to C4 stated by the owner; C5 from Z23). TL10 already
@@ -479,3 +632,141 @@ CPU only (the local GPU is another user's service). Script `dev/116_bioclip2_sui
   all trained. Insects (SPIPOLL ids): none found in ToL's URLs. Fungi is therefore read on its clean part only.
   The candidate pool for the hash audit: 11.0 M trained ToL rows in the audited genera and families, 7.7 M of
   them in the 45 Insects classes that are whole families (Geometridae alone 1.3 M rows in all splits).
+
+**The queue, and two fixes it forced (2026-11-21, written before the reruns).** The embeddings ran on cores 0-3
+from 17:24 on 20 November to 10:03 on 21 November (ToL 6 img/s, BioCLIP-2 2.5 img/s on four threads). Zero-shot,
+the hash audit, ToL's NeWT and ToL's AwA2 ran between them; the few-shot step stopped on an error. Two things
+were wrong in my code, not in the models:
+- *The clean part crashed.* Removing flagged images from support and query alike left a Fungi class with 2 images,
+  and BioCLIP-2's protocol never skips a class, so 5-shot cannot be drawn. Changed to **clean queries**: the same
+  draws as the full run (the shuffle is over row indices, which gives the same permutation), accuracy over the
+  queries not found among ToL's training rows. A flagged image can still be a support image. Both models are
+  scored on the same queries. NeWT gets the same split of its test images.
+- *AwA2's recipe does not transfer across feature scales.* ToL scored macro-F1 0.0 on its head embedding and 30.8
+  on its trunk features. BioCLIP-2's code feeds unnormalised features (BioCLIP-2's mean norm 47.6) to a probe
+  trained at learning rate 1e-5 that predicts an attribute when the logit exceeds 0.5; ToL's embedding has norm
+  1.0 and its trunk features 1.9, so the probe barely leaves its initialisation and predicts almost nothing. This
+  is a measurement artefact. Kept as "as is" (the protocol taken literally), and added a second variant: each
+  model's features times one constant, to BioCLIP-2's mean norm (identity for BioCLIP-2).
+- *The hash audit misses cropped copies.* Meta-Album images are 128 px squares cut from the source photographs.
+  On Fungi, where the GBIF id gives the ground truth, the hash finds 29 images within 6 bits against 517 trained
+  occurrences by id. So on the Meta-Album sets the hash counts are lower bounds, and only Fungi (ids) and PlantNet
+  (ids, 27) have a usable clean part; for NeWT, AwA2, Camera Trap and PlantDoc, which keep whole frames, the hash
+  is the right tool.
+
+Predictions for the reruns: AwA2 with features at BioCLIP-2's norm, ToL trunk features 55 to 68 and head
+embedding 50 to 65, against BioCLIP-2 near 69.5 (prediction (c) stands). Clean queries move ToL's few-shot by
+under 1 point on every task but Fungi, where removing 517 trained occurrences costs ToL 1 to 4 points and
+BioCLIP-2 under 1. On NeWT's audited tasks (inat_unobserved, 6,000 images, 3,286 flagged), ToL is 1 to 5 points
+better on flagged test images than on clean ones; BioCLIP-2 shows a smaller gap or none, unless its own training
+set holds the same iNaturalist photographs (TreeOfLife-200M draws on GBIF too; not audited here).
+
+**Results (2026-11-21).** All on CPU, cores 0-3. Tables in `data/bioclip2_suite/results.md`; BS1-BS4.
+
+*Reproduction (BS1).* Stock BioCLIP-2 through the port, against the paper:
+
+| task | 1-shot | paper | 5-shot | paper | text zero-shot | paper |
+|---|---|---|---|---|---|---|
+| Plankton | 32.9 | 32.0 | 51.3 | 50.5 | 3.7 | 3.9 |
+| Insects | 73.5 | 74.6 | 89.1 | 89.3 | 55.2 | 55.3 |
+| Insects 2 | 28.2 | 28.4 | 44.7 | 44.3 | 27.6 | 27.7 |
+| Camera Trap | 47.6 | 48.1 | 67.3 | 67.7 | 53.8 | 53.9 |
+| PlantNet | 84.3 | 85.8 | 95.0 | 94.4 | 96.9 | 96.8 |
+| Fungi | 66.1 | 70.3 | 85.3 | 85.0 | 83.6 | 83.8 |
+| PlantVillage | 68.1 | 67.6 | 84.1 | 83.9 | 25.2 | 25.1 |
+| Medicinal Leaf | 91.1 | 92.0 | 98.4 | 98.4 | 57.9 | 57.8 |
+| Rare Species | 60.4 | 59.5 | 77.0 | 77.2 | 76.7 | 76.8 |
+
+NeWT 88.9 (paper 89.1). AwA2 with the official 40/10 class files 67.6, runs 69.0, 68.8, 65.0 (paper 69.5): the
+code's split made the table, not the appendix's 45/5. PlantDoc 41.3 as BioCLIP-2's code runs (paper 40.4), 45.9
+with the labels joined by name. Every value is within 1.5 except 1-shot Fungi (4.2 below; the five folds spread
+by 3.7) and 1-shot PlantNet (1.5 below; spread 5.8), the two 25-class tasks where one drawn image per class
+decides much.
+
+*Frozen ToL on the same protocols (BS2), head embedding; trunk features in brackets where they differ by more
+than 1:*
+
+| task | ToL 1-shot | minus BioCLIP-2 | ToL 5-shot | minus BioCLIP-2 |
+|---|---|---|---|---|
+| Plankton | 38.1 | +5.2 | 58.1 (59.2) | +6.8 |
+| Insects | 67.8 | -5.7 | 87.0 | -2.1 |
+| Insects 2 | 26.7 | -1.4 | 43.5 (42.1) | -1.3 |
+| Camera Trap | 48.3 | +0.8 | 69.5 | +2.2 |
+| PlantNet | 81.4 | -2.9 | 94.3 (93.2) | -0.7 |
+| Fungi | 63.1 (61.0) | -3.0 | 83.1 (82.0) | -2.2 |
+| PlantVillage | 72.6 | +4.4 | 88.1 | +4.0 |
+| Medicinal Leaf | 96.5 | +5.4 | 99.5 | +1.1 |
+| Rare Species | 62.9 | +2.6 | 79.1 | +2.1 |
+| **mean of nine** | **61.9** | **+0.6** | **78.0** | **+1.1** |
+
+Non-species tasks: NeWT 86.9 (trunk 87.6) against 88.9; AwA2 with features scaled to BioCLIP-2's norm 64.1
+(trunk 65.3) against 67.6, and 0.0 / 30.8 with the code as is (the scale artefact above); PlantDoc 47.1 as the
+code runs (trunk 46.9) against 41.3, 53.6 by name against 45.9.
+
+*Zero-shot (BS3).* The head's marginals against BioCLIP-2's text (our reproduction), with ToL's coverage
+(classes on species rows / on genus, family or order / unmapped):
+
+| task | ToL head | BioCLIP-2 text | coverage | ceiling |
+|---|---|---|---|---|
+| Plankton | 5.9 | 3.7 | 1 / 9 / 76 of 86 | 10.5 |
+| Insects | 73.1 | 55.2 | 20 / 67 / 17 of 104 | 80.8 |
+| Insects 2 | 19.0 | 27.6 | 17 / 21 / 64 of 102 | 37.3 |
+| Camera Trap | 48.4 | 53.8 | 116 / 32 / 2 of 150 | 97.6 |
+| PlantNet | 96.0 | 96.9 | 25 / 0 / 0 of 25 | 100 |
+| Fungi | 86.2 | 83.6 | 23 / 2 / 0 of 25 | 100 |
+| PlantVillage | 24.0 | 25.2 | 28 / 2 / 8 of 38 | 28.9 |
+| Medicinal Leaf | 70.8 | 57.9 | 18 / 6 / 1 of 25 | 96.0 |
+| Rare Species | 70.2 | 76.7 | 356 / 42 / 2 of 400 | 97.3 |
+| mean of nine | 54.8 | 53.4 | | |
+
+Insects is the head's largest win (+17.9): 46 of its classes are families, and a family marginal is something
+the head has and a text prompt of a family name is not. Camera Trap is its largest loss among covered tasks
+(-5.4 with a 97.6 ceiling; species queries 54.3): night infrared frames of mammals, where the head's 5-shot is
+still ahead (+2.2), so the prototypes, not the embedding, fall short there.
+
+*Overlap (BS4).* Exact ids: Fungi 517 of 1,000 images from occurrences in ToL's training rows, PlantNet 27,
+Insects 0. Hash audit over 11.0 M trained rows in the audited genera and families, each match confirmed by
+thumbnail correlation (`verify`): the 6-bit rule alone flagged 239 Camera Trap and 100 AwA2 images, and by eye
+every Camera Trap match and most AwA2 matches are different frames (night infrared, sea, plain backgrounds);
+copies correlate 0.96 or more, the different frames 0.94 or less. Confirmed copies: **NeWT 3,278 of the 6,000
+images of its inat_unobserved tasks** (the only NeWT tasks whose labels name a genus; the rest are not audited),
+AwA2 9, PlantDoc 1, PlantNet 1 and Fungi 12 (all inside the id matches), Camera Trap, Insects, Insects 2,
+PlantVillage 0. The hash audit is a lower bound on Meta-Album, whose 128 px crops hash differently (Fungi: 12
+by hash against 517 by id).
+
+*Does the overlap inflate ToL?* No measurable effect. Fungi on clean queries (483): ToL 84.6 and BioCLIP-2 86.1 at
+5-shot, a gap of -1.5 against -2.2 on all; the flagged queries are harder for both models, not easier for ToL.
+PlantNet clean: 94.3 against 94.9. NeWT's inat_unobserved test images: ToL 96.6 on the 1,364 clean, 96.9 on the
+1,636 copies (trunk 96.1 / 97.0); BioCLIP-2 97.5 / 97.2. Whether BioCLIP-2's own training set holds the same
+photographs was not audited.
+
+*Predictions scored.*
+- (a) Reproduction: **held** for 5-shot, zero-shot, NeWT (0.2), AwA2 (1.9, with the 40/10 files) and PlantDoc
+  (0.9); **missed** for 1-shot Fungi (4.2) and, by 0.01, 1-shot PlantNet.
+- (b) Per task at 5-shot: held on Camera Trap, Insects 2 and Rare Species; missed on Fungi (-2.2, predicted +2 to
+  +6), PlantNet (-0.7), Insects (-2.1, narrowly), and the wrong way on Plankton (+6.8, predicted -5 to +1),
+  PlantVillage (+4.0, predicted -8 to 0) and Medicinal Leaf (+1.1, predicted -3 to 0). The means held: +1.1 at
+  5-shot (within 2), +0.6 at 1-shot (0 to 3). My per-task picture was backwards: I expected ToL to win where
+  its taxa are well sampled (fungi, plants) and lose on non-taxon images; it loses slightly on the well-sampled
+  taxa and wins on plankton, crop leaves and lab leaves.
+- (c) Non-species: NeWT 2.1 below **held**; AwA2 3.5 below with the features at BioCLIP-2's norm **held** (2.3 for
+  the trunk; with the code as is the comparison is not meaningful); PlantDoc **wrong way** (+5.8 as run, +7.7 by
+  name).
+- (d) Layer: **missed** on size. The trunk's features beat the head's embedding by 0.7 on NeWT, 1.2 on AwA2, 0.2 on
+  PlantVillage and 1.1 on Plankton, and lose by 0.2 on PlantDoc; on the taxon tasks they lose by 0.3 to 1.4. The
+  head costs the non-species tasks about a point, not 2 to 6.
+- (e) Zero-shot: **held** on Fungi (+2.6) and Medicinal Leaf (+12.9), and on coverage limiting Insects 2 and
+  Plankton; **missed** on Rare Species (-6.5), Camera Trap (-5.4) and PlantNet (-0.9); PlantVillage's ceiling is
+  28.9, not 37, and the head is 1.2 below the text.
+- (f) Overlap: Fungi (52 % by id) and NeWT's audited tasks (55 %) far above the 1 to 20 % predicted; Insects 0,
+  not 1 to 20; the rest under 1 % as predicted. Removing it moves ToL's gap to BioCLIP-2 by under 1 point
+  (Fungi +0.7, NeWT 0.3 the other way): **held**.
+
+**What C2 says.** On BioCLIP-2's own suite and code, one frozen trunk trained only on species labels matches
+BioCLIP-2 on few-shot species recognition (+1.1 at 5-shot, +0.6 at 1-shot over nine tasks, ahead on five) and
+its head matches BioCLIP-2's text zero-shot on average (54.8 against 53.4) without a text encoder, winning
+where coarse taxa are the classes (Insects) and losing where the vocabulary is common names or night camera
+traps. It is 1.4 to 3.5 points behind on the two tasks that ask for traits rather than taxa (NeWT, AwA2), and
+ahead on plant disease (PlantDoc, PlantVillage). The overlap with ToL's training rows is large on Fungi and NeWT
+but does not explain any of it. Two protocol facts for the paper: BioCLIP-2's AwA2 recipe only works at its
+own feature scale, and its PlantDoc code mislabels 8.5 % of the test images.

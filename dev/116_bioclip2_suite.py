@@ -243,23 +243,25 @@ def _emb(model: str, name: str, layer: str = "emb") -> np.ndarray:
 
 
 # ----------------------------------------------------------------------------------------------- few-shot
-def simpleshot_bioclip(feats: np.ndarray, target: np.ndarray, kshot: int, fold: int) -> float:
+def simpleshot_bioclip(feats: np.ndarray, target: np.ndarray, kshot: int, fold: int, keep=None) -> tuple[float, float]:
     """classification.py: split_few_shot_examples + get_few_shot_accuracy (features already normalised).
     random.seed(fold); classes in order of first appearance; shuffle each class's list; first k support, the
-    rest query; no class skipped. Distances by the expanded square (same argmin as LA.norm, chunked)."""
+    rest query; no class skipped. Distances by the expanded square (same argmin as LA.norm, chunked).
+    Shuffles row indices, which draws the same permutation as shuffling the feature list (same length, same state).
+    Returns (accuracy, accuracy over the queries with keep True; nan without keep)."""
     select: dict = {}
-    for x, t in zip(feats, target):
-        select.setdefault(int(t), []).append(x)
+    for i, t in enumerate(target):
+        select.setdefault(int(t), []).append(i)
     random.seed(fold)
     train, test, label, tgt = [], [], [], []
-    for c, fs in select.items():
-        if len(fs) < kshot:
-            raise ValueError(f"class {c} has {len(fs)} images, fewer than {kshot}")
-        fs = fs[:]
-        random.shuffle(fs)
-        train.append(fs[:kshot]); test.extend(fs[kshot:])
-        label.extend([c] * kshot); tgt.extend([c] * (len(fs) - kshot))
-    tr, te, label, tgt = np.vstack(train), np.vstack(test), np.array(label), np.array(tgt)
+    for c, ids in select.items():
+        if len(ids) < kshot:
+            raise ValueError(f"class {c} has {len(ids)} images, fewer than {kshot}")
+        ids = ids[:]
+        random.shuffle(ids)
+        train.append(ids[:kshot]); test.extend(ids[kshot:])
+        label.extend([c] * kshot); tgt.extend([c] * (len(ids) - kshot))
+    tr, te, label, tgt = feats[np.concatenate(train)], feats[np.array(test)], np.array(label), np.array(tgt)
     m = tr.mean(0)
     tr = (tr - m) / np.linalg.norm(tr - m, 2, 1)[:, None]
     te = (te - m) / np.linalg.norm(te - m, 2, 1)[:, None]
@@ -267,15 +269,19 @@ def simpleshot_bioclip(feats: np.ndarray, target: np.ndarray, kshot: int, fold: 
     labels = label[::kshot]
     cn = (centre ** 2).sum(1)
     pred = np.concatenate([labels[(cn[None] - 2 * te[i:i + 2048] @ centre.T).argmin(1)] for i in range(0, len(te), 2048)])
-    return float((pred == tgt).mean())
+    ok = pred == tgt
+    return float(ok.mean()), (float(ok[keep[np.array(test)]].mean()) if keep is not None else float("nan"))
 
 
-def _fewshot(feats, target, ks=(1, 5), folds=5) -> dict:
+def _fewshot(feats, target, ks=(1, 5), folds=5, keep=None) -> dict:
+    """{k: (mean, sd)}; with keep also {("clean", k): (mean, sd)} over the kept queries of the same draws."""
     f = feats / np.linalg.norm(feats, axis=1, keepdims=True)
     res = {}
     for k in ks:
-        accs = [simpleshot_bioclip(f, target, k, fold) for fold in range(folds)]
-        res[k] = (100 * float(np.mean(accs)), 100 * float(np.std(accs)))
+        accs = np.array([simpleshot_bioclip(f, target, k, fold, keep) for fold in range(folds)])
+        res[k] = (100 * float(accs[:, 0].mean()), 100 * float(accs[:, 0].std()))
+        if keep is not None:
+            res[("clean", k)] = (100 * float(accs[:, 1].mean()), 100 * float(accs[:, 1].std()))
     return res
 
 
@@ -324,11 +330,15 @@ def _rare(model: str, layer: str = "emb"):
 
 
 def _flagged() -> set:
-    """Benchmark images found among ToL's training rows (overlap): a difference hash within BENCH_HAMMING bits of a
-    trained row in the same genus/family, or an exact id match on a trained row. Empty before `overlap` ran."""
+    """Benchmark images found among ToL's training rows (overlap): an exact id match on a trained row, or a
+    difference hash within BENCH_HAMMING bits of a trained row in the same genus/family that `verify` confirms
+    as a copy (thumbnail correlation >= VERIFY_CORR; the hash alone before `verify` ran). Empty before `overlap`."""
     d = OUT / "overlap"
     out = set()
-    if (d / "nearest.parquet").exists():
+    if (d / "verified.parquet").exists():
+        v = pd.read_parquet(d / "verified.parquet")
+        out |= set(v.loc[v["corr"] >= VERIFY_CORR, "path"])
+    elif (d / "nearest.parquet").exists():
         n = pd.read_parquet(d / "nearest.parquet")
         out |= set(n.loc[n["dist_trained"] <= BENCH_HAMMING, "path"])
     for f in d.glob("exact_*.parquet"):
@@ -353,10 +363,11 @@ def fewshot(a) -> None:
                     if not (OUT / "emb" / model / "camera_trap" / f"{layer}.npy").exists():
                         continue
                     e = _emb(model, "camera_trap", layer)
-                    per = {s: _fewshot(e[(ix.subset == s).to_numpy()], ix.loc[ix.subset == s, "cls_idx"].to_numpy())
-                           for s in CAMERA}
+                    keep = ~ix["path"].isin(flagged).to_numpy()
+                    per = {s: _fewshot(e[(ix.subset == s).to_numpy()], ix.loc[ix.subset == s, "cls_idx"].to_numpy(),
+                                       keep=keep[(ix.subset == s).to_numpy()]) for s in CAMERA}
                     res = {k: (float(np.mean([per[s][k][0] for s in CAMERA])), float(np.mean([per[s][k][1] for s in CAMERA])))
-                           for k in (1, 5)}
+                           for k in (1, 5, ("clean", 1), ("clean", 5))}
                     for s in CAMERA:
                         rows.append({"model": model, "layer": layer, "task": f"camera_trap/{s}",
                                      "1-shot": per[s][1][0], "5-shot": per[s][5][0], "1-shot sd": per[s][1][1], "5-shot sd": per[s][5][1]})
@@ -365,16 +376,20 @@ def fewshot(a) -> None:
                         continue
                     ix = pd.read_parquet(OUT / "index" / f"{task}.parquet")
                     e = _emb(model, task, layer)
-                    res = _fewshot(e, ix["cls_idx"].to_numpy())
-                    clean = ~ix["path"].isin(flagged).to_numpy()
-                    if not clean.all():   # the clean part: flagged images out of support and query alike
-                        rc = _fewshot(e[clean], ix.loc[clean, "cls_idx"].to_numpy())
-                        rows.append({"model": model, "layer": layer, "task": f"{task}, clean part", "images": int(clean.sum()),
-                                     "1-shot": rc[1][0], "5-shot": rc[5][0], "1-shot sd": rc[1][1], "5-shot sd": rc[5][1]})
+                    keep = ~ix["path"].isin(flagged).to_numpy()
+                    res = _fewshot(e, ix["cls_idx"].to_numpy(), keep=keep)
+                if task != "rare_species" and ("clean", 1) in res:
+                    # clean queries: the same draws, scored only on queries not found among ToL's training rows (a
+                    # flagged image can still be a support image; dropping it there would empty some 5-shot classes)
+                    n_flag = int((~keep).sum())
+                    rows.append({"model": model, "layer": layer, "task": f"{task}, clean queries", "images": int(keep.sum()),
+                                 "flagged": n_flag, "1-shot": res[("clean", 1)][0], "5-shot": res[("clean", 5)][0],
+                                 "1-shot sd": res[("clean", 1)][1], "5-shot sd": res[("clean", 5)][1]})
                 rows.append({"model": model, "layer": layer, "task": task, "1-shot": res[1][0], "5-shot": res[5][0],
                              "1-shot sd": res[1][1], "5-shot sd": res[5][1],
                              "paper 1-shot": PAPER[task][1], "paper 5-shot": PAPER[task][2]})
-                print({k: (round(v, 2) if isinstance(v, float) else v) for k, v in rows[-1].items()}, flush=True)
+                for r in rows[-2:] if rows[-2:-1] and rows[-2]["task"].endswith("clean queries") else rows[-1:]:
+                    print({k: (round(v, 2) if isinstance(v, float) else v) for k, v in r.items()}, flush=True)
             if (OUT / "emb" / model / "plantdoc" / f"{layer}.npy").exists():
                 for by_name in (False, True):
                     m, s = plantdoc_1shot(_emb(model, "plantdoc", layer), pd.read_parquet(OUT / "index/plantdoc.parquet"),
@@ -643,17 +658,18 @@ def newt(a) -> None:
     import sklearn.preprocessing
     import sklearn.svm
     ix = pd.read_parquet(OUT / "index/newt.parquet")
+    flagged = _flagged()
     rows = []
     for model, layer in (("bioclip2", "emb"), ("tol", "emb"), ("tol", "feat")):
         if not (OUT / "emb" / model / "newt" / f"{layer}.npy").exists() or (a.models and model not in a.models.split(",")):
             continue
         e = _emb(model, "newt", layer)
         e /= np.linalg.norm(e, axis=1, keepdims=True)
-        scores, by_cluster = [], {}
+        scores, by_cluster, extra = [], {}, {}
         for run in range(a.runs):
             seed = SEED + run
             random.seed(seed); np.random.seed(seed)
-            yp, yt, cl = [], [], []
+            yp, yt, cl, fl, un = [], [], [], [], []
             for task, g in ix.groupby("task", sort=False):
                 tr = (g["split"] == "train").to_numpy()
                 x = e[g.index.to_numpy()]
@@ -667,13 +683,25 @@ def newt(a) -> None:
                 y = g["label"].to_numpy()
                 svc.fit(x[tr], y[tr])
                 yp.append(svc.predict(x[~tr])); yt.append(y[~tr]); cl += [g["task_cluster"].iloc[0]] * int((~tr).sum())
-            yp, yt = np.concatenate(yp), np.concatenate(yt)
-            scores.append(100 * float((yp == yt).mean()))
-            for c, ok in pd.Series(yp == yt).groupby(np.array(cl)):
-                by_cluster.setdefault(c, []).append(100 * float(ok.mean()))
+                fl.append(g.loc[~tr, "path"].isin(flagged).to_numpy())
+                un.append(np.full(int((~tr).sum()), task.startswith("inat_unobserved")))
+            yp, yt, fl, un = np.concatenate(yp), np.concatenate(yt), np.concatenate(fl), np.concatenate(un)
+            ok = yp == yt
+            te_paths = np.concatenate([g.loc[g["split"] != "train", "path"].to_numpy() for _, g in ix.groupby("task", sort=False)])
+            (OUT / "newt_pred").mkdir(exist_ok=True)   # per test image, so another clean split needs no refit
+            pd.DataFrame({"path": te_paths, "correct": ok}).to_parquet(OUT / "newt_pred" / f"{model}_{layer}_run{run}.parquet")
+            scores.append(100 * float(ok.mean()))
+            for c, okc in pd.Series(ok).groupby(np.array(cl)):
+                by_cluster.setdefault(c, []).append(100 * float(okc.mean()))
+            # the overlap audit covers the inat_unobserved tasks only (their labels name a genus)
+            for name, m in (("flagged test images out", ~fl), ("inat_unobserved tasks", un),
+                            ("inat_unobserved, clean test images", un & ~fl), ("inat_unobserved, flagged test images", un & fl)):
+                extra.setdefault(name, []).append(100 * float(ok[m].mean()))
+                extra[f"{name}: n"] = [int(m.sum())]
             print(f"newt {model} {layer} run {run}: {scores[-1]:.2f}", flush=True)
         rows.append({"model": model, "layer": layer, "newt": float(np.mean(scores)), "sd": float(np.std(scores)),
-                     **{f"cluster {c}": float(np.mean(v)) for c, v in by_cluster.items()}, "paper": PAPER_OTHER["newt"]})
+                     **{f"cluster {c}": float(np.mean(v)) for c, v in by_cluster.items()},
+                     **{k: float(np.mean(v)) for k, v in extra.items()}, "paper": PAPER_OTHER["newt"]})
     res = pd.DataFrame(rows)
     if (OUT / "newt.csv").exists():   # keep other models' rows from an earlier run
         old = pd.read_csv(OUT / "newt.csv")
@@ -693,11 +721,22 @@ def awa2(a) -> None:
     pm = np.load(OUT / "index/awa2_predicates.npy")
     y_all = pm[ix["cls_idx"].to_numpy()].astype(np.float32)
     tr = (ix["split"] == "train").to_numpy()
+    # The recipe (lr 1e-5, threshold on the logit at 0.5) is tuned to BioCLIP-2's unnormalised features, mean norm
+    # about 48; ToL's embedding has norm 1 and its trunk features about 1.9, so with the code as is the probe barely
+    # leaves its initialisation. Second variant: each model's features times one constant, to BioCLIP-2's mean norm.
+    ref = OUT / "emb" / "bioclip2" / "awa2" / "emb.npy"
+    ref_norm = float(np.linalg.norm(np.load(ref).astype(np.float32), axis=1).mean()) if ref.exists() else None
     rows = []
-    for model, layer in (("bioclip2", "emb"), ("tol", "emb"), ("tol", "feat")):
+    variants = [(m, l, s) for m, l in (("bioclip2", "emb"), ("tol", "emb"), ("tol", "feat"))
+                for s in ((False,) if m == "bioclip2" else (False, True))]
+    for model, layer, scaled in variants:
         if not (OUT / "emb" / model / "awa2" / f"{layer}.npy").exists() or (a.models and model not in a.models.split(",")):
             continue
-        x = torch.from_numpy(_emb(model, "awa2", layer))
+        if scaled and ref_norm is None:
+            continue
+        xn = _emb(model, "awa2", layer)
+        factor = ref_norm / float(np.linalg.norm(xn, axis=1).mean()) if scaled else 1.0
+        x = torch.from_numpy(xn * factor)
         y = torch.from_numpy(y_all)
         scores = []
         for run in range(a.runs):
@@ -718,13 +757,16 @@ def awa2(a) -> None:
                 pred = (clf(x[~tr]) > 0.5).numpy()
             yt = y_all[~tr]
             scores.append(100 * float(sklearn.metrics.f1_score(yt, pred, average="macro", labels=np.unique(yt))))
-            print(f"awa2 {model} {layer} run {run}: {scores[-1]:.2f}", flush=True)
-        rows.append({"model": model, "layer": layer, "awa2": float(np.mean(scores)), "sd": float(np.std(scores)),
-                     "paper": PAPER_OTHER["awa2"]})
+            print(f"awa2 {model} {layer} x{factor:.1f} run {run}: {scores[-1]:.2f}", flush=True)
+        rows.append({"model": model, "layer": layer, "features": f"x {factor:.1f} (mean norm {ref_norm:.1f})" if scaled else "as is",
+                     "awa2": float(np.mean(scores)), "sd": float(np.std(scores)), "paper": PAPER_OTHER["awa2"]})
     res = pd.DataFrame(rows)
     if (OUT / "awa2.csv").exists():   # keep other models' rows from an earlier run
         old = pd.read_csv(OUT / "awa2.csv")
-        res = pd.concat([old[~old.set_index(["model", "layer"]).index.isin(res.set_index(["model", "layer"]).index)], res])
+        if "features" not in old:
+            old["features"] = "as is"
+        key = ["model", "layer", "features"]
+        res = pd.concat([old[~old.set_index(key).index.isin(res.set_index(key).index)], res])
     res.to_csv(OUT / "awa2.csv", index=False)
     print(pd.DataFrame(rows).round(2).to_string())
 
@@ -934,6 +976,105 @@ def overlap(a) -> None:
     print(res.to_string(), flush=True)
 
 
+VERIFY_CORR = 0.95   # by eye on the borderline pairs (C2 journal, 2026-11-21): copies >= 0.96, other frames <= 0.94
+
+
+def _thumb(path, side: int = 32):
+    """Whole image, grey, LANCZOS to side x side, zero mean and unit norm (Pearson correlation by dot product)."""
+    from PIL import Image
+    try:
+        with Image.open(path) as im:
+            g = np.asarray(im.convert("L").resize((side, side), Image.Resampling.LANCZOS), dtype=np.float32).ravel()
+    except Exception:  # noqa: BLE001 - unreadable file
+        return None
+    g -= g.mean()
+    n = np.linalg.norm(g)
+    return g / n if n > 0 else None
+
+
+def _pair_corr(pair):
+    a, b = _thumb(pair[0]), _thumb(pair[1])
+    return float(a @ b) if a is not None and b is not None else float("nan")
+
+
+def verify(a) -> None:
+    """The hash rule (dev/103's, set on Rare Species photographs) passes different camera-trap night frames and
+    plain-background AwA2 images at 6 bits. For each flagged benchmark image: every trained ToL row within
+    BENCH_HAMMING bits in its audited taxon (nearest 20), and the best Pearson correlation of 32 x 32 grey
+    thumbnails. A copy, resized or recompressed, correlates near 1; a different frame does not."""
+    import pyarrow.parquet as pq
+    from multiprocessing import get_context
+    out = OUT / "overlap"
+    bench = pd.read_parquet(out / "bench_records.parquet").merge(pd.read_parquet(out / "bench_hash.parquet"), on="path")
+    near = pd.read_parquet(out / "nearest.parquet")
+    flagged = set(near.loc[near["dist_trained"] <= BENCH_HAMMING, "path"])
+    fb = bench[bench["path"].isin(flagged) & (bench["level"] != "none")].dropna(subset=["h"]).copy()
+    fb["hu"] = _u64(fb["h"])
+    groups = {k: g for k, g in fb.groupby(["level", "kingdom", "taxon"])}
+    pf = pq.ParquetFile(out / "tol_candidates.parquet")
+    pairs = []
+    for i in range(pf.metadata.num_row_groups):
+        th = pd.read_parquet(out / "tol_hash" / f"{i:05d}.parquet")
+        th["path"] = pf.read_row_group(i, columns=["path"]).column(0).to_numpy(zero_copy_only=False)
+        th = th.dropna(subset=["h"])
+        gl, fl, kg = th["genus"].fillna("").str.lower(), th["family"].fillna("").str.lower(), th["kingdom"].fillna("")
+        for (lvl, king, tax), g in groups.items():
+            m = ((gl if lvl == "genus" else fl) == tax) & ((kg == king) if king else True)
+            if not m.any():
+                continue
+            xh = _u64(th.loc[m, "h"])
+            xp = th.loc[m, "path"].to_numpy()
+            d = np.bitwise_count(g["hu"].to_numpy()[:, None] ^ xh[None, :])
+            for bi, ti in zip(*np.nonzero(d <= BENCH_HAMMING)):
+                pairs.append((g["path"].iloc[bi], xp[ti], int(d[bi, ti])))
+        if i % 100 == 0:
+            print(f"  hash group {i}/{pf.metadata.num_row_groups}: {len(pairs):,} pairs within {BENCH_HAMMING} bits", flush=True)
+    p = pd.DataFrame(pairs, columns=["path", "tol_path", "dist"]).drop_duplicates(["path", "tol_path"])
+    p = p.sort_values(["path", "dist"]).groupby("path").head(20).reset_index(drop=True)
+    img = TOL_META.parent / "images"
+    with get_context("spawn").Pool(a.threads) as pool:
+        p["corr"] = pool.map(_pair_corr, [(b, str(img / t)) for b, t in zip(p["path"], p["tol_path"])], chunksize=64)
+    p.to_parquet(out / "verify_pairs.parquet")
+    best = p.sort_values("corr", ascending=False).drop_duplicates("path")
+    best = best.merge(bench[["set", "path"]].drop_duplicates("path"), on="path")
+    best.to_parquet(out / "verified.parquet")
+    edges = [-1, 0.5, 0.7, 0.8, 0.9, 0.95, 0.98, 1.01]
+    tab = best.groupby(["set", pd.cut(best["corr"], edges)], observed=False).size().unstack(fill_value=0)
+    print(tab.to_string(), flush=True)
+    res = best.groupby("set").agg(flagged=("path", "size"), verified=("corr", lambda c: int((c >= VERIFY_CORR).sum())))
+    res.to_csv(OUT / "overlap_verified.csv")
+    print(res.to_string())
+
+
+def clean(a) -> None:
+    """After `verify`: the verified counts per set at VERIFY_CORR, and NeWT's clean split recomputed from the saved
+    per-image predictions (no refit)."""
+    v = pd.read_parquet(OUT / "overlap" / "verified.parquet")
+    res = v.groupby("set").agg(hash_flagged=("path", "size"), copies=("corr", lambda c: int((c >= VERIFY_CORR).sum())))
+    res.to_csv(OUT / "overlap_verified.csv")
+    print(res.to_string(), flush=True)
+    flagged = _flagged()
+    ix = pd.read_parquet(OUT / "index/newt.parquet")
+    unobs = set(ix.loc[ix["task"].str.startswith("inat_unobserved"), "path"])
+    nt = pd.read_csv(OUT / "newt.csv")
+    for i, r in nt.iterrows():
+        runs = sorted((OUT / "newt_pred").glob(f"{r['model']}_{r['layer']}_run*.parquet"))
+        if not runs:
+            continue
+        extra = {}
+        for f in runs:
+            p = pd.read_parquet(f)
+            fl, un = p["path"].isin(flagged).to_numpy(), p["path"].isin(unobs).to_numpy()
+            for name, m in (("flagged test images out", ~fl), ("inat_unobserved tasks", un),
+                            ("inat_unobserved, clean test images", un & ~fl), ("inat_unobserved, flagged test images", un & fl)):
+                extra.setdefault(name, []).append(100 * float(p["correct"].to_numpy()[m].mean()))
+                extra[f"{name}: n"] = [int(m.sum())]
+        for k, vals in extra.items():
+            nt.loc[i, k] = float(np.mean(vals))
+    nt.to_csv(OUT / "newt.csv", index=False)
+    print(nt.round(2).to_string())
+
+
 def pa_set(values):
     import pyarrow as pa
     return pa.array(sorted(values), type=pa.string())
@@ -955,7 +1096,8 @@ def main() -> None:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = p.add_subparsers(dest="cmd", required=True)
     for name, fn in (("index", index), ("embed", embed), ("fewshot", fewshot), ("zeroshot", zeroshot),
-                     ("newt", newt), ("awa2", awa2), ("overlap", overlap), ("report", report)):
+                     ("newt", newt), ("awa2", awa2), ("overlap", overlap), ("verify", verify), ("clean", clean),
+                     ("report", report)):
         sp = sub.add_parser(name)
         sp.set_defaults(fn=fn)
         sp.add_argument("--threads", type=int, default=4)

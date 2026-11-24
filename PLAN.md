@@ -1,6 +1,6 @@
 # PLAN — what we are doing now
 
-**Kind:** living · **Last updated:** 2026-11-20 · **Supersedes:** [2026-07-28-landscape-and-plan](archive/journal/engineering/2026-07-28-landscape-and-plan.md)
+**Kind:** living · **Last updated:** 2026-11-23 · **Supersedes:** [2026-07-28-landscape-and-plan](archive/journal/engineering/2026-07-28-landscape-and-plan.md)
 
 The one file about *today*. Experiment IDs resolve in [`RESULTS.md`](RESULTS.md); reasons are in
 the linked journal entries; older versions of this file are in git history.
@@ -68,6 +68,15 @@ estimated prior, gated labels on a head, TTA, open-set scoring, abstention) that
 real deployment under domain shift, label shift and unknown objects; fine-tuning (Otto) as the reference it is
 measured against, and its cost to generality (Z21). Evidence so far: Z23 (the frozen trunk discriminates trap
 species as well as fine-tuned models; its deficit is class bias and confidence), 4b, 15; TL10 decides how close.
+TL10 (WSD) done 2026-11-22: stable phase flat at lr 8e-4; branches d5 / d10 validation 0.603 / 0.618 (tol-full 0.640); TL8a-v2
+test fold 0.893 / 0.897 (TL8a 0.895), trap probe 0.664 / 0.667 (0.647). Length is not the lever for the frozen trunk; s3 off.
+Owner, 2026-11-23: queue the two cheap checks (mt): training-set scoring without augmentation by species-frequency bin
+(tol-full, d10), and an overfit test on 1 % of tol256 without augmentation, one-cycle cosine. No 4-pass cooldown for now; the
+owner is reconsidering constant learning rates for the next run. Also in parallel: filtering ToL outputs to OT6's species with a
+post-hoc prior, and TL8a-v2 on d10 with sqrt oversampling, against OT6's 0.917 ([[2026-11-19-what-the-tree-of-life-model-is-for]]).
+Approved 2026-11-23 (mt): the overfit test with DINOv3 ViT-L/16 after fit1pct (capacity), the label-shift test of sqrt oversampling
+(test-fold logits on UCloud), re-scoring the bank's oversampled Lepidoptera pairs, opt-in head/tail monitoring in mini_trainer.
+Open: an OT6 run with sqrt oversampling (the fair specialist bar), decided after the oversampled head scores.
 Claims C1-C5, the work they need (BioCLIP-2's benchmark suite, AMI order + moth heads on one trunk, iWildCam,
 Pl@ntNet-300K, an image-overlap audit per benchmark) and predictions: [[2026-11-20-can-one-frozen-trunk-with-specialisation-heads-stand-in-for-specialist-models]].
 

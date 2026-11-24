@@ -750,6 +750,11 @@ is what the floor costs in coverage.
 
 ### 4.13 Long-tail rebalancing trades robustness for accuracy, and the trade comes from where it is applied
 
+> **Superseded in part (2026-11-23), text to be rewritten.** The shifted cost of rebalancing is label shift, not damage to
+> the representation: a sqrt-oversampled head's trap deficit vanishes when its training prior is reset to the natural one,
+> and with the regional list and an EM-estimated trap prior it beats its control on the traps (RESULTS TL11 (4)); the cRT
+> result below is void (the trunk was not frozen). Claim C4 needs the same revision.
+
 *Figures 5c and 2b summarise this section.*
 
 The long-tailed-recognition literature validates on in-distribution held-out splits: CIFAR-LT,

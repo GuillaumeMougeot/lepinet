@@ -8,6 +8,7 @@ against Kim Bjerge's specialist (ResNet50v2 at 128 px). CPU only, ONNX Runtime, 
     .venv/bin/python -I dev/115_broad_taxa.py head       # BT1: every labelled rung, on Kim's list and site held out
     .venv/bin/python -I dev/115_broad_taxa.py nolabels   # BT5: EM prior (L0), temperature, pseudo-label head
     .venv/bin/python -I dev/115_broad_taxa.py leak       # near-duplicates across each split, 1-NN, byte-identical pairs
+    .venv/bin/python -I dev/115_broad_taxa.py night      # diagnostic: 80/20 by trap-night within the sites, 1-NN and (a)
     .venv/bin/python -I dev/115_broad_taxa.py views      # BT3: tta3bm and pad-to-square, from dev/117's embeddings
     .venv/bin/python -I dev/115_broad_taxa.py gpu        # BT2 (Kim's recipe retrained), BT4 (frozen-trunk head)
 
@@ -316,15 +317,30 @@ def mapping(_):
 
 
 def load_shards(cols=("embedding",)):
-    """Every finished shard, rows in Kim's full-set order (kim_idx); missing rows absent."""
-    parts = {c: [] for c in ("kim_idx",) + tuple(cols)}
-    for f in sorted((OUT / "emb").glob("shard_*.npz")):
+    """Every finished shard, rows in Kim's full-set order (kim_idx); missing rows absent. Each column is allocated
+    once and filled shard by shard, so the peak is the result plus one shard (the family masses are 1.3 GB in fp16)."""
+    files = sorted((OUT / "emb").glob("shard_*.npz"))
+    ki = []
+    for f in files:
         with np.load(f) as z:
-            for c in parts:
-                parts[c].append(z[c])
-    arr = {c: np.concatenate(v) for c, v in parts.items()}
-    o = np.argsort(arr["kim_idx"])
-    return {c: v[o] for c, v in arr.items()}
+            ki.append(z["kim_idx"])
+    rows = np.sort(np.concatenate(ki))
+    pos = np.full(int(rows.max()) + 1, -1)
+    pos[rows] = np.arange(len(rows))
+    out = {"kim_idx": rows}
+    for f, k in zip(files, ki):
+        with np.load(f) as z:
+            for c in cols:
+                a = z[c]
+                if c not in out:
+                    out[c] = np.empty((len(rows),) + a.shape[1:], a.dtype)
+                out[c][pos[k]] = a
+    return out
+
+
+def family_mass_reduce(fp, M, chunk=8192):
+    """fp (n x families, fp16) @ M (families x k), in float32 chunks."""
+    return np.concatenate([fp[s:s + chunk].astype(np.float32) @ M for s in range(0, len(fp), chunk)])
 
 
 # ----------------------------------------------------------------------------------------------- scoring
@@ -363,7 +379,7 @@ def zeroshot(_):
     rows = z["kim_idx"]
     y = idx.label.to_numpy()[rows]
     val = idx.split.to_numpy()[rows] == "val"
-    fp = z["family_p"].astype(np.float32)
+    fp = z["family_p"]   # fp16; reduced in float32 chunks
     res = {"n_embedded": int(len(rows)), "n_val_embedded": int(val.sum())}
     yk, pk = kim_val()
     res["kim_val"] = {**macro_prf(yk, pk), "diag": diagnostics(yk, pk)}
@@ -372,7 +388,7 @@ def zeroshot(_):
         fc, _ = family_category(labels, v)
         M = np.zeros((len(labels), len(CATS)), np.float32)
         M[np.flatnonzero(fc >= 0), fc[fc >= 0]] = 1
-        mass = fp @ M
+        mass = family_mass_reduce(fp, M)
         off = np.clip(1 - mass.sum(1), 0, 1)
         pred = mass.argmax(1)
         for name, sel in (("full", np.ones(len(rows), bool)), ("val", val)):
@@ -384,9 +400,10 @@ def zeroshot(_):
             res[f"{v}_{name}"] = r
             print(_line(f"ToL zero training {v} {name}", r), f" set-aside mass {r['set_aside_mass_mean']:.3f}")
         if v == "V0":   # where the set-aside mass goes
-            top = np.argsort(-fp[:, fc < 0].sum(0))[:12]
-            fams = np.flatnonzero(fc < 0)[top]
-            res["V0_set_aside_families"] = {labels[i]: float(fp[:, i].mean()) for i in fams}
+            colmean = sum(fp[s:s + 8192].astype(np.float32).sum(0) for s in range(0, len(fp), 8192)) / len(fp)
+            off_cols = np.flatnonzero(fc < 0)
+            fams = off_cols[np.argsort(-colmean[off_cols])[:12]]
+            res["V0_set_aside_families"] = {labels[i]: float(colmean[i]) for i in fams}
     (OUT / "zeroshot.json").write_text(json.dumps(res, indent=1))
     r = res["V0_val"]["per_class"]
     print("per class, V0 on Kim's validation (F1; Kim's F1):")
@@ -479,12 +496,16 @@ def _lr_rung(X, y, chosen, tag):
     return fn
 
 
-def category_logmass(fp, variant="V0"):
+def category_matrix(variant="V0"):
     labels = json.loads((RELEASE / "heads/tol.json").read_text())["labels"][2]
     fc, _ = family_category(labels, variant)
     M = np.zeros((len(labels), len(CATS)), np.float32)
     M[np.flatnonzero(fc >= 0), fc[fc >= 0]] = 1
-    return np.log(fp @ M + 1e-6)
+    return M
+
+
+def category_logmass(fp, variant="V0"):
+    return np.log(family_mass_reduce(fp, category_matrix(variant)) + 1e-6)
 
 
 def _softmax(z):
@@ -555,7 +576,14 @@ def head(_):
     idx, z = _load_all(("embedding", "features", "family_p"))
     y = idx.label.to_numpy()
     masks = fold_masks(idx)
-    lm = category_logmass(z["family_p"].astype(np.float32))
+    lm = category_logmass(z["family_p"])
+    # L3's candidates: a family with mean mass above 1e-4 on a fold's training part (at least half the crops) has
+    # mean mass above 5e-5 over all crops, so the columns above 1e-5 hold every candidate of every fold
+    fp16 = z["family_p"]
+    colmean = sum(fp16[s:s + 8192].astype(np.float32).sum(0) for s in range(0, len(fp16), 8192)) / len(fp16)
+    cand = np.flatnonzero(colmean > 1e-5)
+    fp = z.pop("family_p")[:, cand].astype(np.float32)
+    print(f"L3 candidates: {len(cand)} families of {len(colmean)}", flush=True)
     chosen = {k: [] for k in ("L2", "L3", "a", "c")}
     res = {}
 
@@ -563,7 +591,6 @@ def head(_):
         return (lm[te] + fit_bias(lm[tr], y[tr])).argmax(1)
     res["L1_bias_only"] = score_folds(l1, y, masks, "L1 zero training + 16 biases")
     res["L2_linear_on_16_masses"] = score_folds(_lr_rung(lm, y, chosen, "L2"), y, masks, "L2 linear on 16 log masses")
-    fp = z["family_p"].astype(np.float32)
 
     def l3(tr, te):
         keep = fp[tr].mean(0) > 1e-4
@@ -591,7 +618,7 @@ def nolabels(_):
     masks = fold_masks(idx)
     val = masks["kim"][1]
     site = idx.trap.str[:2].to_numpy()
-    lm = category_logmass(z["family_p"].astype(np.float32))
+    lm = category_logmass(z.pop("family_p"))
     p = _softmax(lm)
     res = {}
 
@@ -674,73 +701,135 @@ def leak(_):
     (OUT / "leak.json").write_text(json.dumps(res, indent=1))
 
 
+def night_groups(idx):
+    """(trap, night) per crop: the evening's date (hours before noon belong to the night before). Crops carry a full
+    time stamp; Lepidoptera files only a day of year, so their nights merge across 2022 and 2023 (larger groups)."""
+    out = []
+    for trap, st in zip(idx.trap, idx.stamp.astype(str)):
+        if not trap:
+            out.append("")
+        elif st.startswith("doy"):
+            doy, hour = int(st[3:6]), int(st[7:9])
+            out.append(f"{trap}|d{doy - int(hour < 12)}")
+        else:
+            t = pd.Timestamp(f"{st[:4]}-{st[4:6]}-{st[6:8]}") - pd.Timedelta(days=int(int(st[8:10]) < 12))
+            out.append(f"{trap}|{t.date()}")
+    return np.array(out)
+
+
+def night(_):
+    """Post-hoc diagnostic (2026-11-20, prediction written first): Kim's 80/20, but by trap-night instead of by crop,
+    within the same sites. Separates what his random split shares within a night (the same individuals across
+    frames, the same conditions) from what a new site changes."""
+    import torch
+    torch.set_num_threads(THREADS)
+    idx = pd.read_csv(OUT / "index.csv", keep_default_na=False, dtype={"stamp": str})
+    z = load_shards(("embedding", "family_p"))
+    y = idx.label.to_numpy()
+    g = night_groups(idx)
+    ug = np.unique(g[g != ""])
+    test = set(np.random.default_rng(0).choice(ug, size=round(0.2 * len(ug)), replace=False))
+    te = np.isin(g, list(test))
+    tr = (g != "") & ~te
+    X = _features(z, "embedding")
+    res = {"groups": int(len(ug)), "n_train": int(tr.sum()), "n_test": int(te.sum())}
+    Xt = torch.from_numpy(X)
+    R, ri, qi = Xt[tr], np.flatnonzero(tr), np.flatnonzero(te)
+    cos, arg = np.empty(len(qi), np.float32), np.empty(len(qi), int)
+    for s0 in range(0, len(qi), 4096):
+        v, i = (Xt[qi[s0:s0 + 4096]] @ R.T).max(1)
+        cos[s0:s0 + 4096], arg[s0:s0 + 4096] = v.numpy(), ri[i.numpy()]
+    res["near_duplicates"] = {"cos_ge_0.98": float((cos >= 0.98).mean()), "cos_ge_0.95": float((cos >= 0.95).mean()),
+                              "cos_median": float(np.median(cos))}
+    res["nn1"] = {k: v for k, v in macro_prf(y[te], y[arg]).items() if k != "per_class"}
+    C = json.loads((OUT / "head.json").read_text())["C_chosen"]["a"][0]   # (a)'s C on Kim's fold
+    p = LR(C).fit(X[tr], y[tr]).predict(X[te])
+    res["a_lr_embedding"] = {**macro_prf(y[te], p), "diag": diagnostics(y[te], p), "C": C}
+    lm = category_logmass(z["family_p"])
+    res["zero_training_same_crops"] = {k: v for k, v in macro_prf(y[te], lm[te].argmax(1)).items() if k != "per_class"}
+    print(f"night split: {len(ug)} trap-nights, train {tr.sum():,}, test {te.sum():,}; nearest training crop cos >= 0.98 "
+          f"{res['near_duplicates']['cos_ge_0.98']:.3f}, >= 0.95 {res['near_duplicates']['cos_ge_0.95']:.3f}, median "
+          f"{res['near_duplicates']['cos_median']:.3f}")
+    print(_line("1-NN, night held out", res["nn1"]))
+    print(_line(f"(a) LR on the embedding, night held out, C {C}", res["a_lr_embedding"]))
+    print(_line("zero training, same crops", res["zero_training_same_crops"]))
+    (OUT / "night.json").write_text(json.dumps(res, indent=1))
+
+
 # --------------------------------------------------------------------------------------- the GPU job's outputs
 GPU = OUT / "gpu"   # /12347837/repos/broad_taxa/out, downloaded
 
 
-def head_scores(E, batch=512):
-    """Species logits of the ToL head for normalised embeddings, then family masses (as `embed`), in torch."""
-    import torch
-    from scipy import sparse
-    P = predict_module()
-    h = P.load_head(RELEASE / "heads/tol.safetensors")
-    D = torch.from_numpy(h.direction)
-    g, b = torch.from_numpy(h.magnitude), torch.from_numpy(h.bias)
-    fam = h.parents[1][h.parents[0]]
-    S = sparse.csr_matrix((np.ones(len(fam), np.float32), (np.arange(len(fam)), fam)), shape=(len(fam), h.sizes[2]))
-    return D, g, b, S
-
-
 def views(_):
-    """BT3: zero training and head (a) under tta3bm and pad-to-square, from the job's embeddings."""
+    """BT3: zero training and head (a) under tta3bm and pad-to-square, from dev/117's embeddings (one row per crop,
+    index order). The ToL head is scored in chunks straight to the 16 V0 category log masses (species -> category),
+    so no 190 k-wide array is kept. Head (a) reuses each fold's C from `head`; one fit on r0 serves r0 and tta3bm
+    (the three views' logits averaged), one on padsq serves padsq."""
     import torch
     torch.set_num_threads(THREADS)
     meta = json.loads((GPU / "emb_meta.json").read_text())
     idx = pd.read_csv(OUT / "index.csv", keep_default_na=False)
-    assert meta["kim_idx"] == list(range(len(idx)))
+    assert meta["kim_idx"] == list(range(len(idx))), "the job's rows are not in index order"
     y = idx.label.to_numpy()
     masks = fold_masks(idx)
-    D, g, b, S = head_scores(None)
-    s = math.sqrt(D.shape[1] - 2)
     E = {v: np.load(GPU / f"emb_{v}.npy", mmap_mode="r") for v in meta["views"]}
-    cache = OUT / "views_family_p.npz"
+    tta = ("r0", "rot-30bm_pad25", "rot30bm_pad25")
+    cache = OUT / "views_logmass.npz"
     if not cache.exists():
-        fps = {"r0": [], "tta3bm": [], "padsq": []}
-        for st in range(0, len(idx), 512):
+        P = predict_module()
+        h = P.load_head(RELEASE / "heads/tol.safetensors")
+        D, g, b = (torch.from_numpy(t) for t in (h.direction, h.magnitude, h.bias))
+        SM = torch.from_numpy(category_matrix("V0")[h.parents[1][h.parents[0]]])   # species -> category
+        sc = math.sqrt(D.shape[1] - 2)
+        out = {k: np.empty((len(idx), len(CATS)), np.float32) for k in ("r0", "tta3bm", "padsq")}
+        t0 = time.time()
+        for st in range(0, len(idx), 256):
             z = {}
             for v in meta["views"]:
-                e = torch.from_numpy(E[v][st:st + 512].astype(np.float32))
+                e = torch.from_numpy(np.asarray(E[v][st:st + 256], dtype=np.float32))
                 e = e / e.norm(dim=1, keepdim=True)
-                z[v] = s * torch.asin((g * (e @ D.T)).clamp(-1 + 1e-7, 1 - 1e-7)) + b
-            pol = {"r0": z["r0"], "padsq": z["padsq"], "tta3bm": (z["r0"] + z["rot-30bm_pad25"] + z["rot30bm_pad25"]) / 3}
+                z[v] = sc * torch.asin((g * (e @ D.T)).clamp(-1 + 1e-7, 1 - 1e-7)) + b   # predict.score's formula
+            pol = {"r0": z["r0"], "padsq": z["padsq"], "tta3bm": sum(z[v] for v in tta) / 3}
             for k, zz in pol.items():
-                fps[k].append((S.T @ torch.softmax(zz, 1).numpy().T).T.astype(np.float16))
+                out[k][st:st + 256] = torch.log(torch.softmax(zz, 1) @ SM + 1e-6).numpy()
             if st % 16384 == 0:
-                print(f"views: {st:,}/{len(idx):,}", flush=True)
-        np.savez(cache, **{k: np.concatenate(v) for k, v in fps.items()})
-    fps = np.load(cache)
+                print(f"views: {st:,}/{len(idx):,} ({time.time() - t0:.0f} s)", flush=True)
+        np.savez(cache, **out)
+    lms = np.load(cache)
     res = {}
-    zr = load_shards(("family_p",))
-    ref = category_logmass(zr["family_p"].astype(np.float32)).argmax(1)
+    # the job's r0 against the CPU (ONNX) run: embeddings and the zero-training answer, every crop
+    zc = load_shards(("embedding", "family_p"))
+    ref = category_logmass(zc["family_p"]).argmax(1)
+    cos = np.concatenate([(lambda a, b: (a * b).sum(1) / np.linalg.norm(a, axis=1) / np.linalg.norm(b, axis=1))(
+        np.asarray(E["r0"][s:s + 8192], dtype=np.float32), zc["embedding"][s:s + 8192].astype(np.float32))
+        for s in range(0, len(idx), 8192)])
+    res["r0_against_cpu"] = {"embedding_cos_min": float(cos.min()), "embedding_cos_median": float(np.median(cos)),
+                             "same_category": float((lms["r0"].argmax(1) == ref).mean())}
+    print("GPU r0 against the CPU ONNX run:", res["r0_against_cpu"], flush=True)
+    del zc
     for k in ("r0", "tta3bm", "padsq"):
-        lm = category_logmass(fps[k].astype(np.float32))
-        pred = lm.argmax(1)
-        if k == "r0":
-            res["r0_agreement_with_cpu"] = float((pred == ref).mean())
-            print(f"GPU r0 against the CPU run: same category on {res['r0_agreement_with_cpu']:.4f} of crops")
+        pred = lms[k].argmax(1)
         res[f"zero_{k}"] = score_folds(lambda tr, te, p=pred: p[te], y, masks, f"zero training, {k}")
-    X = {v: np.asarray(E[v], dtype=np.float32) for v in meta["views"]}
-    for v in X:
-        X[v] /= np.linalg.norm(X[v], axis=1, keepdims=True)
+    Cs = dict(zip(("kim", "LV", "OH", "SS"), json.loads((OUT / "head.json").read_text())["C_chosen"]["a"]))
 
-    def a_views(tr, te, test_views=("r0",), train_view="r0"):
-        C = _choose_c(X[train_view][tr], y[tr])
-        m = LR(C).fit(X[train_view][tr], y[tr])
-        return np.mean([m.logits(X[v][te]) for v in test_views], 0).argmax(1)
-    res["a_r0"] = score_folds(a_views, y, masks, "(a) r0")
-    res["a_tta3bm"] = score_folds(lambda tr, te: a_views(tr, te, ("r0", "rot-30bm_pad25", "rot30bm_pad25")), y, masks,
-                                  "(a) trained r0, tested tta3bm")
-    res["a_padsq"] = score_folds(lambda tr, te: a_views(tr, te, ("padsq",), "padsq"), y, masks, "(a) padsq")
+    def emb(v, rows):
+        x = np.asarray(E[v][rows], dtype=np.float32)
+        return x / np.linalg.norm(x, axis=1, keepdims=True)
+
+    fits = {}
+
+    def fold_of(te):
+        return next(f for f, (_, t) in masks.items() if t is te)
+
+    def a_pred(tr, te, train_view, test_views):
+        f = fold_of(te)
+        if (f, train_view) not in fits:
+            fits[(f, train_view)] = LR(Cs[f]).fit(emb(train_view, np.flatnonzero(tr)), y[tr])
+        m, rows = fits[(f, train_view)], np.flatnonzero(te)
+        return np.mean([m.logits(emb(v, rows)) for v in test_views], 0).argmax(1)
+    res["a_r0"] = score_folds(lambda tr, te: a_pred(tr, te, "r0", ("r0",)), y, masks, "(a) on the job's r0")
+    res["a_tta3bm"] = score_folds(lambda tr, te: a_pred(tr, te, "r0", tta), y, masks, "(a) fit on r0, tested tta3bm")
+    res["a_padsq"] = score_folds(lambda tr, te: a_pred(tr, te, "padsq", ("padsq",)), y, masks, "(a) padsq")
     (OUT / "views.json").write_text(json.dumps(res, indent=1))
 
 
@@ -772,6 +861,12 @@ def gpu(_):
                                 r["kim_best_epoch"]))
             else:
                 r[f"site_{f}"] = {k: v for k, v in macro_prf(z["label"], pred).items() if k != "per_class"}
+                if "history" in z.files:   # the held-out site's score per epoch (reported, never used to choose)
+                    h = json.loads(str(z["history"]))
+                    r[f"site_{f}"]["f1_by_epoch"] = [round(e["macro_f1"], 4) for e in h]
+                    print(f"{tag} | site {f} macro F1 by epoch: min {min(e['macro_f1'] for e in h):.3f}, "
+                          f"max {max(e['macro_f1'] for e in h):.3f}, last 5 mean "
+                          f"{np.mean([e['macro_f1'] for e in h[-5:]]):.3f}")
                 yy.append(z["label"]), pp.append(pred)
         yy, pp = np.concatenate(yy), np.concatenate(pp)
         r["site"] = {**macro_prf(yy, pp), "diag": diagnostics(yy, pp)}
@@ -782,11 +877,12 @@ def gpu(_):
 
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("step", choices=["split", "embed", "mapping", "zeroshot", "head", "nolabels", "leak", "views", "gpu"])
+    p.add_argument("step", choices=["split", "embed", "mapping", "zeroshot", "head", "nolabels", "leak", "night", "views",
+                                    "gpu"])
     p.add_argument("--limit", type=int, default=0, help="embed: only the first N crops (a smoke test)")
     a = p.parse_args()
     {"split": split, "embed": embed, "mapping": mapping, "zeroshot": zeroshot, "head": head, "nolabels": nolabels,
-     "leak": leak, "views": views, "gpu": gpu}[a.step](a)
+     "leak": leak, "night": night, "views": views, "gpu": gpu}[a.step](a)
 
 
 if __name__ == "__main__":
