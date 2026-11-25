@@ -1,4 +1,4 @@
-# CPU budget (2026-11-25): 2 vCPU x 2h max = 4 core-hours worst case.
+# CPU budget (2026-11-25): 2 vCPU x 6h max = 12 core-hours worst case.
 # File renames on the datasets drive (ucloud/rejectmove.sh): metadata work, one core is plenty.
 name = "lepinet-rejectmove"
 replicas = 1
@@ -10,7 +10,7 @@ id = "cpu-amd-zen5-2-vcpu"
 category = "cpu-amd-zen5"
 provider = "ucloud"
 [time_allocation]
-hours = 1
+hours = 2
 [sync]
 local = ".."
 remote = "/12347837/repos/lepinet"
@@ -19,7 +19,7 @@ script = "setup-rejectmove.sh"
 run = "bash /work/lepinet/ucloud/rejectmove.sh"
 [schedule]
 auto_extend = "1h"
-max_time = "2h"
+max_time = "6h"
 
 [[resources]]
 type = "file"
