@@ -1,0 +1,26 @@
+# CPU budget (2026-11-25): 2 vCPU x 2h max = 4 core-hours worst case.
+# File renames on the datasets drive (ucloud/tailmove.sh): metadata work, one core is plenty.
+name = "lepinet-tailmove"
+replicas = 1
+[application]
+name = "pytorch-te"
+version = "26.05"
+[product]
+id = "cpu-amd-zen5-2-vcpu"
+category = "cpu-amd-zen5"
+provider = "ucloud"
+[time_allocation]
+hours = 1
+[sync]
+local = ".."
+remote = "/12347837/repos/lepinet"
+[setup]
+script = "setup-tailmove.sh"
+run = "bash /work/lepinet/ucloud/tailmove.sh"
+[schedule]
+auto_extend = "1h"
+max_time = "2h"
+
+[[resources]]
+type = "file"
+path = "/12383016/global_lepi"

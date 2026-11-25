@@ -12,6 +12,7 @@ relative to `ucloud/`).
 | `lepinet-ioprobe3.toml` | one-minute cold-read throughput probe: tells starvation from a hang |
 | `lepinet-tol*.toml` | TreeOfLife plan, split, probe, I/O test and fetch (1-4 vCPU) |
 | `lepinet-bt-a.toml`, `lepinet-bt-c.toml`, `setup-bt.sh` | C3 on Kim Bjerge's broad-taxon set, one B200 MIG slice each: his recipe retrained and the ToL trunk on test-time views (a), a frozen-trunk head (c); `dev/117`, staged folder synced to `/12347837/repos/broad_taxa` |
+| `lepinet-tailmove.toml`, `setup-tailmove.sh`, `tailmove.sh`; `lepinet-rejectmove.toml`, `setup-rejectmove.sh`, `rejectmove.sh` | empty Global Lepidoptera's `global_lepi/images` of what the shards lack, by renames: the cut tail (38,316 species dropped before quality filtering, J1's open-set unknowns) to `global_lepi/cut_tail`, then the 720,072 quality-rejected images of kept species to `global_lepi/quality_rejected`; `images/` is then the quality-filtered set, which `global_lepi_shards-v1` holds byte for byte (2 vCPU) |
 | `setup-lepinet.sh`, `setup-crawler.sh`, `setup.sh`, `setup-staged.sh`, `stage.py` | environment setup run inside the job |
 | `budget_check.py` | the CPU budget guard (see below) |
 

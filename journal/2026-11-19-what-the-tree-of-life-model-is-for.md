@@ -411,6 +411,85 @@ long training, so a narrow H2 loss would not rule it out at full scale). Label p
 from outside knowledge and the EM prior from unlabelled target images (averaged soft pseudo-labels), and the oversampled head
 takes the EM prior better than its control (+2.1 probe).
 
+**GPU idle at phase starts (mt's diagnosis, 2026-11-24).** On the 1 % runs the GPU is idle about a quarter of the time
+(nvidia-smi dmon: fit-vitl 27.1 %, the three augmentation arms 23-27 %). The idle time comes as two stalls of about 2.5 min,
+before the first batch of every training and every evaluation phase. Staging the shards to local disk changed nothing, so the
+reading of 2026-11-23 (re-reads over the network; mt's, and I endorsed it) was wrong. The stall has two pieces of 60-90 s each.
+- (A) Workers start one after another. With the spawn start method, each DataLoader worker receives the pickled ShardDataset
+  (19.6 MiB, mostly the seven class maps of 190 k species) through a 64 KiB pipe, which the child drains only after importing
+  torch. So the 32 workers start serially, about 2.7 s each. mt reproduced this locally: 4 workers take 6.07 s with a 20 MiB
+  dataset, against 0.01 s with a 10 KiB one.
+- (B) The summary.csv append on /work, in `MultiLogger.update`. Between the progress bar and that write, the code computes only
+  running-sum means (I checked `mini_trainer/logging/core.py`). The wait is therefore in the file system; the mechanism is
+  unknown.
+
+Workers restart every phase by design, because they receive the phase plan. The bundle has two virtual epochs per pass, so
+about 60 phase starts over 15 passes. At 8 ranks that is roughly 2-5 % of a 60-hour run (10-25 B200-h), depending on workers
+per rank. Fixes applied (owner's go; mt, mini_trainer 77f8177..2a44941 on feature/lepinet-integration, 1,017 tests pass):
+- (A) the dataset's large static state goes to a side file in the temporary directory. The pickle each worker
+  receives is about 1 KiB, so the workers start in parallel. Locally, with 4 workers, iter() fell from 5.1 to 0.0 s.
+- (B) summary.csv rows are appended in order by one background thread. finish() waits for them, and queued rows are
+  written at exit, also after an error, but not after a SIGTERM or SIGKILL.
+- An opt-in stack dump every 10 s until the first batch (`MT_PHASE_TRACEBACK_SECONDS=10`) will show in the smoke
+  test what (B) was waiting on. On the node I expect a few seconds per phase start; to be confirmed there.
+
+**First field check (mt, J1, 2026-11-24 22:36; mini_trainer 2a44941, fork workers, one process per GPU).** After the
+first train-evaluation-train cycle, no GPU was idle for 30 s or more. Each phase start shows at most one or two 10 s dmon
+samples below 25 % SM, so under about 20 s, against 180-200 s on polysh (same testbed, old code). The stack dumps never
+fired, so no loader took over 10 s to its first batch. Attribution is open:
+- Polysh also used fork workers, so fix (A) is not the difference.
+- The whole wait vanished, not only (B)'s 60-80 s; the roughly 120 s nobody had explained went with it.
+- J1 also ran on a different node, with three runs instead of two.
+A free split, asked of mt: time the background summary.csv write on J1. If it still takes a minute, (B) moved the wait off
+the training thread and earns the credit; if it takes about a second, the /work slowness was specific to that node or
+its load. The DDP smoke test (383f978's worker lines) still has to show fix (A) under spawn.
+Answer (mt, end of J1): no idle stretch of 30 s or more in the whole 4.7 h run, and the evaluation row's summary.csv append
+finished within 6 s of the evaluation's end. So the write is fast on this node and fix (B) is not shown to be the cause.
+Polysh's 180-200 s did not recur, and its cause remains unknown (that node, or /work's load at the time). The 8-GPU smoke
+test is still the check that matters.
+
+**Augmentation test scored (mt, fit-aug1/2/3, 2026-11-24; `/data/au761367/lepinet/fit/results_aug`, `plans/fit/README.md`).**
+DINOv3 ViT-L/16 on the 1 % subset, 30 epochs, the same 293,880 validation images as fit-vitl (augmentation off at
+validation). One seed per arm and no per-image validation predictions kept, so there are no confidence intervals and a
+difference under about 0.01 F1 is not established. Validation species macro-F1 at epochs 10 / 20 / 30:
+
+| arm | e10 | e20 | e30 | top-1 e30 | top-1 <100 / >=1000 | training top-1 (eval mode) |
+|---|---|---|---|---|---|---|
+| none (fit-vitl) | 0.179 | 0.196 | 0.210 | 26.1 | 11.7 / 52.2 | 1.000 at e18 |
+| LIGHT (tol-full's) | 0.189 | 0.206 | **0.216** | 27.0 | 11.4 / 54.5 | 1.000 at e21 |
+| H1 = LIGHT + TrivialAugmentWide | 0.183 | 0.203 | 0.211 | 26.5 | 10.7 / 55.1 | 1.000 at e24 |
+| H2 = H1 + erasing + Mixup/CutMix | 0.128 | 0.197 | 0.212 | 27.2 | 11.6 / 55.3 | plateau 0.948 |
+
+Every arm peaks at epochs 28-30. Throughput is within 1 % across arms (788-795 img/s).
+
+Predictions scored:
+- LIGHT above none, 0.215-0.235: right on the number (0.216), but the +0.006 is under the noise.
+- H1 above LIGHT by 1-3 points: wrong (-0.5).
+- H2 within 2 points of H1: right (+0.1).
+
+Reading: universal augmentation buys nothing measurable on in-domain validation, and no arm moves the rarest bin (top-1
+10.7-11.7). Is the 1 % proxy valid for a 15-pass full-scale run with sqrt oversampling? It is, for both halves of the
+bundle's distribution:
+- The rare half. Over 15 passes, sqrt oversampling shows each image of a species under 100 images about 48 times on
+  average (76 at 20 images, 152 at 5; 57.2 M training rows, 190,166 species). That is the memorising regime of the 1 %
+  runs, which see each image 30 times. There, augmentation did not help the tail.
+- The common half. Species of 1,000 images or more get about 8 exposures per image, an under-fitting regime. In that
+  regime AG measured TrivialAugmentWide at -1.7 points on the test fold.
+
+TrivialAugmentWide's one measured benefit is shift robustness (AG, +8.6 on the trap probe), which in-domain validation
+cannot see. Since AG, the trap deficit has been traced mostly to the label prior (TL11 check 4, Z23). TL8 already applies
+TrivialAugmentWide when it trains a specialisation head.
+
+Recommendation (supervisor, for the owner's decision): the bundle keeps LIGHT, tol-full's augmentation. That also takes
+one factor out of the bundle. Drop Mixup/CutMix for three reasons:
+- it is new code;
+- it starts slowly (0.128 at e10);
+- its mixed targets change what the logits mean, an untested effect on open-set scores.
+The case for H1 is a generalist made robust to shifts nobody has named. It is untested at ToL scale, and AG's -1.7 is the
+nearest estimate of its in-domain cost.
+
+**Decided (owner, 2026-11-25): keep tol-full's augmentation.**
+
 **What I got wrong here.** As supervisor I tracked job states and checkpoints through s1 and s2 (27 hours) and never read
 the validation curve against tol-full's at matched epochs; the gap was visible at virtual epoch 4 (0.494 against 0.531),
 about 5 hours into s1. For any long run, compare its curve with the reference run's after the first few evaluations.

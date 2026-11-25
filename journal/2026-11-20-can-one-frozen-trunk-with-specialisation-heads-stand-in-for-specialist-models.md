@@ -79,7 +79,7 @@ and C4.
 
 Two more change the trunk, so they are the generalist's training recipe rather than specialisation: resolution
 augmentation (MixRes, MR; Z22 puts never-trap models 13-18 accuracy points lower on their smallest crops than on their
-largest) and domain augmentation (AG). Fine-tuning the trunk (TL4) is the specialist reference, not a candidate:
+largest; Z24, 2026-11-25: shrinking the largest crops to the smallest's size costs the frozen ToL head nothing, so the deficit is blur and framing, not resolution, and MixRes is ruled out) and domain augmentation (AG). Fine-tuning the trunk (TL4) is the specialist reference, not a candidate:
 it erases the trunk's generality (Z21).
 
 **On Kim's split.** Rungs 8-12 are scored twice: on his list, to compare with his 0.970, and site held out, where only
@@ -440,6 +440,158 @@ GPU cost: lepinet-bt-a 12472031 about 1.7 h and the aborted 12472000 0.2 h, lepi
 staging folder and 1.5 GB of outputs (nothing deleted; the owner can remove it). Local CPU: 6.6 h for the trunk on
 all crops (5.4 img/s on 4 cores, 3.9 GB), then 1.5 h of scoring; the largest step (`head`) peaked at 7.6 GB, above
 the few GB asked for and under the 12 GB cap.
+
+### BT6: the reverse direction (owner, 2026-11-24; supervisor, `dev/118`, CPU)
+
+The owner's question: score Kim's model on ToL's test images of the same taxa, against our best ToL model. C3 scored
+ToL on Kim's ground (zero training 0.765, 0.829 with views, against his 0.970); BT6 scores his model on ToL's ground.
+Sample (drawn before any score): ToL test rows with no exclude flag, in the 15 arthropod categories by the V0 mapping,
+Vegetation left out (Kim's Vegetation is trap background, not plant photos), at most 2,000 per category at random:
+27,898 images of 10,035 species. 20,734 are citizen-science photos, 6,572 museum specimens and 592 unknown; Trichoptera
+and Ephemeroptera are mostly museum specimens. Three classifiers, each scored as trained (16-way, so a Vegetation answer
+is wrong) and restricted to the 15 categories:
+- Kim's published weights, with his preprocessing;
+- tol_full with zero training (dev/115 V0);
+- C3's head (a), fitted on Kim's training crops on ToL's embedding: the trap-trained head on the general trunk.
+
+The test is lopsided by design. Kim's model classifies detector crops of trap insects; ToL's photos are whole field
+photos and pinned specimens. It measures how far each model travels from its own domain, the mirror of C3, not which
+classifier is better.
+
+**Predictions (before the score; the 48-image smoke test was seen first: all spiders, ToL right on 47, Kim's model
+Vegetation on 36, Araneae on 7).** Macro-F1 over the 15 categories:
+- ToL zero training: 0.88-0.95 (in domain; the weak spots should be Nematocera against Brachycera, macro against micro
+  moths, and Trichoceridae on 72 images);
+- Kim as trained: 0.25-0.45, with Vegetation absorbing many photos; restricted to 15: 0.40-0.60;
+- Kim on museum specimens above citizen-science photos by 5-15 points (15-way): a pinned insect on a plain background
+  is closer to a trap crop than a field photo is;
+- ToL head (a): 0.75-0.88, below zero training because its category prior and boundaries were fitted on traps.
+
+If these hold, the symmetric reading for paper B: the specialist loses 40 to 60 points off its domain, the generalist
+about 14-20 on the specialist's domain with zero training and about 1 with a cheap head (C3).
+
+**BT6 scored (2026-11-24; `data/broad_taxa/reverse/scores.json`, 200 bootstrap draws over images).** Macro-F1 over the
+15 categories present, with its 95 % interval:
+
+| classifier | as trained | restricted to 15 | accuracy (15) | citizen / museum (15) |
+|---|---|---|---|---|
+| ToL, zero training | **0.974** [0.970, 0.978] | 0.975 | 0.983 | 0.974 / 0.950 |
+| Kim's published model | **0.130** [0.124, 0.137] | 0.137 | 0.174 | 0.158 / 0.065 |
+| ToL trunk + head (a), trap-fitted | 0.357 [0.351, 0.362] | 0.368 | 0.376 | 0.357 / 0.300 |
+
+The measurement was checked first. On 320 of Kim's own crops, dev/118's model and preprocessing reproduce his published
+predictions:
+- same answer on 320 of 320;
+- accuracy 0.9875 in both;
+- largest logit gap 0.38.
+So the 0.13 is his model, not the harness.
+
+What Kim's model does on photos:
+- It answers Vegetation for 59 % of them: 65 % of citizen-science photos (leaves and plants behind the insect) and 42 %
+  of museum specimens.
+- With Vegetation removed, it calls 49 % of all images a macro-moth.
+- It is confident while wrong: median maximum softmax 0.988, and 67 % of images above 0.9.
+ToL's weakest categories are Trichoceridae (0.86, 72 images) and Nematocera (0.95). Macro- against micro-moths was not a
+weak spot (0.99 each).
+
+Predictions scored:
+- ToL zero training 0.88-0.95: wrong, above (0.974).
+- Kim 0.25-0.45 as trained, 0.40-0.60 on 15: wrong, far below (0.130 / 0.137).
+- Kim on museum specimens above citizen science: wrong direction (0.065 against 0.158). Group macro-F1 is confounded by
+  each group's category mix, so this is not read further.
+- Head (a) 0.75-0.88: wrong, far below (0.357).
+I underestimated how specialised a trap-trained classifier is, whether it is Kim's whole network or a linear head on
+our trunk.
+
+Reading for paper B, the symmetric comparison (C3 and BT6):
+
+| | on Kim's trap crops | on ToL's test photos |
+|---|---|---|
+| Kim's model (the specialist) | 0.970 | 0.13 |
+| ToL, zero training (the generalist) | 0.765 (0.829 with views) | 0.974 |
+| ToL trunk + trap head (a) | 0.953, site held out 0.878 (BT1) | 0.36 |
+| ToL trunk + trap head, augmented (BT4) | 0.962, site held out 0.897 | not scored |
+
+- The specialist loses 84 points off its domain, and loses them confidently.
+- The generalist loses 21 points on the specialist's domain with zero training, and none with a cheap head.
+- Head (a) shows the specialisation lives in the head. On the same trunk features the generalist's own head scores
+  0.974 and the trap head 0.357, so one trunk with both heads keeps both abilities.
+- A likely cause of head (a)'s collapse, not tested: its inputs are standardised with trap statistics, which amplifies
+  directions that are quiet in traps.
+- The comparison is lopsided by design. Kim's model never saw a photo; it shows what a domain-specific model costs
+  outside its domain, not that ToL is the better trap classifier.
+
+### BT7: the owner's box tree moth crops (supervisor, 2026-11-25, CPU, `dev/120`)
+
+The owner gave a mothbot export of Kim's order classifier ("nemo") run on snapshots selected for the box tree moth
+(*Cydalima perspectalis*, an invasive Crambidae): 4,933 crops from 2022-2025 and about 60 traps across Europe (most in
+the IAS project; 2022 crops from Kim's own LV, OH and SS sites are included), with a parquet of the annotations. The
+owner's view: Kim's classifier is particularly bad on this species, probably because his training set has few. The
+task: the same zip with our best order classifier's answers in place of Kim's.
+
+The classifier: head (a) on the pad-to-square read (0.961 on his list, 0.900 site held out; level with BT4 and
+CPU-only), refit on his training list from dev/117's embeddings (0.9608, the recorded score). The CPU read reproduces
+the GPU embedding it was fit on (48 of Kim's crops: cosine 0.99999 or more, the same answer on all). ToL's own
+species head gives an independent-of-labels species read of each crop: the box tree moth is row 28774,
+*Cryptographis perspectalis*, the Catalogue of Life build's name (about 49 k crawled images).
+
+| | crops | Kim's classifier | ours |
+|---|---|---|---|
+| ToL's species answer is the box tree moth | 2,428 (2,346 above 0.5) | Vegetation 1,078, Lepidoptera Micro 763, Macro 510, Tipulidae 74, other 3: **52.4 % Lepidoptera** | Micro 2,358, Macro 67, other 3: **99.9 % Lepidoptera** |
+| the other crops | 2,505 | | agreement with Kim 63.7 % |
+| Kim's own dataset (125,135 crops, ToL centre read) | 1 box tree moth (probability below 0.5; labelled Vegetation) | | |
+
+- **The owner is right on both counts.** Kim's classifier calls 44 % of the box tree moths Vegetation and 3 % crane
+  flies, with a median score of 1.000 on those it calls Vegetation, and his training set holds essentially none (1 of
+  46,816 Lepidoptera crops by ToL's read, 3 in the top 5).
+- **Checks.** The output zip has the input's entries, Arrow schema and row order, the same image bytes, and differs only
+  in label, labelid, score, abovethreshold, algorithm and orderlabel; filenames follow the input's pattern
+  (`label_score_project_partner_snapshot_crop_detection.jpg`, score to 3 decimals with trailing zeros cut), checked on
+  every crop before renaming. score_order and abovethreshold_order are left as they were: they are not Kim's order
+  score (they anti-correlate with it) and their meaning is unknown. abovethreshold keeps the input's rule
+  (score >= 0.045), which every 16-way softmax maximum meets.
+- **I looked at a few crops.** The three box tree moth crops opened (two Kim-Vegetation, one Kim-Tipulidae, all at
+  about 1.0) are unmistakable. The crops ours calls Vegetation are empty background, the closest category Kim's scheme
+  has; some empty crops go to Diptera Nematocera.
+- **Caveats.** No human labels: ToL's species read is the reference, and it shares the trunk with our order head, so
+  the two are not independent (the visual check is small). Five crops have a near-twin in Kim's dataset (cosine 0.98 or
+  more), negligible. Box tree moths split Micro 97 % / Macro 3 % here; Crambidae are micro in the convention dev/115
+  wrote down, and Kim's labels for them are unknown.
+
+Output (outside the repo, the owner's folder): `/home/au761367/Documents/mothbot/AMI_IAS_tol.zip`, and a side table
+`AMI_IAS_tol.csv` (per crop: Kim's answer, ours, ToL's species top 1 and its probability, the box tree moth's
+probability, the nearest crop of Kim's dataset).
+
+**The owner's review of head (a)'s zip, and two more versions (2026-11-25).** The owner saw box tree moths in both
+Lepidoptera folders, snails among the macros, crops with several insects or a branch called macro with confidence, and
+dirt confidently in Ephemeroptera and Vegetation (Kim's scheme has no dirt class). ToL's species read agrees: of head
+(a)'s 266 macros, 90 are Crambidae (65 with box tree moth probability above 0.2) and about 30 more are other micro
+families, 4 are land snails and 11 are read as tardigrades (dirt); of its 60 Ephemeroptera, 9 are read as mayflies and
+25 as moths. **Kim's labels are not the cause:** on his own Lepidoptera crops his macro / micro follows the family
+convention dev/115 wrote down 98-99 % of the time (Crambidae 3,792 micro, 8 macro). The box tree moth is simply absent
+from his training set, and a head fit to it calls a large white crambid macro.
+
+- **Raw ToL** (`raw`): ToL's own head on the padded read, family posterior summed into Kim's 16 categories by the V0
+  mapping, every other family into its ToL order (snails "Stylommatophora"). Box tree moths 2,427 of 2,428 micro.
+  191 crops land outside his 16, median mass 0.35 against 0.95 inside. ToL's open-vocabulary names on dirt are
+  nonsense, sometimes confident: four crops opened show a real snail (0.99, Kim's macro), and blurry streaks or blobs
+  read as a gecko (0.82, at a Danish site), a songbird (0.86) and an amphipod (0.92). It also calls 435 crops winter
+  crane flies, where head (a) says Nematocera for 368; 280 of them are from October and November, the family's
+  season, so part may be right; no labels settle it. On Kim's data raw ToL is 13 points below head (a) (0.826 /
+  0.821, BT3).
+- **The product of the two** (`combo`, supervisor's idea, checked on Kim's data before use, no prediction written):
+  head (a)'s probabilities times raw ToL's, renormalised over the 16. On Kim's data **0.949 on his list (-1.2) and
+  0.899 site held out (-0.0)**, the components reproducing their recorded 0.961 / 0.900 and 0.826 / 0.821. Where
+  ToL puts more than half its mass outside the 16, the crop is labelled **Other** (labelid 16; ToL's name only in
+  the side table). On the mothbot crops: box tree moths 2,423 micro, 4 macro; 213 Other (snails, dirt; head (a) had
+  34 of them in macros, 47 in Vegetation); Ephemeroptera 60 to 25, macros 266 to 170; it keeps head (a)'s answer
+  on 89 % of crops.
+- **Not fixed by any classifier:** crops holding several insects, or an insect on a branch, are detection errors; a
+  classifier names the dominant object. They need the detector, or a "several objects" class with labels.
+- **BT4** (the augmented head) was not run: dev/117 saved its logits, not its weights.
+
+Outputs in `/home/au761367/Documents/mothbot/`: `AMI_IAS_tolraw.zip` and `AMI_IAS_tolcombo.zip`, each with its side
+table (`.csv`); the trunk pass is cached in `data/broad_taxa/mothbot_cache.npz`, so further variants cost seconds.
 
 ## Log
 

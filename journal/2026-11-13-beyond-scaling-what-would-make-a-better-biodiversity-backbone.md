@@ -1743,6 +1743,55 @@ resolution is the cause and MixRes is worth one run on the generalist path; if n
 penalty is framing or posture, which MixRes does not address. Prediction (e): held in direction; the
 recoverable amount for Otto is nearer zero than 1 to 3 points.
 
+### Z24, the eval-only MixRes check (opened 2026-11-25, owner's go; supervisor, CPU, `dev/121`)
+
+The owner asked whether to train a head on the frozen ToL trunk with MixRes on photos only, against a model
+self-trained on small crops. The test Z22 proposed comes first: does resolution alone produce the small-crop deficit?
+Model: the frozen ToL head of Z22 (tol_full's own head over the 12,268 moth species it shares with lepinet, dev/109's
+map), list rule (the 1,936 north-European species), one view (r0), on CPU through the release (`trunk.onnx`, the
+release's reader). Crops: the probe's largest absolute quintile (qa5, 230-674 px, 3,038 crops) as they are, shrunk
+(PIL bilinear with its antialiasing, aspect kept) so that sqrt(area) is the middle quintile's median (178 px) and the
+smallest's (124 px); the reader then upsamples every crop to 256 as it does real small crops. Measurement check first:
+qa5 as is and qa1 as is must reproduce Z22's 83.4 and 65.2 (within 0.5).
+
+Predictions (before any number):
+1. qa5 shrunk to 124 px loses 4 to 9 of the 18.2 points between qa5 and qa1 (accuracy 74 to 79 %): resolution is part
+   of the deficit, framing and posture (truncated detections, folded wings) the larger part.
+2. Shrunk to 178 px: 0 to 3 points.
+3. Decision: if (1) loses 9 points or more, a MixRes head on the frozen trunk is worth one run (TL8a's recipe plus
+   MixRes on photos, one factor, against TL8a, scored by quintile against OT3); under 5, MixRes is not the lever for
+   the generalist path either.
+
+**Z24 result (2026-11-25, 40 min CPU; `data/population_probes/z24/`).** The pipeline reproduces Z22: qa5 83.41 % and
+qa1 65.16 % (Z22: 83.4, 65.2), on the same 12,268 mapped and 1,936 listed species as E3.
+
+| qa5 crops (3,038) | accuracy, list, one view | against qa5 as is (bootstrap over species) |
+|---|---|---|
+| as they are | 83.4 % | |
+| shrunk to 178 px (qa3's median) | 83.8 % | +0.4 [-0.3, +1.0] |
+| shrunk to 124 px (qa1's median) | 83.5 % | +0.1 [-1.4, +1.2] |
+| qa1, the real small crops | 65.2 % | |
+
+- Prediction 1 (shrunk to 124 px loses 4 to 9 points): **wrong, it loses nothing.** Prediction 2 (0 to 3 at 178 px):
+  right. Decision rule: under 5 points, so **MixRes is not the lever on the generalist path either**. The frozen ToL
+  head already reads a 124 px moth as well as a 268 px one, and MixRes's augmentation (downscale, upscale back) is
+  exactly the degradation simulated here.
+- **What the small crops are instead (exploratory, no prediction written).** By sharpness (the probe's sharpness
+  column, tertiles over qa1 and qa5 together): sharp crops score the same small or large (90.3 % against 89.3 %); qa1
+  is mostly blurry (1,655 of 3,040 crops in the blurry tertile, qa5 371 of 3,038) and blurry small crops score 56.7 %.
+  Within qa1, crops small for their species (likely truncated detections or folded wings) score 52.6 % against 73.2 %
+  for those large for their species.
+- **The sharpness measure is partly a size measure** (dev/095: Laplacian variance after resizing each crop to 128 px
+  on its short side). Measured on 800 qa5 crops: shrinking them to 124 px moves their median from 350 to 145 and their
+  share in the blurry tertile from 12.5 % to 32.4 % (the upsampling to 128 px smooths edges). Real qa1 crops: median 77,
+  54.4 % blurry. So about 60 % of qa5's lead over qa1 in sharpness is size, and the rest is real: qa1 is about half as sharp as
+  equally small shrunk qa5 crops, which lost no accuracy. The extra real blur is what costs; "same score when sharp" holds
+  regardless, since the measure is biased against small crops and a small crop it rates sharp is sharp.
+- Consequence: the small-crop deficit is blur and framing, which trap self-training (OT3, OT4 flat across sizes) and
+  tta3bm (+6.6 on the ToL head) already address. A blur augmentation would be the matching training lever; it is a
+  trap-specific degradation, outside the universal augmentations decided for ToL, so it belongs in a trap head, if
+  anywhere.
+
 ### Z23, TL8a and TL8b through the same checks (opened 2026-11-20, before scoring them)
 
 TL8 is the first rung of the step-back entry's ladder ([[2026-11-19-what-the-tree-of-life-model-is-for]],

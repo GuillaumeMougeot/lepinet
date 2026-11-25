@@ -1,6 +1,6 @@
 # PLAN — what we are doing now
 
-**Kind:** living · **Last updated:** 2026-11-23 · **Supersedes:** [2026-07-28-landscape-and-plan](archive/journal/engineering/2026-07-28-landscape-and-plan.md)
+**Kind:** living · **Last updated:** 2026-11-25 · **Supersedes:** [2026-07-28-landscape-and-plan](archive/journal/engineering/2026-07-28-landscape-and-plan.md)
 
 The one file about *today*. Experiment IDs resolve in [`RESULTS.md`](RESULTS.md); reasons are in
 the linked journal entries; older versions of this file are in git history.
@@ -77,8 +77,19 @@ post-hoc prior, and TL8a-v2 on d10 with sqrt oversampling, against OT6's 0.917 (
 Approved 2026-11-23 (mt): the overfit test with DINOv3 ViT-L/16 after fit1pct (capacity), the label-shift test of sqrt oversampling
 (test-fold logits on UCloud), re-scoring the bank's oversampled Lepidoptera pairs, opt-in head/tail monitoring in mini_trainer.
 Open: an OT6 run with sqrt oversampling (the fair specialist bar), decided after the oversampled head scores.
+Agreed 2026-11-24 (owner): the next ToL run is a bundle: ViT-L, sqrt oversampling, 15 passes, tol-full's cosine with warmup
+(about 480 B200-h). Augmentation test done (TL12, mt fit-aug1/2/3): validation macro-F1 none 0.210, LIGHT 0.216, + TrivialAugmentWide 0.211,
++ erasing/Mixup/CutMix 0.212, all within noise and none moves the rarest bin. **Decided (owner, 2026-11-25): the bundle keeps
+tol-full's augmentation.** UCloud storage was full (2026-11-25): the owner approved a cleanup (finished runs' resume checkpoints, closed evaluations' logits, tol256-fit1pct's images, an unrelated model's weights), now in the Trash; the owner emptied it (2026-11-25), so submissions resume. The cut tail of Global Lepidoptera moves to `global_lepi/cut_tail` (job 12479335), and the quality-rejected images to `global_lepi/quality_rejected` (kept), after which `global_lepi/images` duplicates the shards; it stays for now and is removed once the owner is sure. mt implements checkpoint retention (newest resume checkpoint only, removed on a clean finish) before the bundle; no storage gate (owner). The GPU stall at each phase start (about 2.5 min: serial worker start, then the summary.csv write
+on /work) is fixed in mini_trainer (2a44941); the 8-GPU smoke test confirms it, run with `MT_PHASE_TRACEBACK_SECONDS=10`.
+J1 done (2026-11-25, seed 42): frozen scale and bias cost 2.7 points of test-fold species F1 (6.5 under 100 images), bias alone
+recovers nothing; the learned head breaks the embedding for open set (maximum cosine AUROC 0.54 against 0.78, 1-NN -3.4) while the
+best logit score is equal (about 0.90); the per-species scale causes both, the bias is inert. Class means of training images restore prototype open set on the learned head (0.864; frozen 0.903). Owner's decision (2026-11-25): J2 before the bundle, three arms with sqrt oversampling (learned, frozen, one learned global scale), submitted 2026-11-25 (job 12479511, about 17 B200-h; option `global_scale`, mini_trainer 9e9ca84); the bundle's head follows J2's decision rule ([[2026-11-24-should-the-cosine-heads-scale-and-bias-be-learned]]).
 Claims C1-C5, the work they need (BioCLIP-2's benchmark suite, AMI order + moth heads on one trunk, iWildCam,
 Pl@ntNet-300K, an image-overlap audit per benchmark) and predictions: [[2026-11-20-can-one-frozen-trunk-with-specialisation-heads-stand-in-for-specialist-models]].
+BT6 done (2026-11-24, CPU): on ToL's test photos of Kim's 15 categories, ToL zero training 0.974 macro-F1, Kim's published
+model 0.130 (59 % called Vegetation, confidently), a trap head on our trunk 0.357: the specialist loses 84 points off its domain.
+BT7 (2026-11-25, CPU): the owner's mothbot box tree moth crops re-annotated with our best order head; see RESULTS BT7.
 
 Pieces: 03, 04, 05, 07, 08, 14, 15, 17, 18, 20, 23 (plus 01, 02, 10, 11 shared).
 
