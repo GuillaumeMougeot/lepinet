@@ -1,6 +1,7 @@
 """J1 open set, one more embedding score: cosine to the nearest class mean (CPU, from e-j1-os2's saved embeddings).
 
     CUDA_VISIBLE_DEVICES="" taskset -c 0-3 .venv/bin/python -I dev/119_j1_class_mean_openset.py [--reps 500]
+    ... --dir /data/au761367/lepinet/j2/openset --arms ctl,frz,gs     (J2, e-j2-os; same layout)
 
 The head rows of a learned cosine head point away from their images (J1: predicted-class cosine -0.44), so "maximum
 cosine to a head row" fails as an open-set score there (AUROC 0.54). A class mean, the renormalised average embedding
@@ -26,7 +27,7 @@ import pandas as pd
 import torch
 
 D = Path("/data/au761367/lepinet/j1/openset")
-ARMS = ("ctl", "frz", "b")
+ARMS = ("ctl", "frz", "b")  # J1's; --dir / --arms for another run with the same layout (the first arm is the paired reference)
 STRATA = {"near": ["near"], "mid": ["mid"], "far": ["far"], "all": ["near", "mid", "far"]}
 SCORES = ("cm_max", "knn1", "maxcos")
 
@@ -52,15 +53,21 @@ def auroc(known, unknown, wk=None, wu=None):
 
 
 def main():
+    global D, ARMS
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--reps", type=int, default=500)
+    p.add_argument("--dir", type=Path, default=D)
+    p.add_argument("--arms", default=",".join(ARMS))
+    p.add_argument("--out", default="classmean_auroc.json", help="output name in --dir (J4: a new name keeps J2's file)")
     a = p.parse_args()
+    D, ARMS = a.dir, tuple(a.arms.split(","))
+    REF = ARMS[0]  # the paired reference (ctl for J1/J2; frz for J4b against the frozen head)
     torch.set_num_threads(4)
     rows = pd.read_parquet(D / "rows.parquet")
     uniq = rows.path.drop_duplicates()
     emb_row = pd.Series(np.arange(len(uniq)), index=uniq.to_numpy())[rows.path.to_numpy()].to_numpy()
     tables = {arm: pd.read_parquet(D / f"{arm}.parquet") for arm in ARMS}
-    base = tables["ctl"]
+    base = tables[REF]
     assert (base.key.to_numpy() == rows.key.to_numpy()).all() and (base.set.to_numpy() == rows.set.to_numpy()).all()
     ref = (base.set == "ref").to_numpy()
     sp_codes, species = pd.factorize(base.speciesKey[ref])
@@ -105,16 +112,18 @@ def main():
             for s in SCORES:
                 res[s] = {arm: {"auroc": point[(arm, s)],
                                 "ci": list(np.percentile(boot[(arm, s)], [2.5, 97.5]))} for arm in ARMS}
-                d = np.array(boot[("frz", s)]) - np.array(boot[("ctl", s)])
-                res[s]["frz-ctl"] = {"auroc": point[("frz", s)] - point[("ctl", s)], "ci": list(np.percentile(d, [2.5, 97.5]))}
-            d = np.array(boot[("ctl", "cm_max")]) - np.array(boot[("ctl", "maxcos")])
-            res["ctl_cm_minus_maxcos"] = {"auroc": point[("ctl", "cm_max")] - point[("ctl", "maxcos")],
+                for arm in ARMS[1:]:
+                    d = np.array(boot[(arm, s)]) - np.array(boot[(REF, s)])
+                    res[s][f"{arm}-{REF}"] = {"auroc": point[(arm, s)] - point[(REF, s)],
+                                            "ci": list(np.percentile(d, [2.5, 97.5]))}
+            d = np.array(boot[(REF, "cm_max")]) - np.array(boot[(REF, "maxcos")])
+            res[f"{REF}_cm_minus_maxcos"] = {"auroc": point[(REF, "cm_max")] - point[(REF, "maxcos")],
                                           "ci": list(np.percentile(d, [2.5, 97.5]))}
             out[known_set][stratum] = res
             print(f"{known_set:10s} {stratum:4s} " + "  ".join(
                 f"{s} " + " / ".join(f"{point[(arm, s)]:.3f}" for arm in ARMS) for s in SCORES), flush=True)
-    (D / "classmean_auroc.json").write_text(json.dumps(out, indent=1))
-    print("wrote", D / "classmean_auroc.json")
+    (D / a.out).write_text(json.dumps(out, indent=1))
+    print("wrote", D / a.out)
 
 
 if __name__ == "__main__":

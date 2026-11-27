@@ -1,6 +1,6 @@
 # Should the cosine head's per-class scale and bias be learned or frozen?
 
-**Kind:** research · **Status:** OPEN (2026-11-25): J1 scored (seed 42). Frozen loses 2.7 points of test-fold species F1 (6.5 in species under 100 images); bias only recovers nothing. The learned head wrecks the embedding for open set (maximum cosine to a head row 0.54 against 0.78, 1-NN -3.4; class means of training images 0.86 against 0.90, the best score on the frozen head), while the best logit score is equal (about 0.90). The per-species scale alone causes both effects; the bias is inert. Owner's decision (2026-11-25): J2 first, three sqrt-oversampled arms (learned, frozen, one learned global scale); the bundle waits for it
+**Kind:** research · **Status:** RESOLVED (2026-11-26, by J4: [[2026-11-26-can-one-model-have-a-clean-embedding-and-the-learned-heads-f1]]): learned, without the leaky ReLU before the normalisation. The geometry costs below were the learned scale together with the ReLU: without it the learned head (J4b) gains 0.7 points of species F1, its rows become prototypes (+0.70) and most of its embedding gap to the frozen head closes. History: J1 scored (seed 42). Frozen loses 2.7 points of test-fold species F1 (6.5 in species under 100 images); bias only recovers nothing. The learned head wrecks the embedding for open set (maximum cosine to a head row 0.54 against 0.78, 1-NN -3.4; class means of training images 0.86 against 0.90, the best score on the frozen head), while the best logit score is equal (about 0.90). The learned scale causes both effects; the bias is inert. J2 scored (2026-11-26): with sqrt oversampling the frozen head is still 1.6 points below the learned head (1.5 calibrated; tail 2.1), and one learned global scale (s = 8.9) recovers only part of that (-1.0 zero, -0.7 calibrated) and points away from its images too (cosine -0.25), so the geometry follows the size of the scale, not its being per class; the global scale has the worst open-set scores and the best calibration. The decision rule falls on its 1-point line. J3 scored (2026-11-26): on the frozen head's trunk a learned scale and bias recover 2 % of the gap, a whole retrained head 28 % (its rows drift toward anti-prototypes), so the learned head's lead is in the trunk it trains, not in its decision rule; supervisor recommended the learned head (tol-full's), then, after J4, the learned head without the ReLU; owner decides the bundle's head.
 
 ## The question, in plain words
 
@@ -420,3 +420,324 @@ Decision rule (written now): gs-os goes into the bundle if its species F1 is wit
 was about 0.1); otherwise frz-os if within 0.3; a gap of 0.3 to 1 point goes to the owner; beyond 1 point, the learned
 head with entropy for open set. Transfer risk: 12,632 classes here against 190,000 in ToL. A learned s adapts to the
 class count by itself, which a hand-set s would not.
+
+Submitted 2026-11-25 as J1 ran, three arms on one 3-GPU node (job 12479511). It waited 4.5 h for a node, while every
+1-GPU job of the past week had started within 0.7 h (J1's 3-GPU job waited 5 h; 8-GPU jobs 0.1 to 14 h). On the owner's
+question it was cancelled unstarted and resubmitted at 19:13 as three 1-GPU jobs (j2-ctl 12479905, j2-frz 12479906,
+j2-gs 12479907). A 1-GPU B200 node is a third of the 3-GPU one (48 vCPU, 288 GB), so each arm keeps its GPU, its 44
+data workers (and with them the shard order) and its configuration, byte for byte; only the node is no longer shared.
+
+## J2 result (scored 2026-11-26)
+
+All seven jobs exited 0 (training 19:50 to 01:08, about 4.3 h per arm; about 16 B200-h in all). Every weights folder
+ends with best.pt and last.pt only, so checkpoint retention works at this scale. Numbers from mt's scoring
+(mini_trainer `.agents/local/campaign/plans/j2/README.md`, "J2 result"); class means from dev/119 run on e-j2-os's
+embeddings (`--dir /data/au761367/lepinet/j2/openset --arms ctl,frz,gs`), which first reproduced mt's 1-NN and maximum
+cosine AUROC to three decimals.
+
+| | learned (ctl-os) | frozen (frz-os) | global scale (gs-os) |
+|---|---|---|---|
+| test-fold species F1, zero / calibrated | **0.8961 / 0.8998** | 0.8798 / 0.8850 | 0.8861 / 0.8926 |
+| gap to the learned head, zero / calibrated | | -1.63 / -1.49 | -1.00 / -0.72 |
+| species F1 under 100 images / 1,000 and over | **0.885** / 0.942 | 0.864 / 0.935 | 0.876 / 0.935 |
+| genus / family F1 (zero) | **0.956** / 0.968 | 0.948 / **0.975** | 0.949 / 0.974 |
+| trap probe, calibrated: line 1 / list + EM | **0.630** / 0.630 | 0.608 / 0.624 | 0.590 / **0.641** |
+| trap probe held out, calibrated: line 1 / list + EM | 0.472 / 0.464 | 0.468 / 0.496 | **0.490 / 0.511** |
+| calibration error (debiased L2, T = 1): test fold / trap vocabulary / trap list | 0.057 / 0.062 / **0.034** | 0.037 / 0.089 / 0.082 | **0.014 / 0.046** / 0.040 |
+| open set, best logit score (AUROC, balanced knowns) | 0.913 (max logit; entropy 0.903) | **0.924** (family MSP) | 0.908 (family MSP) |
+| open set: class mean / 1-NN / maximum cosine to a row | 0.893 / 0.876 / 0.542 | **0.912 / 0.902 / 0.812** | 0.862 / 0.846 / 0.726 |
+| median cosine to the predicted class's row | -0.58 | **+0.33** | -0.25 |
+| learned scale s (epochs 1 to 5) | | | 3.65, 5.09, 6.45, 8.12, 8.92 |
+
+Paired bootstrap over species: class mean frozen - learned +0.020 [+0.018, +0.022], global scale - learned -0.031
+[-0.033, -0.028]; uniform knowns +0.030 and -0.028. The trap rows have no intervals yet and disagree with each other
+(the learned head leads on line 1, the global scale on list + EM); they decide nothing here.
+
+**Oversampling, one factor against J1** (same testbed and seed): the learned head +0.85 species F1 zero, +2.0
+calibrated, +4.1 under 100 images (0.844 to 0.885); the frozen head +2.0 and +3.6, +8.5 under 100 images. The frozen
+deficit shrinks from 2.7 to 1.6 points (tail 6.5 to 2.1) but does not close. On this testbed, sqrt oversampling is
+confirmed for the bundle.
+
+**Predictions scored.**
+1. Frozen - learned between -0.5 and -1.5: -1.63 zero (just outside), -1.49 calibrated (just inside); mostly the
+   tail (-2.1 under 100 images, -0.7 over 1,000): **half right**.
+2. s ends between 1.5 and 3, global scale within 0.5 of the learned head: s = 8.92 and still rising (+0.8 in epoch 5);
+   -1.00 / -0.72: **wrong on both**.
+3. The global scale keeps prototype geometry (cosine above +0.2, maximum cosine within 0.03 of frozen, class mean at
+   least 0.89): -0.25, 0.726 against 0.812, 0.862: **wrong on all three**.
+4. The learned head keeps anti-prototypes: -0.58 (J1 -0.44): **right**.
+5. Best open-set scores within 0.01: frozen leads by 0.011 (balanced) and 0.019 (uniform): **wrong**, narrowly.
+
+**What it changes.** J1 concluded that the per-species scale causes both the F1 gain and the anti-prototypes. J2
+corrects the second half: one scale shared by every class, which cannot favour any species, grew to 8.9 and also
+turned the rows away from their images (-0.25). The geometry follows the size of the logit scale, not its being per
+class. A reading consistent with all three arms: at a large scale, small cosine differences already make the softmax
+confident, so training only orders the cosines and leaves their level free to drift; at the frozen head's fixed
+scale, the only way to a confident softmax is a large cosine to the true row (+0.33). The per-species freedom adds
+the rest of the F1 gain (the global scale recovers 39 % of the frozen deficit at zero threshold, 52 % calibrated) and
+deeper anti-prototypes. So in this family of heads accuracy and prototype geometry trade against each other. Nothing
+measured so far gets both. The global scale's one clear win is calibration at T = 1 (0.014 on the test fold): a
+learned temperature. The learned head's calibration can probably be brought there with one temperature fitted after
+training; not yet checked on J2.
+
+**The decision rule.** Global scale - learned is -1.003 points zero and -0.721 calibrated. The rule does not say
+which F1; J1 reported zero first. Zero puts it 0.003 past the 1-point line, which goes to the learned head with a
+logit open-set score; calibrated puts it in the 0.3 to 1 band, which goes to the owner. Under neither reading does
+the rule pick the global scale by itself. The frozen head is beyond 1 point on both. The supervisor's recommendation
+is the learned head:
+- the global scale was tested for one reason, prototype geometry at the learned head's accuracy, and fails on both
+  halves: 0.7 to 1.0 points below in F1, and the worst open-set scores of the three (class mean 0.862);
+- the frozen head is 1.5 to 1.6 points below in F1 (2.1 in the tail) for +0.011 open-set AUROC on the best score
+  and +0.020 on class means;
+- the learned head is tol-full's, so choosing it leaves the bundle with one changed factor fewer.
+
+Transfer caveat, as before: 12,632 classes here against about 190,000 in ToL. Owner decides.
+
+## Which model has the best embedding space? (owner, 2026-11-26)
+
+The owner cares about the embedding itself and read the open-set numbers as favouring the frozen head. dev/122 measures
+the embedding with the head set aside, on e-j2-os's saved embeddings: class means of 10 training images per species
+as prototypes, test-fold images of known species (`known_bal`, 12,630 species) and the cut tail's species the models
+never saw (`near`: new species of known genera, 4,000 species; `mid`: new genera of known families, 4,000 species).
+Macro over species; brackets are paired bootstrap intervals over species.
+
+| embedding only | learned | frozen | global scale | frozen - learned |
+|---|---|---|---|---|
+| known species, nearest class mean: species | 0.883 | **0.888** | 0.840 | +0.5 [+0.3, +0.7] |
+| known species, nearest training image (1-NN) | 0.852 | **0.865** | 0.804 | +1.3 [+1.1, +1.5] |
+| known species, nearest class mean: genus / family | 0.954 / 0.990 | **0.958 / 0.991** | 0.927 / 0.982 | +0.4 / +0.1 |
+| new species of known genera: genus right | 0.513 | **0.526** | 0.479 | +1.3 [+0.6, +2.0] |
+| new species of known genera: family right | 0.858 | **0.878** | 0.843 | +2.0 [+1.6, +2.5] |
+| new genera of known families: family right | 0.639 | **0.672** | 0.627 | +3.3 [+2.5, +4.1] |
+| open set, class mean / 1-NN AUROC (dev/119) | 0.893 / 0.876 | **0.912 / 0.902** | 0.862 / 0.846 | +2.0 / +2.6 |
+| nearest other class mean is a congener (10,190 species) | 0.736 | **0.764** | 0.692 | |
+| cosine between class means: same genus / same family / other family | 0.81 / 0.69 / 0.67 | 0.41 / 0.06 / 0.02 | 0.61 / 0.28 / 0.17 | |
+
+| the head, same images | learned | frozen | global scale |
+|---|---|---|---|
+| known species: species / genus / family | **0.914 / 0.967 / 0.992** | 0.900 / 0.962 / 0.991 | 0.906 / 0.960 / 0.989 |
+| new species of known genera: genus / family | **0.540** / 0.863 | 0.537 / **0.882** | 0.515 / 0.856 |
+| new genera of known families: family | 0.638 | **0.687** | 0.624 |
+
+The frozen head's model has the best embedding on every measure taken, and the global scale's the worst. The margins
+over the learned head are small for known species (+0.5 by class mean) and grow with distance from the training
+labels (+1.3 genus for new species, +3.3 family for new genera). The learned head's embedding sits in a narrow cone:
+class means of different families have cosine 0.67, so the taxonomy is a small modulation on top of one shared
+direction; the frozen head's means are near-orthogonal across families (0.02) and the taxonomy is the large structure
+(0.41 within genus). Cosines are not comparable across the three spaces; the accuracies are.
+
+The useful split: on known species the learned head beats its own embedding's prototypes by 3.1 points (0.914
+against 0.883), the frozen head only by 1.3 (0.900 against 0.888), and the frozen embedding's prototypes are the
+better of the two. The learned head's F1 advantage is therefore in the head's decision rule, not in a better trunk.
+That is the case for the owner's proposal below.
+
+**J3, a learned head on the frozen head's trunk** (owner's idea; owner GO 2026-11-26, with J3c added). Take frz-os,
+freeze the whole trunk (and check its tensors are unchanged afterwards: 2026-11-05), and train the learned head's form,
+z_k = S asin(clip(g_k c_k)) + b_k, with sqrt oversampling:
+- J3a, scale and bias only: rows kept as frz-os's, g_k and b_k learned (25,264 numbers). Kang et al. (ICLR 2020) call
+  the scale part learnable weight scaling. The embedding and the rows are unchanged, so every embedding and maximum
+  cosine score stays frz-os's exactly, and the frozen logits remain available (g = 1, b = 0) for open set.
+- J3b, the whole head retrained from frz-os's rows (classifier retraining in Kang et al.).
+Predictions (before any number): J3a recovers at least half of the 1.6-point gap (species F1 zero at least 0.888),
+most of it under 100 images; J3b at least as much as J3a; neither changes any embedding score (by construction). If
+J3a reaches within 0.3 of ctl-os, a model trained with the frozen head plus a learned head afterwards has the
+frozen embedding and the learned F1, and the one-step version to explore is a second, detached head (no gradient
+into the trunk or the rows) trained alongside the frozen one.
+
+J3 as launched (owner, 2026-11-26): three 1-GPU jobs in parallel, so each starts on its own.
+- J3a as above, one epoch (the owner: so few parameters should need one); J3b three epochs, since it retrains about
+  16 M row parameters (Kang et al. retrain the classifier for 10 epochs from a fresh start; J3b starts from frz-os's
+  rows). Validation species F1 after every epoch and the training loss with a summary of g and b through each epoch
+  are logged, to see whether they plateau. The hidden layer that produces the embedding sits inside mini_trainer's
+  classifier module, so it is frozen with the trunk, dropout off (mt).
+- **J3c, the one-step version, trained from scratch** with frz-os's configuration for 5 epochs: the frozen head as in
+  frz-os, plus a second head that shares the frozen head's rows but sees them and the embedding detached, with its own
+  learned g and b. The trunk and the rows learn only from the frozen head; the second head's gradient reaches only its
+  g and b. Both heads are evaluated.
+- In every arm g and b are treated as ctl-os's (same weight decay and parameter group), so the comparison with ctl-os
+  is of the trunk and rows only. J3a and J3b: AdamW peak 1e-3, warmup 0.05 epoch (0.5 in the testbed), cosine to 0.
+- J3c's second head is gradient-clipped on its own. mini_trainer clips the joint gradient norm at 5, and a shared
+  clip would let the second head's gradient shrink the trunk's update; a test shows the trunk and the main head train
+  identically with and without the second head (mt).
+- Submitted 2026-11-26 10:23: j3a 12480677, j3b 12480678, j3c 12480680; e-j3a/b/c, e-j3clh (J3c's second head as
+  an ordinary learned head) and e-j3-os after them; about 11-12 B200-h expected, 41 at the caps. Each training job
+  compares every tensor of its last.pt with frz-os's and fails if anything but the trained tensors differs.
+
+More predictions, before any number:
+6. J3a's and J3b's trunk tensors, and J3a's rows, are bit-identical to frz-os's; so are their embeddings.
+7. J3a: species F1 zero at least 0.888; the gain over frz-os is largest under 100 images; one epoch is enough (the
+   loss flat over the last quarter of the epoch).
+8. J3b within 0.3 of J3a or above it; its rows move away from the class means (median predicted-class cosine falls
+   from +0.33), while the embedding scores stay frz-os's by construction.
+9. J3c's frozen head lands within 0.3 of frz-os (0.880; seed and order are the same, the extra head adds no gradient
+   to the trunk); its second head within 0.3 of J3a; its embedding scores within 0.01 of frz-os's.
+10. The best of J3 reaches within 0.3 of ctl-os (0.896): the frozen embedding and the learned F1 together. If it
+    falls short, the remaining gap is the trunk's.
+
+**J3a interim (2026-11-26, training job only; the test fold comes from e-j3a).** One epoch took 22 min (forward-only
+trunk). All 790 frozen tensors equal frz-os's (333 normalisation buffers, the hidden layer, the rows), so prediction 6
+holds for J3a. Validation species macro-F1 (mini_trainer's validation split): J3a 0.8947 against frz-os 0.8939 and
+ctl-os 0.9076, so **+0.08 of the 1.37-point gap**; genus and family move by under 0.001. One epoch was enough: the
+training loss is flat from the first summary (0.456 at batch 2,000, 0.453 at the end), g settles by batch 26,000
+(median 1.065, 5-95 % 0.96 to 1.26). The median b keeps drifting (-0.02 to -0.42) until the rate runs out, but a
+shift common to every b is invisible to the softmax, and the flat loss says the fit is done. Prediction 7 is heading
+for failure: on a frozen model with prototype geometry, a per-species scale and bias are a recalibration with almost
+nothing to recalibrate. The indirect argument above ("the lead is in the head's decision rule, since the learned
+head beats its own prototypes by 3.1 points") was weaker than it looked: that comparison is of jointly trained rows
+against class means, so it speaks for the rows, not for g and b. J3b (rows retrained) and J3c test the rest.
+
+**Why the learned head's embedding is a cone (owner's question, 2026-11-26).** mini_trainer's embedding is
+`normalize(leaky_relu(hidden(dropout(pooled trunk feature))))`: one 1,280 to 1,280 linear layer, then a leaky ReLU
+(slope 0.01), then unit length. The coordinates are therefore almost all non-negative, and the embedding lives in the
+positive orthant, where dense vectors are far from orthogonal (unit vectors with half-normal coordinates have mean
+cosine 0.64). Measured on the 126,310 reference images:
+
+| | learned | frozen | global scale |
+|---|---|---|---|
+| coordinates above 0.001 per image (of 1,280) | 867 | 84 | 281 |
+| coordinates below 0 (all tiny: minimum -0.018) | 31 % | 93 % | 78 % |
+| mean pairwise cosine | 0.58 | 0.02 | 0.12 |
+| participation ratio of the centred covariance (effective dimensions) | 142 | 496 | 168 |
+
+The learned head's model writes a dense code and gets the cone for free; the frozen head's model writes a sparse code
+(84 active coordinates), which is how non-negative vectors become near-orthogonal. The frozen head needs that: its
+only route to a confident softmax is a high cosine to the true row and a low one to the rest. The learned head does
+not: only logit differences matter and per-class g with the clamp does the rest.
+
+dev/122 `--center` (subtract the reference images' mean, renormalise) removes the cone: the learned head's centred
+class means have the frozen head's structure (same genus 0.41, same family 0.04, other family -0.004). But no accuracy
+moves (known species by class mean 0.882 against 0.883 uncentred; genus of new species 0.512 against 0.513). The cone
+is a shared offset, harmless to any ranking. What separates the spaces is the number of directions used, about 140
+against about 500, and that is what costs the learned head's embedding 0.5 to 3.3 points. *(Wrong, tested the same
+day: within-class whitening gives both models about 1,000 effective dimensions and the gap stays; see "Did the leaky
+ReLU handicap the embedding?" below.)* Calibration, for the same
+owner message: the debiased L2 error is computed over 15 equal-count bins of top-1 confidence (mt's
+`j2_trap_cal.py`); on the test fold the learned head is underconfident (mean confidence 0.895, accuracy 0.931), the
+frozen head too (0.901 against 0.922), the global scale slightly overconfident (0.934 against 0.923).
+
+**J3b interim (2026-11-26, validation only; the test fold comes from e-j3b).** Validation species macro-F1 after each
+epoch: 0.8698, 0.8858, **0.8984** (frz-os 0.8939, J3a 0.8947, ctl-os 0.9076); genus 0.9531, family 0.9759 (frz-os
+0.9518 / 0.9753, ctl-os 0.9592 / 0.9795). The peak rate (1e-3) first knocked the converged rows off (-2.4 after one
+epoch), and the cosine decay brought them back and past; the last epoch alone added 1.3 points. Retrained rows on the
+frozen trunk recover about a third of the 1.37-point gap (+0.45), the scale and bias about nothing (+0.08). So
+prediction 8 holds (J3b above J3a), and prediction 10 (within 0.3 of ctl-os) fails on validation by about 0.9. The
+curve does not say J3b has converged: it is still rising when the rate runs out, so a lower peak rate or more epochs
+may recover more. All 789 frozen tensors equal frz-os's (prediction 6 holds for J3b). With the rows free, g grows as in
+the learned head: median 1.39, 1.66, 1.75 at the end of epochs 1 to 3 (95th percentile 2.08), against 1.065 in J3a;
+the training loss is flat after the first epoch (0.39 to 0.43), so the validation gain of the last epoch is the
+annealing of the rate, not more fitting. Whether the rows turned away from the images (as ctl-os's did) comes with
+e-j3-os.
+
+**J3c cancelled (owner, 2026-11-26; terminated 11:37 in epoch 1, before any checkpoint).** Its second head learns only g and b, the part J3a
+showed recovers nothing; the part that helped in J3b, the rows, is not in its design. Prediction 9 is left untested.
+
+## J3 result (scored 2026-11-26)
+
+e-j3a 12480766, e-j3b 12480909 and e-j3-os 12480910, scored by mt as J2 was (mini_trainer
+`.agents/local/campaign/plans/j3/README.md`, "J3 result"). J3a's and J3b's embeddings equal frz-os's bitwise (303,886
+x 1280, maximum difference 0), so every embedding score (1-NN 0.902, the class means, dev/122) is frz-os's.
+
+| test fold | ctl-os (learned) | frz-os (frozen) | J3a (g, b on frz-os) | J3b (rows, g, b on frz-os) |
+|---|---|---|---|---|
+| species F1, zero / calibrated | **0.8961 / 0.8998** | 0.8798 / 0.8850 | 0.8801 / 0.8855 | 0.8843 / 0.8894 |
+| genus / family F1, zero | **0.9559** / 0.9678 | 0.9483 / **0.9746** | 0.9478 / 0.9745 | 0.9490 / 0.9741 |
+| species top-1 | **0.9314** | 0.9223 | 0.9229 | 0.9248 |
+| species F1 under 100 images / 1,000 or more | **0.885 / 0.942** | 0.864 / 0.935 | 0.865 / 0.936 | 0.872 / 0.938 |
+| calibration error (debiased L2): test fold / trap vocabulary / trap list | 0.057 / **0.062 / 0.034** | 0.037 / 0.089 / 0.082 | 0.030 / 0.065 / 0.070 | **0.010** / 0.077 / 0.088 |
+| trap probe, calibrated: tta3bm / held out | **0.630** / 0.472 | 0.608 / 0.468 | 0.603 / **0.472** | 0.601 / 0.451 |
+| open set, best logit score: known_bal / known_unif | 0.913 / 0.925 | **0.924 / 0.945** | 0.920 / 0.937 | 0.916 / 0.928 |
+| open set, maximum cosine to a row (known_bal) | 0.542 | **0.812** | **0.812** | 0.712 |
+| median cosine to the predicted class's row | -0.58 | +0.33 | +0.33 | +0.155 |
+
+**Predictions scored.**
+6. Trunk, hidden layer and (J3a) rows bit-identical to frz-os's, embeddings too: **right**.
+7. J3a at least 0.888: **wrong** (0.880, +0.03 of 1.63); no frequency bin gains more than 0.1. One epoch enough:
+   right (the loss was flat from batch 2,000).
+8. J3b within 0.3 of J3a or above it: **right** (+0.42); its rows move away from the class means (+0.33 to +0.155):
+   **right**; embedding scores unchanged: right, by construction.
+9. Not tested (J3c cancelled).
+10. The best of J3 within 0.3 of ctl-os: **wrong** (J3b -1.18 zero, -1.04 calibrated).
+
+**What it changes.** Of the 1.63-point gap between the learned and frozen heads, a learned scale and bias on the
+frozen model recover 2 %, and a fully retrained head 28 % (three epochs; still rising on validation when the rate ran
+out, so a longer run would take a little more). The rest, about 70 %, is in the representation the learned head
+trained: the backbone and the 1,280 to 1,280 hidden layer, both frozen here. The J2 conclusion that "the learned
+head's F1 lead lies in its head" is therefore wrong. It rested on the learned head beating its own class means by 3.1
+points, but that compares jointly trained rows against class means, and says nothing about whether those rows could be
+learned on another trunk. The two-step model does not give the frozen embedding with the learned F1. As J3b's rows
+move toward the learned head's optimum they also move toward anti-prototypes (+0.33 to +0.155), and maximum cosine
+falls (0.812 to 0.712), as does the best logit score (0.924 to 0.916). So accuracy and prototype geometry trade
+against each other inside the trunk, as J1 and J2 found across heads. The two-step model's one clear gain is
+calibration on the test fold (J3b 0.010, the best of all four), but it is worse than the learned head on the traps.
+Getting both needs a training-time change that alters the trunk itself (the owner's "explore the head geometries to
+avoid this two step process"); the first candidate examined is the leaky ReLU in front of the normalisation, below.
+
+## Did the leaky ReLU handicap the embedding? (owner's question, 2026-11-26)
+
+The owner asked whether the leaky ReLU in front of the normalisation had "sandbagged" the models. Notation: f is the
+pooled trunk feature (EfficientNetV2-S averages SiLU outputs; *corrected 2026-11-26: "so f is itself almost
+non-negative" was assumed, not measured, and is wrong. SiLU goes down to -0.28, and J4f measured 59-76 % of f's
+coordinates negative, carrying 46-53 % of its squared length; see the J4 entry*), h = W f + c the 1,280 to 1,280 hidden layer, a = leaky_relu(h) with slope 0.01, x = a / |a| the
+embedding. A coordinate is "on" when x_i > 0.001 (x_i > 0 gives 883, 85 and 287 instead of 867, 84 and 281). Effective
+dimensions are the participation ratio (sum l)^2 / sum l^2 of the eigenvalues l of the centred covariance: d when
+the variance is spread evenly over d axes, 1 when it lies along one. The mean cosine of an image to the mean direction is |mean x| (0.76 learned, 0.14 frozen,
+0.35 global scale), so the learned head's images sit about 40 degrees from one axis, the frozen head's about 82.
+
+dev/122 `--transform` asks two questions of the saved embeddings, each fitted on the reference images only:
+- `preact` undoes the ReLU. It is positively homogeneous and invertible, so dividing the negative coordinates by 0.01
+  gives h / |a|, whose direction is h's: the signed output the hidden layer computed. (22 % of the learned head's
+  negatives are fp16 subnormals and lose precision; they are its smallest coordinates.)
+- `whiten` is within-class whitening, x -> Sw^(-1/2) (x - mean), Sw the covariance of the reference images around their own
+  species' mean: nearest class mean becomes LDA's rule. It asks whether one model's lead is geometry a linear map can
+  undo, or a difference in what the representation encodes.
+
+| macro accuracy | known species, class mean | known species, 1-NN | new species: genus | new species: family | new genera: family |
+|---|---|---|---|---|---|
+| learned, as saved | 0.8825 | 0.8524 | 0.5132 | 0.8576 | 0.6391 |
+| learned, ReLU undone | 0.8794 | 0.8513 | 0.5056 | 0.8472 | 0.6252 |
+| learned, whitened | 0.8801 | 0.8488 | 0.5143 | 0.8546 | 0.6395 |
+| frozen, as saved | 0.8876 | 0.8650 | 0.5260 | **0.8777** | 0.6718 |
+| frozen, ReLU undone | 0.8799 | 0.8611 | 0.5169 | 0.8750 | 0.6695 |
+| frozen, whitened | **0.8895** | **0.8671** | **0.5279** | 0.8761 | 0.6703 |
+| global scale, as saved | 0.8402 | 0.8043 | 0.4785 | 0.8427 | 0.6271 |
+| global scale, ReLU undone | 0.8430 | 0.8069 | 0.4797 | 0.8316 | 0.6050 |
+| global scale, whitened | 0.8493 | 0.8077 | 0.4937 | 0.8451 | 0.6231 |
+
+Both together (`preact_whiten`) are mixed: new genera +0.7 learned, +1.7 frozen (0.6888 [+1.1, +2.4]), known species
+-1.4 and -0.7. Output `embedding_quality_none_preact_whiten_preact_whiten.json`, 200 paired bootstrap draws.
+
+1. **Undoing the ReLU makes the trained models worse** (frozen, class mean -0.8 [-1.0, -0.6]; learned, new genera -1.4
+   [-1.8, -1.0]); only the global scale gains, +0.3 on known species, and it loses 2.2 on new genera. The squashed half
+   holds no better information. In the frozen model it holds 98.6 % of the pre-activation's energy: the hidden layer
+   drives 93 % of the units well below zero and lets about 84 through, so the ReLU is the gate of its sparse code.
+   Before the gate the frozen model's images form a cone too (mean pairwise cosine 0.72).
+2. **No linear map closes the gap.** Whitening spreads both models over about 1,000 effective dimensions (learned
+   1,018, frozen 930) and moves nothing by more than 1.5 points; the frozen model's lead stays (class mean +0.95,
+   new species genus +1.35, family +2.15, new genera +3.07, all intervals clear of 0). The sentence above that the
+   number of directions used "is what costs the learned head's embedding" was wrong: equalise it and the cost stays.
+   The spread is a symptom. The difference is in which images the representation puts together, set during training:
+   the same place J3 found the learned head's F1 lead.
+3. **No coordinate is dead.** In every model each of the 1,280 coordinates is on for at least 1 % of reference images
+   (median 66 % learned, 6 % frozen, 22 % global scale): the frozen code is a sparse distributed code, not a small
+   subspace.
+
+**Theory and literature.** With 12,632 species in 1,280 dimensions, the best class-mean arrangement for non-negative
+features is an orthogonal frame (cosine 0) and for signed ones a simplex (cosine -1/(C-1), here -0.00008); the two
+differ only by subtracting the global mean (Kini et al., ICLR 2024; arXiv 2510.21078). The frozen model's class means
+are such a frame (other families 0.02), and centring, which turns one into the other, moved nothing. So the orthant
+does not shrink the room for separating classes; it decides how the code is written (sparse, or dense plus a shared
+offset). Face recognition removes the final ReLU (SphereFace's appendix: it confines features to the non-negative
+range; ArcFace ends BN-Dropout-FC-BN), while Kini et al. add one on purpose, because under class imbalance it keeps the
+class means symmetric. The literature records it as a design choice with a known geometric effect, not a defect.
+
+**Verdict.** No sign of a handicap in the trained models. Whether a model trained without the ReLU would learn a better
+representation, only a training run can say. Prediction for one (learned head, J2's testbed): species F1 within 0.3 of
+ctl-os, embedding measures within 1 point, so it is not the lever. The evidence points elsewhere:
+- Where the embedding is read. It is the hidden layer's output, the one nearest the head. Representations before a
+  projection head transfer better: SimCLR; Wang et al. (CVPR 2022), with an MLP projector in supervised training;
+  Kornblith et al. (NeurIPS 2021), where losses that raise accuracy make the penultimate layer transfer worse, and the
+  differences appear only in the last layers. Re-embedding the three J2 models at the pooled trunk feature f costs about
+  1 B200-h. If the learned head's f is as good as the frozen head's, one model gives both: its head for species,
+  f for prototypes and open set.
+- The head's scale (temperature), which J1 to J3 keep pointing at: fixed S (frozen) gives the best embedding, 8.9 S
+  (global scale) the worst.

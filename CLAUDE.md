@@ -120,7 +120,9 @@ should be "the measurement is wrong."
 **A cheap proxy for an expensive experiment is usually invalid, and you must argue that it is not.**
 Two attempts to tune the ArcFace margin cheaply failed for *principled* reasons — a range test
 mechanically raises the loss when you add a margin, and a short-horizon grid anti-correlates with the
-converged outcome. Both were abandoned with the reasoning written down, which is the correct outcome.
+converged outcome. Both were abandoned with the reasoning written down, which is the correct outcome. A test on a trained model is
+also not a test of training: undoing the leaky ReLU on saved embeddings showed "no handicap" (2026-11-26), and
+retraining without it gained 0.7 to 2.4 points of species F1 (J4).
 
 **Prefer mechanisms that do not need one constant to be right at every level at once.** This single
 idea explains two separate results: why oversampling beat logit adjustment, and why marginalisation
